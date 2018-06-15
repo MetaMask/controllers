@@ -1,0 +1,20 @@
+{
+  "name": "key-tree",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bip39": "^2.5.0",
+    "ethereumjs-util": "^5.2.0",
+    "keccak": "^1.4.0",
+    "secp256k1": "^3.5.0"
+  },
+  "devDependencies": {
+    "tape": "^4.9.1"
+  }
+}
