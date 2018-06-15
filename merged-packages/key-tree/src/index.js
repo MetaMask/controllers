@@ -46,7 +46,12 @@ function fromMasterSeed(seedBuffer) {
 function deriveKeyFromPath(_key, path) {
   let key = _key
 
-  path.split('/').forEach((pathPart) => {
+  let pathParts = path.split('/')
+  // strip "m" noop
+  if (pathParts[0].toLowerCase() === 'm') pathParts = pathParts.slice(1)
+
+  // derive through each part of path
+  pathParts.forEach((pathPart) => {
     const childKey = deriveChildKey(key, pathPart)
     // continue deriving from child key
     key = childKey
@@ -56,38 +61,37 @@ function deriveKeyFromPath(_key, path) {
 }
 
 function deriveChildKey (parentKey, pathPart) {
-  if (pathPart === 'm' || pathPart === 'M') {
-    return parentKey
-  }
-
-  const isHardened = (pathPart.length > 1) && (pathPart[pathPart.length - 1] === "'")
-  let childIndex = parseInt(pathPart, 10)
+  const isHardened = pathPart.includes(`'`)
+  const indexPart = pathPart.split(`'`)[0]
+  const childIndex = parseInt(indexPart, 10)
   // console.log(`pathPart: #${index} "${pathPart}" isHardened? ${isHardened} childIndex: ${childIndex}`)
   assert(childIndex < HARDENED_OFFSET, 'Invalid index')
 
-  let data
-  if (isHardened) {
-    // Hardened child
-    const indexBuffer = Buffer.allocUnsafe(4)
-    indexBuffer.writeUInt32BE(childIndex + HARDENED_OFFSET, 0)
-    let pk = parentKey.privateKey
-    const zb = Buffer.alloc(1, 0)
-    pk = Buffer.concat([zb, pk])
-    data = Buffer.concat([pk, indexBuffer])
-  } else {
-    // Normal child
-    const indexBuffer = Buffer.allocUnsafe(4)
-    indexBuffer.writeUInt32BE(childIndex, 0)
-    data = Buffer.concat([parentKey.publicKey, indexBuffer])
-  }
+  const secretExtension = deriveSecretExtension({ parentKey, childIndex, isHardened })
 
   const childKey = generateKey({
     baseSecret: parentKey.chainCode,
-    secretExtension: data,
+    secretExtension: secretExtension,
     parentPrivateKey: parentKey.privateKey
   })
 
   return childKey
+}
+
+function deriveSecretExtension ({ parentKey, childIndex, isHardened }) {
+  if (isHardened) {
+    // Hardened child
+    const indexBuffer = Buffer.allocUnsafe(4)
+    indexBuffer.writeUInt32BE(childIndex + HARDENED_OFFSET, 0)
+    const pk = parentKey.privateKey
+    const zb = Buffer.alloc(1, 0)
+    return Buffer.concat([zb, pk, indexBuffer])
+  } else {
+    // Normal child
+    const indexBuffer = Buffer.allocUnsafe(4)
+    indexBuffer.writeUInt32BE(childIndex, 0)
+    return Buffer.concat([parentKey.publicKey, indexBuffer])
+  }
 }
 
 function generateKey ({ baseSecret, secretExtension, parentPrivateKey }) {
