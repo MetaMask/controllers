@@ -34,6 +34,7 @@ test('ethereum key test - full path', (t) => {
     const bip32Part = bip32PathToMultipath(`${defaultEthereumPath}/${index}`)
     const bip39Part = bip39MnemonicToMultipath(mnemonic)
     const multipath = `${bip39Part}/${bip32Part}`
+    t.equal(multipath, `bip39:${mnemonic}/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:${index}`, 'matches expected multipath')
     return deriveKeyFromPath(null, multipath)
   })
   // validate addresses
