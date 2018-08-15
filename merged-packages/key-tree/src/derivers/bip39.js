@@ -21,9 +21,6 @@ function deriveChildKey (parentKey, pathPart) {
   const mnemonic = pathPart
   const seedBuffer = bip39.mnemonicToSeed(mnemonic)
   const entropy = crypto.createHmac('sha512', ROOT_BASE_SECRET).update(seedBuffer).digest()
-  const privateKey = entropy.slice(0, 32)
-  // also called "chaincode"
-  const extraEntropy = entropy.slice(32)
 
   return entropy
 }

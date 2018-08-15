@@ -4,10 +4,12 @@ const {
   deriveKeyFromPath,
 } = require('../src/index')
 const {
+  deriveChildKey: bip32Derive,
   bip32PathToMultipath,
   privateKeyToEthAddress,
 } = require('../src/derivers/bip32')
 const {
+  deriveChildKey: bip39Derive,
   bip39MnemonicToMultipath,
 } = require('../src/derivers/bip39')
 
@@ -44,13 +46,33 @@ test('ethereum key test - full path', (t) => {
 })
 
 test('ethereum key test - parent key reuse', (t) => {
-  // generate keys
+  // generate parent key
   const bip32Part = bip32PathToMultipath(`${defaultEthereumPath}`)
   const bip39Part = bip39MnemonicToMultipath(mnemonic)
   const multipath = `${bip39Part}/${bip32Part}`
   const parentKey = deriveKeyFromPath(null, multipath)
   const keys = expectedAddresses.map((_, index) => {
     return deriveKeyFromPath(parentKey, `bip32:${index}`)
+  })
+  // validate addresses
+  keys.map((key, index) => {
+    const address = privateKeyToEthAddress(key)
+    t.equal(address.toString('hex'), expectedAddresses[index])
+  })
+
+  t.end()
+})
+
+test('ethereum key test - direct derive', (t) => {
+  // generate parent key
+  let parentKey = null
+  parentKey = bip39Derive(parentKey, `romance hurry grit huge rifle ordinary loud toss sound congress upset twist`)
+  parentKey = bip32Derive(parentKey, `44'`)
+  parentKey = bip32Derive(parentKey, `60'`)
+  parentKey = bip32Derive(parentKey, `0'`)
+  parentKey = bip32Derive(parentKey, `0`)
+  const keys = expectedAddresses.map((_, index) => {
+    return bip32Derive(parentKey, `${index}`)
   })
   // validate addresses
   keys.map((key, index) => {

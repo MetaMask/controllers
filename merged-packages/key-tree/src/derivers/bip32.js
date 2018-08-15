@@ -29,6 +29,7 @@ function deriveChildKey (parentKey, pathPart) {
   const indexPart = pathPart.split(`'`)[0]
   const childIndex = parseInt(indexPart, 10)
   assert(childIndex < HARDENED_OFFSET, 'Invalid index')
+  assert(parentKey.length === 64, 'Parent key invalid length')
 
   const parentPrivateKey = parentKey.slice(0, 32)
   const parentExtraEntropy = parentKey.slice(32)
