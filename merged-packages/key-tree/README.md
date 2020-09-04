@@ -1,8 +1,10 @@
-# key-tree
+# @metamask/key-tree
 
-Status: Experiment. Do not use.
+```
+yarn add @metamask/key-tree
+```
 
-A superset of bip32 + bip39 key derivation to provide additional derivation paths and key types.
+An interface over bip32 + bip39 key derivation paths.
 
 
 
