@@ -13,11 +13,11 @@ module.exports = {
 }
 
 function bip39MnemonicToMultipath(mnemonic) {
-  return `bip39:${mnemonic}`
+  return `bip39:${mnemonic.trim()}`
 }
 
 // this creates a child key using bip39, ignoring the parent key
-function deriveChildKey (parentKey, pathPart) {
+function deriveChildKey (_parentKey, pathPart) {
   const mnemonic = pathPart
   const seedBuffer = bip39.mnemonicToSeed(mnemonic)
   const entropy = crypto.createHmac('sha512', ROOT_BASE_SECRET).update(seedBuffer).digest()

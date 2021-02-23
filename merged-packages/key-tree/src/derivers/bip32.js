@@ -5,7 +5,6 @@ const assert = require('assert')
 const secp256k1 = require('secp256k1')
 const createKeccakHash = require('keccak')
 
-const ROOT_BASE_SECRET = Buffer.from('Bitcoin seed', 'utf8')
 const HARDENED_OFFSET = 0x80000000
 
 module.exports = {
@@ -17,7 +16,7 @@ module.exports = {
 }
 
 function bip32PathToMultipath(bip32Path) {
-  let pathParts = bip32Path.split('/')
+  let pathParts = bip32Path.trim().split('/')
   // strip "m" noop
   if (pathParts[0].toLowerCase() === 'm') pathParts = pathParts.slice(1)
   const multipath = pathParts.map(part => 'bip32:' + part).join('/')

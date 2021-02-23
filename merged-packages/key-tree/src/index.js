@@ -1,48 +1,73 @@
-// node
-const crypto = require('crypto')
-const assert = require('assert')
-// npm
 const bip39 = require('bip39')
-const secp256k1 = require('secp256k1')
-const createKeccakHash = require('keccak')
 
-const derivers = {
-  'bip32': require('./derivers/bip32'),
-  'bip39': require('./derivers/bip39'),
-}
+const derivers = require('./derivers')
 
 module.exports = {
-  mnemonicToSeed,
   deriveKeyFromPath,
+  mnemonicToSeed,
 }
 
+/**
+ * ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
+ * multipath: "bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:{account_index}"
+ * 
+ * m: { privateKey, chainCode } = sha512Hmac("Bitcoin seed", masterSeed)
+ * 44': { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [0x00, parentKey.privateKey, index + HARDENED_OFFSET])
+ * 60': { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [0x00, parentKey.privateKey, index + HARDENED_OFFSET])
+ * 0': { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [0x00, parentKey.privateKey, index + HARDENED_OFFSET])
+ * 0: { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [parentKey.publicKey, index])
+ * 0: { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [parentKey.publicKey, index])
+ */
 
-/*
-ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
-multipath: "bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:{account_index}"
+/**
+ * e.g.
+ * -  bip32:0
+ * -  bip32:0'
+ */
+const BIP_32_PATH_REGEX = /^bip32:\d+'?$/u
 
-m: { privateKey, chainCode } = sha512Hmac("Bitcoin seed", masterSeed)
-44': { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [0x00, parentKey.privateKey, index + HARDENED_OFFSET])
-60': { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [0x00, parentKey.privateKey, index + HARDENED_OFFSET])
-0': { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [0x00, parentKey.privateKey, index + HARDENED_OFFSET])
-0: { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [parentKey.publicKey, index])
-0: { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [parentKey.publicKey, index])
-*/
+/**
+ * bip39:<SPACE_DELMITED_SEED_PHRASE>
+ * 
+ * The seed phrase must consist of 12 <= 24 words.
+ */
+const BIP_39_PATH_REGEX = /^bip39:(\w+){1}( \w+){11,23}$/u
 
-function mnemonicToSeed(mnemonic) {
-  return bip39.mnemonicToSeed(mnemonic)
+/**
+ * e.g.
+ * -  bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
+ * -  bip39:<SPACE_DELMITED_SEED_PHRASE>/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
+ */
+const MULTI_PATH_REGEX = /^(bip39:(\w+){1}( \w+){11,23}\/)?(bip32:\d+'?\/){3,4}(bip32:\d+'?)$/u
+
+function isValidPathSegment(path) {
+  return BIP_32_PATH_REGEX.test(path) ||
+    BIP_39_PATH_REGEX.test(path) ||
+    MULTI_PATH_REGEX.test(path)
 }
 
-function deriveKeyFromPath(_key, fullPath) {
-  let key = _key
+/**
+ * @param {string} pathSegment - A full or leaf HD path segment. If full,
+ * optionally preceded by "bip39:<SPACE_DELIMITED_SEED_PHRASE>/".
+ * @param {Buffer} [parentKey] - The parent key of the given path segment.
+ */
+function deriveKeyFromPath(pathSegment, parentKey) {
+  if (!isValidPathSegment(pathSegment)) {
+    throw new Error('Invalid HD path segment. Ensure that the HD path segment is correctly formatted.')
+  }
+  if (parentKey && !Buffer.isBuffer(parentKey)) {
+    throw new Error('Parent key must be a buffer if specified.')
+  }
 
-  const pathParts = fullPath.split('/')
+  let key = parentKey
 
   // derive through each part of path
-  pathParts.forEach((path) => {
+  pathSegment.split('/').forEach((path) => {
     const [pathType, pathValue] = path.split(':')
     const deriver = derivers[pathType]
-    if (!deriver) throw new Error(`Unknown derivation type "${pathType}"`)
+    if (!deriver) {
+      throw new Error(`Unknown derivation type "${pathType}"`)
+    }
     const childKey = deriver.deriveChildKey(key, pathValue)
     // continue deriving from child key
     key = childKey
@@ -51,10 +76,6 @@ function deriveKeyFromPath(_key, fullPath) {
   return key
 }
 
-function logKey(key) {
-  console.log('privateKey', key.privateKey.toString('hex'))
-  console.log('publicKey', key.publicKey.toString('hex'))
-  console.log('chainCode', key.chainCode.toString('hex'))
-  // const address = privateKeyToEthAddress(key.privateKey)
-  // console.log('address', address.toString('hex'))
+function mnemonicToSeed(mnemonic) {
+  return bip39.mnemonicToSeed(mnemonic)
 }
