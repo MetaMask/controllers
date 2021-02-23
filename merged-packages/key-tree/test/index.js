@@ -37,7 +37,7 @@ test('ethereum key test - full path', (t) => {
     const bip39Part = bip39MnemonicToMultipath(mnemonic)
     const multipath = `${bip39Part}/${bip32Part}`
     t.equal(multipath, `bip39:${mnemonic}/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:${index}`, 'matches expected multipath')
-    return deriveKeyFromPath(multipath, null)
+    return deriveKeyFromPath(multipath)
   })
   // validate addresses
   keys.map((key, index) => {
@@ -53,7 +53,7 @@ test('ethereum key test - parent key reuse', (t) => {
   const bip32Part = bip32PathToMultipath(`${defaultEthereumPath}`)
   const bip39Part = bip39MnemonicToMultipath(mnemonic)
   const multipath = `${bip39Part}/${bip32Part}`
-  const parentKey = deriveKeyFromPath(multipath, null)
+  const parentKey = deriveKeyFromPath(multipath)
   const keys = expectedAddresses.map((_, index) => {
     return deriveKeyFromPath(`bip32:${index}`, parentKey)
   })

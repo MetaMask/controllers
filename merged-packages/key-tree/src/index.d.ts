@@ -1,5 +1,5 @@
 declare module "@metamask/key-tree" {
-  export function deriveKeyFromPath(pathSegment: string, parentKey: Buffer | null): Buffer;
+  export function deriveKeyFromPath(pathSegment: string, parentKey?: Buffer): Buffer;
   export function isValidFullPath(fullPath: string): boolean;
 }
 
