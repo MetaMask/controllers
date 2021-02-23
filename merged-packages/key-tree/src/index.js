@@ -40,10 +40,33 @@ const BIP_39_PATH_REGEX = /^bip39:(\w+){1}( \w+){11,23}$/u
  */
 const MULTI_PATH_REGEX = /^(bip39:(\w+){1}( \w+){11,23}\/)?(bip32:\d+'?\/){3,4}(bip32:\d+'?)$/u
 
-function isValidPathSegment(path) {
-  return BIP_32_PATH_REGEX.test(path) ||
-    BIP_39_PATH_REGEX.test(path) ||
-    MULTI_PATH_REGEX.test(path)
+function validateDeriveKeyParams(pathSegment, parentKey) {
+  // The path segment must be one of the following:
+  // - A lone BIP-32 path segment
+  // - A lone BIP-39 path segment
+  // - A multipath
+  if (!(
+    BIP_32_PATH_REGEX.test(pathSegment) ||
+    BIP_39_PATH_REGEX.test(pathSegment) ||
+    MULTI_PATH_REGEX.test(pathSegment)
+  )) {
+    throw new Error('Invalid HD path segment. Ensure that the HD path segment is correctly formatted.')
+  }
+
+  // BIP-39 segments can only initiate HD paths
+  if (BIP_39_PATH_REGEX.test(pathSegment) && parentKey) {
+    throw new Error('May not specify parent key and BIP-39 path segment.')
+  }
+
+  // BIP-32 segments cannot initiate HD paths
+  if (!pathSegment.startsWith('bip39') && !parentKey) {
+    throw new Error('Must specify parent key if the first path of the path segment is not BIP-39.')
+  }
+
+  // The parent key must be a Buffer
+  if (parentKey && !Buffer.isBuffer(parentKey)) {
+    throw new Error('Parent key must be a Buffer if specified.')
+  }
 }
 
 /**
@@ -52,12 +75,7 @@ function isValidPathSegment(path) {
  * @param {Buffer} [parentKey] - The parent key of the given path segment.
  */
 function deriveKeyFromPath(pathSegment, parentKey) {
-  if (!isValidPathSegment(pathSegment)) {
-    throw new Error('Invalid HD path segment. Ensure that the HD path segment is correctly formatted.')
-  }
-  if (parentKey && !Buffer.isBuffer(parentKey)) {
-    throw new Error('Parent key must be a buffer if specified.')
-  }
+  validateDeriveKeyParams(pathSegment, parentKey)
 
   let key = parentKey
 
