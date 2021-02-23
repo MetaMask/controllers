@@ -2,16 +2,18 @@ const test = require('tape')
 
 const {
   deriveKeyFromPath,
-} = require('../src/index')
+} = require('../src')
 const {
-  deriveChildKey: bip32Derive,
-  bip32PathToMultipath,
-  privateKeyToEthAddress,
-} = require('../src/derivers/bip32')
-const {
-  deriveChildKey: bip39Derive,
-  bip39MnemonicToMultipath,
-} = require('../src/derivers/bip39')
+  bip32: {
+    deriveChildKey: bip32Derive,
+    bip32PathToMultipath,
+    privateKeyToEthAddress,
+  },
+  bip39: {
+    deriveChildKey: bip39Derive,
+    bip39MnemonicToMultipath,
+  }
+} = require('../src/derivers')
 
 const defaultEthereumPath = `m/44'/60'/0'/0`
 const mnemonic = 'romance hurry grit huge rifle ordinary loud toss sound congress upset twist'
@@ -35,7 +37,7 @@ test('ethereum key test - full path', (t) => {
     const bip39Part = bip39MnemonicToMultipath(mnemonic)
     const multipath = `${bip39Part}/${bip32Part}`
     t.equal(multipath, `bip39:${mnemonic}/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:${index}`, 'matches expected multipath')
-    return deriveKeyFromPath(null, multipath)
+    return deriveKeyFromPath(multipath)
   })
   // validate addresses
   keys.map((key, index) => {
@@ -51,10 +53,11 @@ test('ethereum key test - parent key reuse', (t) => {
   const bip32Part = bip32PathToMultipath(`${defaultEthereumPath}`)
   const bip39Part = bip39MnemonicToMultipath(mnemonic)
   const multipath = `${bip39Part}/${bip32Part}`
-  const parentKey = deriveKeyFromPath(null, multipath)
+  const parentKey = deriveKeyFromPath(multipath)
   const keys = expectedAddresses.map((_, index) => {
-    return deriveKeyFromPath(parentKey, `bip32:${index}`)
+    return deriveKeyFromPath(`bip32:${index}`, parentKey)
   })
+
   // validate addresses
   keys.map((key, index) => {
     const address = privateKeyToEthAddress(key)
