@@ -1,22 +1,20 @@
 const test = require('tape');
 
-const {
-  deriveKeyFromPath,
-} = require('../src');
+const { deriveKeyFromPath } = require('../src');
 const {
   bip32: {
     deriveChildKey: bip32Derive,
     bip32PathToMultipath,
     privateKeyToEthAddress,
   },
-  bip39: {
-    deriveChildKey: bip39Derive,
-    bip39MnemonicToMultipath,
-  },
+  bip39: { deriveChildKey: bip39Derive, bip39MnemonicToMultipath },
 } = require('../src/derivers');
 
 const defaultEthereumPath = `m/44'/60'/0'/0`;
-const mnemonic = 'romance hurry grit huge rifle ordinary loud toss sound congress upset twist';
+
+const mnemonic =
+  'romance hurry grit huge rifle ordinary loud toss sound congress upset twist';
+
 const expectedAddresses = [
   '5df603999c3d5ca2ab828339a9883585b1bce11b',
   '441c07e32a609afd319ffbb66432b424058bcfe9',
@@ -30,25 +28,29 @@ const expectedAddresses = [
   '7b99c781cbfff075229314ccbdc7f6d9e8440ad9',
 ];
 
-test('ethereum key test - full path', (t) => {
+test('deriveKeyPath - full path', (t) => {
   // generate keys
   const keys = expectedAddresses.map((_, index) => {
     const bip32Part = bip32PathToMultipath(`${defaultEthereumPath}/${index}`);
     const bip39Part = bip39MnemonicToMultipath(mnemonic);
     const multipath = `${bip39Part}/${bip32Part}`;
-    t.equal(multipath, `bip39:${mnemonic}/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:${index}`, 'matches expected multipath');
+    t.strictEqual(
+      multipath,
+      `bip39:${mnemonic}/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:${index}`,
+      'matches expected multipath',
+    );
     return deriveKeyFromPath(multipath);
   });
   // validate addresses
   keys.forEach((key, index) => {
     const address = privateKeyToEthAddress(key);
-    t.equal(address.toString('hex'), expectedAddresses[index]);
+    t.strictEqual(address.toString('hex'), expectedAddresses[index]);
   });
 
   t.end();
 });
 
-test('ethereum key test - parent key reuse', (t) => {
+test('deriveKeyPath - parent key reuse', (t) => {
   // generate parent key
   const bip32Part = bip32PathToMultipath(`${defaultEthereumPath}`);
   const bip39Part = bip39MnemonicToMultipath(mnemonic);
@@ -61,16 +63,62 @@ test('ethereum key test - parent key reuse', (t) => {
   // validate addresses
   keys.forEach((key, index) => {
     const address = privateKeyToEthAddress(key);
-    t.equal(address.toString('hex'), expectedAddresses[index]);
+    t.strictEqual(address.toString('hex'), expectedAddresses[index]);
   });
 
   t.end();
 });
 
-test('ethereum key test - direct derive', (t) => {
+test('deriveKeyPath - input validation', (t) => {
+  // generate parent key
+  const bip32Part = bip32PathToMultipath(`${defaultEthereumPath}`);
+  const bip39Part = bip39MnemonicToMultipath(mnemonic);
+  const multipath = `${bip39Part}/${bip32Part}`;
+  const parentKey = deriveKeyFromPath(multipath);
+
+  // Malformed multipaths are disallowed
+  t.throws(() => {
+    deriveKeyFromPath(multipath.replace(/bip39/u, `foo`));
+  }, /Invalid HD path segment\./u);
+  t.throws(() => {
+    deriveKeyFromPath(multipath.replace(/bip32/u, `bar`));
+  }, /Invalid HD path segment\./u);
+  t.throws(() => {
+    deriveKeyFromPath(multipath.replace(/44'/u, `xyz'`));
+  }, /Invalid HD path segment\./u);
+  t.throws(() => {
+    deriveKeyFromPath(multipath.replace(/'/u, `"`));
+  }, /Invalid HD path segment\./u);
+
+  // Multipaths that start with bip39 segment require _no_ parentKey
+  t.throws(() => {
+    deriveKeyFromPath(bip39Part, parentKey);
+  }, /May not specify parent key and BIP-39 path segment\./u);
+
+  // Multipaths that start with bip32 segment require parentKey
+  t.throws(() => {
+    deriveKeyFromPath('bip32:1');
+  }, /Must specify parent key/u);
+
+  // parentKey must be a buffer if specified
+  t.throws(
+    () => {
+      deriveKeyFromPath('bip32:1', parentKey.toString('utf8'));
+    },
+    { message: 'Parent key must be a Buffer if specified.' },
+    'should throw expected error',
+  );
+
+  t.end();
+});
+
+test('bip32Derive', (t) => {
   // generate parent key
   let parentKey = null;
-  parentKey = bip39Derive(parentKey, `romance hurry grit huge rifle ordinary loud toss sound congress upset twist`);
+  parentKey = bip39Derive(
+    parentKey,
+    `romance hurry grit huge rifle ordinary loud toss sound congress upset twist`,
+  );
   parentKey = bip32Derive(parentKey, `44'`);
   parentKey = bip32Derive(parentKey, `60'`);
   parentKey = bip32Derive(parentKey, `0'`);
@@ -81,7 +129,7 @@ test('ethereum key test - direct derive', (t) => {
   // validate addresses
   keys.forEach((key, index) => {
     const address = privateKeyToEthAddress(key);
-    t.equal(address.toString('hex'), expectedAddresses[index]);
+    t.strictEqual(address.toString('hex'), expectedAddresses[index]);
   });
 
   t.end();

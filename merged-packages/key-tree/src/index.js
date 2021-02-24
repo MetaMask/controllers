@@ -38,7 +38,7 @@ const BIP_39_PATH_REGEX = /^bip39:(\w+){1}( \w+){11,23}$/u;
  * -  bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
  * -  bip39:<SPACE_DELMITED_SEED_PHRASE>/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
  */
-const MULTI_PATH_REGEX = /^(bip39:(\w+){1}( \w+){11,23}\/)?(bip32:\d+'?\/){3,4}(bip32:\d+'?)$/u;
+const MULTI_PATH_REGEX = /^(bip39:(\w+){1}( \w+){11,23}\/)?(bip32:\d+'?\/){0,4}(bip32:\d+'?)$/u;
 
 function validateDeriveKeyParams(pathSegment, parentKey) {
   // The path segment must be one of the following:
