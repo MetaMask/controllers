@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "CommonJS",
+    "outDir": "./dist",
+    "resolveJsonModule": true,
+    "skipLibCheck": false,
+    "sourceMap": true,
+    "strict": true,
+    "target": "ES2017",
+    "typeRoots": ["./node_modules/@types", "./src/types"]
+  },
+  "include": ["./src"]
+}

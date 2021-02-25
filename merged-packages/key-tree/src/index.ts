@@ -1,11 +1,9 @@
-const bip39 = require('bip39');
+import bip39 from 'bip39';
+import derivers from './derivers';
 
-const derivers = require('./derivers');
-
-module.exports = {
-  deriveKeyFromPath,
-  mnemonicToSeed,
-};
+export function mnemonicToSeed(mnemonic: string): Buffer {
+  return bip39.mnemonicToSeed(mnemonic);
+}
 
 /**
  * ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
@@ -18,6 +16,35 @@ module.exports = {
  * 0: { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [parentKey.publicKey, index])
  * 0: { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [parentKey.publicKey, index])
  */
+
+/**
+ * @param {string} pathSegment - A full or leaf HD path segment. If full,
+ * optionally preceded by "bip39:<SPACE_DELIMITED_SEED_PHRASE>/".
+ * @param {Buffer} [parentKey] - The parent key of the given path segment.
+ */
+export function deriveKeyFromPath(pathSegment: string, parentKey: Buffer) {
+  validateDeriveKeyParams(pathSegment, parentKey);
+
+  let key = parentKey;
+
+  // derive through each part of path
+  pathSegment.split('/').forEach((path) => {
+    const [pathType, pathValue] = path.split(':');
+    if (!(hasDeriver(pathType))) {
+      throw new Error(`Unknown derivation type "${pathType}"`);
+    }
+    const deriver = derivers[pathType];
+    const childKey = deriver.deriveChildKey(key, pathValue);
+    // continue deriving from child key
+    key = childKey;
+  });
+
+  return key;
+}
+
+function hasDeriver(pathType: string): pathType is keyof typeof derivers {
+  return pathType in derivers;
+}
 
 /**
  * e.g.
@@ -40,7 +67,7 @@ const BIP_39_PATH_REGEX = /^bip39:(\w+){1}( \w+){11,23}$/u;
  */
 const MULTI_PATH_REGEX = /^(bip39:(\w+){1}( \w+){11,23}\/)?(bip32:\d+'?\/){0,4}(bip32:\d+'?)$/u;
 
-function validateDeriveKeyParams(pathSegment, parentKey) {
+function validateDeriveKeyParams(pathSegment: string, parentKey: Buffer) {
   // The path segment must be one of the following:
   // - A lone BIP-32 path segment
   // - A lone BIP-39 path segment
@@ -67,33 +94,4 @@ function validateDeriveKeyParams(pathSegment, parentKey) {
   if (parentKey && !Buffer.isBuffer(parentKey)) {
     throw new Error('Parent key must be a Buffer if specified.');
   }
-}
-
-/**
- * @param {string} pathSegment - A full or leaf HD path segment. If full,
- * optionally preceded by "bip39:<SPACE_DELIMITED_SEED_PHRASE>/".
- * @param {Buffer} [parentKey] - The parent key of the given path segment.
- */
-function deriveKeyFromPath(pathSegment, parentKey) {
-  validateDeriveKeyParams(pathSegment, parentKey);
-
-  let key = parentKey;
-
-  // derive through each part of path
-  pathSegment.split('/').forEach((path) => {
-    const [pathType, pathValue] = path.split(':');
-    const deriver = derivers[pathType];
-    if (!deriver) {
-      throw new Error(`Unknown derivation type "${pathType}"`);
-    }
-    const childKey = deriver.deriveChildKey(key, pathValue);
-    // continue deriving from child key
-    key = childKey;
-  });
-
-  return key;
-}
-
-function mnemonicToSeed(mnemonic) {
-  return bip39.mnemonicToSeed(mnemonic);
 }

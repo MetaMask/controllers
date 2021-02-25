@@ -1,6 +1,6 @@
 const test = require('tape');
 
-const { deriveKeyFromPath } = require('../src');
+const { deriveKeyFromPath } = require('../dist');
 const {
   bip32: {
     deriveChildKey: bip32Derive,
@@ -8,7 +8,7 @@ const {
     privateKeyToEthAddress,
   },
   bip39: { deriveChildKey: bip39Derive, bip39MnemonicToMultipath },
-} = require('../src/derivers');
+} = require('../dist/derivers');
 
 const defaultEthereumPath = `m/44'/60'/0'/0`;
 
