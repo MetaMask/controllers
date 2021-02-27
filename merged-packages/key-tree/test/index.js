@@ -90,6 +90,11 @@ test('deriveKeyPath - input validation', (t) => {
     deriveKeyFromPath(multipath.replace(/'/u, `"`));
   }, /Invalid HD path segment\./u);
 
+  // bip39 seed phrase component must be completely lowercase
+  t.throws(() => {
+    deriveKeyFromPath(bip39Part.replace('r', 'R'));
+  }, /Invalid HD path segment\./u);
+
   // Multipaths that start with bip39 segment require _no_ parentKey
   t.throws(() => {
     deriveKeyFromPath(bip39Part, parentKey);

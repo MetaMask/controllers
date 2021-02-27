@@ -4,7 +4,7 @@ import bip39 from 'bip39';
 const ROOT_BASE_SECRET = Buffer.from('Bitcoin seed', 'utf8');
 
 export function bip39MnemonicToMultipath(mnemonic: string): string {
-  return `bip39:${mnemonic.trim()}`;
+  return `bip39:${mnemonic.toLowerCase().trim()}`;
 }
 
 // this creates a child key using bip39, ignoring the parent key
