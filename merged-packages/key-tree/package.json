@@ -1,6 +1,6 @@
 {
   "name": "@metamask/key-tree",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "An interface over BIP-32 and BIP-39 key derivation paths.",
   "main": "dist/index.js",
   "files": [
