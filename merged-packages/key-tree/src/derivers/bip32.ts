@@ -29,11 +29,12 @@ export function bip32PathToMultipath(bip32Path: string): string {
   return multipath;
 }
 
-export function deriveChildKey(parentKey: Buffer, pathPart: string): Buffer {
+export function deriveChildKey(pathPart: string, parentKey: Buffer): Buffer {
   const isHardened = pathPart.includes(`'`);
   const indexPart = pathPart.split(`'`)[0];
   const childIndex = parseInt(indexPart, 10);
   assert(childIndex < HARDENED_OFFSET, 'Invalid index');
+  assert(Boolean(parentKey), 'Must provide parentKey');
   assert(parentKey.length === 64, 'Parent key invalid length');
 
   const parentPrivateKey = parentKey.slice(0, 32);

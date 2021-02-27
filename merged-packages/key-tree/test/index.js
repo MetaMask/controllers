@@ -8,7 +8,7 @@ const {
     privateKeyToEthAddress,
   },
   bip39: { deriveChildKey: bip39Derive, bip39MnemonicToMultipath },
-} = require('../dist/derivers');
+} = require('../dist/derivers').derivers;
 
 const defaultEthereumPath = `m/44'/60'/0'/0`;
 
@@ -121,15 +121,15 @@ test('bip32Derive', (t) => {
   // generate parent key
   let parentKey = null;
   parentKey = bip39Derive(
-    parentKey,
     `romance hurry grit huge rifle ordinary loud toss sound congress upset twist`,
+    parentKey,
   );
-  parentKey = bip32Derive(parentKey, `44'`);
-  parentKey = bip32Derive(parentKey, `60'`);
-  parentKey = bip32Derive(parentKey, `0'`);
-  parentKey = bip32Derive(parentKey, `0`);
+  parentKey = bip32Derive(`44'`, parentKey);
+  parentKey = bip32Derive(`60'`, parentKey);
+  parentKey = bip32Derive(`0'`, parentKey);
+  parentKey = bip32Derive(`0`, parentKey);
   const keys = expectedAddresses.map((_, index) => {
-    return bip32Derive(parentKey, `${index}`);
+    return bip32Derive(`${index}`, parentKey);
   });
   // validate addresses
   keys.forEach((key, index) => {
