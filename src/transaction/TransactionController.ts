@@ -22,10 +22,11 @@ import {
   isSmartContractCode,
   handleTransactionFetch,
   query,
+  getIncreasedPriceFromExisting,
 } from '../util';
 import { MAINNET, RPC } from '../constants';
 
-const HARDFORK = 'berlin';
+const HARDFORK = 'london';
 
 /**
  * @type Result
@@ -72,6 +73,9 @@ export interface Transaction {
   nonce?: string;
   to?: string;
   value?: string;
+  // type?: number;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
 }
 
 /**
@@ -495,9 +499,11 @@ export class TransactionController extends BaseController<
     };
 
     try {
-      const { gas, gasPrice } = await this.estimateGas(transaction);
+      const { gas } = await this.estimateGas(transaction);
       transaction.gas = gas;
-      transaction.gasPrice = gasPrice;
+
+      // TODO(eip1559) check if this is not needed for legacy
+      // transaction.gasPrice = gasPrice;
     } catch (error) {
       this.failTransaction(transactionMeta, error);
       return Promise.reject(error);
@@ -565,7 +571,8 @@ export class TransactionController extends BaseController<
     } = this.getNetworkState();
 
     if (chain !== RPC) {
-      return new Common({ chain, hardfork: HARDFORK });
+      const common = new Common({ chain, hardfork: HARDFORK, eips: [1559] });
+      return common;
     }
 
     const customChainParams = {
@@ -621,7 +628,12 @@ export class TransactionController extends BaseController<
       transactionMeta.transaction.nonce = txNonce;
       transactionMeta.transaction.chainId = chainId;
 
-      const txParams = {
+      const {
+        maxFeePerGas = undefined,
+        maxPriorityFeePerGas = undefined,
+      } = transactionMeta.transaction;
+
+      const baseTxParams = {
         ...transactionMeta.transaction,
         gasLimit: transactionMeta.transaction.gas,
         chainId,
@@ -629,8 +641,23 @@ export class TransactionController extends BaseController<
         status,
       };
 
-      const unsignedEthTx = this.prepareUnsignedEthTx(txParams);
+      const txParams =
+        maxFeePerGas && maxPriorityFeePerGas
+          ? {
+              ...baseTxParams,
+              maxFeePerGas,
+              maxPriorityFeePerGas,
+              // specify type 2 if maxFeePerGas and maxPriorityFeePerGas are set
+              type: 2,
+            }
+          : baseTxParams;
 
+      // delete gasPrice if maxFeePerGas and maxPriorityFeePerGas are set
+      if (maxFeePerGas && maxPriorityFeePerGas) {
+        delete txParams.gasPrice;
+      }
+
+      const unsignedEthTx = this.prepareUnsignedEthTx(txParams);
       const signedTx = await this.sign(unsignedEthTx, from);
       transactionMeta.status = TransactionStatus.signed;
       this.updateTransaction(transactionMeta);
@@ -691,26 +718,42 @@ export class TransactionController extends BaseController<
       throw new Error('No sign method defined.');
     }
 
-    const existingGasPrice = transactionMeta.transaction.gasPrice;
-    /* istanbul ignore next */
-    const existingGasPriceDecimal = parseInt(
-      existingGasPrice === undefined ? '0x0' : existingGasPrice,
-      16,
-    );
-    const gasPrice = addHexPrefix(
-      `${parseInt(`${existingGasPriceDecimal * CANCEL_RATE}`, 10).toString(
-        16,
-      )}`,
+    const gasPrice = getIncreasedPriceFromExisting(
+      transactionMeta.transaction.gasPrice,
+      CANCEL_RATE,
     );
 
-    const txParams = {
-      from: transactionMeta.transaction.from,
-      gasLimit: transactionMeta.transaction.gas,
-      gasPrice,
-      nonce: transactionMeta.transaction.nonce,
-      to: transactionMeta.transaction.from,
-      value: '0x0',
-    };
+    const existingMaxFeePerGas = transactionMeta.transaction?.maxFeePerGas;
+    const existingMaxPriorityFeePerGas =
+      transactionMeta.transaction?.maxPriorityFeePerGas;
+
+    const newMaxFeePerGas =
+      existingMaxFeePerGas &&
+      getIncreasedPriceFromExisting(existingMaxFeePerGas, CANCEL_RATE);
+    const newMaxPriorityFeePerGas =
+      existingMaxPriorityFeePerGas &&
+      getIncreasedPriceFromExisting(existingMaxPriorityFeePerGas, CANCEL_RATE);
+
+    const txParams =
+      newMaxFeePerGas && newMaxFeePerGas
+        ? {
+            from: transactionMeta.transaction.from,
+            gasLimit: transactionMeta.transaction.gas,
+            maxFeePerGas: newMaxFeePerGas,
+            maxPriorityFeePerGas: newMaxPriorityFeePerGas,
+            type: 2,
+            nonce: transactionMeta.transaction.nonce,
+            to: transactionMeta.transaction.from,
+            value: '0x0',
+          }
+        : {
+            from: transactionMeta.transaction.from,
+            gasLimit: transactionMeta.transaction.gas,
+            gasPrice,
+            nonce: transactionMeta.transaction.nonce,
+            to: transactionMeta.transaction.from,
+            value: '0x0',
+          };
 
     const unsignedEthTx = this.prepareUnsignedEthTx(txParams);
 
@@ -744,23 +787,39 @@ export class TransactionController extends BaseController<
     }
 
     const { transactions } = this.state;
-    const existingGasPrice = transactionMeta.transaction.gasPrice;
-    /* istanbul ignore next */
-    const existingGasPriceDecimal = parseInt(
-      existingGasPrice === undefined ? '0x0' : existingGasPrice,
-      16,
-    );
-    const gasPrice = addHexPrefix(
-      `${parseInt(`${existingGasPriceDecimal * SPEED_UP_RATE}`, 10).toString(
-        16,
-      )}`,
+    const gasPrice = getIncreasedPriceFromExisting(
+      transactionMeta.transaction.gasPrice,
+      SPEED_UP_RATE,
     );
 
-    const txParams = {
-      ...transactionMeta.transaction,
-      gasLimit: transactionMeta.transaction.gas,
-      gasPrice,
-    };
+    const existingMaxFeePerGas = transactionMeta.transaction?.maxFeePerGas;
+    const existingMaxPriorityFeePerGas =
+      transactionMeta.transaction?.maxPriorityFeePerGas;
+
+    const newMaxFeePerGas =
+      existingMaxFeePerGas &&
+      getIncreasedPriceFromExisting(existingMaxFeePerGas, SPEED_UP_RATE);
+    const newMaxPriorityFeePerGas =
+      existingMaxPriorityFeePerGas &&
+      getIncreasedPriceFromExisting(
+        existingMaxPriorityFeePerGas,
+        SPEED_UP_RATE,
+      );
+
+    const txParams =
+      newMaxFeePerGas && newMaxPriorityFeePerGas
+        ? {
+            ...transactionMeta.transaction,
+            gasLimit: transactionMeta.transaction.gas,
+            maxFeePerGas: newMaxFeePerGas,
+            maxPriorityFeePerGas: newMaxPriorityFeePerGas,
+            type: 2,
+          }
+        : {
+            ...transactionMeta.transaction,
+            gasLimit: transactionMeta.transaction.gas,
+            gasPrice,
+          };
 
     const unsignedEthTx = this.prepareUnsignedEthTx(txParams);
 
@@ -772,16 +831,29 @@ export class TransactionController extends BaseController<
     const transactionHash = await query(this.ethQuery, 'sendRawTransaction', [
       rawTransaction,
     ]);
-    const newTransactionMeta = {
+    const baseTransactionMeta = {
       ...transactionMeta,
       id: random(),
       time: Date.now(),
-      transaction: {
-        ...transactionMeta.transaction,
-        gasPrice,
-      },
       transactionHash,
     };
+    const newTransactionMeta =
+      newMaxFeePerGas && newMaxPriorityFeePerGas
+        ? {
+            ...baseTransactionMeta,
+            transaction: {
+              ...transactionMeta.transaction,
+              maxFeePerGas: newMaxFeePerGas,
+              maxPriorityFeePerGas: newMaxPriorityFeePerGas,
+            },
+          }
+        : {
+            ...baseTransactionMeta,
+            transaction: {
+              ...transactionMeta.transaction,
+              gasPrice,
+            },
+          };
     transactions.push(newTransactionMeta);
     this.update({ transactions: [...transactions] });
     this.hub.emit(`${transactionMeta.id}:speedup`, newTransactionMeta);

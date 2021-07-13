@@ -95,6 +95,8 @@ describe('util', () => {
       nonce: 'nonce',
       to: 'TO',
       value: 'value',
+      maxFeePerGas: 'maxFeePerGas',
+      maxPriorityFeePerGas: 'maxPriorityFeePerGas',
     });
     expect(normalized).toStrictEqual({
       data: '0xdata',
@@ -104,6 +106,8 @@ describe('util', () => {
       nonce: '0xnonce',
       to: '0xto',
       value: '0xvalue',
+      maxFeePerGas: '0xmaxFeePerGas',
+      maxPriorityFeePerGas: '0xmaxPriorityFeePerGas',
     });
   });
 
@@ -874,6 +878,33 @@ describe('util', () => {
       await expect(util.query(ethQuery, 'gasPrice', [])).rejects.toThrow(
         'Uh oh',
       );
+    });
+  });
+
+  describe('convertPriceToDecimal', () => {
+    it('should convert hex price to decimal', () => {
+      expect(util.convertPriceToDecimal('0x50fd51da')).toStrictEqual(
+        1358778842,
+      );
+    });
+    it('should return zero when undefined', () => {
+      expect(util.convertPriceToDecimal(undefined)).toStrictEqual(0);
+    });
+  });
+
+  describe('getIncreasedPriceHex', () => {
+    it('should get increased price from number as hex', () => {
+      expect(util.getIncreasedPriceHex(1358778842, 1.1)).toStrictEqual(
+        '0x5916a6d6',
+      );
+    });
+  });
+
+  describe('getIncreasedPriceFromExisting', () => {
+    it('should get increased price from number as hex', () => {
+      expect(
+        util.getIncreasedPriceFromExisting('0x50fd51da', 1.1),
+      ).toStrictEqual('0x5916a6d6');
     });
   });
 });

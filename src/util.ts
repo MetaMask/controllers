@@ -32,6 +32,9 @@ const NORMALIZERS: { [param in keyof Transaction]: any } = {
   nonce: (nonce: string) => addHexPrefix(nonce),
   to: (to: string) => addHexPrefix(to).toLowerCase(),
   value: (value: string) => addHexPrefix(value),
+  maxFeePerGas: (maxFeePerGas: string) => addHexPrefix(maxFeePerGas),
+  maxPriorityFeePerGas: (maxPriorityFeePerGas: string) =>
+    addHexPrefix(maxPriorityFeePerGas),
 };
 
 /**
@@ -653,6 +656,19 @@ export function query(
     });
   });
 }
+
+export const convertPriceToDecimal = (value: string | undefined): number =>
+  parseInt(value === undefined ? '0x0' : value, 16);
+
+export const getIncreasedPriceHex = (value: number, rate: number): string =>
+  addHexPrefix(`${parseInt(`${value * rate}`, 10).toString(16)}`);
+
+export const getIncreasedPriceFromExisting = (
+  value: string | undefined,
+  rate: number,
+): string => {
+  return getIncreasedPriceHex(convertPriceToDecimal(value), rate);
+};
 
 export default {
   BNToHex,
