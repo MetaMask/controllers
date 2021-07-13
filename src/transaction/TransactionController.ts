@@ -27,6 +27,27 @@ import { MAINNET, RPC } from '../constants';
 
 const HARDFORK = 'berlin';
 
+
+/**
+ * Major issuse attempting to fix with these suggestions is that the tx state stored locally does not
+ * reflect the blockchain. This can result in a number of different app behaviors.
+ * - duplicate transactions
+ * - incorrect transactions state
+ *   - On transaction history we're currently using the gas values that the user sent the transaction with, but in many cases the actual gas spent was less so we are showing misleading informaction.
+ *   - Wrong transaction state: showing failed transaction, when the tx was successful.
+ *   - Wrong transaction state: “Dropped and replaced” shows up in etherscan and our end shows pending.
+ *   - Wrong value being shown on history: showing gas fee instead of the amount swapped.
+ *   - The states of transactions 2 transactions with same nonce are shown wrongly.
+ *   - SWAPS transactions not updating correctly
+ *   - Group by nonce doesn't mean it is the same tx (drop then retry) group by the intent of tx (examine tx params, data field, github link WIP: https://github.com/MetaMask/metamask-extension/blob/869c446068e1d6a54020a391e168d031c0e26702/shared/helpers/transaction.js#L14)
+ * Suggested changes
+ * - add property to txMeta to identify if tx has been reconciled with the blockchain
+ * - add property to group txMetas
+ * - add method to force update unreconciled tx
+ * - reconciled tx on controller construction
+ * - correct logic that allows duplicate nonces in (addTransaction & speedUpTransaction)
+ */
+
 /**
  * @type Result
  *
@@ -81,9 +102,10 @@ export interface Transaction {
  */
 export enum TransactionStatus {
   approved = 'approved',
-  cancelled = 'cancelled',
+  cancelled = 'cancelled', //(is also "dropped" for transactions on chain)
   confirmed = 'confirmed',
   failed = 'failed',
+  failedBeforeChain = 'failedBeforeChain',
   rejected = 'rejected',
   signed = 'signed',
   submitted = 'submitted',
@@ -97,6 +119,15 @@ export enum WalletDevice {
   MM_MOBILE = 'metamask_mobile',
   MM_EXTENSION = 'metamask_extension',
   OTHER = 'other_device',
+}
+
+/**
+ * Source of data used to reconcile local transactions end state 
+ */
+ export enum StateReconcileMethod {
+  ETHERSCAN = 'etherscan',
+  BLOCKCHAIN = 'blockchain',
+  OTHER = 'other'
 }
 
 type TransactionMetaBase = {
@@ -117,6 +148,9 @@ type TransactionMetaBase = {
   transactionHash?: string;
   blockNumber?: string;
   deviceConfirmedOn?: WalletDevice;
+  stateReconcileMethod?: StateReconcileMethod; 
+  intentId?: number;
+  //OPTIONAL: Add status group property (pending (unapproved, approved, signed, submitted), completed(cancelled, failed, failedBeforeChain, rejected, confirmed))
 };
 
 /**
@@ -136,7 +170,9 @@ type TransactionMetaBase = {
  * @property transaction - Underlying Transaction object
  * @property transactionHash - Hash of a successful transaction
  * @property blockNumber - Number of the block where the transaction has been included
- */
+ * @property stateReconcileMethod - string to indicate the method of reconciliation of the local transactions end state 
+ * @property intentId - hash used to group a set of transactions based on intent
+*/
 export type TransactionMeta =
   | ({
       status: Exclude<TransactionStatus, TransactionStatus.failed>;
@@ -259,7 +295,7 @@ export class TransactionController extends BaseController<
     const newTransactionMeta = {
       ...transactionMeta,
       error,
-      status: TransactionStatus.failed,
+      status: TransactionStatus.failedBeforeChain,
     };
     this.updateTransaction(newTransactionMeta);
     this.hub.emit(`${transactionMeta.id}:finished`, newTransactionMeta);
@@ -420,6 +456,12 @@ export class TransactionController extends BaseController<
       this.ethQuery = new EthQuery(newProvider);
       this.registry = new MethodRegistry({ provider: newProvider });
     });
+
+    /** This will allow for the tx controller to attempt to resovle any transactions that occured while the 
+    * app was in the background. 
+    */
+    // transactionStateReconciler ();
+    
     this.poll();
   }
 
@@ -870,6 +912,8 @@ export class TransactionController extends BaseController<
     let gotUpdates = false;
     await safelyExecute(() =>
       Promise.all(
+        /************* Refactor to include reconcilation method (transactionStateReconciler()) and use boolean to indicate whether updates 
+        * were completed this.state.transactions.length should not be the only trigger for an update at the bottom fot he method */
         transactions.map(async (meta, index) => {
           // Using fallback to networkID only when there is no chainId present. Should be removed when networkID is completely removed.
           if (
@@ -973,6 +1017,8 @@ export class TransactionController extends BaseController<
         this.normalizeTokenTx(tx, currentNetworkID, currentChainId),
     );
 
+    /************* Refactor to include reconcilation method (transactionStateReconciler()) and use boolean to indicate whether updates 
+    * were completed this.state.transactions.length should not be the only trigger for an update at the bottom fot he method */
     const remoteTxs = [...normalizedTxs, ...normalizedTokenTxs].filter((tx) => {
       const alreadyInTransactions = this.state.transactions.find(
         ({ transactionHash }) => transactionHash === tx.transactionHash,
@@ -984,6 +1030,8 @@ export class TransactionController extends BaseController<
     allTxs.sort((a, b) => (a.time < b.time ? -1 : 1));
 
     let latestIncomingTxBlockNumber: string | undefined;
+
+
     allTxs.forEach(async (tx) => {
       /* istanbul ignore next */
       if (
@@ -1024,6 +1072,17 @@ export class TransactionController extends BaseController<
     }
     return latestIncomingTxBlockNumber;
   }
+
+  /**
+   * Resolves the locally stored transactions with the blockchain or etherscan. Then updated TransactionController State
+   */
+  async transactionStateReconciler (localTx: , remoteTx: method?: StateReconcileMethod) {
+    
+    // If the transaction reported on the blockchain/etherscan has reach an end state 
+    // (cancelled = 'cancelled', confirmed = 'confirmed', failed = 'failed', rejected = 'rejected') 
+    // updated local tx to match on chain state & meta data property stateReconcileMethod 
+  }
+
 }
 
 export default TransactionController;
