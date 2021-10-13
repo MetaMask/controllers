@@ -80,12 +80,15 @@ test('deriveKeyPath - input validation', (t) => {
   t.throws(() => {
     deriveKeyFromPath(multipath.replace(/bip39/u, `foo`));
   }, /Invalid HD path segment\./u);
+
   t.throws(() => {
     deriveKeyFromPath(multipath.replace(/bip32/u, `bar`));
   }, /Invalid HD path segment\./u);
+
   t.throws(() => {
     deriveKeyFromPath(multipath.replace(/44'/u, `xyz'`));
   }, /Invalid HD path segment\./u);
+
   t.throws(() => {
     deriveKeyFromPath(multipath.replace(/'/u, `"`));
   }, /Invalid HD path segment\./u);
