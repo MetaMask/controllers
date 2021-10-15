@@ -21,34 +21,38 @@
     "lint:misc": "prettier '**/*.json' '**/*.md' '!CHANGELOG.md' '**/*.yml' --ignore-path .gitignore",
     "prepublishOnly": "yarn build:clean && yarn lint && yarn test",
     "setup": "yarn install && yarn allow-scripts",
-    "test": "yarn build && node ./test/index.js",
-    "test:nobuild": "node ./test/index.js"
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "bip39": "^2.5.0",
-    "ethereumjs-util": "^5.2.0",
     "keccak": "^1.4.0",
     "secp256k1": "^3.5.0"
   },
   "devDependencies": {
     "@lavamoat/allow-scripts": "^1.0.6",
     "@metamask/eslint-config": "^8.0.0",
+    "@metamask/eslint-config-jest": "^8.0.0",
     "@metamask/eslint-config-nodejs": "^8.0.0",
     "@metamask/eslint-config-typescript": "^8.0.0",
+    "@types/jest": "^27.0.2",
     "@types/keccak": "^3.0.1",
+    "@types/secp256k1": "^4.0.3",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
     "eslint": "^7.23.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-jest": "^24.3.4",
     "eslint-plugin-jsdoc": "^36.1.1",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^4.0.0",
+    "jest": "^27.2.5",
     "prettier": "^2.4.1",
     "prettier-plugin-packagejson": "^2.2.13",
     "rimraf": "^3.0.2",
-    "tape": "^4.9.1",
-    "typescript": "^4.3.5"
+    "ts-jest": "^27.0.6",
+    "typescript": "4.3.5"
   },
   "engines": {
     "node": ">=12.0.0"

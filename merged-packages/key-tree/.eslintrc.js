@@ -24,11 +24,10 @@ module.exports = {
       extends: ['@metamask/eslint-config-nodejs'],
     },
 
-    // TODO
-    // {
-    //   files: ['*.test.ts', '*.test.js'],
-    //   extends: ['@metamask/eslint-config-jest'],
-    // },
+    {
+      files: ['*.test.ts', '*.test.js'],
+      extends: ['@metamask/eslint-config-jest'],
+    },
   ],
 
   ignorePatterns: ['!.eslintrc.js', '!.prettierrc.js', 'dist/'],
