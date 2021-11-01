@@ -4,15 +4,19 @@ module.exports = {
   // ones.
   collectCoverageFrom: ['./src/**/*.ts'],
   coverageReporters: ['text', 'html'],
-  // TODO
-  // coverageThreshold: {
-  //   global: {
-  //     branches: 100,
-  //     functions: 100,
-  //     lines: 100,
-  //     statements: 100,
-  //   },
-  // },
+  coverageThreshold: {
+    global: {
+      branches: 100,
+      functions: 100,
+      lines: 100,
+      statements: 100,
+    },
+  },
+  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.test.json',
+    },
+  },
   moduleFileExtensions: ['js', 'json', 'jsx', 'ts', 'tsx', 'node'],
   preset: 'ts-jest',
   // "resetMocks" resets all mocks, including mocked modules, to jest.fn(),

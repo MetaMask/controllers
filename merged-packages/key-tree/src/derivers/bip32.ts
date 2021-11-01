@@ -1,44 +1,40 @@
-// node
 import crypto from 'crypto';
-import assert from 'assert';
-// npm
 import secp256k1 from 'secp256k1';
 import createKeccakHash from 'keccak';
+import { BUFFER_KEY_LENGTH } from '../constants';
+import { isValidBufferKey } from '../utils';
 
 const HARDENED_OFFSET = 0x80000000;
 
 type KeccakBits = '224' | '256' | '384' | '512';
 
 /**
- * @param keyBuffer
+ * Converts a BIP-32 private key to an Ethereum address.
+ *
+ * **WARNING:** Only validates that the key is non-zero and of the correct
+ * length. It is the consumer's responsibility to ensure that the specified
+ * key is a valid BIP-44 Ethereum `address_index` key.
+ *
+ * @param key - The `address_index` key buffer to convert to an Ethereum
+ * address.
+ * @returns The Ethereum address corresponding to the given key.
  */
-export function privateKeyToEthAddress(keyBuffer: Buffer) {
-  const privateKey = keyBuffer.slice(0, 32);
+export function privateKeyToEthAddress(key: Buffer) {
+  if (!Buffer.isBuffer(key) || !isValidBufferKey(key)) {
+    throw new Error('Invalid key: The key must be a 64-byte, non-zero Buffer.');
+  }
+
+  const privateKey = key.slice(0, 32);
   const publicKey = secp256k1.publicKeyCreate(privateKey, false).slice(1);
   return keccak(publicKey as Buffer).slice(-20);
 }
 
 /**
- * @param a
- * @param bits
+ * @param data
+ * @param keccakBits
  */
-function keccak(a: string | Buffer, bits: KeccakBits = '256'): Buffer {
-  return createKeccakHash(`keccak${bits}` as any)
-    .update(a)
-    .digest();
-}
-
-/**
- * @param bip32Path
- */
-export function bip32PathToMultipath(bip32Path: string): string {
-  let pathParts = bip32Path.trim().split('/');
-  // strip "m" noop
-  if (pathParts[0].toLowerCase() === 'm') {
-    pathParts = pathParts.slice(1);
-  }
-  const multipath = pathParts.map((part) => `bip32:${part}`).join('/');
-  return multipath;
+function keccak(data: string | Buffer, keccakBits: KeccakBits = '256'): Buffer {
+  return createKeccakHash(`keccak${keccakBits}`).update(data).digest();
 }
 
 /**
@@ -46,12 +42,28 @@ export function bip32PathToMultipath(bip32Path: string): string {
  * @param parentKey
  */
 export function deriveChildKey(pathPart: string, parentKey: Buffer): Buffer {
+  if (!parentKey) {
+    throw new Error('Invalid parameters: Must specify a parent key.');
+  }
+
+  if (parentKey.length !== BUFFER_KEY_LENGTH) {
+    throw new Error('Invalid parent key: Must be 64 bytes long.');
+  }
+
   const isHardened = pathPart.includes(`'`);
   const indexPart = pathPart.split(`'`)[0];
   const childIndex = parseInt(indexPart, 10);
-  assert(childIndex < HARDENED_OFFSET, 'Invalid index');
-  assert(Boolean(parentKey), 'Must provide parentKey');
-  assert(parentKey.length === 64, 'Parent key invalid length');
+
+  if (
+    !/^\d+$/u.test(indexPart) ||
+    !Number.isInteger(childIndex) ||
+    childIndex < 0 ||
+    childIndex >= HARDENED_OFFSET
+  ) {
+    throw new Error(
+      `Invalid BIP-32 index: The index must be a non-negative decimal integer less than ${HARDENED_OFFSET}.`,
+    );
+  }
 
   const parentPrivateKey = parentKey.slice(0, 32);
   const parentExtraEntropy = parentKey.slice(32);
@@ -78,10 +90,10 @@ interface DeriveSecretExtensionArgs {
 
 // the bip32 secret extension is created from the parent private or public key and the child index
 /**
- * @param options0
- * @param options0.parentPrivateKey
- * @param options0.childIndex
- * @param options0.isHardened
+ * @param options
+ * @param options.parentPrivateKey
+ * @param options.childIndex
+ * @param options.isHardened
  */
 function deriveSecretExtension({
   parentPrivateKey,
@@ -111,10 +123,10 @@ interface GenerateKeyArgs {
 }
 
 /**
- * @param options0
- * @param options0.parentPrivateKey
- * @param options0.parentExtraEntropy
- * @param options0.secretExtension
+ * @param options
+ * @param options.parentPrivateKey
+ * @param options.parentExtraEntropy
+ * @param options.secretExtension
  */
 function generateKey({
   parentPrivateKey,

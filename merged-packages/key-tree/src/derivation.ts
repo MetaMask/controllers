@@ -1,15 +1,12 @@
-import bip39 from 'bip39';
+import {
+  HDPathTuple,
+  BIP44Depth,
+  MAX_BIP_44_DEPTH,
+  MIN_BIP_44_DEPTH,
+  BIP_39_PATH_REGEX,
+  BIP_32_PATH_REGEX,
+} from './constants';
 import { derivers, Deriver } from './derivers';
-
-/**
- * Converts the given BIP-39 mnemonic to a cryptographic seed.
- *
- * @param mnemonic - The BIP-39 mnemonic.
- * @returns The cryptographic seed corresponding to the given mnemonic.
- */
-export function mnemonicToSeed(mnemonic: string): Buffer {
-  return bip39.mnemonicToSeed(mnemonic);
-}
 
 /**
  * ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
@@ -27,10 +24,10 @@ export function mnemonicToSeed(mnemonic: string): Buffer {
  * Takes a full or partial HD path string and returns the key corresponding to
  * the given path, with the following constraints:
  *
- * - If the path starts with a BIP-32 segment, a parent key must be provided.
- * - If the path starts with a BIP-39 segment, a parent key may NOT be provided.
- * - The path cannot exceed 5 BIP-32 segments in length, optionally preceded by
- *   a single BIP-39 segment.
+ * - If the path starts with a BIP-32 node, a parent key must be provided.
+ * - If the path starts with a BIP-39 node, a parent key must NOT be provided.
+ * - The path cannot exceed 5 BIP-32 nodes in length, optionally preceded by
+ *   a single BIP-39 node.
  *
  * WARNING: It is the consumer's responsibility to ensure that the path is valid
  * relative to its parent key.
@@ -43,18 +40,23 @@ export function mnemonicToSeed(mnemonic: string): Buffer {
  * @returns The derived key.
  */
 export function deriveKeyFromPath(
-  pathSegment: string,
+  pathSegment: HDPathTuple,
   parentKey?: Buffer,
+  depth?: BIP44Depth,
 ): Buffer {
-  validateDeriveKeyParams(pathSegment, parentKey);
+  if (parentKey && !Buffer.isBuffer(parentKey)) {
+    throw new Error('Parent key must be a Buffer if specified.');
+  }
+  validatePathSegment(pathSegment, Boolean(parentKey), depth);
 
   let key = parentKey;
 
   // derive through each part of path
-  pathSegment.split('/').forEach((path) => {
-    const [pathType, pathValue] = path.split(':');
+  pathSegment.forEach((node) => {
+    const [pathType, pathValue] = node.split(':');
+    /* istanbul ignore if: should be impossible */
     if (!hasDeriver(pathType)) {
-      throw new Error(`Unknown derivation type "${pathType}"`);
+      throw new Error(`Unknown derivation type: "${pathType}"`);
     }
     const deriver = derivers[pathType] as Deriver;
     const childKey = deriver.deriveChildKey(pathValue, key);
@@ -73,62 +75,62 @@ function hasDeriver(pathType: string): pathType is keyof typeof derivers {
 }
 
 /**
- * e.g.
- * -  bip32:0
- * -  bip32:0'
- */
-const BIP_32_PATH_REGEX = /^bip32:\d+'?$/u;
-
-/**
- * bip39:<SPACE_DELMITED_SEED_PHRASE>
+ * The path segment must be one of the following:
+ * - A lone BIP-32 path node
+ * - A lone BIP-39 path node
+ * - A multipath
  *
- * The seed phrase must consist of 12 <= 24 words.
+ * @param pathSegment - The path segment string to validate.
  */
-const BIP_39_PATH_REGEX = /^bip39:([a-z]+){1}( [a-z]+){11,23}$/u;
+export function validatePathSegment(
+  pathSegment: HDPathTuple,
+  hasKey: boolean,
+  depth?: BIP44Depth,
+) {
+  if ((pathSegment as any).length === 0) {
+    throw new Error(`Invalid HD path segment: The segment must not be empty.`);
+  }
 
-/**
- * e.g.
- * -  bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
- * -  bip39:<SPACE_DELMITED_SEED_PHRASE>/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
- */
-const MULTI_PATH_REGEX =
-  /^(bip39:([a-z]+){1}( [a-z]+){11,23}\/)?(bip32:\d+'?\/){0,4}(bip32:\d+'?)$/u;
+  if (pathSegment.length - 1 > MAX_BIP_44_DEPTH) {
+    throw new Error(
+      `Invalid HD path segment: The segment cannot exceed a 0-indexed depth of 5.`,
+    );
+  }
 
-/**
- * @param pathSegment
- * @param parentKey
- */
-function validateDeriveKeyParams(pathSegment: string, parentKey?: Buffer) {
-  // The path segment must be one of the following:
-  // - A lone BIP-32 path segment
-  // - A lone BIP-39 path segment
-  // - A multipath
+  let startsWithBip39 = false;
+  pathSegment.forEach((node, index) => {
+    if (index === 0) {
+      startsWithBip39 = BIP_39_PATH_REGEX.test(node);
+      if (!startsWithBip39 && !BIP_32_PATH_REGEX.test(node)) {
+        throw getMalformedError();
+      }
+    } else if (!BIP_32_PATH_REGEX.test(node)) {
+      throw getMalformedError();
+    }
+  });
+
   if (
-    !(
-      BIP_32_PATH_REGEX.test(pathSegment) ||
-      BIP_39_PATH_REGEX.test(pathSegment) ||
-      MULTI_PATH_REGEX.test(pathSegment)
-    )
+    depth === MIN_BIP_44_DEPTH &&
+    (!startsWithBip39 || pathSegment.length !== 1)
   ) {
-    throw new Error('Invalid HD path segment: The path segment is malformed.');
-  }
-
-  // BIP-39 segments can only initiate HD paths
-  if (BIP_39_PATH_REGEX.test(pathSegment) && parentKey) {
     throw new Error(
-      'Invalid derivation parameters: May not specify parent entropy if the path segment starts with a BIP-39 node.',
+      `Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of ${MIN_BIP_44_DEPTH}. Received: "${pathSegment}"`,
     );
   }
 
-  // BIP-32 segments cannot initiate HD paths
-  if (!pathSegment.startsWith('bip39') && !parentKey) {
+  if (!hasKey && !startsWithBip39) {
     throw new Error(
-      'Invalid derivation parameters: Must specify parent entropy if the first node of the path segment is not a BIP-39 node.',
+      'Invalid derivation parameters: Must specify parent key if the first node of the path segment is not a BIP-39 node.',
     );
   }
 
-  // The parent key must be a Buffer
-  if (parentKey && !Buffer.isBuffer(parentKey)) {
-    throw new Error('Parent key must be a Buffer if specified.');
+  if (hasKey && startsWithBip39) {
+    throw new Error(
+      'Invalid derivation parameters: May not specify parent key if the path segment starts with a BIP-39 node.',
+    );
   }
+}
+
+function getMalformedError() {
+  throw new Error('Invalid HD path segment: The path segment is malformed.');
 }
