@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1]
+### Changed
+- Update cryptography dependencies ([#29](https://github.com/MetaMask/key-tree/pull/29), [#30](https://github.com/MetaMask/key-tree/pull/30), [#31](https://github.com/MetaMask/key-tree/pull/31))
+  - This results in an overall ~4x speedup in Node.js for operations with this package. Browser performance gains, if any, are not known at this time.
+  - Individual pull requests:
+    - `bip39@3.0.4` ([#29](https://github.com/MetaMask/key-tree/pull/29))
+    - `secp256k1@4.0.2` ([#30](https://github.com/MetaMask/key-tree/pull/30))
+    - `keccak@3.0.2` ([#31](https://github.com/MetaMask/key-tree/pull/31))
+
 ## [3.0.0]
 ### Changed
 - **BREAKING:** Refactor package API ([#25](https://github.com/MetaMask/key-tree/pull/25))
@@ -34,7 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/MetaMask/key-tree/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/MetaMask/key-tree/compare/v2.0.1...v3.0.0
 [2.0.1]: https://github.com/MetaMask/key-tree/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/MetaMask/key-tree/compare/v1.0.0...v2.0.0
