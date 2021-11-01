@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import bip39 from 'bip39';
+import { mnemonicToSeedSync } from 'bip39';
 import { BIP39Node } from '../constants';
 
 // This magic constant is analogous to a salt, and is consistent across all
@@ -19,7 +19,7 @@ export function bip39MnemonicToMultipath(mnemonic: string): BIP39Node {
  * @param _parentKey
  */
 export function deriveChildKey(pathPart: string, _parentKey?: never): Buffer {
-  return createBip39KeyFromSeed(bip39.mnemonicToSeed(pathPart));
+  return createBip39KeyFromSeed(mnemonicToSeedSync(pathPart));
 }
 
 /**
