@@ -25,8 +25,10 @@ export function privateKeyToEthAddress(key: Buffer) {
   }
 
   const privateKey = key.slice(0, 32);
-  const publicKey = secp256k1.publicKeyCreate(privateKey, false).slice(1);
-  return keccak(publicKey as Buffer).slice(-20);
+  const publicKey = secp256k1
+    .publicKeyCreate(new Uint8Array(privateKey), false)
+    .slice(1);
+  return keccak(Buffer.from(publicKey)).slice(-20);
 }
 
 /**
@@ -112,7 +114,10 @@ function deriveSecretExtension({
   // Normal child
   const indexBuffer = Buffer.allocUnsafe(4);
   indexBuffer.writeUInt32BE(childIndex, 0);
-  const parentPublicKey = secp256k1.publicKeyCreate(parentPrivateKey, true);
+  const parentPublicKey = secp256k1.publicKeyCreate(
+    new Uint8Array(parentPrivateKey),
+    true,
+  );
   return Buffer.concat([parentPublicKey, indexBuffer]);
 }
 
@@ -141,8 +146,8 @@ function generateKey({
   // extraEntropy is also called "chaincode"
   const extraEntropy = entropy.slice(32);
   const privateKey = secp256k1.privateKeyTweakAdd(
-    parentPrivateKey,
-    keyMaterial,
+    new Uint8Array(parentPrivateKey),
+    new Uint8Array(keyMaterial),
   );
   return { privateKey, extraEntropy };
 }
