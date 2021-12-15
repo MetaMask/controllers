@@ -263,7 +263,7 @@ export function deriveBIP44AddressKey(
   ).keyBuffer;
 }
 
-interface BIP44AddressKeyDeriver {
+type BIP44AddressKeyDeriver = {
   /**
    * @param address_index - The `address_index` value.
    * @returns The key corresponding to the path of this deriver and the
@@ -289,7 +289,7 @@ interface BIP44AddressKeyDeriver {
    * The `coin_type` index of addresses derived by this deriver function.
    */
   coin_type: number;
-}
+};
 
 /**
  * Creates a function that derives BIP-44 address keys corresponding to the

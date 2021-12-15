@@ -29,12 +29,12 @@ export function getBIP44CoinTypePathString(
   )}'`;
 }
 
-interface BIP44PathIndices {
+type BIP44PathIndices = {
   coin_type: number;
   account?: number;
   change?: number;
   address_index: number;
-}
+};
 
 export type CoinTypeToAddressIndices = Pick<
   BIP44PathIndices,

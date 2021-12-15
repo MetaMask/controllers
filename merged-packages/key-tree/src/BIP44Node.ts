@@ -25,7 +25,7 @@ import {
  * cryptographic keys used to generate keypairs and addresses for cryptocurrency
  * protocols.
  */
-export interface JsonBIP44Node {
+export type JsonBIP44Node = {
   /**
    * The 0-indexed BIP-44 path depth of this node.
    *
@@ -43,7 +43,7 @@ export interface JsonBIP44Node {
    * The Base64 string representation of the key material for this node.
    */
   readonly key: string;
-}
+};
 
 export type BIP44NodeInterface = JsonBIP44Node & {
   /**
@@ -58,11 +58,11 @@ export type BIP44NodeInterface = JsonBIP44Node & {
   toJSON(): JsonBIP44Node;
 };
 
-interface BIP44NodeOptions {
+type BIP44NodeOptions = {
   readonly depth?: BIP44Depth;
   readonly key?: Buffer | string;
   readonly derivationPath?: RootedHDPathTuple;
-}
+};
 
 /**
  * A wrapper for BIP-44 Hierarchical Deterministic (HD) tree nodes, i.e.

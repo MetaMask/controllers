@@ -84,11 +84,11 @@ export function deriveChildKey(pathPart: string, parentKey: Buffer): Buffer {
   return Buffer.concat([privateKey, extraEntropy]);
 }
 
-interface DeriveSecretExtensionArgs {
+type DeriveSecretExtensionArgs = {
   parentPrivateKey: Buffer;
   childIndex: number;
   isHardened: boolean;
-}
+};
 
 // the bip32 secret extension is created from the parent private or public key and the child index
 /**
@@ -121,11 +121,11 @@ function deriveSecretExtension({
   return Buffer.concat([parentPublicKey, indexBuffer]);
 }
 
-interface GenerateKeyArgs {
+type GenerateKeyArgs = {
   parentPrivateKey: Buffer;
   parentExtraEntropy: string | Buffer;
   secretExtension: string | Buffer;
-}
+};
 
 /**
  * @param options
