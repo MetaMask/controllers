@@ -1,3 +1,4 @@
+import { bytesToHex } from '@noble/hashes/utils';
 import {
   BASE_64_KEY_LENGTH,
   BASE_64_REGEX,
@@ -257,4 +258,14 @@ export function isValidBase64StringKey(stringKey: string): boolean {
     return false;
   }
   return true;
+}
+
+/**
+ * Get a BigInt from a byte array.
+ *
+ * @param bytes - The byte array to get the BigInt for.
+ * @returns The byte array as BigInt.
+ */
+export function bytesToNumber(bytes: Uint8Array): bigint {
+  return BigInt(`0x${bytesToHex(bytes)}`);
 }

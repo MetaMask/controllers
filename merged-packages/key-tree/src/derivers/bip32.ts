@@ -1,12 +1,11 @@
-import crypto from 'crypto';
-import secp256k1 from 'secp256k1';
-import createKeccakHash from 'keccak';
+import { CURVE, getPublicKey, utils as secp256k1Utils } from '@noble/secp256k1';
+import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
+import { hmac } from '@noble/hashes/hmac';
+import { sha512 } from '@noble/hashes/sha512';
 import { BUFFER_KEY_LENGTH } from '../constants';
-import { isValidBufferKey } from '../utils';
+import { bytesToNumber, hexStringToBuffer, isValidBufferKey } from '../utils';
 
 const HARDENED_OFFSET = 0x80000000;
-
-type KeccakBits = '224' | '256' | '384' | '512';
 
 /**
  * Converts a BIP-32 private key to an Ethereum address.
@@ -25,18 +24,8 @@ export function privateKeyToEthAddress(key: Buffer) {
   }
 
   const privateKey = key.slice(0, 32);
-  const publicKey = secp256k1
-    .publicKeyCreate(new Uint8Array(privateKey), false)
-    .slice(1);
-  return keccak(Buffer.from(publicKey)).slice(-20);
-}
-
-/**
- * @param data
- * @param keccakBits
- */
-function keccak(data: string | Buffer, keccakBits: KeccakBits = '256'): Buffer {
-  return createKeccakHash(`keccak${keccakBits}`).update(data).digest();
+  const publicKey = getPublicKey(privateKey, false).slice(1);
+  return Buffer.from(keccak256(Buffer.from(publicKey)).slice(-20));
 }
 
 /**
@@ -114,10 +103,7 @@ function deriveSecretExtension({
   // Normal child
   const indexBuffer = Buffer.allocUnsafe(4);
   indexBuffer.writeUInt32BE(childIndex, 0);
-  const parentPublicKey = secp256k1.publicKeyCreate(
-    new Uint8Array(parentPrivateKey),
-    true,
-  );
+  const parentPublicKey = getPublicKey(parentPrivateKey, true);
   return Buffer.concat([parentPublicKey, indexBuffer]);
 }
 
@@ -126,6 +112,35 @@ type GenerateKeyArgs = {
   parentExtraEntropy: string | Buffer;
   secretExtension: string | Buffer;
 };
+
+/**
+ * Add a tweak to the private key: `(privateKey + tweak) % n`.
+ *
+ * @param privateKeyBuffer - The private key as 32 byte Uint8Array.
+ * @param tweakBuffer - The tweak as 32 byte Uint8Array.
+ * @throws If the private key or tweak is invalid.
+ * @returns The private key with the tweak added to it.
+ */
+export function privateAdd(
+  privateKeyBuffer: Uint8Array,
+  tweakBuffer: Uint8Array,
+): Uint8Array {
+  const privateKey = bytesToNumber(privateKeyBuffer);
+  const tweak = bytesToNumber(tweakBuffer);
+
+  if (tweak >= CURVE.n) {
+    throw new Error('Invalid tweak: Tweak is larger than the curve order.');
+  }
+
+  const added = secp256k1Utils.mod(privateKey + tweak, CURVE.n);
+  if (!secp256k1Utils.isValidPrivateKey(added)) {
+    throw new Error(
+      'Invalid private key or tweak: The resulting private key is invalid.',
+    );
+  }
+
+  return hexStringToBuffer(added.toString(16).padStart(64, '0'));
+}
 
 /**
  * @param options
@@ -138,16 +153,11 @@ function generateKey({
   parentExtraEntropy,
   secretExtension,
 }: GenerateKeyArgs) {
-  const entropy = crypto
-    .createHmac('sha512', parentExtraEntropy)
-    .update(secretExtension)
-    .digest();
+  const entropy = hmac(sha512, parentExtraEntropy, secretExtension);
   const keyMaterial = entropy.slice(0, 32);
   // extraEntropy is also called "chaincode"
   const extraEntropy = entropy.slice(32);
-  const privateKey = secp256k1.privateKeyTweakAdd(
-    new Uint8Array(parentPrivateKey),
-    new Uint8Array(keyMaterial),
-  );
+  const privateKey = privateAdd(parentPrivateKey, keyMaterial);
+
   return { privateKey, extraEntropy };
 }

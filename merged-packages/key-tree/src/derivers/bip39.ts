@@ -1,5 +1,6 @@
-import crypto from 'crypto';
-import { mnemonicToSeedSync } from 'bip39';
+import { mnemonicToSeedSync } from '@scure/bip39';
+import { hmac } from '@noble/hashes/hmac';
+import { sha512 } from '@noble/hashes/sha512';
 import { BIP39Node } from '../constants';
 
 // This magic constant is analogous to a salt, and is consistent across all
@@ -19,7 +20,7 @@ export function bip39MnemonicToMultipath(mnemonic: string): BIP39Node {
  * @param _parentKey
  */
 export function deriveChildKey(pathPart: string, _parentKey?: never): Buffer {
-  return createBip39KeyFromSeed(mnemonicToSeedSync(pathPart));
+  return createBip39KeyFromSeed(Buffer.from(mnemonicToSeedSync(pathPart)));
 }
 
 /**
@@ -27,5 +28,5 @@ export function deriveChildKey(pathPart: string, _parentKey?: never): Buffer {
  * @returns The bytes of the corresponding BIP-39 master key.
  */
 export function createBip39KeyFromSeed(seed: Buffer): Buffer {
-  return crypto.createHmac('sha512', ROOT_BASE_SECRET).update(seed).digest();
+  return Buffer.from(hmac(sha512, ROOT_BASE_SECRET, seed));
 }
