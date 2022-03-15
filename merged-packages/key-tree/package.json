@@ -46,8 +46,6 @@
     "eslint-plugin-jsdoc": "^36.1.1",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^4.0.0",
-    "eth-hd-keyring": "^3.6.0",
-    "ethereumjs-wallet": "^1.0.2",
     "jest": "^27.2.5",
     "prettier": "^2.4.1",
     "prettier-plugin-packagejson": "^2.2.13",
@@ -64,9 +62,7 @@
   },
   "lavamoat": {
     "allowScripts": {
-      "@lavamoat/preinstall-always-fail": false,
-      "keccak": true,
-      "secp256k1": true
+      "@lavamoat/preinstall-always-fail": false
     }
   }
 }

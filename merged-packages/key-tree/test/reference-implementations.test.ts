@@ -1,5 +1,3 @@
-import HdKeyring from 'eth-hd-keyring';
-import { hdkey } from 'ethereumjs-wallet';
 import { BIP44Node } from '../src/BIP44Node';
 import { BIP44PurposeNodeToken } from '../src/constants';
 import { deriveKeyFromPath } from '../src/derivation';
@@ -8,7 +6,6 @@ import { createBip39KeyFromSeed } from '../src/derivers/bip39';
 import {
   getBIP44CoinTypeToAddressPathTuple,
   hexStringToBuffer,
-  stripHexPrefix,
 } from '../src/utils';
 import fixtures from './fixtures';
 
@@ -64,7 +61,7 @@ describe('reference implementation tests', () => {
   });
 
   describe('eth-hd-keyring', () => {
-    const { mnemonic } = fixtures['eth-hd-keyring'];
+    const { mnemonic, addresses } = fixtures['eth-hd-keyring'];
     const mnemonicBip39Node = `bip39:${mnemonic}` as const;
 
     describe('BIP44Node', () => {
@@ -90,12 +87,7 @@ describe('reference implementation tests', () => {
           );
         }
 
-        const hdKeyring = new HdKeyring({
-          mnemonic,
-          numberOfAccounts,
-        });
-
-        expect(await hdKeyring.getAccounts()).toStrictEqual(
+        expect(addresses).toStrictEqual(
           ourAccounts.map((account) => `0x${account}`),
         );
         expect(ourAccounts).toMatchSnapshot();
@@ -124,12 +116,7 @@ describe('reference implementation tests', () => {
           );
         }
 
-        const hdKeyring = new HdKeyring({
-          mnemonic,
-          numberOfAccounts,
-        });
-
-        expect(await hdKeyring.getAccounts()).toStrictEqual(
+        expect(addresses).toStrictEqual(
           ourAccounts.map((account) => `0x${account}`),
         );
         expect(ourAccounts).toMatchSnapshot();
@@ -138,7 +125,7 @@ describe('reference implementation tests', () => {
   });
 
   describe('ethereumjs-wallet', () => {
-    const { sampleAddressIndices, hexSeed, path } =
+    const { sampleAddressIndices, hexSeed, privateKey, address, path } =
       fixtures['ethereumjs-wallet'];
     const seed = hexStringToBuffer(hexSeed);
 
@@ -146,33 +133,23 @@ describe('reference implementation tests', () => {
       it('derives the same keys as the reference implementation', () => {
         const seedKey = createBip39KeyFromSeed(seed);
 
-        const fixtureHd = hdkey.fromMasterSeed(seed);
-        const childFixtureHd = fixtureHd.derivePath(path.theirs);
-        const childFixtureHdKey = childFixtureHd.getWallet().getPrivateKey();
-
         const node = new BIP44Node({
           depth: 0,
           key: seedKey,
         }).derive(path.ours.tuple);
 
-        expect(node.keyBuffer.slice(0, 32).toString('base64')).toStrictEqual(
-          childFixtureHdKey.toString('base64'),
+        expect(node.keyBuffer.slice(0, 32).toString('hex')).toStrictEqual(
+          privateKey,
         );
 
         expect(
           privateKeyToEthAddress(node.keyBuffer).toString('hex'),
-        ).toStrictEqual(
-          stripHexPrefix(childFixtureHd.getWallet().getAddressString()),
-        );
+        ).toStrictEqual(address);
 
-        sampleAddressIndices.forEach((index) => {
+        sampleAddressIndices.forEach(({ address: theirAddress, index }) => {
           const ourAddress = privateKeyToEthAddress(
             node.derive([`bip32:${index}`]).keyBuffer,
           ).toString('hex');
-
-          const theirAddress = stripHexPrefix(
-            childFixtureHd.deriveChild(index).getWallet().getAddressString(),
-          );
 
           expect(ourAddress).toStrictEqual(theirAddress);
           expect(ourAddress).toMatchSnapshot();
@@ -183,29 +160,20 @@ describe('reference implementation tests', () => {
     describe('deriveKeyFromPath', () => {
       it('derives the same keys as the reference implementation', () => {
         const seedKey = createBip39KeyFromSeed(seed);
-
-        const fixtureHd = hdkey.fromMasterSeed(seed);
-        const childFixtureHd = fixtureHd.derivePath(path.theirs);
-        const childFixtureHdKey = childFixtureHd.getWallet().getPrivateKey();
-
         const parentKey = deriveKeyFromPath(path.ours.tuple, seedKey);
 
-        expect(parentKey.slice(0, 32).toString('base64')).toStrictEqual(
-          childFixtureHdKey.toString('base64'),
+        expect(parentKey.slice(0, 32).toString('hex')).toStrictEqual(
+          privateKey,
         );
 
         expect(privateKeyToEthAddress(parentKey).toString('hex')).toStrictEqual(
-          stripHexPrefix(childFixtureHd.getWallet().getAddressString()),
+          address,
         );
 
-        sampleAddressIndices.forEach((index) => {
+        sampleAddressIndices.forEach(({ index, address: theirAddress }) => {
           const ourAddress = privateKeyToEthAddress(
             deriveKeyFromPath([`bip32:${index}`], parentKey),
           ).toString('hex');
-
-          const theirAddress = stripHexPrefix(
-            childFixtureHd.deriveChild(index).getWallet().getAddressString(),
-          );
 
           expect(ourAddress).toStrictEqual(theirAddress);
           expect(ourAddress).toMatchSnapshot();
@@ -226,8 +194,13 @@ describe('reference implementation tests', () => {
           const seedKey = createBip39KeyFromSeed(seed);
 
           vector.keys.forEach(
-            (keyObj: { path: any; extPrivKey: string; extPubKey: string }) => {
-              const { path, extPrivKey } = keyObj;
+            (keyObj: {
+              path: any;
+              extPrivKey: string;
+              extPubKey: string;
+              privateKey: string;
+            }) => {
+              const { path, privateKey } = keyObj;
 
               let targetKey: Buffer;
               if (path.ours.string === '') {
@@ -236,13 +209,8 @@ describe('reference implementation tests', () => {
                 targetKey = deriveKeyFromPath(path.ours.tuple, seedKey);
               }
 
-              const xprvHdKey = hdkey
-                .fromExtendedKey(extPrivKey)
-                .getWallet()
-                .getPrivateKey();
-
-              expect(targetKey.slice(0, 32).toString('base64')).toStrictEqual(
-                xprvHdKey.toString('base64'),
+              expect(targetKey.slice(0, 32).toString('hex')).toStrictEqual(
+                privateKey,
               );
             },
           );
