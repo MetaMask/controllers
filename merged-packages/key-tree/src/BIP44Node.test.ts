@@ -222,7 +222,7 @@ describe('BIP44Node', () => {
       );
     });
 
-    it('throws if the depth 4 node of the derivation path is not an unhardened BIP-32 node', () => {
+    it('throws if the depth 4 node of the derivation path is not a BIP-32 node', () => {
       expect(
         () =>
           new BIP44Node({
@@ -231,15 +231,15 @@ describe('BIP44Node', () => {
               BIP44PurposeNodeToken,
               `bip32:60'`,
               `bip32:0'`,
-              `bip32:0'`,
-            ] as any,
+              `bip32:-1`,
+            ],
           }),
       ).toThrow(
-        'Invalid derivation path: The "change" node (depth 4) must be an unhardened BIP-32 node.',
+        'Invalid derivation path: The "change" node (depth 4) must be a BIP-32 node.',
       );
     });
 
-    it('throws if the depth 5 node of the derivation path is not an unhardened BIP-32 node', () => {
+    it('throws if the depth 5 node of the derivation path is not a BIP-32 node', () => {
       expect(
         () =>
           new BIP44Node({
@@ -249,11 +249,11 @@ describe('BIP44Node', () => {
               `bip32:60'`,
               `bip32:0'`,
               `bip32:0`,
-              `bip32:0'`,
-            ] as any,
+              `bip32:-1`,
+            ],
           }),
       ).toThrow(
-        'Invalid derivation path: The "address_index" node (depth 5) must be an unhardened BIP-32 node.',
+        'Invalid derivation path: The "address_index" node (depth 5) must be a BIP-32 node.',
       );
     });
 
@@ -381,7 +381,7 @@ describe('BIP44Node', () => {
       );
     });
 
-    it('throws if the depth 4 node of the derivation path is not an unhardened BIP-32 node', () => {
+    it('throws if the depth 4 node of the derivation path is not a BIP-32 node', () => {
       expect(() =>
         new BIP44Node({
           derivationPath: [
@@ -390,13 +390,13 @@ describe('BIP44Node', () => {
             `bip32:60'`,
             `bip32:0'`,
           ],
-        }).derive([`bip32:0'`]),
+        }).derive([`bip32:-1'`]),
       ).toThrow(
-        'Invalid derivation path: The "change" node (depth 4) must be an unhardened BIP-32 node.',
+        'Invalid derivation path: The "change" node (depth 4) must be a BIP-32 node.',
       );
     });
 
-    it('throws if the depth 5 node of the derivation path is not an unhardened BIP-32 node', () => {
+    it('throws if the depth 5 node of the derivation path is not a BIP-32 node', () => {
       expect(() =>
         new BIP44Node({
           derivationPath: [
@@ -406,9 +406,9 @@ describe('BIP44Node', () => {
             `bip32:0'`,
             `bip32:0`,
           ],
-        }).derive([`bip32:0'`]),
+        }).derive([`bip32:-1`]),
       ).toThrow(
-        'Invalid derivation path: The "address_index" node (depth 5) must be an unhardened BIP-32 node.',
+        'Invalid derivation path: The "address_index" node (depth 5) must be a BIP-32 node.',
       );
     });
   });

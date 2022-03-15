@@ -2,10 +2,8 @@ import { CURVE, getPublicKey, utils as secp256k1Utils } from '@noble/secp256k1';
 import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
-import { BUFFER_KEY_LENGTH } from '../constants';
+import { BUFFER_KEY_LENGTH, BIP_32_HARDENED_OFFSET } from '../constants';
 import { bytesToNumber, hexStringToBuffer, isValidBufferKey } from '../utils';
-
-const HARDENED_OFFSET = 0x80000000;
 
 /**
  * Converts a BIP-32 private key to an Ethereum address.
@@ -49,10 +47,10 @@ export function deriveChildKey(pathPart: string, parentKey: Buffer): Buffer {
     !/^\d+$/u.test(indexPart) ||
     !Number.isInteger(childIndex) ||
     childIndex < 0 ||
-    childIndex >= HARDENED_OFFSET
+    childIndex >= BIP_32_HARDENED_OFFSET
   ) {
     throw new Error(
-      `Invalid BIP-32 index: The index must be a non-negative decimal integer less than ${HARDENED_OFFSET}.`,
+      `Invalid BIP-32 index: The index must be a non-negative decimal integer less than ${BIP_32_HARDENED_OFFSET}.`,
     );
   }
 
@@ -94,7 +92,7 @@ function deriveSecretExtension({
   if (isHardened) {
     // Hardened child
     const indexBuffer = Buffer.allocUnsafe(4);
-    indexBuffer.writeUInt32BE(childIndex + HARDENED_OFFSET, 0);
+    indexBuffer.writeUInt32BE(childIndex + BIP_32_HARDENED_OFFSET, 0);
     const pk = parentPrivateKey;
     const zb = Buffer.alloc(1, 0);
     return Buffer.concat([zb, pk, indexBuffer]);

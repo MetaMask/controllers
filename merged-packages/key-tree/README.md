@@ -77,6 +77,9 @@ const addressKey0 = addressKeyDeriver(0);
 // m / 44' / 60' / 0' / 0 / 1
 const addressKey1 = addressKeyDeriver(1);
 
+// m / 44' / 60' / 0' / 0 / 2'
+const addressKey2 = addressKeyDeriver(2, true);
+
 // Now, the extended private keys can be used to derive the corresponding public
 // keys and protocol addresses.
 ```

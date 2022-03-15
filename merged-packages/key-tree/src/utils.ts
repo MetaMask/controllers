@@ -3,14 +3,15 @@ import {
   BASE_64_KEY_LENGTH,
   BASE_64_REGEX,
   BASE_64_ZERO,
-  BUFFER_KEY_LENGTH,
+  BIP32Node,
   BIP44PurposeNodeToken,
-  UnhardenedBIP32Node,
+  BUFFER_KEY_LENGTH,
+  ChangeHDPathString,
   CoinTypeHDPathString,
   CoinTypeToAddressTuple,
   HardenedBIP32Node,
-  ChangeHDPathString,
   HEXADECIMAL_KEY_LENGTH,
+  UnhardenedBIP32Node,
 } from './constants';
 
 /**
@@ -30,11 +31,13 @@ export function getBIP44CoinTypePathString(
   )}'`;
 }
 
+type BIP44PathIndex = number | { index: number; hardened: boolean };
+
 type BIP44PathIndices = {
   coin_type: number;
   account?: number;
-  change?: number;
-  address_index: number;
+  change?: BIP44PathIndex;
+  address_index: BIP44PathIndex;
 };
 
 export type CoinTypeToAddressIndices = Pick<
@@ -59,7 +62,7 @@ export function getBIP44ChangePathString(
 ): ChangeHDPathString {
   return `${coinTypePath} / ${getHardenedBIP32NodeToken(
     indices.account || 0,
-  )} / ${getUnhardenedBIP32NodeToken(indices.change || 0)}`;
+  )} / ${getBIP32NodeToken(indices.change || 0)}`;
 }
 
 /**
@@ -80,8 +83,8 @@ export function getBIP44CoinTypeToAddressPathTuple({
 }: CoinTypeToAddressIndices): CoinTypeToAddressTuple {
   return [
     getHardenedBIP32NodeToken(account),
-    getUnhardenedBIP32NodeToken(change),
-    getUnhardenedBIP32NodeToken(address_index),
+    getBIP32NodeToken(change),
+    getBIP32NodeToken(address_index),
   ] as const;
 }
 
@@ -111,6 +114,36 @@ export function getUnhardenedBIP32NodeToken(
 ): UnhardenedBIP32Node {
   validateBIP32Index(index);
   return `bip32:${index}`;
+}
+
+/**
+ * A hardened or unhardened BIP-32 node token, e.g. `bip32:0` or `bip32:0'`.
+ * Validates that the index is a non-negative integer number, and throws an
+ * error if validation fails.
+ *
+ * @param index - The index of the node.
+ * @returns The hardened or unhardened BIP-32 node token.
+ */
+export function getBIP32NodeToken(index: BIP44PathIndex): BIP32Node {
+  if (typeof index === 'number') {
+    return getUnhardenedBIP32NodeToken(index);
+  }
+
+  if (
+    !index ||
+    !Number.isInteger(index.index) ||
+    typeof index.hardened !== 'boolean'
+  ) {
+    throw new Error(
+      'Invalid BIP-32 index: Must be an object containing the index and whether it is hardened.',
+    );
+  }
+
+  if (index.hardened) {
+    return getHardenedBIP32NodeToken(index.index);
+  }
+
+  return getUnhardenedBIP32NodeToken(index.index);
 }
 
 /**

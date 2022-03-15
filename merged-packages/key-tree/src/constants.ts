@@ -11,8 +11,8 @@ export const HEXADECIMAL_KEY_LENGTH = 128 as const;
 export const BASE_64_REGEX =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/u;
 
-export const MIN_BIP_44_DEPTH = 0 as const;
-export const MAX_BIP_44_DEPTH = 5 as const;
+export const MIN_BIP_44_DEPTH = 0;
+export const MAX_BIP_44_DEPTH = 5;
 
 export type MinBIP44Depth = typeof MIN_BIP_44_DEPTH;
 export type MaxBIP44Depth = typeof MAX_BIP_44_DEPTH;
@@ -50,12 +50,14 @@ export const BIP_32_PATH_REGEX = /^bip32:\d+'?$/u;
  */
 export const BIP_39_PATH_REGEX = /^bip39:([a-z]+){1}( [a-z]+){11,23}$/u;
 
+export const BIP_32_HARDENED_OFFSET = 0x80000000;
+
 type HDPathString0 = AnonymizedBIP39Node;
 type HDPathString1 = `${HDPathString0} / ${HardenedBIP32Node}`;
 type HDPathString2 = `${HDPathString1} / ${HardenedBIP32Node}`;
 type HDPathString3 = `${HDPathString2} / ${HardenedBIP32Node}`;
-type HDPathString4 = `${HDPathString3} / ${UnhardenedBIP32Node}`;
-type HDPathString5 = `${HDPathString4} / ${UnhardenedBIP32Node}`;
+type HDPathString4 = `${HDPathString3} / ${BIP32Node}`;
+type HDPathString5 = `${HDPathString4} / ${BIP32Node}`;
 
 export type CoinTypeHDPathString = HDPathString2;
 export type ChangeHDPathString = HDPathString4;
@@ -73,8 +75,8 @@ type RootedHDPathTuple0 = readonly [BIP39Node];
 type RootedHDPathTuple1 = readonly [...RootedHDPathTuple0, HardenedBIP32Node];
 type RootedHDPathTuple2 = readonly [...RootedHDPathTuple1, HardenedBIP32Node];
 type RootedHDPathTuple3 = readonly [...RootedHDPathTuple2, HardenedBIP32Node];
-type RootedHDPathTuple4 = readonly [...RootedHDPathTuple3, UnhardenedBIP32Node];
-type RootedHDPathTuple5 = readonly [...RootedHDPathTuple4, UnhardenedBIP32Node];
+type RootedHDPathTuple4 = readonly [...RootedHDPathTuple3, BIP32Node];
+type RootedHDPathTuple5 = readonly [...RootedHDPathTuple4, BIP32Node];
 
 export type RootedHDPathTuple =
   | RootedHDPathTuple0
@@ -87,32 +89,22 @@ export type RootedHDPathTuple =
 type PartialHDPathTuple1 = readonly [HardenedBIP32Node];
 type PartialHDPathTuple2 = readonly [...PartialHDPathTuple1, HardenedBIP32Node];
 type PartialHDPathTuple3 = readonly [...PartialHDPathTuple2, HardenedBIP32Node];
-type PartialHDPathTuple4 = readonly [
-  ...PartialHDPathTuple3,
-  UnhardenedBIP32Node,
-];
-type PartialHDPathTuple5 = readonly [
-  ...PartialHDPathTuple4,
-  UnhardenedBIP32Node,
-];
-type PartialHDPathTuple6 = readonly [UnhardenedBIP32Node];
-type PartialHDPathTuple7 = readonly [UnhardenedBIP32Node, UnhardenedBIP32Node];
-type PartialHDPathTuple8 = readonly [
-  HardenedBIP32Node,
-  UnhardenedBIP32Node,
-  UnhardenedBIP32Node,
-];
-type PartialHDPathTuple9 = readonly [HardenedBIP32Node, UnhardenedBIP32Node];
+type PartialHDPathTuple4 = readonly [...PartialHDPathTuple3, BIP32Node];
+type PartialHDPathTuple5 = readonly [...PartialHDPathTuple4, BIP32Node];
+type PartialHDPathTuple6 = readonly [BIP32Node];
+type PartialHDPathTuple7 = readonly [BIP32Node, BIP32Node];
+type PartialHDPathTuple8 = readonly [HardenedBIP32Node, BIP32Node, BIP32Node];
+type PartialHDPathTuple9 = readonly [HardenedBIP32Node, BIP32Node];
 type PartialHDPathTuple10 = readonly [
   HardenedBIP32Node,
   HardenedBIP32Node,
-  UnhardenedBIP32Node,
+  BIP32Node,
 ];
 type PartialHDPathTuple11 = readonly [
   HardenedBIP32Node,
   HardenedBIP32Node,
-  UnhardenedBIP32Node,
-  UnhardenedBIP32Node,
+  BIP32Node,
+  BIP32Node,
 ];
 
 export type CoinTypeToAddressTuple = PartialHDPathTuple8;

@@ -20,6 +20,7 @@ import {
   getHardenedBIP32NodeToken,
   getUnhardenedBIP32NodeToken,
   getBIP44ChangePathString,
+  getBIP32NodeToken,
 } from './utils';
 
 export type CoinTypeHDPathTuple = [
@@ -266,10 +267,11 @@ export function deriveBIP44AddressKey(
 type BIP44AddressKeyDeriver = {
   /**
    * @param address_index - The `address_index` value.
+   * @param isHardened - Whether the derived index is hardened.
    * @returns The key corresponding to the path of this deriver and the
    * specified `address_index` value.
    */
-  (address_index: number): Buffer;
+  (address_index: number, isHardened?: boolean): Buffer;
 
   /**
    * A human-readable representation of the derivation path of this deriver
@@ -326,13 +328,18 @@ export function getBIP44AddressKeyDeriver(
       : base64StringToBuffer(key);
 
   const accountNode = getHardenedBIP32NodeToken(account);
-  const changeNode = getUnhardenedBIP32NodeToken(change);
+  const changeNode = getBIP32NodeToken(change);
 
-  const bip44AddressKeyDeriver = (address_index: number): Buffer => {
+  const bip44AddressKeyDeriver = (
+    address_index: number,
+    isHardened = false,
+  ): Buffer => {
     return deriveChildNode(parentKeyBuffer, BIP_44_COIN_TYPE_DEPTH, [
       accountNode,
       changeNode,
-      getUnhardenedBIP32NodeToken(address_index),
+      isHardened
+        ? getHardenedBIP32NodeToken(address_index)
+        : getUnhardenedBIP32NodeToken(address_index),
     ]).keyBuffer;
   };
 

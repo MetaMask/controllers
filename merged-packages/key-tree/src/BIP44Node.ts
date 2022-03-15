@@ -337,17 +337,17 @@ function validateBIP44DerivationPath(
         break;
 
       case 4:
-        if (!BIP_32_PATH_REGEX.test(nodeToken) || isHardened(nodeToken)) {
+        if (!BIP_32_PATH_REGEX.test(nodeToken)) {
           throw new Error(
-            'Invalid derivation path: The "change" node (depth 4) must be an unhardened BIP-32 node.',
+            'Invalid derivation path: The "change" node (depth 4) must be a BIP-32 node.',
           );
         }
         break;
 
       case MAX_BIP_44_DEPTH: // 5
-        if (!BIP_32_PATH_REGEX.test(nodeToken) || isHardened(nodeToken)) {
+        if (!BIP_32_PATH_REGEX.test(nodeToken)) {
           throw new Error(
-            'Invalid derivation path: The "address_index" node (depth 5) must be an unhardened BIP-32 node.',
+            'Invalid derivation path: The "address_index" node (depth 5) must be a BIP-32 node.',
           );
         }
         break;
