@@ -90,7 +90,6 @@ describe('reference implementation tests', () => {
         expect(addresses).toStrictEqual(
           ourAccounts.map((account) => `0x${account}`),
         );
-        expect(ourAccounts).toMatchSnapshot();
       });
     });
 
@@ -119,7 +118,6 @@ describe('reference implementation tests', () => {
         expect(addresses).toStrictEqual(
           ourAccounts.map((account) => `0x${account}`),
         );
-        expect(ourAccounts).toMatchSnapshot();
       });
     });
   });
@@ -152,7 +150,6 @@ describe('reference implementation tests', () => {
           ).toString('hex');
 
           expect(ourAddress).toStrictEqual(theirAddress);
-          expect(ourAddress).toMatchSnapshot();
         });
       });
     });
@@ -176,7 +173,6 @@ describe('reference implementation tests', () => {
           ).toString('hex');
 
           expect(ourAddress).toStrictEqual(theirAddress);
-          expect(ourAddress).toMatchSnapshot();
         });
       });
     });
