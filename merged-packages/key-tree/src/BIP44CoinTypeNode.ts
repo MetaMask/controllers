@@ -41,11 +41,6 @@ export type BIP44CoinTypeNodeInterface = BIP44NodeInterface & {
 };
 
 /**
- * Used to conceal the inner {@link BIP44Node} from consumers.
- */
-const InnerNode = Symbol('_node');
-
-/**
  * A wrapper object for BIP-44 `coin_type` keys. `coin_type` is the index
  * specifying the protocol for which deeper keys are intended. For the
  * authoritative list of coin types, please see
@@ -61,18 +56,18 @@ const InnerNode = Symbol('_node');
  *
  */
 export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
-  private readonly [InnerNode]: BIP44Node;
+  readonly #node: BIP44Node;
 
   public get depth(): BIP44Depth {
-    return this[InnerNode].depth;
+    return this.#node.depth;
   }
 
   public get key(): string {
-    return this[InnerNode].key;
+    return this.#node.key;
   }
 
   public get keyBuffer(): Buffer {
-    return this[InnerNode].keyBuffer;
+    return this.#node.keyBuffer;
   }
 
   public readonly path: CoinTypeHDPathString;
@@ -111,7 +106,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
 
       validateCoinTypeNodeDepth(nodeOrPathTuple.length - 1);
 
-      this[InnerNode] = new BIP44Node({
+      this.#node = new BIP44Node({
         derivationPath: nodeOrPathTuple,
       });
 
@@ -140,7 +135,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
       }
       this.coin_type = coin_type;
 
-      this[InnerNode] =
+      this.#node =
         nodeOrPathTuple instanceof BIP44Node
           ? nodeOrPathTuple
           : new BIP44Node({
@@ -178,14 +173,14 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     change = 0,
     address_index,
   }: CoinTypeToAddressIndices): Buffer {
-    return this[InnerNode].derive(
+    return this.#node.derive(
       getBIP44CoinTypeToAddressPathTuple({ account, change, address_index }),
     ).keyBuffer;
   }
 
   toJSON(): JsonBIP44CoinTypeNode {
     return {
-      ...this[InnerNode].toJSON(),
+      ...this.#node.toJSON(),
       coin_type: this.coin_type,
       path: this.path,
     };
