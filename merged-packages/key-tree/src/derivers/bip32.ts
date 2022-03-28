@@ -14,16 +14,15 @@ import { Curve, mod, secp256k1 } from '../curves';
  *
  * @param key - The `address_index` key buffer to convert to an Ethereum
  * address.
- * @param curve - The curve to use.
  * @returns The Ethereum address corresponding to the given key.
  */
-export function privateKeyToEthAddress(key: Buffer, curve = secp256k1) {
+export function privateKeyToEthAddress(key: Buffer) {
   if (!Buffer.isBuffer(key) || !isValidBufferKey(key)) {
     throw new Error('Invalid key: The key must be a 64-byte, non-zero Buffer.');
   }
 
   const privateKey = key.slice(0, 32);
-  const publicKey = curve.getPublicKey(privateKey, false).slice(1);
+  const publicKey = secp256k1.getPublicKey(privateKey, false).slice(1);
   return Buffer.from(keccak256(Buffer.from(publicKey)).slice(-20));
 }
 

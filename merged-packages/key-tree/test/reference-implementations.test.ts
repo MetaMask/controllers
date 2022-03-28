@@ -33,9 +33,7 @@ describe('reference implementation tests', () => {
             getBIP44CoinTypeToAddressPathTuple({ address_index: index }),
           );
 
-          expect(
-            privateKeyToEthAddress(childNode.keyBuffer).toString('hex'),
-          ).toStrictEqual(expectedAddress);
+          expect(await childNode.getAddress()).toStrictEqual(expectedAddress);
         }
       });
     });
@@ -83,13 +81,9 @@ describe('reference implementation tests', () => {
         const ourAccounts = [];
         for (let i = 0; i < numberOfAccounts; i++) {
           ourAccounts.push(
-            privateKeyToEthAddress(
-              (
-                await node.derive(
-                  getBIP44CoinTypeToAddressPathTuple({ address_index: i }),
-                )
-              ).keyBuffer,
-            ).toString('hex'),
+            await node
+              .derive(getBIP44CoinTypeToAddressPathTuple({ address_index: i }))
+              .then((childNode) => childNode.getAddress()),
           );
         }
 
@@ -147,9 +141,7 @@ describe('reference implementation tests', () => {
           privateKey,
         );
 
-        expect(
-          privateKeyToEthAddress(node.keyBuffer).toString('hex'),
-        ).toStrictEqual(address);
+        expect(await node.getAddress()).toStrictEqual(address);
 
         for (const { index, address: theirAddress } of sampleAddressIndices) {
           const ourAddress = privateKeyToEthAddress(
@@ -290,9 +282,9 @@ describe('reference implementation tests', () => {
               theirPrivateKey,
             );
 
-            expect(
-              (await ed25519.getPublicKey(ourPrivateKey)).toString('hex'),
-            ).toStrictEqual(theirPublicKey);
+            expect(await childNode.getPublicKey()).toStrictEqual(
+              theirPublicKey,
+            );
           }
         });
       });

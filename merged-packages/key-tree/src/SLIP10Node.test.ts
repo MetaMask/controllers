@@ -2,6 +2,8 @@ import fixtures from '../test/fixtures';
 import { ed25519, secp256k1 } from './curves';
 import { SLIP10Node } from './SLIP10Node';
 import { BIP44PurposeNodeToken } from './constants';
+import { createBip39KeyFromSeed } from './derivers/bip39';
+import { hexStringToBuffer } from './utils';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 
@@ -327,6 +329,106 @@ describe('SLIP10Node', () => {
 
       await expect(node.derive(['bip32:0'])).rejects.toThrow(
         'Invalid path: Cannot derive unhardened child keys with ed25519.',
+      );
+    });
+  });
+
+  describe('getPublicKey', () => {
+    const {
+      ed25519: { slip10 },
+      bip32,
+    } = fixtures;
+
+    it.each(slip10)(
+      'returns the public key for an ed25519 node',
+      async ({ hexSeed, keys }) => {
+        const seedKey = createBip39KeyFromSeed(
+          hexStringToBuffer(hexSeed),
+          ed25519,
+        );
+
+        for (const { path, publicKey } of keys) {
+          const node = await SLIP10Node.create({
+            key: seedKey,
+            curve: ed25519,
+            depth: 0,
+          });
+
+          if (path.ours.tuple.length === 0) {
+            continue;
+          }
+
+          const childNode = await node.derive(path.ours.tuple);
+          expect(await childNode.getPublicKey()).toBe(publicKey);
+        }
+      },
+    );
+
+    it.each(bip32)(
+      'returns the public key for an secp256k1 node',
+      async ({ hexSeed, keys }) => {
+        const seedKey = createBip39KeyFromSeed(
+          hexStringToBuffer(hexSeed),
+          secp256k1,
+        );
+
+        for (const { path, publicKey } of keys) {
+          const node = await SLIP10Node.create({
+            key: seedKey,
+            curve: secp256k1,
+            depth: 0,
+          });
+
+          if (path.ours.tuple.length === 0) {
+            continue;
+          }
+
+          const childNode = await node.derive(path.ours.tuple);
+          expect(await childNode.getPublicKey()).toBe(publicKey);
+        }
+      },
+    );
+  });
+
+  describe('getAddress', () => {
+    const { hexSeed, path, sampleAddressIndices } =
+      fixtures['ethereumjs-wallet'];
+
+    it.each(sampleAddressIndices)(
+      'returns the address for an secp256k1 node',
+      async ({ index, address }) => {
+        const seedKey = createBip39KeyFromSeed(
+          hexStringToBuffer(hexSeed),
+          secp256k1,
+        );
+
+        const node = await SLIP10Node.create({
+          key: seedKey,
+          curve: secp256k1,
+          depth: 0,
+        });
+
+        const childNode = await node.derive([
+          ...path.ours.tuple,
+          `bip32:${index}`,
+        ]);
+
+        expect(await childNode.getAddress()).toBe(address);
+      },
+    );
+
+    it('throws an error when trying to get an address for an ed25519 node', async () => {
+      const node = await SLIP10Node.create({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: ed25519,
+      });
+
+      await expect(node.getAddress()).rejects.toThrow(
+        'Unable to get address for this node: Only secp256k1 is supported.',
       );
     });
   });

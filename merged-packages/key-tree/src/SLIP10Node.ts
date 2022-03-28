@@ -9,6 +9,7 @@ import {
   isValidHexStringKey,
 } from './utils';
 import { deriveKeyFromPath } from './derivation';
+import { privateKeyToEthAddress } from './derivers/bip32';
 
 /**
  * A wrapper for SLIP-10 Hierarchical Deterministic (HD) tree nodes, i.e.
@@ -152,6 +153,12 @@ export class SLIP10Node implements SLIP10NodeInterface {
     return bufferToBase64String(this.keyBuffer);
   }
 
+  get #privateKeyBuffer(): Buffer {
+    // `keyBuffer` consists of both the private key (first 32 bytes) and chain code
+    // (last 32 bytes), so we slice off the chain code here.
+    return this.keyBuffer.slice(0, 32);
+  }
+
   constructor({ depth, key, curve }: SLIP10NodeConstructorOptions) {
     this.depth = depth;
     this.keyBuffer = key;
@@ -185,8 +192,27 @@ export class SLIP10Node implements SLIP10NodeInterface {
     });
   }
 
+  public async getPublicKey(compressed = false): Promise<string> {
+    const publicKey = await this.curve.getPublicKey(
+      this.#privateKeyBuffer,
+      compressed,
+    );
+
+    return publicKey.toString('hex');
+  }
+
+  public async getAddress(): Promise<string> {
+    if (this.curve.name !== 'secp256k1') {
+      throw new Error(
+        'Unable to get address for this node: Only secp256k1 is supported.',
+      );
+    }
+
+    return privateKeyToEthAddress(this.keyBuffer).toString('hex');
+  }
+
   // This is documented in the interface of this class.
-  toJSON(): JsonSLIP10Node {
+  public toJSON(): JsonSLIP10Node {
     return {
       depth: this.depth,
       key: this.key,

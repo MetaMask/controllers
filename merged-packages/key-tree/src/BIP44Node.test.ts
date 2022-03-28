@@ -1,4 +1,6 @@
 import fixtures from '../test/fixtures';
+import { createBip39KeyFromSeed } from './derivers/bip39';
+import { hexStringToBuffer } from './utils';
 import { BIP44Node, BIP44PurposeNodeToken } from '.';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
@@ -397,6 +399,54 @@ describe('BIP44Node', () => {
         'Invalid derivation path: The "address_index" node (depth 5) must be a BIP-32 node.',
       );
     });
+  });
+
+  describe('getPublicKey', () => {
+    const { hexSeed, path, sampleAddressIndices } =
+      fixtures['ethereumjs-wallet'];
+
+    it.each(sampleAddressIndices)(
+      'returns the public key for an secp256k1 node',
+      async ({ index, publicKey }) => {
+        const seedKey = createBip39KeyFromSeed(hexStringToBuffer(hexSeed));
+
+        const node = await BIP44Node.create({
+          key: seedKey,
+          depth: 0,
+        });
+
+        const childNode = await node.derive([
+          ...path.ours.tuple,
+          `bip32:${index}`,
+        ]);
+
+        expect(await childNode.getPublicKey()).toBe(publicKey);
+      },
+    );
+  });
+
+  describe('getAddress', () => {
+    const { hexSeed, path, sampleAddressIndices } =
+      fixtures['ethereumjs-wallet'];
+
+    it.each(sampleAddressIndices)(
+      'returns the address for an secp256k1 node',
+      async ({ index, address }) => {
+        const seedKey = createBip39KeyFromSeed(hexStringToBuffer(hexSeed));
+
+        const node = await BIP44Node.create({
+          key: seedKey,
+          depth: 0,
+        });
+
+        const childNode = await node.derive([
+          ...path.ours.tuple,
+          `bip32:${index}`,
+        ]);
+
+        expect(await childNode.getAddress()).toBe(address);
+      },
+    );
   });
 
   describe('toJSON', () => {

@@ -141,6 +141,14 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.keyBuffer;
   }
 
+  public getPublicKey(compressed?: boolean) {
+    return this.#node.getPublicKey(compressed);
+  }
+
+  public getAddress() {
+    return this.#node.getAddress();
+  }
+
   public readonly path: CoinTypeHDPathString;
 
   public readonly coin_type: number;

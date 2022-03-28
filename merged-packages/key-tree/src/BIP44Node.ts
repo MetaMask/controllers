@@ -196,8 +196,16 @@ export class BIP44Node implements BIP44NodeInterface {
     return new BIP44Node(node);
   }
 
+  public getPublicKey(compressed?: boolean) {
+    return this.#node.getPublicKey(compressed);
+  }
+
+  public getAddress() {
+    return this.#node.getAddress();
+  }
+
   // This is documented in the interface of this class.
-  toJSON(): JsonBIP44Node {
+  public toJSON(): JsonBIP44Node {
     return {
       depth: this.depth,
       key: this.key,

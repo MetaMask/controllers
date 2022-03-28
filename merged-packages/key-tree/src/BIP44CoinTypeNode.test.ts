@@ -298,6 +298,42 @@ describe('BIP44CoinTypeNode', () => {
     });
   });
 
+  describe('getPublicKey', () => {
+    it('returns the public key for a node', async () => {
+      const coinType = 60;
+      const node = await BIP44Node.create({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:${coinType}'`,
+        ],
+      });
+
+      const parentNode = await BIP44CoinTypeNode.create(node, coinType);
+      const expectedKey = await node.getPublicKey();
+
+      expect(await parentNode.getPublicKey()).toBe(expectedKey);
+    });
+  });
+
+  describe('getAddress', () => {
+    it('returns an Ethereum address for a node', async () => {
+      const coinType = 60;
+      const node = await BIP44Node.create({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:${coinType}'`,
+        ],
+      });
+
+      const parentNode = await BIP44CoinTypeNode.create(node, coinType);
+      const expectedKey = await node.getAddress();
+
+      expect(await parentNode.getAddress()).toBe(expectedKey);
+    });
+  });
+
   describe('toJSON', () => {
     it('returns a JSON-compatible representation of the node', async () => {
       const coinType = 60;
