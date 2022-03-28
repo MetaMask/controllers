@@ -127,4 +127,8 @@ export type PartialHDPathTuple =
  */
 export type HDPathTuple = RootedHDPathTuple | PartialHDPathTuple;
 
+export type RootedSLIP10PathTuple = readonly [BIP39Node, ...BIP32Node[]];
+export type SLIP10PathTuple = readonly BIP32Node[];
+export type SLIP10Path = RootedSLIP10PathTuple | SLIP10PathTuple;
+
 export type FullHDPathTuple = RootedHDPathTuple5;

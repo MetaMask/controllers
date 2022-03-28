@@ -25,6 +25,7 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
+    "@noble/ed25519": "^1.6.0",
     "@noble/hashes": "^1.0.0",
     "@noble/secp256k1": "^1.5.5",
     "@scure/bip39": "^1.0.0"

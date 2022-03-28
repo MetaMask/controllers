@@ -1,4 +1,6 @@
 export { BIP44Node, BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
+export { SLIP10Node, SLIP10NodeInterface, JsonSLIP10Node } from './SLIP10Node';
+export { secp256k1, ed25519 } from './curves';
 export {
   BIP44CoinTypeNode,
   BIP44CoinTypeNodeInterface,

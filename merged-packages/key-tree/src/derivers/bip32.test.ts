@@ -1,6 +1,7 @@
 import { CURVE } from '@noble/secp256k1';
 import { hexStringToBuffer } from '../utils';
 import fixtures from '../../test/fixtures';
+import { secp256k1 } from '../curves';
 import { privateAdd } from './bip32';
 
 const privateAddFixtures = fixtures['secp256k1-node'].privateAdd;
@@ -12,7 +13,11 @@ describe('privateAdd', () => {
       const expected = hexStringToBuffer(result);
 
       expect(
-        privateAdd(hexStringToBuffer(privateKey), hexStringToBuffer(tweak)),
+        privateAdd(
+          hexStringToBuffer(privateKey),
+          hexStringToBuffer(tweak),
+          secp256k1,
+        ),
       ).toStrictEqual(expected);
     },
   );
@@ -23,7 +28,7 @@ describe('privateAdd', () => {
     );
     const tweak = hexStringToBuffer(CURVE.n.toString(16));
 
-    expect(() => privateAdd(privateKey, tweak)).toThrow(
+    expect(() => privateAdd(privateKey, tweak, secp256k1)).toThrow(
       'Invalid tweak: Tweak is larger than the curve order.',
     );
   });
@@ -39,7 +44,7 @@ describe('privateAdd', () => {
       '0000000000000000000000000000000000000000000000000000000000000001',
     );
 
-    expect(() => privateAdd(privateKey, tweak)).toThrow(
+    expect(() => privateAdd(privateKey, tweak, secp256k1)).toThrow(
       'Invalid private key or tweak: The resulting private key is invalid.',
     );
   });

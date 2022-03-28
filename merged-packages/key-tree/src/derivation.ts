@@ -1,12 +1,12 @@
 import {
-  HDPathTuple,
-  BIP44Depth,
   MAX_BIP_44_DEPTH,
   MIN_BIP_44_DEPTH,
   BIP_39_PATH_REGEX,
   BIP_32_PATH_REGEX,
+  SLIP10Path,
 } from './constants';
 import { derivers, Deriver } from './derivers';
+import { Curve } from './curves';
 
 /**
  * ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
@@ -37,34 +37,40 @@ import { derivers, Deriver } from './derivers';
  *
  * BIP-39 seed phrases must be lowercase, space-delimited, and 12-24 words long.
  * @param parentKey - The parent key of the given path segment, if any.
+ * @param depth - The depth of the segment.
+ * @param curve - The curve to use.
  * @returns The derived key.
  */
-export function deriveKeyFromPath(
-  pathSegment: HDPathTuple,
+export async function deriveKeyFromPath(
+  pathSegment: SLIP10Path,
   parentKey?: Buffer,
-  depth?: BIP44Depth,
-): Buffer {
+  depth?: number,
+  curve?: Curve,
+): Promise<Buffer> {
   if (parentKey && !Buffer.isBuffer(parentKey)) {
     throw new Error('Parent key must be a Buffer if specified.');
   }
   validatePathSegment(pathSegment, Boolean(parentKey), depth);
 
-  let key = parentKey;
-
   // derive through each part of path
-  pathSegment.forEach((node) => {
+  // `pathSegment` needs to be cast to `string[]` because `HDPathTuple.reduce()` doesn't work
+  const derivedKey = await (pathSegment as readonly string[]).reduce<
+    Promise<Buffer>
+  >(async (promise, node) => {
+    const key = await promise;
+
     const [pathType, pathValue] = node.split(':');
     /* istanbul ignore if: should be impossible */
     if (!hasDeriver(pathType)) {
       throw new Error(`Unknown derivation type: "${pathType}"`);
     }
     const deriver = derivers[pathType] as Deriver;
-    const childKey = deriver.deriveChildKey(pathValue, key);
+    const childKey = await deriver.deriveChildKey(pathValue, key, curve);
     // continue deriving from child key
-    key = childKey;
-  });
+    return childKey;
+  }, Promise.resolve(parentKey as Buffer));
 
-  return key as Buffer;
+  return derivedKey;
 }
 
 /**
@@ -81,11 +87,13 @@ function hasDeriver(pathType: string): pathType is keyof typeof derivers {
  * - A multipath
  *
  * @param pathSegment - The path segment string to validate.
+ * @param hasKey
+ * @param depth
  */
 export function validatePathSegment(
-  pathSegment: HDPathTuple,
+  pathSegment: SLIP10Path,
   hasKey: boolean,
-  depth?: BIP44Depth,
+  depth?: number,
 ) {
   if ((pathSegment as any).length === 0) {
     throw new Error(`Invalid HD path segment: The segment must not be empty.`);
@@ -114,7 +122,7 @@ export function validatePathSegment(
     (!startsWithBip39 || pathSegment.length !== 1)
   ) {
     throw new Error(
-      `Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of ${MIN_BIP_44_DEPTH}. Received: "${pathSegment}"`,
+      `Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of ${MIN_BIP_44_DEPTH}. Received: "${pathSegment}".`,
     );
   }
 
