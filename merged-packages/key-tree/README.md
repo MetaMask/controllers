@@ -1,6 +1,6 @@
 # @metamask/key-tree
 
-An interface over [BIP-44] key derivation paths.
+An interface over [SLIP-10] and [BIP-44] key derivation paths.
 
 ## Installation
 
@@ -12,7 +12,7 @@ or
 
 ## Usage
 
-This package is designed to accommodate the creation of keys for any level of a BIP-44 path.
+This package is designed to accommodate the creation of keys for any level of a SLIP-10 or BIP-44 path.
 Recall that a BIP-44 HD tree path consists of the following nodes (and depths):
 
 > `m / 44' / coin_type' / account' / change / address_index`
@@ -24,7 +24,11 @@ and `address_index` usually furnishes key pairs intended for user addresses / ac
 For details, refer to the [BIP-44] specification.
 For the authoritative list of protocol `coin_type` indices, see [SLIP-44].
 
-This package exports two classes intended to facilitate the creation of keys in contexts with different privileges.
+The [SLIP-10] interface provides a more generic way for deriving keys, which is not constrained to the BIP-44 path
+nodes. Currently only Secp256k1 and Ed25519 are supported for SLIP-10, but NIST P-256 may be added if there is
+sufficient demand for it.
+
+This package exports a few classes intended to facilitate the creation of keys in contexts with different privileges.
 They are used as follows.
 
 ```typescript
@@ -38,7 +42,7 @@ const coinType = 60;
 // the user's mnemonic.
 const mnemonic = getMnemonic();
 
-const coinTypeNode = new BIP44CoinTypeNode([
+const coinTypeNode = await BIP44CoinTypeNode.create([
   `bip39:${mnemonic}`,
   `bip32:44'`, // By BIP-44, the "purpose" node must be "44'"
   `bip32:${coinType}'`,
@@ -72,20 +76,37 @@ const addressKeyDeriver = getBIP44AddressKeyDeriver(coinTypeNode);
 // the respective addresses.
 
 // m / 44' / 60' / 0' / 0 / 0
-const addressKey0 = addressKeyDeriver(0);
+const addressKey0 = await addressKeyDeriver(0);
 
 // m / 44' / 60' / 0' / 0 / 1
-const addressKey1 = addressKeyDeriver(1);
+const addressKey1 = await addressKeyDeriver(1);
 
 // m / 44' / 60' / 0' / 0 / 2'
-const addressKey2 = addressKeyDeriver(2, true);
+const addressKey2 = await addressKeyDeriver(2, true);
 
 // Now, the extended private keys can be used to derive the corresponding public
 // keys and protocol addresses.
 ```
 
+You can derive SLIP-10 keys as follows.
+
+```typescript
+import { SLIP10Node, secp256k1 } from '@metamask/key-tree';
+
+// Create a SLIP10Node from a derivation path. You can also specify a key and depth instead.
+const node = await SLIP10Node.create({
+  curve: secp256k1, // or ed25519
+  derivationPath: [`bip39:${mnemonic}`, `bip32:0'`],
+});
+
+// Derive the child node at m / 0' / 1' / 2'. This results in a new SLIP10Node.
+// Note that you cannot derive unhardened child nodes when using Ed25519
+const childNode = await node.derive([`bip32:1'`, `bip32:2'`]);
+```
+
 There are other ways of deriving keys in addition to the above example.
-See the docstrings in the [BIP44Node](./src/BIP44Node.ts) and [BIP44CoinTypeNode](./src/BIP44CoinTypeNode.ts) files for details.
+See the docstrings in the [BIP44Node](./src/BIP44Node.ts), [BIP44CoinTypeNode](./src/BIP44CoinTypeNode.ts) and
+[SLIP10Node](./src/SLIP10Node.ts) files for details.
 
 ### Internals
 
@@ -104,10 +125,12 @@ See the [reference implementation tests](./test/reference-implementations.test.t
 - [BIP-32]
 - [BIP-39]
 - [BIP-44]
+- [SLIP-10]
 - [SLIP-44]
 - Network Working Group: ["Key Derivation Functions and their Uses"](https://trac.tools.ietf.org/html/draft-irtf-cfrg-kdf-uses-00)
 
 [bip-32]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 [bip-39]: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
 [bip-44]: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
+[slip-10]: https://github.com/satoshilabs/slips/blob/master/slip-0010.md
 [slip-44]: https://github.com/satoshilabs/slips/blob/master/slip-0044.md
