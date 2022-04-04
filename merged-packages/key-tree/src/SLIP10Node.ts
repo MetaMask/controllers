@@ -1,5 +1,5 @@
 import { RootedSLIP10PathTuple, SLIP10PathTuple } from './constants';
-import { Curve } from './curves';
+import { Curve, curves, SupportedCurve } from './curves';
 import {
   base64StringToBuffer,
   bufferToBase64String,
@@ -26,6 +26,11 @@ export type JsonSLIP10Node = {
    * The Base64 string representation of the key material for this node.
    */
   readonly key: string;
+
+  /**
+   * The name of the curve used by the node.
+   */
+  readonly curve: SupportedCurve;
 };
 
 export type SLIP10NodeInterface = JsonSLIP10Node & {
@@ -45,14 +50,14 @@ type SLIP10NodeKeyDepthOptions = {
   readonly depth: number;
   readonly key: Buffer | string;
   readonly derivationPath?: never;
-  readonly curve: Curve;
+  readonly curve: SupportedCurve;
 };
 
 type SLIP10NodeDerivationPathOptions = {
   readonly derivationPath: RootedSLIP10PathTuple;
   readonly depth?: never;
   readonly key?: never;
-  readonly curve: Curve;
+  readonly curve: SupportedCurve;
 };
 
 export type SLIP10NodeOptions =
@@ -62,10 +67,8 @@ export type SLIP10NodeOptions =
 type SLIP10NodeConstructorOptions = {
   readonly depth: number;
   readonly key: Buffer;
-  readonly curve: Curve;
+  readonly curve: SupportedCurve;
 };
-
-const SUPPORTED_CURVES = ['secp256k1', 'ed25519'];
 
 export class SLIP10Node implements SLIP10NodeInterface {
   static async create({
@@ -143,7 +146,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     return bufferKey;
   }
 
-  private readonly curve: Curve;
+  public readonly curve: SupportedCurve;
 
   public readonly depth: number;
 
@@ -182,7 +185,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       this.keyBuffer,
       this.depth,
       path,
-      this.curve,
+      getCurveByName(this.curve),
     );
 
     return new SLIP10Node({
@@ -193,7 +196,8 @@ export class SLIP10Node implements SLIP10NodeInterface {
   }
 
   public async getPublicKey(compressed = false): Promise<string> {
-    const publicKey = await this.curve.getPublicKey(
+    const curve = getCurveByName(this.curve);
+    const publicKey = await curve.getPublicKey(
       this.#privateKeyBuffer,
       compressed,
     );
@@ -202,7 +206,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
   }
 
   public async getAddress(): Promise<string> {
-    if (this.curve.name !== 'secp256k1') {
+    if (this.curve !== 'secp256k1') {
       throw new Error(
         'Unable to get address for this node: Only secp256k1 is supported.',
       );
@@ -216,6 +220,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     return {
       depth: this.depth,
       key: this.key,
+      curve: this.curve,
     };
   }
 }
@@ -224,7 +229,7 @@ async function createKeyFromPath({
   derivationPath,
   depth,
   key,
-  curve,
+  curve: curveName,
 }: Required<Pick<SLIP10NodeOptions, 'derivationPath'>> &
   Omit<SLIP10NodeOptions, 'derivationPath'>) {
   if (key) {
@@ -245,6 +250,9 @@ async function createKeyFromPath({
     );
   }
 
+  validateCurve(curveName);
+  const curve = getCurveByName(curveName);
+
   const _depth = derivationPath.length - 1;
   validateBIP32Depth(_depth);
 
@@ -252,19 +260,22 @@ async function createKeyFromPath({
 }
 
 /**
- * Validates the curve.
- * @param curve
+ * Validates the curve name.
+ *
+ * @param curveName - The name of the curve to validate.
  */
-function validateCurve(curve: Curve): asserts curve is Curve {
-  if (!curve) {
+function validateCurve(
+  curveName: unknown,
+): asserts curveName is SupportedCurve {
+  if (!curveName || typeof curveName !== 'string') {
     throw new Error('Invalid curve: Must specify a curve.');
   }
 
-  if (!SUPPORTED_CURVES.includes(curve.name)) {
+  if (!Object.keys(curves).includes(curveName)) {
     throw new Error(
-      `Invalid curve: Only the following curves are supported: ${SUPPORTED_CURVES.join(
-        ', ',
-      )}.`,
+      `Invalid curve: Only the following curves are supported: ${Object.keys(
+        curves,
+      ).join(', ')}.`,
     );
   }
 }
@@ -312,4 +323,13 @@ export async function deriveChildNode(
     key: await deriveKeyFromPath(pathToChild, parentKey, newDepth, curve),
     depth: newDepth,
   };
+}
+
+/**
+ * Get a curve by name.
+ *
+ * @param curveName - The name of the curve to get.
+ */
+function getCurveByName(curveName: SupportedCurve): Curve {
+  return curves[curveName];
 }

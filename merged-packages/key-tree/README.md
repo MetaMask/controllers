@@ -91,11 +91,11 @@ const addressKey2 = await addressKeyDeriver(2, true);
 You can derive SLIP-10 keys as follows.
 
 ```typescript
-import { SLIP10Node, secp256k1 } from '@metamask/key-tree';
+import { SLIP10Node } from '@metamask/key-tree';
 
 // Create a SLIP10Node from a derivation path. You can also specify a key and depth instead.
 const node = await SLIP10Node.create({
-  curve: secp256k1, // or ed25519
+  curve: 'secp256k1', // or 'ed25519'
   derivationPath: [`bip39:${mnemonic}`, `bip32:0'`],
 });
 

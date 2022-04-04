@@ -254,7 +254,7 @@ describe('reference implementation tests', () => {
         fixtures.ed25519['ed25519-hd-key'];
       const seed = hexStringToBuffer(hexSeed);
 
-      describe('BIP44Node', () => {
+      describe('SLIP10Node', () => {
         it('derives the same keys as the reference implementation', async () => {
           // Ethereum coin type node
           const seedKey = createBip39KeyFromSeed(seed, ed25519);
@@ -262,7 +262,7 @@ describe('reference implementation tests', () => {
           const parentNode = await SLIP10Node.create({
             depth: 0,
             key: seedKey,
-            curve: ed25519,
+            curve: 'ed25519',
           });
           const node = await parentNode.derive(path.ours.tuple);
 

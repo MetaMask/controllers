@@ -9,7 +9,6 @@ import {
   SLIP10Path,
 } from './constants';
 import { isHardened } from './utils';
-import { secp256k1 } from './curves';
 import {
   SLIP10Node,
   SLIP10NodeOptions,
@@ -117,7 +116,7 @@ export class BIP44Node implements BIP44NodeInterface {
 
       const node = await SLIP10Node.create({
         derivationPath,
-        curve: secp256k1,
+        curve: 'secp256k1',
       });
 
       return new BIP44Node(node);
@@ -129,7 +128,7 @@ export class BIP44Node implements BIP44NodeInterface {
       const node = await SLIP10Node.create({
         key,
         depth,
-        curve: secp256k1,
+        curve: 'secp256k1',
       });
 
       return new BIP44Node(node);
