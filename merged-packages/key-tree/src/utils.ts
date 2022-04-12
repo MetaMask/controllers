@@ -1,16 +1,11 @@
 import { bytesToHex } from '@noble/hashes/utils';
 import {
-  BASE_64_KEY_LENGTH,
-  BASE_64_REGEX,
-  BASE_64_ZERO,
   BIP32Node,
   BIP44PurposeNodeToken,
-  BUFFER_KEY_LENGTH,
   ChangeHDPathString,
   CoinTypeHDPathString,
   CoinTypeToAddressTuple,
   HardenedBIP32Node,
-  HEXADECIMAL_KEY_LENGTH,
   UnhardenedBIP32Node,
 } from './constants';
 
@@ -195,27 +190,33 @@ export function isValidHexString(hexString: string): boolean {
 }
 
 /**
- * @param base64String - The Base64 string to convert.
- * @returns The {@link Buffer} corresponding to the Base64 string.
+ * @param hexString - The hexadecimal string to convert.
+ * @returns The {@link Buffer} corresponding to the hexadecimal string.
  */
-export function base64StringToBuffer(base64String: string): Buffer {
-  return Buffer.from(base64String, 'base64');
+export function hexStringToBuffer(hexString: string | Buffer): Buffer {
+  if (Buffer.isBuffer(hexString)) {
+    return hexString;
+  }
+
+  if (typeof hexString !== 'string' || !isValidHexString(hexString)) {
+    throw new Error(`Invalid hex string: "${hexString}".`);
+  }
+
+  return Buffer.from(stripHexPrefix(hexString), 'hex');
 }
 
 /**
  * @param hexString - The hexadecimal string to convert.
  * @returns The {@link Buffer} corresponding to the hexadecimal string.
  */
-export function hexStringToBuffer(hexString: string): Buffer {
-  return Buffer.from(stripHexPrefix(hexString), 'hex');
-}
+export function nullableHexStringToBuffer(
+  hexString?: string | Buffer,
+): Buffer | undefined {
+  if (hexString) {
+    return hexStringToBuffer(hexString);
+  }
 
-/**
- * @param input - The {@link Buffer} to convert.
- * @returns The buffer as a Base64 string.
- */
-export function bufferToBase64String(input: Buffer): string {
-  return input.toString('base64');
+  return undefined;
 }
 
 /**
@@ -223,10 +224,14 @@ export function bufferToBase64String(input: Buffer): string {
  * A valid buffer key is 64 bytes long and has at least one non-zero byte.
  *
  * @param buffer - The {@link Buffer} to test.
+ * @param expectedLength - The expected length of the buffer.
  * @returns Whether the buffer represents a valid BIP-32 key.
  */
-export function isValidBufferKey(buffer: Buffer): boolean {
-  if (buffer.length !== BUFFER_KEY_LENGTH) {
+export function isValidBufferKey(
+  buffer: Buffer,
+  expectedLength: number,
+): boolean {
+  if (buffer.length !== expectedLength) {
     return false;
   }
 
@@ -239,61 +244,6 @@ export function isValidBufferKey(buffer: Buffer): boolean {
 }
 
 /**
- * @param input - The string to test.
- * @returns Whether the given string is a valid Base64 string.
- */
-function isValidBase64String(input: string) {
-  return BASE_64_REGEX.test(input);
-}
-
-/**
- * Tests whether the specified hexadecimal string is a valid BIP-32 key.
- * A valid hexadecimal string key is 128 characters long (excluding any `0x`
- * prefix) and has at least one non-zero byte.
- *
- * @param stringKey - The hexadecimal string to test.
- * @returns Whether the string represents a valid BIP-32 key.
- */
-export function isValidHexStringKey(stringKey: string): boolean {
-  if (!isValidHexString(stringKey)) {
-    return false;
-  }
-
-  const stripped = stripHexPrefix(stringKey);
-  if (stripped.length !== HEXADECIMAL_KEY_LENGTH) {
-    return false;
-  }
-
-  if (/^0+$/iu.test(stripped)) {
-    return false;
-  }
-  return true;
-}
-
-/**
- * Tests whether the specified Base64 string is a valid BIP-32 key.
- * A valid Base64 string key is 88 characters long and has at least one non-zero
- * byte.
- *
- * @param stringKey - The Base64 string to test.
- * @returns Whether the string represents a valid BIP-32 key.
- */
-export function isValidBase64StringKey(stringKey: string): boolean {
-  if (!isValidBase64String(stringKey)) {
-    return false;
-  }
-
-  if (stringKey.length !== BASE_64_KEY_LENGTH) {
-    return false;
-  }
-
-  if (stringKey === BASE_64_ZERO) {
-    return false;
-  }
-  return true;
-}
-
-/**
  * Get a BigInt from a byte array.
  *
  * @param bytes - The byte array to get the BigInt for.
@@ -301,4 +251,44 @@ export function isValidBase64StringKey(stringKey: string): boolean {
  */
 export function bytesToNumber(bytes: Uint8Array): bigint {
   return BigInt(`0x${bytesToHex(bytes)}`);
+}
+
+/**
+ * Get a Buffer from a hexadecimal string or Buffer. Validates that the
+ * length of the Buffer matches the specified length, and that the buffer
+ * is not empty.
+ *
+ * @param value - The value to convert to a Buffer.
+ * @param length - The length to validate the Buffer against.
+ */
+export function getBuffer(value: unknown, length: number): Buffer {
+  if (value instanceof Buffer) {
+    validateBuffer(value, length);
+
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if (!isValidHexString(value)) {
+      throw new Error(
+        `Invalid value: Must be a valid hex string of length: ${length * 2}.`,
+      );
+    }
+
+    const buffer = hexStringToBuffer(value);
+    validateBuffer(buffer, length);
+
+    return buffer;
+  }
+
+  throw new Error(`Invalid value: Expected a Buffer or hexadecimal string.`);
+}
+
+function validateBuffer(
+  buffer: Buffer,
+  length: number,
+): asserts buffer is Buffer {
+  if (!isValidBufferKey(buffer, length)) {
+    throw new Error(`Invalid value: Must be a non-zero ${length}-byte buffer.`);
+  }
 }

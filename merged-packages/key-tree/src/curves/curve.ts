@@ -4,7 +4,7 @@ import * as ed25519 from './ed25519';
 
 export type SupportedCurve = keyof typeof curves;
 
-export const curves: Record<string, Curve> = {
+export const curves = {
   secp256k1,
   ed25519,
 };
@@ -13,6 +13,7 @@ export type Curve = {
   name: SupportedCurve;
   secret: Uint8Array;
   deriveUnhardenedKeys: boolean;
+  publicKeyLength: number;
   curve: {
     n: bigint;
   };

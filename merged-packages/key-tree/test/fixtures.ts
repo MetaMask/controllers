@@ -34,6 +34,8 @@ export default {
       '747f302d9c916698912d5f70be53a6cf53bc495803a5523d3a7c3afa2afba94ec3803f838b3e1929ab5481f9da35441372283690fdcf27372c38f40ba134fe03',
     privateKey:
       'f29d6ddd6b0cd1fd59ed99900edd5a53e905b87dfe06824751010feb5228d960',
+    publicKey:
+      '04f7e989b55ebf3f9acfd32303e83069a9e4220bfc128f962325e6aa87e0f11f902a188c3f22f975c064a20c12b5523c53735f42467f2b83546869180abc42751e',
     address: 'b9f89177a4ce589e6d18c33a9748bcc8063836df',
     // The path used is modified from the ethereumjs-wallet original, which
     // isn't BIP-44 compatible. Since we're testing against their

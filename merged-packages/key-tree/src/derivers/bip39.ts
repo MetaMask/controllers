@@ -15,13 +15,17 @@ export function bip39MnemonicToMultipath(mnemonic: string): BIP39Node {
 /**
  * @param pathPart
  * @param _parentKey
+ * @param _parentPublicKey
+ * @param _chainCode
  * @param curve
  */
-export function deriveChildKey(
+export async function deriveChildKey(
   pathPart: string,
   _parentKey?: never,
+  _parentPublicKey?: never,
+  _chainCode?: never,
   curve: Curve = secp256k1,
-): Buffer {
+): Promise<[privateKey: Buffer, publicKey: Buffer, chainCode: Buffer]> {
   return createBip39KeyFromSeed(
     Buffer.from(mnemonicToSeedSync(pathPart)),
     curve,
@@ -33,9 +37,13 @@ export function deriveChildKey(
  * @param curve - The curve to use.
  * @returns The bytes of the corresponding BIP-39 master key.
  */
-export function createBip39KeyFromSeed(
+export async function createBip39KeyFromSeed(
   seed: Buffer,
   curve: Curve = secp256k1,
-): Buffer {
-  return Buffer.from(hmac(sha512, curve.secret, seed));
+): Promise<[privateKey: Buffer, publicKey: Buffer, chainCode: Buffer]> {
+  const key = Buffer.from(hmac(sha512, curve.secret, seed));
+
+  const privateKey = key.slice(0, 32);
+
+  return [privateKey, await curve.getPublicKey(privateKey), key.slice(32, 64)];
 }

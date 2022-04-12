@@ -6,8 +6,10 @@ export type Deriver = {
   deriveChildKey: (
     pathPart: string,
     parentKey?: Buffer,
+    parentPublicKey?: Buffer,
+    chainCode?: Buffer,
     curve?: Curve,
-  ) => Promise<Buffer>;
+  ) => Promise<[privateKey: Buffer, publicKey: Buffer, chainCode: Buffer]>;
 };
 
 export const derivers = {

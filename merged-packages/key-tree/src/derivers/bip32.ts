@@ -1,7 +1,7 @@
 import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
-import { BUFFER_KEY_LENGTH, BIP_32_HARDENED_OFFSET } from '../constants';
+import { BIP_32_HARDENED_OFFSET, BUFFER_KEY_LENGTH } from '../constants';
 import { bytesToNumber, hexStringToBuffer, isValidBufferKey } from '../utils';
 import { Curve, mod, secp256k1 } from '../curves';
 
@@ -12,43 +12,89 @@ import { Curve, mod, secp256k1 } from '../curves';
  * length. It is the consumer's responsibility to ensure that the specified
  * key is a valid BIP-44 Ethereum `address_index` key.
  *
- * @param key - The `address_index` key buffer to convert to an Ethereum
+ * @param key - The `address_index` private key buffer to convert to an Ethereum
  * address.
  * @returns The Ethereum address corresponding to the given key.
  */
 export function privateKeyToEthAddress(key: Buffer) {
-  if (!Buffer.isBuffer(key) || !isValidBufferKey(key)) {
-    throw new Error('Invalid key: The key must be a 64-byte, non-zero Buffer.');
+  if (!Buffer.isBuffer(key) || !isValidBufferKey(key, BUFFER_KEY_LENGTH)) {
+    throw new Error('Invalid key: The key must be a 32-byte, non-zero Buffer.');
   }
 
-  const privateKey = key.slice(0, 32);
-  const publicKey = secp256k1.getPublicKey(privateKey, false).slice(1);
-  return Buffer.from(keccak256(Buffer.from(publicKey)).slice(-20));
+  const publicKey = secp256k1.getPublicKey(key, false);
+  return publicKeyToEthAddress(publicKey);
 }
 
 /**
- * @param pathPart
- * @param parentKey
- * @param curve
+ * Converts a BIP-32 public key to an Ethereum address.
+ *
+ * **WARNING:** Only validates that the key is non-zero and of the correct
+ * length. It is the consumer's responsibility to ensure that the specified
+ * key is a valid BIP-44 Ethereum `address_index` key.
+ *
+ * @param key - The `address_index` public key buffer to convert to an Ethereum
+ * address.
+ * @returns The Ethereum address corresponding to the given key.
+ */
+export function publicKeyToEthAddress(key: Buffer) {
+  if (
+    !Buffer.isBuffer(key) ||
+    !isValidBufferKey(key, secp256k1.publicKeyLength)
+  ) {
+    throw new Error('Invalid key: The key must be a 65-byte, non-zero Buffer.');
+  }
+
+  return Buffer.from(keccak256(key.slice(1)).slice(-20));
+}
+
+/**
+ * Derive a BIP-32 child key with a given path from a parent key.
+ *
+ * @param pathPart - The derivation path part to derive.
+ * @param parentKey - The parent private key to derive from.
+ * @param parentPublicKey - The parent public key to derive from, if no
+ * private key is provided.
+ * @param chainCode - The chain code to use for derivation.
+ * @param curve - The curve to use for derivation.
+ * @returns A tuple containing the derived private key, public key and chain
+ * code.
  */
 export async function deriveChildKey(
   pathPart: string,
-  parentKey: Buffer,
+  parentKey: Buffer | undefined,
+  parentPublicKey: Buffer | undefined,
+  chainCode: Buffer,
   curve: Curve = secp256k1,
-): Promise<Buffer> {
-  if (!parentKey) {
-    throw new Error('Invalid parameters: Must specify a parent key.');
-  }
-
-  if (parentKey.length !== BUFFER_KEY_LENGTH) {
-    throw new Error('Invalid parent key: Must be 64 bytes long.');
-  }
-
+): Promise<[privateKey: Buffer, publicKey: Buffer, chainCode: Buffer]> {
   const isHardened = pathPart.includes(`'`);
   if (!isHardened && !curve.deriveUnhardenedKeys) {
     throw new Error(
       `Invalid path: Cannot derive unhardened child keys with ${curve.name}.`,
     );
+  }
+
+  if (!parentKey && !parentPublicKey) {
+    throw new Error(
+      'Invalid parameters: Must specify either a parent private or public key.',
+    );
+  }
+
+  if (!chainCode) {
+    throw new Error('Invalid parameters: Must specify a chain code.');
+  }
+
+  if (parentKey && parentKey.length !== BUFFER_KEY_LENGTH) {
+    throw new Error('Invalid parent key: Must be 32 bytes long.');
+  }
+
+  if (parentPublicKey && parentPublicKey.length !== curve.publicKeyLength) {
+    throw new Error(
+      `Invalid parent public key: Must be ${curve.publicKeyLength} bytes long.`,
+    );
+  }
+
+  if (chainCode.length !== BUFFER_KEY_LENGTH) {
+    throw new Error('Invalid chain code: Must be 32 bytes long.');
   }
 
   const indexPart = pathPart.split(`'`)[0];
@@ -65,23 +111,25 @@ export async function deriveChildKey(
     );
   }
 
-  const parentPrivateKey = parentKey.slice(0, 32);
-  const parentExtraEntropy = parentKey.slice(32);
   const secretExtension = await deriveSecretExtension({
-    parentPrivateKey,
+    parentPrivateKey: parentKey as Buffer,
     childIndex,
     isHardened,
     curve,
   });
 
   const { privateKey, extraEntropy } = generateKey({
-    parentPrivateKey,
-    parentExtraEntropy,
+    parentPrivateKey: parentKey as Buffer,
+    parentExtraEntropy: chainCode,
     secretExtension,
     curve,
   });
 
-  return Buffer.concat([privateKey, extraEntropy]);
+  return [
+    Buffer.from(privateKey),
+    await curve.getPublicKey(privateKey),
+    Buffer.from(extraEntropy),
+  ];
 }
 
 type DeriveSecretExtensionArgs = {

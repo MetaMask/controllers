@@ -15,6 +15,8 @@ export const isValidPrivateKey = (_privateKey: Uint8Array | string | bigint) =>
 
 export const deriveUnhardenedKeys = false;
 
+export const publicKeyLength = 33;
+
 export const getPublicKey = async (
   privateKey: Uint8Array | string | bigint,
   _compressed?: boolean,

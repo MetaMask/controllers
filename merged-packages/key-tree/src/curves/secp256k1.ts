@@ -12,6 +12,8 @@ export const secret = Buffer.from('Bitcoin seed', 'utf8');
 
 export const deriveUnhardenedKeys = true;
 
+export const publicKeyLength = 65;
+
 export const getPublicKey = (
   privateKey: Uint8Array | string | bigint,
   compressed?: boolean,

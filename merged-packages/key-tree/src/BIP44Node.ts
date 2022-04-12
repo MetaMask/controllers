@@ -6,14 +6,22 @@ import {
   MAX_BIP_44_DEPTH,
   MIN_BIP_44_DEPTH,
   PartialHDPathTuple,
+  RootedSLIP10PathTuple,
   SLIP10Path,
 } from './constants';
 import { isHardened } from './utils';
-import {
-  SLIP10Node,
-  SLIP10NodeOptions,
-  validateBIP32Depth,
-} from './SLIP10Node';
+import { SLIP10Node, validateBIP32Depth } from './SLIP10Node';
+
+type BIP44ExtendedKeyOptions = {
+  readonly depth: number;
+  readonly chainCode: Buffer | string;
+  readonly privateKey?: Buffer | string;
+  readonly publicKey?: Buffer | string;
+};
+
+type BIP44DerivationPathOptions = {
+  readonly derivationPath: RootedSLIP10PathTuple;
+};
 
 /**
  * A wrapper for BIP-44 Hierarchical Deterministic (HD) tree nodes, i.e.
@@ -35,18 +43,23 @@ export type JsonBIP44Node = {
   readonly depth: BIP44Depth;
 
   /**
-   * The Base64 string representation of the key material for this node.
+   * The hexadecimal string representation of the private key for this node.
+   * May be `undefined` if the node is a public node.
    */
-  readonly key: string;
+  readonly privateKey?: string;
+
+  /**
+   * The hexadecimal string representation of the public key for this node.
+   */
+  readonly publicKey: string;
+
+  /**
+   * The hexadecimal string representation of the chain code for this node.
+   */
+  readonly chainCode: string;
 };
 
 export type BIP44NodeInterface = JsonBIP44Node & {
-  /**
-   * The raw bytes of the key material for this node, as a Node.js Buffer or
-   * browser-equivalent.
-   */
-  keyBuffer: Buffer;
-
   /**
    * @returns A JSON-compatible representation of this node's data fields.
    */
@@ -63,14 +76,53 @@ export type BIP44NodeInterface = JsonBIP44Node & {
  */
 export class BIP44Node implements BIP44NodeInterface {
   /**
-   * Initializes a BIP-44 node. Accepts either:
-   * - An existing 64-byte BIP-44 key, and its **0-indexed** BIP-44 path depth.
-   *   - The key may be in the form of a hexadecimal string, Base64 string, or a
-   *     {@link Buffer}.
-   * - A BIP-44 derivation path starting with an `m` node.
-   *   - At present, the `m` node must be a BIP-39 node, given as a string of
-   *     the form `bip39:MNEMONIC`, where `MNEMONIC` is a space-separated list
-   *     of BIP-39 seed phrase words.
+   * Wrapper of the {@link fromExtendedKey} function. Refer to that function
+   * for documentation.
+   *
+   * @param json - The JSON representation of a SLIP-10 node.
+   */
+  static async fromJSON(json: JsonBIP44Node): Promise<BIP44Node> {
+    return BIP44Node.fromExtendedKey(json);
+  }
+
+  /**
+   * Create a new BIP-44 node from a key and chain code. You must specify
+   * either a private key or a public key. When specifying a private key,
+   * the public key will be derived from the private key.
+   *
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * @param depth The depth of the node.
+   * @param privateKey The private key for the node.
+   * @param publicKey The public key for the node. If a private key is
+   * specified, this parameter is ignored.
+   * @param chainCode The chain code for the node.
+   */
+  static async fromExtendedKey({
+    privateKey,
+    publicKey,
+    chainCode,
+    depth,
+  }: BIP44ExtendedKeyOptions): Promise<BIP44Node> {
+    validateBIP44Depth(depth);
+
+    const node = await SLIP10Node.fromExtendedKey({
+      privateKey,
+      publicKey,
+      chainCode,
+      depth,
+      curve: 'secp256k1',
+    });
+
+    return new BIP44Node(node);
+  }
+
+  /**
+   * Create a new BIP-44 node from a derivation path. The derivation path
+   * must be rooted, i.e. it must begin with a BIP-39 node, given as a string of
+   * the form `bip39:MNEMONIC`, where `MNEMONIC` is a space-separated list of
+   * BIP-39 seed phrase words.
    *
    * All parameters are stringently validated, and an error is thrown if
    * validation fails.
@@ -83,60 +135,21 @@ export class BIP44Node implements BIP44NodeInterface {
    *
    * `0 / 1 / 2 / 3 / 4 / 5`
    *
-   * @param options - Options bag.
-   * @param options.depth - The 0-indexed BIP-44 tree depth of the `key`, if
-   * specified.
-   * @param options.key - The key of this node. Mutually exclusive with
-   * `derivationPath`, and requires a `depth` to be specified.
-   * @param options.derivationPath - The rooted HD tree path that will be used
-   * to derive the key of this node. Mutually exclusive with `key`.
+   * @param derivationPath The rooted HD tree path that will be used
+   * to derive the key of this node.
    */
-  static async create({
-    depth,
-    key,
+  static async fromDerivationPath({
     derivationPath,
-  }: Omit<SLIP10NodeOptions, 'curve'>): Promise<BIP44Node> {
-    if (derivationPath) {
-      if (key) {
-        throw new Error(
-          'Invalid parameters: May not specify a derivation path if a key is specified. Initialize the node with just the parent key and its depth, then call node.derive() with your desired path.',
-        );
-      }
+  }: BIP44DerivationPathOptions): Promise<BIP44Node> {
+    validateBIP44Depth(derivationPath.length - 1);
+    validateBIP44DerivationPath(derivationPath, MIN_BIP_44_DEPTH);
 
-      if (depth) {
-        throw new Error(
-          'Invalid parameters: May not specify a depth if a derivation path is specified. The depth will be calculated from the path.',
-        );
-      }
+    const node = await SLIP10Node.fromDerivationPath({
+      derivationPath,
+      curve: 'secp256k1',
+    });
 
-      const _depth = derivationPath.length - 1;
-
-      validateBIP44Depth(_depth);
-      validateBIP44DerivationPath(derivationPath, MIN_BIP_44_DEPTH);
-
-      const node = await SLIP10Node.create({
-        derivationPath,
-        curve: 'secp256k1',
-      });
-
-      return new BIP44Node(node);
-    }
-
-    if (key) {
-      validateBIP44Depth(depth);
-
-      const node = await SLIP10Node.create({
-        key,
-        depth,
-        curve: 'secp256k1',
-      });
-
-      return new BIP44Node(node);
-    }
-
-    throw new Error(
-      'Invalid parameters: Must specify either key or derivation path.',
-    );
+    return new BIP44Node(node);
   }
 
   #node: SLIP10Node;
@@ -145,12 +158,32 @@ export class BIP44Node implements BIP44NodeInterface {
     return this.#node.depth as BIP44Depth;
   }
 
-  public get key(): string {
-    return this.#node.key;
+  public get privateKeyBuffer(): Buffer | undefined {
+    return this.#node.privateKeyBuffer;
   }
 
-  public get keyBuffer(): Buffer {
-    return this.#node.keyBuffer;
+  public get publicKeyBuffer(): Buffer {
+    return this.#node.publicKeyBuffer;
+  }
+
+  public get chainCodeBuffer(): Buffer {
+    return this.#node.chainCodeBuffer;
+  }
+
+  public get privateKey(): string | undefined {
+    return this.#node.privateKey;
+  }
+
+  public get publicKey(): string {
+    return this.#node.publicKey;
+  }
+
+  public get chainCode(): string {
+    return this.#node.chainCode;
+  }
+
+  public get address(): string {
+    return this.#node.address;
   }
 
   constructor(node: SLIP10Node) {
@@ -195,19 +228,13 @@ export class BIP44Node implements BIP44NodeInterface {
     return new BIP44Node(node);
   }
 
-  public getPublicKey(compressed?: boolean) {
-    return this.#node.getPublicKey(compressed);
-  }
-
-  public getAddress() {
-    return this.#node.getAddress();
-  }
-
   // This is documented in the interface of this class.
   public toJSON(): JsonBIP44Node {
     return {
       depth: this.depth,
-      key: this.key,
+      privateKey: this.privateKey,
+      publicKey: this.publicKey,
+      chainCode: this.chainCode,
     };
   }
 }

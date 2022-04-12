@@ -1,19 +1,16 @@
-import { RootedSLIP10PathTuple, SLIP10PathTuple } from './constants';
-import { Curve, curves, SupportedCurve } from './curves';
 import {
-  base64StringToBuffer,
-  bufferToBase64String,
-  hexStringToBuffer,
-  isValidBase64StringKey,
-  isValidBufferKey,
-  isValidHexStringKey,
-} from './utils';
+  BUFFER_KEY_LENGTH,
+  RootedSLIP10PathTuple,
+  SLIP10PathTuple,
+} from './constants';
+import { Curve, curves, SupportedCurve } from './curves';
 import { deriveKeyFromPath } from './derivation';
-import { privateKeyToEthAddress } from './derivers/bip32';
+import { publicKeyToEthAddress } from './derivers/bip32';
+import { getBuffer } from './utils';
 
 /**
  * A wrapper for SLIP-10 Hierarchical Deterministic (HD) tree nodes, i.e.
- * cryptographic keys used to generate keypairs and addresses for cryptocurrency
+ * cryptographic keys used to generate key pairs and addresses for cryptocurrency
  * protocols.
  */
 export type JsonSLIP10Node = {
@@ -23,9 +20,19 @@ export type JsonSLIP10Node = {
   readonly depth: number;
 
   /**
-   * The Base64 string representation of the key material for this node.
+   * The (optional) private key of this node.
    */
-  readonly key: string;
+  readonly privateKey?: string;
+
+  /**
+   * The public key of this node.
+   */
+  readonly publicKey: string;
+
+  /**
+   * The chain code of this node.
+   */
+  readonly chainCode: string;
 
   /**
    * The name of the curve used by the node.
@@ -34,11 +41,18 @@ export type JsonSLIP10Node = {
 };
 
 export type SLIP10NodeInterface = JsonSLIP10Node & {
+  chainCodeBuffer: Buffer;
+
   /**
-   * The raw bytes of the key material for this node, as a Node.js Buffer or
-   * browser-equivalent.
+   * The private key for this node, as a Node.js Buffer or browser-equivalent.
+   * May be undefined if this node is a public key only node.
    */
-  keyBuffer: Buffer;
+  privateKeyBuffer?: Buffer;
+
+  /**
+   * The public key for this node, as a Node.js Buffer or browser-equivalent.
+   */
+  publicKeyBuffer: Buffer;
 
   /**
    * @returns A JSON-compatible representation of this node's data fields.
@@ -46,128 +60,201 @@ export type SLIP10NodeInterface = JsonSLIP10Node & {
   toJSON(): JsonSLIP10Node;
 };
 
-type SLIP10NodeKeyDepthOptions = {
-  readonly depth: number;
-  readonly key: Buffer | string;
-  readonly derivationPath?: never;
-  readonly curve: SupportedCurve;
-};
-
-type SLIP10NodeDerivationPathOptions = {
-  readonly derivationPath: RootedSLIP10PathTuple;
-  readonly depth?: never;
-  readonly key?: never;
-  readonly curve: SupportedCurve;
-};
-
-export type SLIP10NodeOptions =
-  | SLIP10NodeKeyDepthOptions
-  | SLIP10NodeDerivationPathOptions;
-
 type SLIP10NodeConstructorOptions = {
   readonly depth: number;
-  readonly key: Buffer;
+  readonly chainCode: Buffer;
+  readonly privateKey?: Buffer;
+  readonly publicKey: Buffer;
+  readonly curve: SupportedCurve;
+};
+
+type SLIP10ExtendedKeyOptions = {
+  readonly depth: number;
+  readonly chainCode: string | Buffer;
+  readonly privateKey?: string | Buffer;
+  readonly publicKey?: string | Buffer;
+  readonly curve: SupportedCurve;
+};
+
+type SLIP10DerivationPathOptions = {
+  readonly derivationPath: RootedSLIP10PathTuple;
   readonly curve: SupportedCurve;
 };
 
 export class SLIP10Node implements SLIP10NodeInterface {
-  static async create({
+  /**
+   * Wrapper of the {@link fromExtendedKey} function. Refer to that function
+   * for documentation.
+   *
+   * @param json - The JSON representation of a SLIP-10 node.
+   */
+  static async fromJSON(json: JsonSLIP10Node): Promise<SLIP10Node> {
+    return SLIP10Node.fromExtendedKey(json);
+  }
+
+  /**
+   * Create a new SLIP-10 node from a key and chain code. You must specify
+   * either a private key or a public key. When specifying a private key,
+   * the public key will be derived from the private key.
+   *
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * @param depth The depth of the node.
+   * @param privateKey The private key for the node.
+   * @param publicKey The public key for the node. If a private key is
+   * specified, this parameter is ignored.
+   * @param chainCode The chain code for the node.
+   * @param curve The curve used by the node.
+   */
+  static async fromExtendedKey({
     depth,
-    key,
-    derivationPath,
+    privateKey,
+    publicKey,
+    chainCode,
     curve,
-  }: SLIP10NodeOptions): Promise<SLIP10Node> {
+  }: SLIP10ExtendedKeyOptions) {
+    const chainCodeBuffer = getBuffer(chainCode, BUFFER_KEY_LENGTH);
+
     validateCurve(curve);
+    validateBIP32Depth(depth);
 
-    const _key = SLIP10Node.#parseKey(key);
-
-    if (derivationPath) {
-      const keyBuffer = await createKeyFromPath({
-        derivationPath,
-        depth,
-        key,
-        curve,
-      });
+    if (privateKey) {
+      const privateKeyBuffer = getBuffer(privateKey, BUFFER_KEY_LENGTH);
 
       return new SLIP10Node({
-        depth: derivationPath.length - 1,
-        key: keyBuffer,
+        depth,
+        chainCode: chainCodeBuffer,
+        privateKey: privateKeyBuffer,
+        publicKey: await getCurveByName(curve).getPublicKey(privateKey),
         curve,
       });
-    } else if (_key) {
-      validateBIP32Depth(depth);
+    }
 
-      return new SLIP10Node({ depth, key: _key, curve });
+    if (publicKey) {
+      const publicKeyBuffer = getBuffer(
+        publicKey,
+        getCurveByName(curve).publicKeyLength,
+      );
+
+      return new SLIP10Node({
+        depth,
+        chainCode: chainCodeBuffer,
+        publicKey: publicKeyBuffer,
+        curve,
+      });
     }
 
     throw new Error(
-      'Invalid parameters: Must specify either key or derivation path.',
+      'Invalid options: Must provide either a private key or a public key.',
     );
   }
 
   /**
-   * Constructor helper for validating and parsing the `key` parameter. An error
-   * is thrown if validation fails.
+   * Create a new SLIP-10 node from a derivation path. The derivation path
+   * must be rooted, i.e. it must begin with a BIP-39 node, given as a string of
+   * the form `bip39:MNEMONIC`, where `MNEMONIC` is a space-separated list of
+   * BIP-39 seed phrase words.
    *
-   * @param key - The key to parse.
-   * @returns A {@link Buffer}, or `undefined` if no key parameter was
-   * specified.
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * Recall that a BIP-44 HD tree path consists of the following nodes:
+   *
+   * `m / 44' / coin_type' / account' / change / address_index`
+   *
+   * With the following depths:
+   *
+   * `0 / 1 / 2 / 3 / 4 / 5`
+   *
+   * @param derivationPath The rooted HD tree path that will be used
+   * to derive the key of this node.
+   * @param curve The curve used by the node.
    */
-  static #parseKey(key: unknown): Buffer | undefined {
-    if (key === undefined || key === null) {
-      return undefined;
+  static async fromDerivationPath({
+    derivationPath,
+    curve,
+  }: SLIP10DerivationPathOptions) {
+    validateCurve(curve);
+
+    if (derivationPath) {
+      const [privateKey, , chainCode] = await createKeyFromPath({
+        derivationPath,
+        curve,
+      });
+
+      const publicKey = await getCurveByName(curve).getPublicKey(privateKey);
+
+      return new SLIP10Node({
+        depth: derivationPath.length - 1,
+        chainCode,
+        privateKey,
+        publicKey,
+        curve,
+      });
     }
 
-    let bufferKey: Buffer;
-    if (Buffer.isBuffer(key)) {
-      if (!isValidBufferKey(key)) {
-        throw new Error(
-          'Invalid buffer key: Must be a 64-byte, non-empty Buffer.',
-        );
-      }
-
-      bufferKey = key;
-    } else if (typeof key === 'string') {
-      if (isValidHexStringKey(key)) {
-        bufferKey = hexStringToBuffer(key);
-      } else if (isValidBase64StringKey(key)) {
-        bufferKey = base64StringToBuffer(key);
-      } else {
-        throw new Error(
-          'Invalid string key: Must be a 64-byte hexadecimal or Base64 string.',
-        );
-      }
-    } else {
-      throw new Error(
-        `Invalid key: Must be a Buffer or string if specified. Received: "${typeof key}".`,
-      );
-    }
-
-    return bufferKey;
+    throw new Error('Invalid options: Must provide a derivation path.');
   }
 
   public readonly curve: SupportedCurve;
 
   public readonly depth: number;
 
-  public readonly keyBuffer: Buffer;
+  public readonly chainCodeBuffer: Buffer;
 
-  public get key(): string {
-    return bufferToBase64String(this.keyBuffer);
-  }
+  public readonly privateKeyBuffer?: Buffer;
 
-  get #privateKeyBuffer(): Buffer {
-    // `keyBuffer` consists of both the private key (first 32 bytes) and chain code
-    // (last 32 bytes), so we slice off the chain code here.
-    return this.keyBuffer.slice(0, 32);
-  }
+  public readonly publicKeyBuffer: Buffer;
 
-  constructor({ depth, key, curve }: SLIP10NodeConstructorOptions) {
+  constructor({
+    depth,
+    chainCode,
+    privateKey,
+    publicKey,
+    curve,
+  }: SLIP10NodeConstructorOptions) {
     this.depth = depth;
-    this.keyBuffer = key;
+    this.chainCodeBuffer = chainCode;
+    this.privateKeyBuffer = privateKey;
+    this.publicKeyBuffer = publicKey;
     this.curve = curve;
 
     Object.freeze(this);
+  }
+
+  public get chainCode() {
+    return this.chainCodeBuffer.toString('hex');
+  }
+
+  public get privateKey(): string | undefined {
+    return this.privateKeyBuffer?.toString('hex');
+  }
+
+  public get publicKey(): string {
+    return this.publicKeyBuffer.toString('hex');
+  }
+
+  public get address(): string {
+    if (this.curve !== 'secp256k1') {
+      throw new Error(
+        'Unable to get address for this node: Only secp256k1 is supported.',
+      );
+    }
+
+    return publicKeyToEthAddress(this.publicKeyBuffer).toString('hex');
+  }
+
+  /**
+   * Returns a neutered version of this node, i.e. a node without a private key.
+   */
+  public neuter(): SLIP10Node {
+    return new SLIP10Node({
+      depth: this.depth,
+      chainCode: this.chainCodeBuffer,
+      publicKey: this.publicKeyBuffer,
+      curve: this.curve,
+    });
   }
 
   /**
@@ -181,69 +268,45 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @returns The {@link SLIP10Node} corresponding to the derived child key.
    */
   public async derive(path: SLIP10PathTuple): Promise<SLIP10Node> {
-    const { key, depth } = await deriveChildNode(
-      this.keyBuffer,
+    // TODO: Support deriving from a public key
+    if (!this.privateKeyBuffer) {
+      throw new Error('Unable to derive child key: No private key.');
+    }
+
+    const { privateKey, publicKey, chainCode, depth } = await deriveChildNode(
+      this.privateKeyBuffer,
+      this.publicKeyBuffer,
+      this.chainCodeBuffer,
       this.depth,
       path,
       getCurveByName(this.curve),
     );
 
-    return new SLIP10Node({
-      key,
+    return SLIP10Node.fromExtendedKey({
       depth,
+      privateKey,
+      publicKey,
+      chainCode,
       curve: this.curve,
     });
-  }
-
-  public async getPublicKey(compressed = false): Promise<string> {
-    const curve = getCurveByName(this.curve);
-    const publicKey = await curve.getPublicKey(
-      this.#privateKeyBuffer,
-      compressed,
-    );
-
-    return publicKey.toString('hex');
-  }
-
-  public async getAddress(): Promise<string> {
-    if (this.curve !== 'secp256k1') {
-      throw new Error(
-        'Unable to get address for this node: Only secp256k1 is supported.',
-      );
-    }
-
-    return privateKeyToEthAddress(this.keyBuffer).toString('hex');
   }
 
   // This is documented in the interface of this class.
   public toJSON(): JsonSLIP10Node {
     return {
       depth: this.depth,
-      key: this.key,
       curve: this.curve,
+      privateKey: this.privateKey,
+      publicKey: this.publicKey,
+      chainCode: this.chainCode,
     };
   }
 }
 
 async function createKeyFromPath({
   derivationPath,
-  depth,
-  key,
   curve: curveName,
-}: Required<Pick<SLIP10NodeOptions, 'derivationPath'>> &
-  Omit<SLIP10NodeOptions, 'derivationPath'>) {
-  if (key) {
-    throw new Error(
-      'Invalid parameters: May not specify a derivation path if a key is specified. Initialize the node with just the parent key and its depth, then call node.derive() with your desired path.',
-    );
-  }
-
-  if (depth) {
-    throw new Error(
-      'Invalid parameters: May not specify a depth if a derivation path is specified. The depth will be calculated from the path.',
-    );
-  }
-
+}: SLIP10DerivationPathOptions) {
   if (derivationPath.length === 0) {
     throw new Error(
       'Invalid derivation path: May not specify an empty derivation path.',
@@ -256,7 +319,14 @@ async function createKeyFromPath({
   const _depth = derivationPath.length - 1;
   validateBIP32Depth(_depth);
 
-  return await deriveKeyFromPath(derivationPath, undefined, _depth, curve);
+  return await deriveKeyFromPath(
+    derivationPath,
+    undefined,
+    undefined,
+    undefined,
+    _depth,
+    curve,
+  );
 }
 
 /**
@@ -294,20 +364,31 @@ export function validateBIP32Depth(depth: unknown): asserts depth is number {
   }
 }
 
+export type ChildNode = {
+  privateKey?: Buffer;
+  publicKey: Buffer;
+  chainCode: Buffer;
+  depth: number;
+};
+
 /**
  * Derives a child key from the given parent key.
- * @param parentKey - The parent key to derive from.
- * @param parentDepth - The depth of the parent key.
+ * @param privateKey - The parent key to derive from.
+ * @param publicKey - The parent public key to derive from.
+ * @param chainCode - The chain code of the parent node.
+ * @param depth - The depth of the parent key.
  * @param pathToChild - The path to the child node / key.
  * @param curve - The curve to use.
  * @returns The derived key and depth.
  */
 export async function deriveChildNode(
-  parentKey: Buffer,
-  parentDepth: number,
+  privateKey: Buffer | undefined,
+  publicKey: Buffer,
+  chainCode: Buffer,
+  depth: number,
   pathToChild: SLIP10PathTuple,
   curve: Curve,
-): Promise<{ key: Buffer; depth: number }> {
+): Promise<ChildNode> {
   if (pathToChild.length === 0) {
     throw new Error(
       'Invalid HD tree derivation path: Deriving a path of length 0 is not defined.',
@@ -316,11 +397,22 @@ export async function deriveChildNode(
 
   // Note that we do not subtract 1 from the length of the path to the child,
   // unlike when we calculate the depth of a rooted path.
-  const newDepth = parentDepth + pathToChild.length;
+  const newDepth = depth + pathToChild.length;
   validateBIP32Depth(newDepth);
 
+  const [childKey, childPublicKey, childChainCode] = await deriveKeyFromPath(
+    pathToChild,
+    privateKey,
+    publicKey,
+    chainCode,
+    newDepth,
+    curve,
+  );
+
   return {
-    key: await deriveKeyFromPath(pathToChild, parentKey, newDepth, curve),
+    privateKey: childKey,
+    publicKey: childPublicKey,
+    chainCode: childChainCode,
     depth: newDepth,
   };
 }

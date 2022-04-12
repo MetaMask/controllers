@@ -1,24 +1,24 @@
 import {
   BIP39Node,
+  BIP44Depth,
   BIP44PurposeNodeToken,
   CoinTypeHDPathString,
   HardenedBIP32Node,
-  BIP44Depth,
 } from './constants';
-import { JsonBIP44Node, BIP44Node, BIP44NodeInterface } from './BIP44Node';
+import { BIP44Node, BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
 import {
-  base64StringToBuffer,
-  getBIP44CoinTypeToAddressPathTuple,
-  getBIP44CoinTypePathString,
-  isValidBase64StringKey,
   CoinTypeToAddressIndices,
+  getBIP32NodeToken,
+  getBIP44ChangePathString,
+  getBIP44CoinTypePathString,
+  getBIP44CoinTypeToAddressPathTuple,
   getHardenedBIP32NodeToken,
   getUnhardenedBIP32NodeToken,
-  getBIP44ChangePathString,
-  getBIP32NodeToken,
+  hexStringToBuffer,
+  nullableHexStringToBuffer,
 } from './utils';
 import { secp256k1 } from './curves';
-import { deriveChildNode } from './SLIP10Node';
+import { ChildNode, deriveChildNode } from './SLIP10Node';
 
 export type CoinTypeHDPathTuple = [
   BIP39Node,
@@ -67,87 +67,86 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
    *
    * `0 / 1 / 2 / 3 / 4 / 5`
    *
-   * @param nodeOrPathTuple - The {@link BIP44Node} or derivation path for the
-   * key of this `coin_type` node.
+   * @param json - The {@link JsonBIP44Node} for the key of this node.
    * @param coin_type - The coin_type index of this node. Must be a non-negative
    * integer.
    */
-  static async create(
-    nodeOrPathTuple: CoinTypeHDPathTuple | BIP44Node | JsonBIP44Node,
-    coin_type?: number,
-  ): Promise<BIP44CoinTypeNode> {
-    if (Array.isArray(nodeOrPathTuple)) {
-      if (coin_type !== undefined) {
-        throw new Error(
-          'Invalid parameters: May not specify both coin type and a derivation path. The coin type will be computed from the derivation path.',
-        );
-      }
+  static async fromJSON(json: JsonBIP44Node, coin_type: number) {
+    validateCoinType(coin_type);
+    validateCoinTypeNodeDepth(json.depth);
 
-      validateCoinTypeNodeDepth(nodeOrPathTuple.length - 1);
+    const node = await BIP44Node.fromExtendedKey({
+      depth: json.depth,
+      chainCode: hexStringToBuffer(json.chainCode),
+      privateKey: nullableHexStringToBuffer(json.privateKey),
+      publicKey: hexStringToBuffer(json.publicKey),
+    });
 
-      const node = await BIP44Node.create({
-        derivationPath: nodeOrPathTuple,
-      });
+    return new BIP44CoinTypeNode(node, coin_type);
+  }
 
-      // Split the bip32 string token and extract the coin_type index
-      const coinType = Number.parseInt(
-        nodeOrPathTuple[BIP_44_COIN_TYPE_DEPTH].split(':')[1].replace(`'`, ''),
-        10,
-      );
+  /**
+   * Constructs a BIP-44 `coin_type` node. `coin_type` is the index
+   * specifying the protocol for which deeper keys are intended. For the
+   * authoritative list of coin types, please see
+   * [SLIP-44](https://github.com/satoshilabs/slips/blob/master/slip-0044.md).
+   *
+   * Recall that a BIP-44 HD tree path consists of the following nodes:
+   *
+   * `m / 44' / coin_type' / account' / change / address_index`
+   *
+   * With the following depths:
+   *
+   * `0 / 1 / 2 / 3 / 4 / 5`
+   *
+   * @param derivationPath - The derivation path for the key of this node.
+   */
+  static async fromDerivationPath(derivationPath: CoinTypeHDPathTuple) {
+    validateCoinTypeNodeDepth(derivationPath.length - 1);
 
-      return new BIP44CoinTypeNode(node, coinType);
+    const node = await BIP44Node.fromDerivationPath({
+      derivationPath,
+    });
+
+    // Split the bip32 string token and extract the coin_type index
+    const coinType = Number.parseInt(
+      derivationPath[BIP_44_COIN_TYPE_DEPTH].split(':')[1].replace(`'`, ''),
+      10,
+    );
+
+    return new BIP44CoinTypeNode(node, coinType);
+  }
+
+  /**
+   * Constructs a BIP-44 `coin_type` node. `coin_type` is the index
+   * specifying the protocol for which deeper keys are intended. For the
+   * authoritative list of coin types, please see
+   * [SLIP-44](https://github.com/satoshilabs/slips/blob/master/slip-0044.md).
+   *
+   * Recall that a BIP-44 HD tree path consists of the following nodes:
+   *
+   * `m / 44' / coin_type' / account' / change / address_index`
+   *
+   * With the following depths:
+   *
+   * `0 / 1 / 2 / 3 / 4 / 5`
+   *
+   * @param node - The {@link BIP44Node} for the key of this node.
+   * @param coin_type - The coin_type index of this node. Must be a non-negative
+   * integer.
+   */
+  static async fromNode(node: BIP44Node, coin_type: number) {
+    if (!(node instanceof BIP44Node)) {
+      throw new Error('Invalid node: Expected an instance of BIP44Node.');
     }
 
-    validateCoinTypeNodeDepth(nodeOrPathTuple.depth);
-    validateCoinTypeParentKey(nodeOrPathTuple.key);
-
-    const keyBuffer =
-      nodeOrPathTuple instanceof BIP44Node
-        ? nodeOrPathTuple.keyBuffer
-        : base64StringToBuffer(nodeOrPathTuple.key);
-
-    if (
-      typeof coin_type !== 'number' ||
-      !Number.isInteger(coin_type) ||
-      coin_type < 0
-    ) {
-      throw new Error(
-        'Invalid coin type: The specified coin type must be a non-negative integer number.',
-      );
-    }
-
-    const node =
-      nodeOrPathTuple instanceof BIP44Node
-        ? nodeOrPathTuple
-        : await BIP44Node.create({
-            depth: BIP_44_COIN_TYPE_DEPTH,
-            key: keyBuffer,
-          });
+    validateCoinType(coin_type);
+    validateCoinTypeNodeDepth(node.depth);
 
     return new BIP44CoinTypeNode(node, coin_type);
   }
 
   readonly #node: BIP44Node;
-
-  public get depth(): BIP44Depth {
-    return this.#node.depth;
-  }
-
-  public get key(): string {
-    return this.#node.key;
-  }
-
-  public get keyBuffer(): Buffer {
-    return this.#node.keyBuffer;
-  }
-
-  public getPublicKey(compressed?: boolean) {
-    return this.#node.getPublicKey(compressed);
-  }
-
-  public getAddress() {
-    return this.#node.getAddress();
-  }
 
   public readonly path: CoinTypeHDPathString;
 
@@ -159,6 +158,38 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     this.path = getBIP44CoinTypePathString(coin_type);
 
     Object.freeze(this);
+  }
+
+  public get depth(): BIP44Depth {
+    return this.#node.depth;
+  }
+
+  public get privateKeyBuffer(): Buffer | undefined {
+    return this.#node.privateKeyBuffer;
+  }
+
+  public get publicKeyBuffer(): Buffer {
+    return this.#node.publicKeyBuffer;
+  }
+
+  public get chainCodeBuffer(): Buffer {
+    return this.#node.chainCodeBuffer;
+  }
+
+  public get privateKey(): string | undefined {
+    return this.#node.privateKey;
+  }
+
+  public get publicKey(): string {
+    return this.#node.publicKey;
+  }
+
+  public get chainCode(): string {
+    return this.#node.chainCode;
+  }
+
+  public get address(): string {
+    return this.#node.address;
   }
 
   /**
@@ -185,12 +216,17 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     account = 0,
     change = 0,
     address_index,
-  }: CoinTypeToAddressIndices): Promise<Buffer> {
+  }: CoinTypeToAddressIndices): Promise<ChildNode> {
     const childKey = await this.#node.derive(
       getBIP44CoinTypeToAddressPathTuple({ account, change, address_index }),
     );
 
-    return childKey.keyBuffer;
+    return {
+      privateKey: childKey.privateKeyBuffer,
+      publicKey: childKey.publicKeyBuffer,
+      chainCode: childKey.chainCodeBuffer,
+      depth: childKey.depth,
+    };
   }
 
   toJSON(): JsonBIP44CoinTypeNode {
@@ -217,14 +253,20 @@ function validateCoinTypeNodeDepth(depth: number) {
 }
 
 /**
- * Validates a `coin_type` Base64 string key. "Parent" is in the name because
- * it's also in the message that's thrown on validation failure.
+ * Validates that the coin type is a non-negative integer number. An error is
+ * thrown if validation fails.
  *
- * @param parentKey The `coin_type` key to validate.
+ * @param coin_type - The coin type to validate.
  */
-function validateCoinTypeParentKey(parentKey: string) {
-  if (!isValidBase64StringKey(parentKey)) {
-    throw new Error('Invalid parent key: Must be a non-zero 64-byte key.');
+function validateCoinType(coin_type: unknown): asserts coin_type is number {
+  if (
+    typeof coin_type !== 'number' ||
+    !Number.isInteger(coin_type) ||
+    coin_type < 0
+  ) {
+    throw new Error(
+      'Invalid coin type: The specified coin type must be a non-negative integer number.',
+    );
   }
 }
 
@@ -246,35 +288,31 @@ function validateCoinTypeParentKey(parentKey: string) {
  * @returns The derived `address_index` key for the specified derivation path.
  */
 export async function deriveBIP44AddressKey(
-  parentKeyOrNode: string | BIP44CoinTypeNode | JsonBIP44CoinTypeNode,
+  // TODO: Support xpubs and xprvs as part of a separate PR.
+  parentKeyOrNode: BIP44CoinTypeNode | JsonBIP44CoinTypeNode,
   { account = 0, change = 0, address_index }: CoinTypeToAddressIndices,
-): Promise<Buffer> {
-  if (typeof parentKeyOrNode === 'string') {
-    validateCoinTypeParentKey(parentKeyOrNode);
-  } else {
-    validateCoinTypeNodeDepth(parentKeyOrNode.depth);
-    validateCoinTypeParentKey(parentKeyOrNode.key);
-  }
+): Promise<ChildNode> {
+  validateCoinTypeNodeDepth(parentKeyOrNode.depth);
 
-  let keyBuffer: Buffer;
   if (parentKeyOrNode instanceof BIP44CoinTypeNode) {
-    keyBuffer = parentKeyOrNode.keyBuffer;
-  } else {
-    keyBuffer = base64StringToBuffer(
-      typeof parentKeyOrNode === 'string'
-        ? parentKeyOrNode
-        : parentKeyOrNode.key,
+    return await deriveChildNode(
+      parentKeyOrNode.privateKeyBuffer,
+      parentKeyOrNode.publicKeyBuffer,
+      parentKeyOrNode.chainCodeBuffer,
+      BIP_44_COIN_TYPE_DEPTH,
+      getBIP44CoinTypeToAddressPathTuple({ account, change, address_index }),
+      secp256k1,
     );
   }
 
-  const childNode = await deriveChildNode(
-    keyBuffer,
+  return await deriveChildNode(
+    nullableHexStringToBuffer(parentKeyOrNode.privateKey),
+    hexStringToBuffer(parentKeyOrNode.publicKey),
+    hexStringToBuffer(parentKeyOrNode.chainCode),
     BIP_44_COIN_TYPE_DEPTH,
     getBIP44CoinTypeToAddressPathTuple({ account, change, address_index }),
     secp256k1,
   );
-
-  return childNode.key;
 }
 
 type BIP44AddressKeyDeriver = {
@@ -284,7 +322,7 @@ type BIP44AddressKeyDeriver = {
    * @returns The key corresponding to the path of this deriver and the
    * specified `address_index` value.
    */
-  (address_index: number, isHardened?: boolean): Promise<Buffer>;
+  (address_index: number, isHardened?: boolean): Promise<ChildNode>;
 
   /**
    * A human-readable representation of the derivation path of this deriver
@@ -331,14 +369,23 @@ export function getBIP44AddressKeyDeriver(
   accountAndChangeIndices?: Omit<CoinTypeToAddressIndices, 'address_index'>,
 ) {
   const { account = 0, change = 0 } = accountAndChangeIndices || {};
-  const { key, depth } = node;
-  validateCoinTypeNodeDepth(depth);
-  validateCoinTypeParentKey(key);
+
+  validateCoinTypeNodeDepth(node.depth);
 
   const parentKeyBuffer =
     node instanceof BIP44CoinTypeNode
-      ? node.keyBuffer
-      : base64StringToBuffer(key);
+      ? node.privateKeyBuffer
+      : nullableHexStringToBuffer(node.privateKey);
+
+  const parentPublicKeyBuffer =
+    node instanceof BIP44CoinTypeNode
+      ? node.publicKeyBuffer
+      : hexStringToBuffer(node.publicKey);
+
+  const parentChainCodeBuffer =
+    node instanceof BIP44CoinTypeNode
+      ? node.chainCodeBuffer
+      : hexStringToBuffer(node.chainCode);
 
   const accountNode = getHardenedBIP32NodeToken(account);
   const changeNode = getBIP32NodeToken(change);
@@ -346,9 +393,11 @@ export function getBIP44AddressKeyDeriver(
   const bip44AddressKeyDeriver: BIP44AddressKeyDeriver = async (
     address_index: number,
     isHardened = false,
-  ): Promise<Buffer> => {
-    const childNode = await deriveChildNode(
+  ): Promise<ChildNode> => {
+    return await deriveChildNode(
       parentKeyBuffer,
+      parentPublicKeyBuffer,
+      parentChainCodeBuffer,
       BIP_44_COIN_TYPE_DEPTH,
       [
         accountNode,
@@ -359,8 +408,6 @@ export function getBIP44AddressKeyDeriver(
       ],
       secp256k1,
     );
-
-    return childNode.key;
   };
 
   bip44AddressKeyDeriver.coin_type = node.coin_type;
@@ -368,6 +415,8 @@ export function getBIP44AddressKeyDeriver(
     account,
     change,
   });
+
   Object.freeze(bip44AddressKeyDeriver);
+
   return bip44AddressKeyDeriver;
 }

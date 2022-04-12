@@ -1,15 +1,69 @@
 import fixtures from '../test/fixtures';
-import { createBip39KeyFromSeed } from './derivers/bip39';
+import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import { hexStringToBuffer } from './utils';
 import { BIP44Node, BIP44PurposeNodeToken } from '.';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 
 describe('BIP44Node', () => {
-  describe('create', () => {
-    it('initializes a new node (depth, derivationPath)', async () => {
+  describe('fromExtendedKey', () => {
+    it('initializes a new node from a private key', async () => {
+      const [privateKey, , chainCode] = await deriveChildKey(
+        fixtures.local.mnemonic,
+      );
+
       // Ethereum coin type node
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromExtendedKey({
+        privateKey,
+        chainCode,
+        depth: 2,
+      });
+
+      expect(node.depth).toStrictEqual(2);
+      expect(node.toJSON()).toStrictEqual({
+        depth: 2,
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
+      });
+    });
+
+    it('initializes a new node from JSON', async () => {
+      const [privateKey, , chainCode] = await deriveChildKey(
+        fixtures.local.mnemonic,
+      );
+
+      // Ethereum coin type node
+      const node = await BIP44Node.fromExtendedKey({
+        privateKey,
+        chainCode,
+        depth: 2,
+      });
+
+      expect(await BIP44Node.fromJSON(node.toJSON())).toStrictEqual(node);
+    });
+
+    it('throws if the depth is invalid', async () => {
+      const [privateKey, , chainCode] = await deriveChildKey(
+        fixtures.local.mnemonic,
+      );
+
+      await expect(
+        BIP44Node.fromExtendedKey({
+          depth: 6,
+          privateKey,
+          chainCode,
+        }),
+      ).rejects.toThrow(
+        `Invalid HD tree path depth: The depth must be a positive integer N such that 0 <= N <= 5. Received: "6"`,
+      );
+    });
+  });
+
+  describe('fromDerivationPath', () => {
+    it('initializes a new node from a derivation path', async () => {
+      // Ethereum coin type node
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -17,72 +71,17 @@ describe('BIP44Node', () => {
         ],
       });
 
-      expect(node.key).toHaveLength(88);
       expect(node.depth).toStrictEqual(2);
       expect(node.toJSON()).toStrictEqual({
         depth: 2,
-        key: node.key,
-      });
-    });
-
-    it('initializes a new node (depth, buffer key)', async () => {
-      const node = await BIP44Node.create({
-        depth: 1,
-        key: Buffer.alloc(64).fill(1),
-      });
-
-      expect(node.key).toHaveLength(88);
-      expect(node.depth).toStrictEqual(1);
-      expect(node.toJSON()).toStrictEqual({
-        depth: 1,
-        key: node.key,
-      });
-    });
-
-    it('initializes a new node (depth, Base64 string key)', async () => {
-      const node = await BIP44Node.create({
-        depth: 3,
-        key: Buffer.alloc(64).fill(2).toString('base64'),
-      });
-
-      expect(node.key).toHaveLength(88);
-      expect(node.depth).toStrictEqual(3);
-      expect(node.toJSON()).toStrictEqual({
-        depth: 3,
-        key: node.key,
-      });
-    });
-
-    it('initializes a new node (depth, hex string key)', async () => {
-      const node = await BIP44Node.create({
-        depth: 3,
-        key: Buffer.alloc(64).fill(2).toString('hex'),
-      });
-
-      expect(node.key).toHaveLength(88);
-      expect(node.depth).toStrictEqual(3);
-      expect(node.toJSON()).toStrictEqual({
-        depth: 3,
-        key: node.key,
-      });
-    });
-
-    it('initializes a new node (depth, 0x-prefixed hex string key)', async () => {
-      const node = await BIP44Node.create({
-        depth: 3,
-        key: `0x${Buffer.alloc(64).fill(2).toString('hex')}`,
-      });
-
-      expect(node.key).toHaveLength(88);
-      expect(node.depth).toStrictEqual(3);
-      expect(node.toJSON()).toStrictEqual({
-        depth: 3,
-        key: node.key,
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
       });
     });
 
     it('throws an error if attempting to modify the fields of a node', async () => {
-      const node: any = await BIP44Node.create({
+      const node: any = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -91,7 +90,7 @@ describe('BIP44Node', () => {
       });
 
       // getter
-      ['key', 'depth', 'keyBuffer'].forEach((property) => {
+      ['depth', 'privateKey', 'publicKey', 'address'].forEach((property) => {
         expect(() => (node[property] = Buffer.allocUnsafe(64).fill(1))).toThrow(
           expect.objectContaining({
             name: 'TypeError',
@@ -103,55 +102,9 @@ describe('BIP44Node', () => {
       });
     });
 
-    it('throws if the depth is invalid', async () => {
-      const validBufferKey = Buffer.alloc(64).fill(1);
-
-      await expect(
-        BIP44Node.create({
-          depth: 6,
-          key: validBufferKey,
-        }),
-      ).rejects.toThrow(
-        `Invalid HD tree path depth: The depth must be a positive integer N such that 0 <= N <= 5. Received: "6"`,
-      );
-    });
-
-    it('throws if both a derivation path and a depth are specified', async () => {
-      await expect(
-        BIP44Node.create({
-          depth: 2, // This is the correct depth, but it's still forbidden
-          derivationPath: [
-            defaultBip39NodeToken,
-            BIP44PurposeNodeToken,
-            `bip32:60'`,
-          ],
-        }),
-      ).rejects.toThrow(
-        'Invalid parameters: May not specify a depth if a derivation path is specified. The depth will be calculated from the path.',
-      );
-    });
-
-    it('throws if neither a derivation path nor a key is specified', async () => {
-      await expect(BIP44Node.create({ depth: 1 })).rejects.toThrow(
-        'Invalid parameters: Must specify either key or derivation path.',
-      );
-    });
-
-    it('throws if both a derivation path and a key are specified', async () => {
-      await expect(
-        BIP44Node.create({
-          depth: 1,
-          derivationPath: [defaultBip39NodeToken],
-          key: Buffer.alloc(64).fill(1),
-        }),
-      ).rejects.toThrow(
-        'Invalid parameters: May not specify a derivation path if a key is specified. Initialize the node with just the parent key and its depth, then call node.derive() with your desired path.',
-      );
-    });
-
     it('throws if the derivation path is of depth 0 and not a single BIP-39 node', async () => {
       await expect(
-        BIP44Node.create({ derivationPath: [`bip32:0'`] as any }),
+        BIP44Node.fromDerivationPath({ derivationPath: [`bip32:0'`] as any }),
       ).rejects.toThrow(
         'Invalid derivation path: The "m" / seed node (depth 0) must be a BIP-39 node.',
       );
@@ -159,7 +112,7 @@ describe('BIP44Node', () => {
 
     it('throws if the depth 1 node of the derivation path is not the BIP-44 purpose node', async () => {
       await expect(
-        BIP44Node.create({
+        BIP44Node.fromDerivationPath({
           derivationPath: [defaultBip39NodeToken, `bip32:43'`] as any,
         }),
       ).rejects.toThrow(
@@ -169,7 +122,7 @@ describe('BIP44Node', () => {
 
     it('throws if the depth 2 node of the derivation path is not a hardened BIP-32 node', async () => {
       await expect(
-        BIP44Node.create({
+        BIP44Node.fromDerivationPath({
           derivationPath: [
             defaultBip39NodeToken,
             BIP44PurposeNodeToken,
@@ -183,7 +136,7 @@ describe('BIP44Node', () => {
 
     it('throws if the depth 3 node of the derivation path is not a hardened BIP-32 node', async () => {
       await expect(
-        BIP44Node.create({
+        BIP44Node.fromDerivationPath({
           derivationPath: [
             defaultBip39NodeToken,
             BIP44PurposeNodeToken,
@@ -198,7 +151,7 @@ describe('BIP44Node', () => {
 
     it('throws if the depth 4 node of the derivation path is not a BIP-32 node', async () => {
       await expect(
-        BIP44Node.create({
+        BIP44Node.fromDerivationPath({
           derivationPath: [
             defaultBip39NodeToken,
             BIP44PurposeNodeToken,
@@ -214,7 +167,7 @@ describe('BIP44Node', () => {
 
     it('throws if the depth 5 node of the derivation path is not a BIP-32 node', async () => {
       await expect(
-        BIP44Node.create({
+        BIP44Node.fromDerivationPath({
           derivationPath: [
             defaultBip39NodeToken,
             BIP44PurposeNodeToken,
@@ -228,62 +181,12 @@ describe('BIP44Node', () => {
         'Invalid derivation path: The "address_index" node (depth 5) must be a BIP-32 node.',
       );
     });
-
-    it('throws if the key is neither a string nor a buffer', async () => {
-      await expect(
-        BIP44Node.create({ depth: 0, key: {} as any }),
-      ).rejects.toThrow(
-        'Invalid key: Must be a Buffer or string if specified. Received: "object"',
-      );
-    });
-
-    it('throws if the key is an invalid Buffer', async () => {
-      const invalidLengthBuffer = Buffer.alloc(63).fill(1);
-      const zeroBuffer = Buffer.alloc(64);
-
-      await expect(
-        BIP44Node.create({ depth: 0, key: invalidLengthBuffer }),
-      ).rejects.toThrow(
-        'Invalid buffer key: Must be a 64-byte, non-empty Buffer.',
-      );
-
-      await expect(
-        BIP44Node.create({ depth: 0, key: zeroBuffer }),
-      ).rejects.toThrow(
-        'Invalid buffer key: Must be a 64-byte, non-empty Buffer.',
-      );
-    });
-
-    it('throws if the key is an invalid string', async () => {
-      const hexInputs = [
-        Buffer.alloc(64).toString('hex'),
-        Buffer.alloc(63).fill(1).toString('hex'),
-      ];
-
-      const inputs = [
-        // Base64
-        Buffer.alloc(64).toString('base64'),
-        Buffer.alloc(63).fill(1).toString('base64'),
-
-        // Hexadecimal
-        ...hexInputs,
-        ...hexInputs.map((input) => `0x${input}`),
-      ];
-
-      for (const input of inputs) {
-        await expect(
-          BIP44Node.create({ depth: 0, key: input }),
-        ).rejects.toThrow(
-          'Invalid string key: Must be a 64-byte hexadecimal or Base64 string.',
-        );
-      }
-    });
   });
 
   describe('derive', () => {
     it('derives a child node', async () => {
       const coinTypeNode = `bip32:40'`;
-      const targetNode = await BIP44Node.create({
+      const targetNode = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -291,7 +194,7 @@ describe('BIP44Node', () => {
         ],
       });
 
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [defaultBip39NodeToken, BIP44PurposeNodeToken],
       });
 
@@ -299,12 +202,13 @@ describe('BIP44Node', () => {
 
       expect(childNode).toMatchObject({
         depth: targetNode.depth,
-        key: targetNode.key,
+        privateKey: targetNode.privateKey,
+        publicKey: targetNode.publicKey,
       });
     });
 
     it('throws if the parent node is already a leaf node', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -321,7 +225,7 @@ describe('BIP44Node', () => {
     });
 
     it('throws if the child derivation path is zero', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -336,7 +240,7 @@ describe('BIP44Node', () => {
     });
 
     it('throws if the depth 1 node of the derivation path is not the BIP-44 purpose node', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [defaultBip39NodeToken],
       });
 
@@ -346,7 +250,7 @@ describe('BIP44Node', () => {
     });
 
     it('throws if the depth 2 node of the derivation path is not a hardened BIP-32 node', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [defaultBip39NodeToken, BIP44PurposeNodeToken],
       });
 
@@ -356,7 +260,7 @@ describe('BIP44Node', () => {
     });
 
     it('throws if the depth 3 node of the derivation path is not a hardened BIP-32 node', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -370,7 +274,7 @@ describe('BIP44Node', () => {
     });
 
     it('throws if the depth 4 node of the derivation path is not a BIP-32 node', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -385,7 +289,7 @@ describe('BIP44Node', () => {
     });
 
     it('throws if the depth 5 node of the derivation path is not a BIP-32 node', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -401,17 +305,20 @@ describe('BIP44Node', () => {
     });
   });
 
-  describe('getPublicKey', () => {
+  describe('publicKey', () => {
     const { hexSeed, path, sampleAddressIndices } =
       fixtures['ethereumjs-wallet'];
 
     it.each(sampleAddressIndices)(
       'returns the public key for an secp256k1 node',
       async ({ index, publicKey }) => {
-        const seedKey = createBip39KeyFromSeed(hexStringToBuffer(hexSeed));
+        const [privateKey, , chainCode] = await createBip39KeyFromSeed(
+          hexStringToBuffer(hexSeed),
+        );
 
-        const node = await BIP44Node.create({
-          key: seedKey,
+        const node = await BIP44Node.fromExtendedKey({
+          privateKey,
+          chainCode,
           depth: 0,
         });
 
@@ -420,22 +327,25 @@ describe('BIP44Node', () => {
           `bip32:${index}`,
         ]);
 
-        expect(await childNode.getPublicKey()).toBe(publicKey);
+        expect(childNode.publicKey).toBe(publicKey);
       },
     );
   });
 
-  describe('getAddress', () => {
+  describe('address', () => {
     const { hexSeed, path, sampleAddressIndices } =
       fixtures['ethereumjs-wallet'];
 
     it.each(sampleAddressIndices)(
       'returns the address for an secp256k1 node',
       async ({ index, address }) => {
-        const seedKey = createBip39KeyFromSeed(hexStringToBuffer(hexSeed));
+        const [privateKey, , chainCode] = await createBip39KeyFromSeed(
+          hexStringToBuffer(hexSeed),
+        );
 
-        const node = await BIP44Node.create({
-          key: seedKey,
+        const node = await BIP44Node.fromExtendedKey({
+          privateKey,
+          chainCode,
           depth: 0,
         });
 
@@ -444,14 +354,14 @@ describe('BIP44Node', () => {
           `bip32:${index}`,
         ]);
 
-        expect(await childNode.getAddress()).toBe(address);
+        expect(childNode.address).toBe(address);
       },
     );
   });
 
   describe('toJSON', () => {
     it('returns a JSON-compatible representation of the node', async () => {
-      const node = await BIP44Node.create({
+      const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
           BIP44PurposeNodeToken,
@@ -459,19 +369,21 @@ describe('BIP44Node', () => {
         ],
       });
 
-      expect(typeof node.key).toStrictEqual('string');
-      expect(node.key).toHaveLength(88);
       expect(node.depth).toStrictEqual(2);
 
       const nodeJson = node.toJSON();
       expect(nodeJson).toStrictEqual({
         depth: node.depth,
-        key: node.key,
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
       });
 
       expect(JSON.parse(JSON.stringify(nodeJson))).toStrictEqual({
         depth: node.depth,
-        key: node.key,
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
       });
     });
   });
