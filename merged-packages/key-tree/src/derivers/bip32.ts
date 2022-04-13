@@ -4,6 +4,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { BIP_32_HARDENED_OFFSET, BUFFER_KEY_LENGTH } from '../constants';
 import { bytesToNumber, hexStringToBuffer, isValidBufferKey } from '../utils';
 import { Curve, mod, secp256k1 } from '../curves';
+import { DeriveChildKeyArgs, DerivedKeys } from '.';
 
 /**
  * Converts a BIP-32 private key to an Ethereum address.
@@ -59,23 +60,23 @@ export function publicKeyToEthAddress(key: Buffer) {
  * @returns A tuple containing the derived private key, public key and chain
  * code.
  */
-export async function deriveChildKey(
-  pathPart: string,
-  parentKey: Buffer | undefined,
-  parentPublicKey: Buffer | undefined,
-  chainCode: Buffer,
-  curve: Curve = secp256k1,
-): Promise<[privateKey: Buffer, publicKey: Buffer, chainCode: Buffer]> {
-  const isHardened = pathPart.includes(`'`);
+export async function deriveChildKey({
+  path,
+  privateKey,
+  publicKey,
+  chainCode,
+  curve = secp256k1,
+}: DeriveChildKeyArgs): Promise<DerivedKeys> {
+  const isHardened = path.includes(`'`);
   if (!isHardened && !curve.deriveUnhardenedKeys) {
     throw new Error(
       `Invalid path: Cannot derive unhardened child keys with ${curve.name}.`,
     );
   }
 
-  if (!parentKey && !parentPublicKey) {
+  if (isHardened && !privateKey) {
     throw new Error(
-      'Invalid parameters: Must specify either a parent private or public key.',
+      'Invalid parameters: Cannot derive hardened child keys without a private key.',
     );
   }
 
@@ -83,21 +84,11 @@ export async function deriveChildKey(
     throw new Error('Invalid parameters: Must specify a chain code.');
   }
 
-  if (parentKey && parentKey.length !== BUFFER_KEY_LENGTH) {
-    throw new Error('Invalid parent key: Must be 32 bytes long.');
-  }
-
-  if (parentPublicKey && parentPublicKey.length !== curve.publicKeyLength) {
-    throw new Error(
-      `Invalid parent public key: Must be ${curve.publicKeyLength} bytes long.`,
-    );
-  }
-
   if (chainCode.length !== BUFFER_KEY_LENGTH) {
     throw new Error('Invalid chain code: Must be 32 bytes long.');
   }
 
-  const indexPart = pathPart.split(`'`)[0];
+  const indexPart = path.split(`'`)[0];
   const childIndex = parseInt(indexPart, 10);
 
   if (
@@ -111,29 +102,55 @@ export async function deriveChildKey(
     );
   }
 
-  const secretExtension = await deriveSecretExtension({
-    parentPrivateKey: parentKey as Buffer,
-    childIndex,
-    isHardened,
-    curve,
-  });
+  if (privateKey) {
+    if (privateKey.length !== BUFFER_KEY_LENGTH) {
+      throw new Error('Invalid parent key: Must be 32 bytes long.');
+    }
 
-  const { privateKey, extraEntropy } = generateKey({
-    parentPrivateKey: parentKey as Buffer,
-    parentExtraEntropy: chainCode,
-    secretExtension,
-    curve,
-  });
+    const secretExtension = await deriveSecretExtension({
+      privateKey,
+      childIndex,
+      isHardened,
+      curve,
+    });
 
-  return [
-    Buffer.from(privateKey),
-    await curve.getPublicKey(privateKey),
-    Buffer.from(extraEntropy),
-  ];
+    return await generateKey({
+      privateKey,
+      chainCode,
+      secretExtension,
+      curve,
+    });
+  }
+
+  if (publicKey) {
+    if (publicKey.length !== curve.publicKeyLength) {
+      throw new Error(
+        `Invalid parent public key: Must be ${curve.publicKeyLength} bytes long.`,
+      );
+    }
+
+    const compressedPublicKey = curve.compressPublicKey(publicKey);
+    const publicExtension = await derivePublicExtension({
+      parentPublicKey: compressedPublicKey,
+      childIndex,
+      curve,
+    });
+
+    return generatePublicKey({
+      publicKey: compressedPublicKey,
+      chainCode,
+      publicExtension,
+      curve,
+    });
+  }
+
+  throw new Error(
+    'Invalid parameters: Must specify either a parent private or public key.',
+  );
 }
 
 type DeriveSecretExtensionArgs = {
-  parentPrivateKey: Buffer;
+  privateKey: Buffer;
   childIndex: number;
   isHardened: boolean;
   curve: Curve;
@@ -142,12 +159,12 @@ type DeriveSecretExtensionArgs = {
 // the bip32 secret extension is created from the parent private or public key and the child index
 /**
  * @param options
- * @param options.parentPrivateKey
+ * @param options.privateKey
  * @param options.childIndex
  * @param options.isHardened
  */
 async function deriveSecretExtension({
-  parentPrivateKey,
+  privateKey,
   childIndex,
   isHardened,
   curve,
@@ -156,7 +173,7 @@ async function deriveSecretExtension({
     // Hardened child
     const indexBuffer = Buffer.allocUnsafe(4);
     indexBuffer.writeUInt32BE(childIndex + BIP_32_HARDENED_OFFSET, 0);
-    const pk = parentPrivateKey;
+    const pk = privateKey;
     const zb = Buffer.alloc(1, 0);
     return Buffer.concat([zb, pk, indexBuffer]);
   }
@@ -164,16 +181,24 @@ async function deriveSecretExtension({
   // Normal child
   const indexBuffer = Buffer.allocUnsafe(4);
   indexBuffer.writeUInt32BE(childIndex, 0);
-  const parentPublicKey = await curve.getPublicKey(parentPrivateKey, true);
+  const parentPublicKey = await curve.getPublicKey(privateKey, true);
   return Buffer.concat([parentPublicKey, indexBuffer]);
 }
 
-type GenerateKeyArgs = {
-  parentPrivateKey: Buffer;
-  parentExtraEntropy: string | Buffer;
-  secretExtension: string | Buffer;
+type DerivePublicExtensionArgs = {
+  parentPublicKey: Buffer;
+  childIndex: number;
   curve: Curve;
 };
+
+async function derivePublicExtension({
+  parentPublicKey,
+  childIndex,
+}: DerivePublicExtensionArgs) {
+  const indexBuffer = Buffer.alloc(4);
+  indexBuffer.writeUInt32BE(childIndex, 0);
+  return Buffer.concat([parentPublicKey, indexBuffer]);
+}
 
 /**
  * Add a tweak to the private key: `(privateKey + tweak) % n`.
@@ -188,7 +213,7 @@ export function privateAdd(
   privateKeyBuffer: Uint8Array,
   tweakBuffer: Uint8Array,
   curve: Curve,
-): Uint8Array {
+): Buffer {
   const privateKey = bytesToNumber(privateKeyBuffer);
   const tweak = bytesToNumber(tweakBuffer);
 
@@ -206,29 +231,64 @@ export function privateAdd(
   return hexStringToBuffer(added.toString(16).padStart(64, '0'));
 }
 
+type GenerateKeyArgs = {
+  privateKey: Buffer;
+  chainCode: Buffer;
+  secretExtension: Buffer;
+  curve: Curve;
+};
+
 /**
  * @param options
- * @param options.parentPrivateKey
- * @param options.parentExtraEntropy
+ * @param options.privateKey
+ * @param options.chainCode
  * @param options.secretExtension
  */
-function generateKey({
-  parentPrivateKey,
-  parentExtraEntropy,
+async function generateKey({
+  privateKey,
+  chainCode,
   secretExtension,
   curve,
-}: GenerateKeyArgs) {
-  const entropy = hmac(sha512, parentExtraEntropy, secretExtension);
-  const keyMaterial = entropy.slice(0, 32);
-  // extraEntropy is also called "chaincode"
-  const extraEntropy = entropy.slice(32);
+}: GenerateKeyArgs): Promise<DerivedKeys> {
+  const entropy = hmac(sha512, chainCode, secretExtension);
+  const keyMaterial = Buffer.from(entropy.slice(0, 32));
+  const childChainCode = Buffer.from(entropy.slice(32));
 
   // If curve is ed25519: The returned child key ki is parse256(IL).
   // https://github.com/satoshilabs/slips/blob/133ea52a8e43d338b98be208907e144277e44c0e/slip-0010.md#private-parent-key--private-child-key
   if (curve.name === 'ed25519') {
-    return { privateKey: keyMaterial, extraEntropy };
+    const publicKey = await curve.getPublicKey(keyMaterial);
+    return { privateKey: keyMaterial, publicKey, chainCode: childChainCode };
   }
 
-  const privateKey = privateAdd(parentPrivateKey, keyMaterial, curve);
-  return { privateKey, extraEntropy };
+  const childPrivateKey = privateAdd(privateKey, keyMaterial, curve);
+  const publicKey = await curve.getPublicKey(childPrivateKey);
+
+  return { privateKey: childPrivateKey, publicKey, chainCode: childChainCode };
+}
+
+type GeneratePublicKeyArgs = {
+  publicKey: Buffer;
+  chainCode: Buffer;
+  publicExtension: Buffer;
+  curve: Curve;
+};
+
+function generatePublicKey({
+  publicKey,
+  chainCode,
+  publicExtension,
+  curve,
+}: GeneratePublicKeyArgs): DerivedKeys {
+  const entropy = hmac(sha512, chainCode, publicExtension);
+  const keyMaterial = entropy.slice(0, 32);
+  const childChainCode = entropy.slice(32);
+
+  // This function may fail if the resulting key is invalid.
+  const childPublicKey = curve.publicAdd(publicKey, Buffer.from(keyMaterial));
+
+  return {
+    publicKey: Buffer.from(childPublicKey),
+    chainCode: Buffer.from(childChainCode),
+  };
 }

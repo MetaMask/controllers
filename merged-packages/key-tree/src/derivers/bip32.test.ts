@@ -59,7 +59,9 @@ describe('privateKeyToEthAddress', () => {
     const { privateKey, address } = fixtures['ethereumjs-wallet'];
 
     expect(
-      privateKeyToEthAddress(hexStringToBuffer(privateKey)).toString('hex'),
+      `0x${privateKeyToEthAddress(hexStringToBuffer(privateKey)).toString(
+        'hex',
+      )}`,
     ).toBe(address);
   });
 
@@ -80,7 +82,9 @@ describe('publicKeyToEthAddress', () => {
     const { publicKey, address } = fixtures['ethereumjs-wallet'];
 
     expect(
-      publicKeyToEthAddress(hexStringToBuffer(publicKey)).toString('hex'),
+      `0x${publicKeyToEthAddress(hexStringToBuffer(publicKey)).toString(
+        'hex',
+      )}`,
     ).toBe(address);
   });
 

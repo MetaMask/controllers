@@ -7,6 +7,7 @@ import { Curve, curves, SupportedCurve } from './curves';
 import { deriveKeyFromPath } from './derivation';
 import { publicKeyToEthAddress } from './derivers/bip32';
 import { getBuffer } from './utils';
+import { DerivedKeys } from './derivers';
 
 /**
  * A wrapper for SLIP-10 Hierarchical Deterministic (HD) tree nodes, i.e.
@@ -178,12 +179,14 @@ export class SLIP10Node implements SLIP10NodeInterface {
     validateCurve(curve);
 
     if (derivationPath) {
-      const [privateKey, , chainCode] = await createKeyFromPath({
+      const { privateKey, chainCode } = await createKeyFromPath({
         derivationPath,
         curve,
       });
 
-      const publicKey = await getCurveByName(curve).getPublicKey(privateKey);
+      const publicKey = await getCurveByName(curve).getPublicKey(
+        privateKey as Buffer,
+      );
 
       return new SLIP10Node({
         depth: derivationPath.length - 1,
@@ -242,7 +245,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       );
     }
 
-    return publicKeyToEthAddress(this.publicKeyBuffer).toString('hex');
+    return `0x${publicKeyToEthAddress(this.publicKeyBuffer).toString('hex')}`;
   }
 
   /**
@@ -268,25 +271,17 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @returns The {@link SLIP10Node} corresponding to the derived child key.
    */
   public async derive(path: SLIP10PathTuple): Promise<SLIP10Node> {
-    // TODO: Support deriving from a public key
-    if (!this.privateKeyBuffer) {
-      throw new Error('Unable to derive child key: No private key.');
-    }
-
-    const { privateKey, publicKey, chainCode, depth } = await deriveChildNode(
-      this.privateKeyBuffer,
-      this.publicKeyBuffer,
-      this.chainCodeBuffer,
-      this.depth,
+    const childNode = await deriveChildNode({
+      privateKey: this.privateKeyBuffer,
+      publicKey: this.publicKeyBuffer,
+      chainCode: this.chainCodeBuffer,
+      depth: this.depth,
       path,
-      getCurveByName(this.curve),
-    );
+      curve: getCurveByName(this.curve),
+    });
 
     return SLIP10Node.fromExtendedKey({
-      depth,
-      privateKey,
-      publicKey,
-      chainCode,
+      ...childNode,
       curve: this.curve,
     });
   }
@@ -319,14 +314,11 @@ async function createKeyFromPath({
   const _depth = derivationPath.length - 1;
   validateBIP32Depth(_depth);
 
-  return await deriveKeyFromPath(
-    derivationPath,
-    undefined,
-    undefined,
-    undefined,
-    _depth,
+  return await deriveKeyFromPath({
+    path: derivationPath,
+    depth: _depth,
     curve,
-  );
+  });
 }
 
 /**
@@ -364,11 +356,17 @@ export function validateBIP32Depth(depth: unknown): asserts depth is number {
   }
 }
 
-export type ChildNode = {
+export type ChildNode = DerivedKeys & {
+  depth: number;
+};
+
+type DeriveChildNodeArgs = {
   privateKey?: Buffer;
   publicKey: Buffer;
   chainCode: Buffer;
   depth: number;
+  path: SLIP10PathTuple;
+  curve: Curve;
 };
 
 /**
@@ -381,15 +379,15 @@ export type ChildNode = {
  * @param curve - The curve to use.
  * @returns The derived key and depth.
  */
-export async function deriveChildNode(
-  privateKey: Buffer | undefined,
-  publicKey: Buffer,
-  chainCode: Buffer,
-  depth: number,
-  pathToChild: SLIP10PathTuple,
-  curve: Curve,
-): Promise<ChildNode> {
-  if (pathToChild.length === 0) {
+export async function deriveChildNode({
+  privateKey,
+  publicKey,
+  chainCode,
+  depth,
+  path,
+  curve,
+}: DeriveChildNodeArgs): Promise<ChildNode> {
+  if (path.length === 0) {
     throw new Error(
       'Invalid HD tree derivation path: Deriving a path of length 0 is not defined.',
     );
@@ -397,22 +395,20 @@ export async function deriveChildNode(
 
   // Note that we do not subtract 1 from the length of the path to the child,
   // unlike when we calculate the depth of a rooted path.
-  const newDepth = depth + pathToChild.length;
+  const newDepth = depth + path.length;
   validateBIP32Depth(newDepth);
 
-  const [childKey, childPublicKey, childChainCode] = await deriveKeyFromPath(
-    pathToChild,
+  const derivedKeys = await deriveKeyFromPath({
+    path,
     privateKey,
     publicKey,
     chainCode,
-    newDepth,
+    depth: newDepth,
     curve,
-  );
+  });
 
   return {
-    privateKey: childKey,
-    publicKey: childPublicKey,
-    chainCode: childChainCode,
+    ...derivedKeys,
     depth: newDepth,
   };
 }

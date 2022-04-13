@@ -294,25 +294,31 @@ export async function deriveBIP44AddressKey(
 ): Promise<ChildNode> {
   validateCoinTypeNodeDepth(parentKeyOrNode.depth);
 
+  const options = {
+    depth: BIP_44_COIN_TYPE_DEPTH,
+    path: getBIP44CoinTypeToAddressPathTuple({
+      account,
+      change,
+      address_index,
+    }),
+    curve: secp256k1,
+  };
+
   if (parentKeyOrNode instanceof BIP44CoinTypeNode) {
-    return await deriveChildNode(
-      parentKeyOrNode.privateKeyBuffer,
-      parentKeyOrNode.publicKeyBuffer,
-      parentKeyOrNode.chainCodeBuffer,
-      BIP_44_COIN_TYPE_DEPTH,
-      getBIP44CoinTypeToAddressPathTuple({ account, change, address_index }),
-      secp256k1,
-    );
+    return await deriveChildNode({
+      privateKey: parentKeyOrNode.privateKeyBuffer,
+      publicKey: parentKeyOrNode.publicKeyBuffer,
+      chainCode: parentKeyOrNode.chainCodeBuffer,
+      ...options,
+    });
   }
 
-  return await deriveChildNode(
-    nullableHexStringToBuffer(parentKeyOrNode.privateKey),
-    hexStringToBuffer(parentKeyOrNode.publicKey),
-    hexStringToBuffer(parentKeyOrNode.chainCode),
-    BIP_44_COIN_TYPE_DEPTH,
-    getBIP44CoinTypeToAddressPathTuple({ account, change, address_index }),
-    secp256k1,
-  );
+  return await deriveChildNode({
+    privateKey: nullableHexStringToBuffer(parentKeyOrNode.privateKey),
+    publicKey: hexStringToBuffer(parentKeyOrNode.publicKey),
+    chainCode: hexStringToBuffer(parentKeyOrNode.chainCode),
+    ...options,
+  });
 }
 
 type BIP44AddressKeyDeriver = {
@@ -394,20 +400,20 @@ export function getBIP44AddressKeyDeriver(
     address_index: number,
     isHardened = false,
   ): Promise<ChildNode> => {
-    return await deriveChildNode(
-      parentKeyBuffer,
-      parentPublicKeyBuffer,
-      parentChainCodeBuffer,
-      BIP_44_COIN_TYPE_DEPTH,
-      [
+    return await deriveChildNode({
+      privateKey: parentKeyBuffer,
+      publicKey: parentPublicKeyBuffer,
+      chainCode: parentChainCodeBuffer,
+      depth: BIP_44_COIN_TYPE_DEPTH,
+      path: [
         accountNode,
         changeNode,
         isHardened
           ? getHardenedBIP32NodeToken(address_index)
           : getUnhardenedBIP32NodeToken(address_index),
       ],
-      secp256k1,
-    );
+      curve: secp256k1,
+    });
   };
 
   bip44AddressKeyDeriver.coin_type = node.coin_type;

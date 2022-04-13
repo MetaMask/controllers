@@ -1,6 +1,13 @@
 import { bytesToHex } from '@noble/hashes/utils';
 import fixtures from '../../test/fixtures';
-import { curve, getPublicKey, isValidPrivateKey } from './ed25519';
+import { hexStringToBuffer } from '../utils';
+import {
+  compressPublicKey,
+  curve,
+  getPublicKey,
+  isValidPrivateKey,
+  publicAdd,
+} from './ed25519';
 
 describe('ed25519', () => {
   describe('curve', () => {
@@ -37,5 +44,26 @@ describe('ed25519', () => {
         }
       },
     );
+  });
+
+  describe('publicAdd', () => {
+    it('throws an error', () => {
+      expect(() => publicAdd(Buffer.alloc(1), Buffer.alloc(1))).toThrow(
+        'Ed25519 does not support public key derivation.',
+      );
+    });
+  });
+
+  describe('compressPublicKey', () => {
+    const { slip10 } = fixtures.ed25519;
+
+    it.each(slip10)('returns the same public key', async ({ keys }) => {
+      for (const { publicKey } of keys) {
+        const publicKeyBuffer = hexStringToBuffer(publicKey);
+        expect(compressPublicKey(publicKeyBuffer)).toStrictEqual(
+          publicKeyBuffer,
+        );
+      }
+    });
   });
 });

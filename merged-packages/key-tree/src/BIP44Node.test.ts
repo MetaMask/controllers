@@ -8,9 +8,9 @@ const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 describe('BIP44Node', () => {
   describe('fromExtendedKey', () => {
     it('initializes a new node from a private key', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       // Ethereum coin type node
       const node = await BIP44Node.fromExtendedKey({
@@ -29,9 +29,9 @@ describe('BIP44Node', () => {
     });
 
     it('initializes a new node from JSON', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       // Ethereum coin type node
       const node = await BIP44Node.fromExtendedKey({
@@ -44,9 +44,9 @@ describe('BIP44Node', () => {
     });
 
     it('throws if the depth is invalid', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       await expect(
         BIP44Node.fromExtendedKey({
@@ -207,6 +207,36 @@ describe('BIP44Node', () => {
       });
     });
 
+    it('derives a public child node', async () => {
+      const coinTypeNode = `bip32:40'`;
+      const targetNode = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          coinTypeNode,
+          `bip32:0'`,
+          `bip32:0`,
+        ],
+      });
+
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          coinTypeNode,
+          `bip32:0'`,
+        ],
+      });
+
+      const childNode = await node.neuter().derive([`bip32:0`]);
+
+      expect(childNode.privateKey).toBeUndefined();
+      expect(childNode).toMatchObject({
+        depth: targetNode.depth,
+        publicKey: targetNode.publicKey,
+      });
+    });
+
     it('throws if the parent node is already a leaf node', async () => {
       const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
@@ -312,7 +342,7 @@ describe('BIP44Node', () => {
     it.each(sampleAddressIndices)(
       'returns the public key for an secp256k1 node',
       async ({ index, publicKey }) => {
-        const [privateKey, , chainCode] = await createBip39KeyFromSeed(
+        const { privateKey, chainCode } = await createBip39KeyFromSeed(
           hexStringToBuffer(hexSeed),
         );
 
@@ -339,7 +369,7 @@ describe('BIP44Node', () => {
     it.each(sampleAddressIndices)(
       'returns the address for an secp256k1 node',
       async ({ index, address }) => {
-        const [privateKey, , chainCode] = await createBip39KeyFromSeed(
+        const { privateKey, chainCode } = await createBip39KeyFromSeed(
           hexStringToBuffer(hexSeed),
         );
 
@@ -357,6 +387,25 @@ describe('BIP44Node', () => {
         expect(childNode.address).toBe(address);
       },
     );
+  });
+
+  describe('neuter', () => {
+    it('returns a BIP-44 node without a private key', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+      });
+
+      const neuterNode = node.neuter();
+
+      expect(neuterNode.publicKey).toBe(node.publicKey);
+      expect(neuterNode.privateKey).toBeUndefined();
+      expect(neuterNode.privateKeyBuffer).toBeUndefined();
+    });
   });
 
   describe('toJSON', () => {

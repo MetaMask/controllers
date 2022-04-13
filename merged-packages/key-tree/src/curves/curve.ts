@@ -22,6 +22,8 @@ export type Curve = {
     compressed?: boolean,
   ) => Buffer | Promise<Buffer>;
   isValidPrivateKey: (privateKey: Uint8Array | string | bigint) => boolean;
+  publicAdd: (publicKey: Buffer, tweak: Buffer) => Buffer;
+  compressPublicKey: (publicKey: Buffer) => Buffer;
 };
 
 // As long as both parameters are specified, this function is the same for all curves.

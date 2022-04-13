@@ -10,9 +10,9 @@ const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 describe('SLIP10Node', () => {
   describe('fromExtendedKey', () => {
     it('initializes a new node from a private key', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const node = await SLIP10Node.fromExtendedKey({
         privateKey,
@@ -27,9 +27,9 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from a hexadecimal private key and chain code', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const node = await SLIP10Node.fromExtendedKey({
         privateKey: privateKey.toString('hex'),
@@ -44,9 +44,9 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new ed25519 node from a private key', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const node = await SLIP10Node.fromExtendedKey({
         privateKey,
@@ -61,9 +61,9 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from a public key', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const privateNode = await SLIP10Node.fromExtendedKey({
         privateKey,
@@ -85,9 +85,9 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new ed25519 node from a public key', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const privateNode = await SLIP10Node.fromExtendedKey({
         privateKey,
@@ -109,9 +109,9 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from a hexadecimal public key and chain code', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const privateNode = await SLIP10Node.fromExtendedKey({
         privateKey,
@@ -133,9 +133,9 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from JSON', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const node = await SLIP10Node.fromExtendedKey({
         privateKey,
@@ -148,9 +148,9 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from JSON with a public key', async () => {
-      const [privateKey, , chainCode] = await deriveChildKey(
-        fixtures.local.mnemonic,
-      );
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+      });
 
       const node = await SLIP10Node.fromExtendedKey({
         privateKey,
@@ -363,15 +363,34 @@ describe('SLIP10Node', () => {
       });
     });
 
-    // TODO: Public key derivation
-    it('throws when trying to derive a node without a private key', async () => {
+    it('derives a public child node', async () => {
+      const targetNode = await SLIP10Node.fromDerivationPath({
+        derivationPath: [defaultBip39NodeToken, 'bip32:0'],
+        curve: 'secp256k1',
+      });
+
+      const node = await SLIP10Node.fromDerivationPath({
+        derivationPath: [defaultBip39NodeToken],
+        curve: 'secp256k1',
+      }).then((n) => n.neuter());
+
+      const childNode = await node.derive(['bip32:0']);
+
+      expect(childNode.privateKey).toBeUndefined();
+      expect(childNode).toMatchObject({
+        depth: targetNode.depth,
+        publicKey: targetNode.publicKey,
+      });
+    });
+
+    it('throws when trying to derive a hardened node without a private key', async () => {
       const node = await SLIP10Node.fromDerivationPath({
         derivationPath: [defaultBip39NodeToken, BIP44PurposeNodeToken],
         curve: 'secp256k1',
       });
 
       await expect(node.neuter().derive([`bip32:0'`])).rejects.toThrow(
-        'Unable to derive child key: No private key.',
+        'Invalid parameters: Cannot derive hardened child keys without a private key.',
       );
     });
 
@@ -417,7 +436,7 @@ describe('SLIP10Node', () => {
     it.each(slip10)(
       'returns the public key for an ed25519 node',
       async ({ hexSeed, keys }) => {
-        const [privateKey, , chainCode] = await createBip39KeyFromSeed(
+        const { privateKey, chainCode } = await createBip39KeyFromSeed(
           hexStringToBuffer(hexSeed),
           ed25519,
         );
@@ -443,7 +462,7 @@ describe('SLIP10Node', () => {
     it.each(bip32)(
       'returns the public key for an secp256k1 node',
       async ({ hexSeed, keys }) => {
-        const [privateKey, , chainCode] = await createBip39KeyFromSeed(
+        const { privateKey, chainCode } = await createBip39KeyFromSeed(
           hexStringToBuffer(hexSeed),
           secp256k1,
         );
@@ -474,7 +493,7 @@ describe('SLIP10Node', () => {
     it.each(sampleAddressIndices)(
       'returns the address for an secp256k1 node',
       async ({ index, address }) => {
-        const [privateKey, , chainCode] = await createBip39KeyFromSeed(
+        const { privateKey, chainCode } = await createBip39KeyFromSeed(
           hexStringToBuffer(hexSeed),
           secp256k1,
         );
@@ -525,6 +544,7 @@ describe('SLIP10Node', () => {
 
       const neuterNode = node.neuter();
 
+      expect(neuterNode.publicKey).toBe(node.publicKey);
       expect(neuterNode.privateKey).toBeUndefined();
       expect(neuterNode.privateKeyBuffer).toBeUndefined();
     });

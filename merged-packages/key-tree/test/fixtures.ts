@@ -4,12 +4,12 @@ export default {
     mnemonic:
       'romance hurry grit huge rifle ordinary loud toss sound congress upset twist',
     addresses: [
-      '5df603999c3d5ca2ab828339a9883585b1bce11b',
-      '441c07e32a609afd319ffbb66432b424058bcfe9',
-      '1f7c93dfe849c06dd610e77473bfaaef7f183c7c',
-      '9e28bae18e0e358b12796697c6546f77d4657527',
-      '6e7734c7f4fb973a3800b72fb1a6bf82d85d3d29',
-      'f87328a8ea5208946c60dbd9385d4c8533ad5dd8',
+      '0x5df603999c3d5ca2ab828339a9883585b1bce11b',
+      '0x441c07e32a609afd319ffbb66432b424058bcfe9',
+      '0x1f7c93dfe849c06dd610e77473bfaaef7f183c7c',
+      '0x9e28bae18e0e358b12796697c6546f77d4657527',
+      '0x6e7734c7f4fb973a3800b72fb1a6bf82d85d3d29',
+      '0xf87328a8ea5208946c60dbd9385d4c8533ad5dd8',
     ],
   },
 
@@ -36,7 +36,7 @@ export default {
       'f29d6ddd6b0cd1fd59ed99900edd5a53e905b87dfe06824751010feb5228d960',
     publicKey:
       '04f7e989b55ebf3f9acfd32303e83069a9e4220bfc128f962325e6aa87e0f11f902a188c3f22f975c064a20c12b5523c53735f42467f2b83546869180abc42751e',
-    address: 'b9f89177a4ce589e6d18c33a9748bcc8063836df',
+    address: '0xb9f89177a4ce589e6d18c33a9748bcc8063836df',
     // The path used is modified from the ethereumjs-wallet original, which
     // isn't BIP-44 compatible. Since we're testing against their
     // implementation, not any reference values, this is fine.
@@ -50,49 +50,49 @@ export default {
     sampleAddressIndices: [
       {
         index: 0,
-        address: 'c5ba325f997531b5f0f50868913f0ce2fc0386bd',
+        address: '0xc5ba325f997531b5f0f50868913f0ce2fc0386bd',
         publicKey:
           '0438e5105bf4d908b40743bd3fc0e8e4ac281872086bf3323dfb4459a8b147aaa74b2b6624479ce069d60ff41336ce7eb0613f66ee91ba72a7581144134d814624',
       },
       {
         index: 1,
-        address: '326aa42f2b600f624d800e109b1e146906bc8175',
+        address: '0x326aa42f2b600f624d800e109b1e146906bc8175',
         publicKey:
           '04fcdae40d78db4aaa196c8f421f9d9243934f4abc69de95dd27522e275de7276b486b6219ad930775127a5645a226a716a52accc456cd93ea82f56ee98994cf6e',
       },
       {
         index: 5,
-        address: '6d0cc8671c91559d5f2d43de9c33eee0497db7cd',
+        address: '0x6d0cc8671c91559d5f2d43de9c33eee0497db7cd',
         publicKey:
           '04226d57014fd0e9eea04a6de8e2071b111b42a102e416f21529698acfec7b78a0ba774dd957dfb6c71f3c597b7cb3ee9c08eeb48f7bf34a8dc24319d743339346',
       },
       {
         index: 50,
-        address: '7bf971adda7f4487ac8f3dbd7450463ff3624f94',
+        address: '0x7bf971adda7f4487ac8f3dbd7450463ff3624f94',
         publicKey:
           '04c7fa0b4154bcb1e2d854c035ba591c3b87ccfbf3fafd0ed30585a1f843e79efcea470920b3fba70524b8a9854ddcfa05192de7d54154e28a8156b5d83a3a7883',
       },
       {
         index: 500,
-        address: '564d7507d39a881d04bffc0120ebd331e7c41758',
+        address: '0x564d7507d39a881d04bffc0120ebd331e7c41758',
         publicKey:
           '0461091945ed21fa036f0e97b4135fc01fb936910989519ba9a8c1c0867f3b34fbe6941f8529d1771532d79fdb2060cecaa12f12323086aec6eeb2ba9a9d9af3e9',
       },
       {
         index: 5000,
-        address: '7496ff062c1fe3e750dff9cbbe317558161ba6db',
+        address: '0x7496ff062c1fe3e750dff9cbbe317558161ba6db',
         publicKey:
           '04cceed14fef73e6c61e648761df3489e6cd87dfbcfa20241fd001675654ecb3d8a0d3b50410a9444de6d38af04f28add1ae12280889b5816dfc66a597cea539ec',
       },
       {
         index: 4_999_999,
-        address: 'ddf1f1a72a668d5014ec57a24019291fd2a00197',
+        address: '0xddf1f1a72a668d5014ec57a24019291fd2a00197',
         publicKey:
           '04b1eed5ab048a7de8939c1a9536d04076982454d7883ec665e4e7da4d457f99842df19468193267e93ec3e4faa5be9602072a6aad69de0f1687a5f1ea57a93a4c',
       },
       {
         index: 5_000_000,
-        address: '24dd12b9df5375f3b7fc5a539d4ac1bd2c16e9a0',
+        address: '0x24dd12b9df5375f3b7fc5a539d4ac1bd2c16e9a0',
         publicKey:
           '04e2ddbc99b6e0f8fc4e62242e375a49a8d856d6865607db474d444d4b729e28e3c80172acc9473b8ba6eaa7c893864589df35ca10d42ca9937cd6c77768871374',
       },

@@ -3,6 +3,7 @@ import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 import { BIP39Node } from '../constants';
 import { Curve, secp256k1 } from '../curves';
+import { DeriveChildKeyArgs, DerivedKeys } from '.';
 
 /**
  * @param mnemonic
@@ -19,31 +20,28 @@ export function bip39MnemonicToMultipath(mnemonic: string): BIP39Node {
  * @param _chainCode
  * @param curve
  */
-export async function deriveChildKey(
-  pathPart: string,
-  _parentKey?: never,
-  _parentPublicKey?: never,
-  _chainCode?: never,
-  curve: Curve = secp256k1,
-): Promise<[privateKey: Buffer, publicKey: Buffer, chainCode: Buffer]> {
-  return createBip39KeyFromSeed(
-    Buffer.from(mnemonicToSeedSync(pathPart)),
-    curve,
-  );
+export async function deriveChildKey({
+  path,
+  curve,
+}: DeriveChildKeyArgs): Promise<DerivedKeys & { privateKey: Buffer }> {
+  return createBip39KeyFromSeed(Buffer.from(mnemonicToSeedSync(path)), curve);
 }
 
 /**
  * @param seed - The cryptographic seed bytes.
  * @param curve - The curve to use.
- * @returns The bytes of the corresponding BIP-39 master key.
+ * @returns An object containing the corresponding BIP-39 master key and chain code.
  */
 export async function createBip39KeyFromSeed(
   seed: Buffer,
   curve: Curve = secp256k1,
-): Promise<[privateKey: Buffer, publicKey: Buffer, chainCode: Buffer]> {
+): Promise<DerivedKeys & { privateKey: Buffer }> {
   const key = Buffer.from(hmac(sha512, curve.secret, seed));
-
   const privateKey = key.slice(0, 32);
 
-  return [privateKey, await curve.getPublicKey(privateKey), key.slice(32, 64)];
+  return {
+    privateKey,
+    publicKey: await curve.getPublicKey(privateKey),
+    chainCode: key.slice(32),
+  };
 }
