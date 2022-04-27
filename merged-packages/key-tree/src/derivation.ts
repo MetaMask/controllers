@@ -5,8 +5,11 @@ import {
   MIN_BIP_44_DEPTH,
   SLIP10Path,
 } from './constants';
-import { DerivedKeys, Deriver, derivers } from './derivers';
-import { Curve } from './curves';
+import { Deriver, derivers } from './derivers';
+import { SLIP10Node } from './SLIP10Node';
+import { BIP44Node } from './BIP44Node';
+import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
+import { getCurveByName, SupportedCurve } from './curves';
 
 /**
  * Ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
@@ -20,14 +23,22 @@ import { Curve } from './curves';
  * 0: { privateKey, chainCode } = parentKey.privateKey + sha512Hmac(parentKey.chainCode, [parentKey.publicKey, index])
  */
 
-type DeriveKeyFromPathArgs = {
+type BaseDeriveKeyFromPathArgs = {
   path: SLIP10Path;
-  privateKey?: Buffer;
-  publicKey?: Buffer;
-  chainCode?: Buffer;
   depth?: number;
-  curve?: Curve;
 };
+
+type DeriveKeyFromPathNodeArgs = BaseDeriveKeyFromPathArgs & {
+  node?: SLIP10Node | BIP44Node | BIP44CoinTypeNode;
+};
+
+type DeriveKeyFromPathCurveArgs = BaseDeriveKeyFromPathArgs & {
+  curve: SupportedCurve;
+};
+
+type DeriveKeyFromPathArgs =
+  | DeriveKeyFromPathNodeArgs
+  | DeriveKeyFromPathCurveArgs;
 
 /**
  * Takes a full or partial HD path string and returns the key corresponding to
@@ -41,38 +52,53 @@ type DeriveKeyFromPathArgs = {
  * WARNING: It is the consumer's responsibility to ensure that the path is valid
  * relative to its parent key.
  *
- * @param path - A full or partial HD path, e.g.:
+ * @param args
+ * @param args.path - A full or partial HD path, e.g.:
  * bip39:SEED_PHRASE/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
  *
  * BIP-39 seed phrases must be lowercase, space-delimited, and 12-24 words long.
- * @param privateKey - The parent key of the given path segment, if any.
- * @param publicKey - The parent public key of the given path segment, if any.
- * @param chainCode - The chain code of the given path segment, if any.
- * @param depth - The depth of the segment.
- * @param curve - The curve to use.
+ * @param args.node - The node to derive from.
+ * @param args.depth - The depth of the segment.
  * @returns The derived key.
  */
-export async function deriveKeyFromPath({
-  path,
-  privateKey,
-  publicKey,
-  chainCode,
-  depth,
-  curve,
-}: DeriveKeyFromPathArgs): Promise<DerivedKeys> {
-  if (privateKey && !Buffer.isBuffer(privateKey)) {
-    throw new Error('Private key must be a Buffer if specified.');
+export async function deriveKeyFromPath(
+  args: DeriveKeyFromPathArgs,
+): Promise<SLIP10Node> {
+  const { path, depth = path.length } = args;
+
+  const node = 'node' in args ? args.node : undefined;
+  const curve = 'curve' in args ? args.curve : node?.curve;
+
+  if (
+    node &&
+    !(node instanceof SLIP10Node) &&
+    !(node instanceof BIP44Node) &&
+    !(node instanceof BIP44CoinTypeNode)
+  ) {
+    throw new Error(
+      'Invalid arguments: Node must be a SLIP-10 node or a BIP-44 node when provided.',
+    );
   }
 
-  validatePathSegment(path, Boolean(privateKey) || Boolean(publicKey), depth);
+  if (!curve) {
+    throw new Error(
+      'Invalid arguments: Must specify either a parent node or curve.',
+    );
+  }
+
+  validatePathSegment(
+    path,
+    Boolean(node?.privateKey) || Boolean(node?.publicKey),
+    depth,
+  );
 
   // derive through each part of path
   // `pathSegment` needs to be cast to `string[]` because `HDPathTuple.reduce()` doesn't work
-  return await (path as readonly string[]).reduce<Promise<DerivedKeys>>(
-    async (promise, node) => {
-      const derivedKeys = await promise;
+  return await (path as readonly string[]).reduce<Promise<SLIP10Node>>(
+    async (promise, pathNode) => {
+      const derivedNode = await promise;
 
-      const [pathType, pathPart] = node.split(':');
+      const [pathType, pathPart] = pathNode.split(':');
       /* istanbul ignore if: should be impossible */
       if (!hasDeriver(pathType)) {
         throw new Error(`Unknown derivation type: "${pathType}"`);
@@ -81,15 +107,11 @@ export async function deriveKeyFromPath({
       const deriver = derivers[pathType] as Deriver;
       return await deriver.deriveChildKey({
         path: pathPart,
-        curve,
-        ...derivedKeys,
+        node: derivedNode,
+        curve: getCurveByName(curve),
       });
     },
-    Promise.resolve({
-      privateKey,
-      publicKey: publicKey as Buffer,
-      chainCode: chainCode as Buffer,
-    }),
+    Promise.resolve(node as SLIP10Node),
   );
 }
 

@@ -3,7 +3,8 @@ import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 import { BIP39Node } from '../constants';
 import { Curve, secp256k1 } from '../curves';
-import { DeriveChildKeyArgs, DerivedKeys } from '.';
+import { SLIP10Node } from '../SLIP10Node';
+import { DeriveChildKeyArgs } from '.';
 
 /**
  * @param mnemonic
@@ -15,15 +16,12 @@ export function bip39MnemonicToMultipath(mnemonic: string): BIP39Node {
 // this creates a child key using bip39, ignoring the parent key
 /**
  * @param pathPart
- * @param _parentKey
- * @param _parentPublicKey
- * @param _chainCode
  * @param curve
  */
 export async function deriveChildKey({
   path,
   curve,
-}: DeriveChildKeyArgs): Promise<DerivedKeys & { privateKey: Buffer }> {
+}: DeriveChildKeyArgs): Promise<SLIP10Node> {
   return createBip39KeyFromSeed(Buffer.from(mnemonicToSeedSync(path)), curve);
 }
 
@@ -35,13 +33,17 @@ export async function deriveChildKey({
 export async function createBip39KeyFromSeed(
   seed: Buffer,
   curve: Curve = secp256k1,
-): Promise<DerivedKeys & { privateKey: Buffer }> {
+): Promise<SLIP10Node> {
   const key = Buffer.from(hmac(sha512, curve.secret, seed));
   const privateKey = key.slice(0, 32);
+  const chainCode = key.slice(32);
 
-  return {
+  return SLIP10Node.fromExtendedKey({
     privateKey,
-    publicKey: await curve.getPublicKey(privateKey),
-    chainCode: key.slice(32),
-  };
+    chainCode,
+    depth: 0,
+    parentFingerprint: 0,
+    index: 0,
+    curve: curve.name,
+  });
 }

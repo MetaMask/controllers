@@ -4,6 +4,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { BIP_32_HARDENED_OFFSET, BUFFER_KEY_LENGTH } from '../constants';
 import { bytesToNumber, hexStringToBuffer, isValidBufferKey } from '../utils';
 import { Curve, mod, secp256k1 } from '../curves';
+import { SLIP10Node } from '../SLIP10Node';
 import { DeriveChildKeyArgs, DerivedKeys } from '.';
 
 /**
@@ -51,22 +52,17 @@ export function publicKeyToEthAddress(key: Buffer) {
 /**
  * Derive a BIP-32 child key with a given path from a parent key.
  *
- * @param pathPart - The derivation path part to derive.
- * @param parentKey - The parent private key to derive from.
- * @param parentPublicKey - The parent public key to derive from, if no
- * private key is provided.
- * @param chainCode - The chain code to use for derivation.
+ * @param path - The derivation path part to derive.
+ * @param node - The node to derive from.
  * @param curve - The curve to use for derivation.
  * @returns A tuple containing the derived private key, public key and chain
  * code.
  */
 export async function deriveChildKey({
   path,
-  privateKey,
-  publicKey,
-  chainCode,
+  node,
   curve = secp256k1,
-}: DeriveChildKeyArgs): Promise<DerivedKeys> {
+}: DeriveChildKeyArgs): Promise<SLIP10Node> {
   const isHardened = path.includes(`'`);
   if (!isHardened && !curve.deriveUnhardenedKeys) {
     throw new Error(
@@ -74,18 +70,14 @@ export async function deriveChildKey({
     );
   }
 
-  if (isHardened && !privateKey) {
+  if (!node) {
+    throw new Error('Invalid parameters: Must specify a node to derive from.');
+  }
+
+  if (isHardened && !node.privateKey) {
     throw new Error(
       'Invalid parameters: Cannot derive hardened child keys without a private key.',
     );
-  }
-
-  if (!chainCode) {
-    throw new Error('Invalid parameters: Must specify a chain code.');
-  }
-
-  if (chainCode.length !== BUFFER_KEY_LENGTH) {
-    throw new Error('Invalid chain code: Must be 32 bytes long.');
   }
 
   const indexPart = path.split(`'`)[0];
@@ -102,51 +94,52 @@ export async function deriveChildKey({
     );
   }
 
-  if (privateKey) {
-    if (privateKey.length !== BUFFER_KEY_LENGTH) {
-      throw new Error('Invalid parent key: Must be 32 bytes long.');
-    }
-
+  if (node.privateKeyBuffer) {
     const secretExtension = await deriveSecretExtension({
-      privateKey,
+      privateKey: node.privateKeyBuffer,
       childIndex,
       isHardened,
       curve,
     });
 
-    return await generateKey({
-      privateKey,
-      chainCode,
+    const { privateKey, chainCode } = await generateKey({
+      privateKey: node.privateKeyBuffer,
+      chainCode: node.chainCodeBuffer,
       secretExtension,
       curve,
     });
-  }
 
-  if (publicKey) {
-    if (publicKey.length !== curve.publicKeyLength) {
-      throw new Error(
-        `Invalid parent public key: Must be ${curve.publicKeyLength} bytes long.`,
-      );
-    }
-
-    const compressedPublicKey = curve.compressPublicKey(publicKey);
-    const publicExtension = await derivePublicExtension({
-      parentPublicKey: compressedPublicKey,
-      childIndex,
-      curve,
-    });
-
-    return generatePublicKey({
-      publicKey: compressedPublicKey,
+    return SLIP10Node.fromExtendedKey({
+      privateKey,
       chainCode,
-      publicExtension,
-      curve,
+      depth: node.depth + 1,
+      parentFingerprint: node.fingerprint,
+      index: childIndex + (isHardened ? BIP_32_HARDENED_OFFSET : 0),
+      curve: curve.name,
     });
   }
 
-  throw new Error(
-    'Invalid parameters: Must specify either a parent private or public key.',
-  );
+  const publicExtension = await derivePublicExtension({
+    parentPublicKey: node.compressedPublicKeyBuffer,
+    childIndex,
+    curve,
+  });
+
+  const { publicKey, chainCode } = generatePublicKey({
+    publicKey: node.compressedPublicKeyBuffer,
+    chainCode: node.chainCodeBuffer,
+    publicExtension,
+    curve,
+  });
+
+  return SLIP10Node.fromExtendedKey({
+    publicKey,
+    chainCode,
+    depth: node.depth + 1,
+    parentFingerprint: node.fingerprint,
+    index: childIndex,
+    curve: curve.name,
+  });
 }
 
 type DeriveSecretExtensionArgs = {
@@ -249,7 +242,7 @@ async function generateKey({
   chainCode,
   secretExtension,
   curve,
-}: GenerateKeyArgs): Promise<DerivedKeys> {
+}: GenerateKeyArgs): Promise<DerivedKeys & { privateKey: Buffer }> {
   const entropy = hmac(sha512, chainCode, secretExtension);
   const keyMaterial = Buffer.from(entropy.slice(0, 32));
   const childChainCode = Buffer.from(entropy.slice(32));

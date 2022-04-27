@@ -4,6 +4,7 @@ import { hexStringToBuffer } from '../utils';
 import {
   compressPublicKey,
   curve,
+  decompressPublicKey,
   getPublicKey,
   isValidPrivateKey,
   publicAdd,
@@ -61,6 +62,19 @@ describe('ed25519', () => {
       for (const { publicKey } of keys) {
         const publicKeyBuffer = hexStringToBuffer(publicKey);
         expect(compressPublicKey(publicKeyBuffer)).toStrictEqual(
+          publicKeyBuffer,
+        );
+      }
+    });
+  });
+
+  describe('decompressPublicKey', () => {
+    const { slip10 } = fixtures.ed25519;
+
+    it.each(slip10)('returns the same public key', async ({ keys }) => {
+      for (const { publicKey } of keys) {
+        const publicKeyBuffer = hexStringToBuffer(publicKey);
+        expect(decompressPublicKey(publicKeyBuffer)).toStrictEqual(
           publicKeyBuffer,
         );
       }

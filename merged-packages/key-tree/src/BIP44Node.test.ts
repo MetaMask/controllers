@@ -1,6 +1,12 @@
 import fixtures from '../test/fixtures';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import { hexStringToBuffer } from './utils';
+import { compressPublicKey } from './curves/secp256k1';
+import {
+  encodeExtendedKey,
+  PRIVATE_KEY_VERSION,
+  PUBLIC_KEY_VERSION,
+} from './extended-keys';
 import { BIP44Node, BIP44PurposeNodeToken } from '.';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
@@ -17,11 +23,15 @@ describe('BIP44Node', () => {
         privateKey,
         chainCode,
         depth: 2,
+        parentFingerprint: 0,
+        index: 0,
       });
 
       expect(node.depth).toStrictEqual(2);
       expect(node.toJSON()).toStrictEqual({
-        depth: 2,
+        depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -38,10 +48,34 @@ describe('BIP44Node', () => {
         privateKey,
         chainCode,
         depth: 2,
+        parentFingerprint: 0,
+        index: 0,
       });
 
       expect(await BIP44Node.fromJSON(node.toJSON())).toStrictEqual(node);
     });
+
+    it.each(fixtures.bip32)(
+      'initializes a node from an extended public key',
+      async ({ keys }) => {
+        for (const key of keys) {
+          const node = await BIP44Node.fromExtendedKey(key.extPubKey);
+          expect(node.privateKey).toBeUndefined();
+          expect(node.publicKey).toBe(key.publicKey);
+        }
+      },
+    );
+
+    it.each(fixtures.bip32)(
+      'initializes a node from an extended private key',
+      async ({ keys }) => {
+        for (const key of keys) {
+          const node = await BIP44Node.fromExtendedKey(key.extPrivKey);
+          expect(node.privateKey).toBe(key.privateKey);
+          expect(node.publicKey).toBe(key.publicKey);
+        }
+      },
+    );
 
     it('throws if the depth is invalid', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
@@ -53,6 +87,8 @@ describe('BIP44Node', () => {
           depth: 6,
           privateKey,
           chainCode,
+          parentFingerprint: 0,
+          index: 0,
         }),
       ).rejects.toThrow(
         `Invalid HD tree path depth: The depth must be a positive integer N such that 0 <= N <= 5. Received: "6"`,
@@ -73,7 +109,9 @@ describe('BIP44Node', () => {
 
       expect(node.depth).toStrictEqual(2);
       expect(node.toJSON()).toStrictEqual({
-        depth: 2,
+        depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -231,10 +269,8 @@ describe('BIP44Node', () => {
       const childNode = await node.neuter().derive([`bip32:0`]);
 
       expect(childNode.privateKey).toBeUndefined();
-      expect(childNode).toMatchObject({
-        depth: targetNode.depth,
-        publicKey: targetNode.publicKey,
-      });
+      expect(childNode.depth).toBe(targetNode.depth);
+      expect(childNode.publicKey).toBe(targetNode.publicKey);
     });
 
     it('throws if the parent node is already a leaf node', async () => {
@@ -350,6 +386,8 @@ describe('BIP44Node', () => {
           privateKey,
           chainCode,
           depth: 0,
+          parentFingerprint: 0,
+          index: 0,
         });
 
         const childNode = await node.derive([
@@ -377,6 +415,8 @@ describe('BIP44Node', () => {
           privateKey,
           chainCode,
           depth: 0,
+          parentFingerprint: 0,
+          index: 0,
         });
 
         const childNode = await node.derive([
@@ -387,6 +427,71 @@ describe('BIP44Node', () => {
         expect(childNode.address).toBe(address);
       },
     );
+  });
+
+  describe('compressedPublicKeyBuffer', () => {
+    it('returns the public key in compressed form', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+      });
+
+      expect(node.compressedPublicKeyBuffer).toStrictEqual(
+        compressPublicKey(node.publicKeyBuffer),
+      );
+    });
+  });
+
+  describe('extendedKey', () => {
+    it('returns the extended private key for nodes with a private key', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+      });
+
+      const extendedKey = encodeExtendedKey({
+        version: PRIVATE_KEY_VERSION,
+        privateKey: node.privateKeyBuffer as Buffer,
+        chainCode: node.chainCodeBuffer,
+        depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+      });
+
+      expect(node.extendedKey).toStrictEqual(extendedKey);
+    });
+
+    it('returns the extended public key for nodes with a public key', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+      });
+
+      const neuteredNode = node.neuter();
+
+      const extendedKey = encodeExtendedKey({
+        version: PUBLIC_KEY_VERSION,
+        publicKey: neuteredNode.publicKeyBuffer,
+        chainCode: neuteredNode.chainCodeBuffer,
+        depth: neuteredNode.depth,
+        parentFingerprint: neuteredNode.parentFingerprint,
+        index: neuteredNode.index,
+      });
+
+      expect(neuteredNode.extendedKey).toStrictEqual(extendedKey);
+    });
   });
 
   describe('neuter', () => {
@@ -423,6 +528,8 @@ describe('BIP44Node', () => {
       const nodeJson = node.toJSON();
       expect(nodeJson).toStrictEqual({
         depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -430,6 +537,8 @@ describe('BIP44Node', () => {
 
       expect(JSON.parse(JSON.stringify(nodeJson))).toStrictEqual({
         depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,

@@ -1,9 +1,11 @@
 import {
   getBuffer,
+  getFingerprint,
   hexStringToBuffer,
   isValidBufferKey,
   nullableHexStringToBuffer,
 } from './utils';
+import { BIP44Node } from './BIP44Node';
 
 describe('nullableHexStringToBuffer', () => {
   it('returns a buffer for a hexadecimal string', () => {
@@ -53,6 +55,26 @@ describe('getBuffer', () => {
 
     expect(() => getBuffer(hexStringToBuffer('1234'), 1)).toThrow(
       'Invalid value: Must be a non-zero 1-byte buffer.',
+    );
+  });
+});
+
+describe('getFingerprint', () => {
+  it('returns the fingerprint for a compressed public key', async () => {
+    const node = await BIP44Node.fromExtendedKey(
+      'xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi',
+    );
+
+    expect(getFingerprint(node.compressedPublicKeyBuffer)).toBe(2391500305);
+  });
+
+  it('throws if the public key is not a valid buffer', async () => {
+    expect(() => getFingerprint(Buffer.alloc(33).fill(0))).toThrow(
+      'Invalid public key: The key must be a 33-byte, non-zero Buffer.',
+    );
+
+    expect(() => getFingerprint(Buffer.alloc(65).fill(1))).toThrow(
+      'Invalid public key: The key must be a 33-byte, non-zero Buffer.',
     );
   });
 });

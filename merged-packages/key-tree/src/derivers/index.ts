@@ -1,4 +1,5 @@
 import { Curve } from '../curves';
+import { SLIP10Node } from '../SLIP10Node';
 import * as bip32 from './bip32';
 import * as bip39 from './bip39';
 
@@ -13,14 +14,12 @@ export type DerivedKeys = {
 
 export type DeriveChildKeyArgs = {
   path: string;
-  privateKey?: Buffer;
-  publicKey?: Buffer;
-  chainCode?: Buffer;
   curve?: Curve;
+  node?: SLIP10Node;
 };
 
 export type Deriver = {
-  deriveChildKey: (args: DeriveChildKeyArgs) => Promise<DerivedKeys>;
+  deriveChildKey: (args: DeriveChildKeyArgs) => Promise<SLIP10Node>;
 };
 
 export const derivers = {

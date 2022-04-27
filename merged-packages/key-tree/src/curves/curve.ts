@@ -24,7 +24,17 @@ export type Curve = {
   isValidPrivateKey: (privateKey: Uint8Array | string | bigint) => boolean;
   publicAdd: (publicKey: Buffer, tweak: Buffer) => Buffer;
   compressPublicKey: (publicKey: Buffer) => Buffer;
+  decompressPublicKey: (publicKey: Buffer) => Buffer;
 };
+
+/**
+ * Get a curve by name.
+ *
+ * @param curveName - The name of the curve to get.
+ */
+export function getCurveByName(curveName: SupportedCurve): Curve {
+  return curves[curveName];
+}
 
 // As long as both parameters are specified, this function is the same for all curves.
 export const { mod } = utils;

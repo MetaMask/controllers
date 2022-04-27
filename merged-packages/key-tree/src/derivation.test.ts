@@ -1,9 +1,10 @@
 import fixtures from '../test/fixtures';
 import { HDPathTuple } from './constants';
 import { deriveKeyFromPath } from './derivation';
-import { DerivedKeys, derivers } from './derivers';
+import { derivers } from './derivers';
 import { getUnhardenedBIP32NodeToken } from './utils';
 import { privateKeyToEthAddress } from './derivers/bip32';
+import { SLIP10Node } from './SLIP10Node';
 
 const {
   bip32: { deriveChildKey: bip32Derive },
@@ -28,6 +29,7 @@ describe('derivation', () => {
             ...ethereumBip32PathParts,
             getUnhardenedBIP32NodeToken(index),
           ] as const;
+
           const bip39Part = bip39MnemonicToMultipath(mnemonic);
           const multipath = [bip39Part, ...bip32Part] as HDPathTuple;
 
@@ -39,13 +41,14 @@ describe('derivation', () => {
             `bip32:0`,
             `bip32:${index}`,
           ]);
-          return deriveKeyFromPath({ path: multipath });
+
+          return deriveKeyFromPath({ path: multipath, curve: 'secp256k1' });
         }),
       );
 
       // validate addresses
-      keys.forEach(({ privateKey }, index) => {
-        const address = privateKeyToEthAddress(privateKey as Buffer);
+      keys.forEach(({ privateKeyBuffer }, index) => {
+        const address = privateKeyToEthAddress(privateKeyBuffer as Buffer);
         expect(`0x${address.toString('hex')}`).toStrictEqual(
           expectedAddresses[index],
         );
@@ -56,22 +59,23 @@ describe('derivation', () => {
       // generate parent key
       const bip39Part = bip39MnemonicToMultipath(mnemonic);
       const multipath = [bip39Part, ...ethereumBip32PathParts] as HDPathTuple;
-      const { privateKey, chainCode } = await deriveKeyFromPath({
+      const node = await deriveKeyFromPath({
         path: multipath,
+        curve: 'secp256k1',
       });
+
       const keys = await Promise.all(
         expectedAddresses.map((_, index) => {
           return deriveKeyFromPath({
             path: [`bip32:${index}`],
-            privateKey,
-            chainCode,
+            node,
           });
         }),
       );
 
       // validate addresses
-      keys.forEach(({ privateKey: childPrivateKey }, index) => {
-        const address = privateKeyToEthAddress(childPrivateKey as Buffer);
+      keys.forEach(({ privateKeyBuffer }, index) => {
+        const address = privateKeyToEthAddress(privateKeyBuffer as Buffer);
         expect(`0x${address.toString('hex')}`).toStrictEqual(
           expectedAddresses[index],
         );
@@ -82,12 +86,15 @@ describe('derivation', () => {
       // generate parent key
       const bip39Part = bip39MnemonicToMultipath(mnemonic);
       const multipath = [bip39Part, ...ethereumBip32PathParts] as const;
-      const { privateKey } = await deriveKeyFromPath({
+      const node = await deriveKeyFromPath({
         path: multipath,
+        curve: 'secp256k1',
       });
 
       // Empty segments are forbidden
-      await expect(() => deriveKeyFromPath({ path: [] })).rejects.toThrow(
+      await expect(() =>
+        deriveKeyFromPath({ path: [], curve: 'secp256k1' }),
+      ).rejects.toThrow(
         /Invalid HD path segment: The segment must not be empty\./u,
       );
 
@@ -95,6 +102,7 @@ describe('derivation', () => {
       await expect(() =>
         deriveKeyFromPath({
           path: [...multipath, multipath[4], multipath[4]],
+          curve: 'secp256k1',
         }),
       ).rejects.toThrow(
         /Invalid HD path segment: The segment cannot exceed a 0-indexed depth of 5\./u,
@@ -105,6 +113,7 @@ describe('derivation', () => {
         const [, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part.replace('bip39', 'foo') as any, ...rest],
+          curve: 'secp256k1',
         });
       }).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -114,6 +123,7 @@ describe('derivation', () => {
         const [, bip32Part1, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace('bip32', 'bar') as any, ...rest],
+          curve: 'secp256k1',
         });
       }).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -123,6 +133,7 @@ describe('derivation', () => {
         const [, bip32Part1, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace(`44'`, 'xyz') as any, ...rest],
+          curve: 'secp256k1',
         });
       }).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -132,6 +143,7 @@ describe('derivation', () => {
         const [, bip32Part1, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace(`'`, '"') as any, ...rest],
+          curve: 'secp256k1',
         });
       }).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -140,6 +152,7 @@ describe('derivation', () => {
       await expect(
         deriveKeyFromPath({
           path: [bip39Part, ethereumBip32PathParts[0]],
+          curve: 'secp256k1',
           depth: 0,
         }),
       ).rejects.toThrow(
@@ -150,6 +163,7 @@ describe('derivation', () => {
       await expect(
         deriveKeyFromPath({
           path: [bip39Part.replace('r', 'R') as any],
+          curve: 'secp256k1',
         }),
       ).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -157,70 +171,82 @@ describe('derivation', () => {
 
       // Multipaths that start with bip39 segment require _no_ parentKey
       await expect(
-        deriveKeyFromPath({ path: [bip39Part], privateKey }),
+        deriveKeyFromPath({ path: [bip39Part], node }),
       ).rejects.toThrow(
         /Invalid derivation parameters: May not specify parent key if the path segment starts with a BIP-39 node\./u,
       );
 
       // Multipaths that start with bip32 segment require parentKey
-      await expect(deriveKeyFromPath({ path: [`bip32:1'`] })).rejects.toThrow(
+      await expect(
+        deriveKeyFromPath({ path: [`bip32:1'`], curve: 'secp256k1' }),
+      ).rejects.toThrow(
         /Invalid derivation parameters: Must specify parent key if the first node of the path segment is not a BIP-39 node\./u,
       );
+    });
 
-      // parentKey must be a buffer if specified
+    it('throws when no curve or node is specified', async () => {
+      await expect(
+        deriveKeyFromPath({ path: [bip39MnemonicToMultipath(mnemonic)] }),
+      ).rejects.toThrow(
+        'Invalid arguments: Must specify either a parent node or curve.',
+      );
+    });
+
+    it('throws when an invalid node is provided', async () => {
       await expect(
         deriveKeyFromPath({
-          path: [`bip32:1'`],
-          privateKey: (privateKey as Buffer).toString('base64') as any,
+          // @ts-expect-error Invalid node type.
+          node: {},
+          path: [bip39MnemonicToMultipath(mnemonic)],
         }),
-      ).rejects.toThrow('Private key must be a Buffer if specified.');
+      ).rejects.toThrow(
+        'Invalid arguments: Node must be a SLIP-10 node or a BIP-44 node when provided.',
+      );
     });
   });
 
   describe('bip32Derive', () => {
     it('derives the expected keys and addresses', async () => {
       // generate parent key
-      let derivedKeys: DerivedKeys;
+      let node: SLIP10Node;
 
       /* eslint-disable require-atomic-updates */
-      derivedKeys = await bip39Derive({ path: mnemonic });
-      derivedKeys = await bip32Derive({
+      node = await bip39Derive({ path: mnemonic });
+      node = await bip32Derive({
         path: `44'`,
-        ...derivedKeys,
+        node,
       });
 
-      derivedKeys = await bip32Derive({
+      node = await bip32Derive({
         path: `60'`,
-        ...derivedKeys,
+        node,
       });
 
-      derivedKeys = await bip32Derive({
+      node = await bip32Derive({
         path: `0'`,
-        ...derivedKeys,
+        node,
       });
 
-      derivedKeys = await bip32Derive({
+      node = await bip32Derive({
         path: `0`,
-        ...derivedKeys,
+        node,
       });
       /* eslint-enable require-atomic-updates */
 
       const keys = await Promise.all(
         expectedAddresses.map((_, index) => {
-          return bip32Derive({ path: `${index}`, ...derivedKeys });
+          return bip32Derive({ path: `${index}`, node });
         }),
       );
 
       // validate addresses
-      keys.forEach(({ privateKey }, index) => {
-        const address = privateKeyToEthAddress(privateKey as Buffer);
-        expect(`0x${address.toString('hex')}`).toStrictEqual(
-          expectedAddresses[index],
-        );
+      keys.forEach(({ address }, index) => {
+        expect(address).toStrictEqual(expectedAddresses[index]);
       });
     });
 
     it('throws for invalid inputs', async () => {
+      const node = await bip39Derive({ path: mnemonic });
       const inputs = [
         String(-1),
         String(1.1),
@@ -235,61 +261,36 @@ describe('derivation', () => {
         await expect(
           bip32Derive({
             path: input,
-            privateKey: Buffer.alloc(32).fill(1),
-            chainCode: Buffer.alloc(32).fill(1),
+            node,
           }),
         ).rejects.toThrow(
           'Invalid BIP-32 index: The index must be a non-negative decimal integer less than 2147483648.',
         );
       }
+    });
 
+    it('throws when no node is specified', async () => {
       await expect(
         bip32Derive({
-          path: `44`,
-          chainCode: Buffer.alloc(32).fill(1),
+          path: '0',
         }),
       ).rejects.toThrow(
-        'Invalid parameters: Must specify either a parent private or public key.',
+        'Invalid parameters: Must specify a node to derive from.',
       );
     });
 
-    it('throws for an invalid private key', async () => {
-      await expect(
-        bip32Derive({
-          path: `44'`,
-          privateKey: Buffer.alloc(31).fill(1),
-          chainCode: Buffer.alloc(32).fill(1),
-        }),
-      ).rejects.toThrow('Invalid parent key: Must be 32 bytes long.');
-    });
+    it('throws when trying to derive from a public key node', async () => {
+      const node = await bip39Derive({ path: mnemonic });
+      const publicNode = node.neuter();
 
-    it('throws for an invalid public key', async () => {
       await expect(
         bip32Derive({
-          path: `44`,
-          publicKey: Buffer.alloc(31).fill(1),
-          chainCode: Buffer.alloc(32).fill(1),
+          path: `0'`,
+          node: publicNode,
         }),
-      ).rejects.toThrow('Invalid parent public key: Must be 65 bytes long.');
-    });
-
-    it('throws if no chain code is specified', async () => {
-      await expect(
-        bip32Derive({
-          path: `44'`,
-          privateKey: Buffer.alloc(32, 1),
-        }),
-      ).rejects.toThrow('Invalid parameters: Must specify a chain code.');
-    });
-
-    it('throws for an invalid chain code', async () => {
-      await expect(
-        bip32Derive({
-          path: `44'`,
-          privateKey: Buffer.alloc(32).fill(1),
-          chainCode: Buffer.alloc(31).fill(1),
-        }),
-      ).rejects.toThrow('Invalid chain code: Must be 32 bytes long.');
+      ).rejects.toThrow(
+        'Invalid parameters: Cannot derive hardened child keys without a private key.',
+      );
     });
   });
 

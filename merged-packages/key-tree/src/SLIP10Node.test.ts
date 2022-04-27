@@ -4,6 +4,7 @@ import { SLIP10Node } from './SLIP10Node';
 import { BIP44PurposeNodeToken } from './constants';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import { hexStringToBuffer } from './utils';
+import { compressPublicKey } from './curves/secp256k1';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 
@@ -18,6 +19,8 @@ describe('SLIP10Node', () => {
         privateKey,
         chainCode,
         depth: 0,
+        parentFingerprint: 0,
+        index: 0,
         curve: 'secp256k1',
       });
 
@@ -32,9 +35,11 @@ describe('SLIP10Node', () => {
       });
 
       const node = await SLIP10Node.fromExtendedKey({
-        privateKey: privateKey.toString('hex'),
-        chainCode: chainCode.toString('hex'),
+        privateKey,
+        chainCode,
         depth: 0,
+        parentFingerprint: 0,
+        index: 0,
         curve: 'secp256k1',
       });
 
@@ -52,6 +57,8 @@ describe('SLIP10Node', () => {
         privateKey,
         chainCode,
         depth: 0,
+        parentFingerprint: 0,
+        index: 0,
         curve: 'ed25519',
       });
 
@@ -61,21 +68,16 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from a public key', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
+      const { publicKeyBuffer, chainCodeBuffer } = await deriveChildKey({
         path: fixtures.local.mnemonic,
       });
 
-      const privateNode = await SLIP10Node.fromExtendedKey({
-        privateKey,
-        chainCode,
-        depth: 0,
-        curve: 'secp256k1',
-      });
-
       const node = await SLIP10Node.fromExtendedKey({
-        publicKey: privateNode.publicKeyBuffer,
-        chainCode: privateNode.chainCodeBuffer,
+        publicKey: publicKeyBuffer,
+        chainCode: chainCodeBuffer,
         depth: 0,
+        parentFingerprint: 0,
+        index: 0,
         curve: 'secp256k1',
       });
 
@@ -85,21 +87,17 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new ed25519 node from a public key', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
+      const { publicKeyBuffer, chainCodeBuffer } = await deriveChildKey({
         path: fixtures.local.mnemonic,
-      });
-
-      const privateNode = await SLIP10Node.fromExtendedKey({
-        privateKey,
-        chainCode,
-        depth: 0,
-        curve: 'ed25519',
+        curve: ed25519,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
-        publicKey: privateNode.publicKeyBuffer,
-        chainCode: privateNode.chainCodeBuffer,
+        publicKey: publicKeyBuffer,
+        chainCode: chainCodeBuffer,
         depth: 0,
+        parentFingerprint: 0,
+        index: 0,
         curve: 'ed25519',
       });
 
@@ -109,21 +107,16 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from a hexadecimal public key and chain code', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
+      const { publicKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
       });
 
-      const privateNode = await SLIP10Node.fromExtendedKey({
-        privateKey,
+      const node = await SLIP10Node.fromExtendedKey({
+        publicKey,
         chainCode,
         depth: 0,
-        curve: 'secp256k1',
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        publicKey: privateNode.publicKey,
-        chainCode: privateNode.chainCode,
-        depth: 0,
+        parentFingerprint: 0,
+        index: 0,
         curve: 'secp256k1',
       });
 
@@ -133,15 +126,8 @@ describe('SLIP10Node', () => {
     });
 
     it('initializes a new node from JSON', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
+      const node = await deriveChildKey({
         path: fixtures.local.mnemonic,
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        privateKey,
-        chainCode,
-        depth: 0,
-        curve: 'secp256k1',
       });
 
       expect(await SLIP10Node.fromJSON(node.toJSON())).toStrictEqual(node);
@@ -156,6 +142,8 @@ describe('SLIP10Node', () => {
         privateKey,
         chainCode,
         depth: 0,
+        parentFingerprint: 0,
+        index: 0,
         curve: 'secp256k1',
       });
 
@@ -171,6 +159,8 @@ describe('SLIP10Node', () => {
         SLIP10Node.fromExtendedKey({
           chainCode: Buffer.alloc(32, 1),
           depth: 0,
+          parentFingerprint: 0,
+          index: 0,
           curve: 'secp256k1',
         }),
       ).rejects.toThrow(
@@ -196,6 +186,8 @@ describe('SLIP10Node', () => {
         await expect(
           SLIP10Node.fromExtendedKey({
             depth: input as any,
+            parentFingerprint: 0,
+            index: 0,
             publicKey: Buffer.alloc(65, 1),
             chainCode: Buffer.alloc(32, 1),
             curve: 'secp256k1',
@@ -206,12 +198,44 @@ describe('SLIP10Node', () => {
       }
     });
 
+    it('throws if the parent fingerprint is invalid', async () => {
+      const inputs = [
+        -1,
+        0.1,
+        -0.1,
+        NaN,
+        Infinity,
+        '0',
+        'zero',
+        {},
+        null,
+        undefined,
+      ];
+
+      for (const input of inputs) {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            depth: 0,
+            parentFingerprint: input as any,
+            index: 0,
+            publicKey: Buffer.alloc(65, 1),
+            chainCode: Buffer.alloc(32, 1),
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          `Invalid parent fingerprint: The fingerprint must be a positive integer. Received: "${input}"`,
+        );
+      }
+    });
+
     it('throws if the private key is invalid', async () => {
       await expect(
         SLIP10Node.fromExtendedKey({
           privateKey: 'foo',
           chainCode: Buffer.alloc(32, 1),
           depth: 0,
+          parentFingerprint: 0,
+          index: 0,
           curve: 'secp256k1',
         }),
       ).rejects.toThrow(
@@ -226,6 +250,8 @@ describe('SLIP10Node', () => {
           privateKey: 123,
           chainCode: Buffer.alloc(32, 1),
           depth: 0,
+          parentFingerprint: 0,
+          index: 0,
           curve: 'secp256k1',
         }),
       ).rejects.toThrow(
@@ -248,7 +274,9 @@ describe('SLIP10Node', () => {
 
       expect(node.depth).toStrictEqual(2);
       expect(node.toJSON()).toStrictEqual({
-        depth: 2,
+        depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
         curve: 'secp256k1',
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -447,6 +475,8 @@ describe('SLIP10Node', () => {
             chainCode,
             curve: 'ed25519',
             depth: 0,
+            parentFingerprint: 0,
+            index: 0,
           });
 
           if (path.ours.tuple.length === 0) {
@@ -473,6 +503,8 @@ describe('SLIP10Node', () => {
             chainCode,
             curve: 'secp256k1',
             depth: 0,
+            parentFingerprint: 0,
+            index: 0,
           });
 
           if (path.ours.tuple.length === 0) {
@@ -484,6 +516,24 @@ describe('SLIP10Node', () => {
         }
       },
     );
+  });
+
+  describe('compressedPublicKeyBuffer', () => {
+    it('returns the public key in compressed form', async () => {
+      const node = await SLIP10Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+        curve: 'secp256k1',
+      });
+
+      expect(node.compressedPublicKeyBuffer).toStrictEqual(
+        compressPublicKey(node.publicKeyBuffer),
+      );
+    });
   });
 
   describe('address', () => {
@@ -503,6 +553,8 @@ describe('SLIP10Node', () => {
           chainCode,
           curve: 'secp256k1',
           depth: 0,
+          parentFingerprint: 0,
+          index: 0,
         });
 
         const childNode = await node.derive([
@@ -527,6 +579,21 @@ describe('SLIP10Node', () => {
       expect(() => node.address).toThrow(
         'Unable to get address for this node: Only secp256k1 is supported.',
       );
+    });
+  });
+
+  describe('fingerprint', () => {
+    it('returns the fingerprint for a public key', async () => {
+      const node = await SLIP10Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'secp256k1',
+      });
+
+      expect(node.fingerprint).toBe(1498926763);
     });
   });
 
@@ -566,6 +633,8 @@ describe('SLIP10Node', () => {
       const nodeJson = node.toJSON();
       expect(nodeJson).toStrictEqual({
         depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
         curve: 'secp256k1',
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -574,6 +643,8 @@ describe('SLIP10Node', () => {
 
       expect(JSON.parse(JSON.stringify(nodeJson))).toStrictEqual({
         depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
         curve: 'secp256k1',
         privateKey: node.privateKey,
         publicKey: node.publicKey,
