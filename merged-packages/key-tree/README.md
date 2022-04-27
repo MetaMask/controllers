@@ -42,7 +42,7 @@ const coinType = 60;
 // the user's mnemonic.
 const mnemonic = getMnemonic();
 
-const coinTypeNode = await BIP44CoinTypeNode.create([
+const coinTypeNode = await BIP44CoinTypeNode.fromDerivationPath([
   `bip39:${mnemonic}`,
   `bip32:44'`, // By BIP-44, the "purpose" node must be "44'"
   `bip32:${coinType}'`,
@@ -50,6 +50,7 @@ const coinTypeNode = await BIP44CoinTypeNode.create([
 
 // Imagine that this is some Node.js stream, but it could be anything that
 // can transmit JSON messages, such as window.postMessage.
+// Alternatively you can use `coinTypeNode.extendedKey` as well.
 stream.write(coinTypeNode.toJSON());
 
 //===============================
@@ -61,8 +62,12 @@ import { getBIP44AddressKeyDeriver } from '@metamask/key-tree';
 // Get the node sent from the privileged context.
 // It will have the following shape:
 //   {
-//     key, // A Base64 string of the coin_type key
+//     privateKey, // A hexadecimal string of the private key
+//     publicKey, // A hexadecimal string of the public key
+//     chainCode, // A hexadecimal string of the chain code
 //     depth, // The number 2, which is the depth of coin_type nodes
+//     parentFingerprint, // The fingerprint of the parent node as number
+//     index, // The index of the node as number
 //     coin_type, // In this case, the number 60
 //     path, // For visualization only. In this case: m / 44' / 60'
 //   }
@@ -70,6 +75,7 @@ const coinTypeNode = await getCoinTypeNode();
 
 // Get an address key deriver for the coin_type node.
 // In this case, its path will be: m / 44' / 60' / 0' / 0 / address_index
+// Alternatively you can use an extended key (`xprv`) as well.
 const addressKeyDeriver = getBIP44AddressKeyDeriver(coinTypeNode);
 
 // These are Node.js Buffer representations of the extended private keys for
@@ -94,7 +100,7 @@ You can derive SLIP-10 keys as follows.
 import { SLIP10Node } from '@metamask/key-tree';
 
 // Create a SLIP10Node from a derivation path. You can also specify a key and depth instead.
-const node = await SLIP10Node.create({
+const node = await SLIP10Node.fromDerivationPath({
   curve: 'secp256k1', // or 'ed25519'
   derivationPath: [`bip39:${mnemonic}`, `bip32:0'`],
 });
