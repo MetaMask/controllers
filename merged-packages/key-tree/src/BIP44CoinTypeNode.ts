@@ -215,6 +215,10 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.curve;
   }
 
+  public get extendedKey(): string {
+    return this.#node.extendedKey;
+  }
+
   /**
    * Derives a BIP-44 `address_index` key corresponding to the path of this
    * node and the specified `account`, `change`, and `address_index` values.

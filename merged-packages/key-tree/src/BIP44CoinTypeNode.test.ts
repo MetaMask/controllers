@@ -1,4 +1,5 @@
 import fixtures from '../test/fixtures';
+import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
 import {
   BIP_44_COIN_TYPE_DEPTH,
   BIP44Node,
@@ -393,6 +394,28 @@ describe('BIP44CoinTypeNode', () => {
       const parentNode = await BIP44CoinTypeNode.fromNode(node, coinType);
 
       expect(parentNode.address).toBe(node.address);
+    });
+  });
+
+  describe('extendedKey', () => {
+    it('returns the extended private key for nodes with a private key', async () => {
+      const coinType = 60;
+      const node = await BIP44CoinTypeNode.fromDerivationPath([
+        defaultBip39NodeToken,
+        BIP44PurposeNodeToken,
+        `bip32:${coinType}'`,
+      ]);
+
+      const extendedKey = encodeExtendedKey({
+        version: PRIVATE_KEY_VERSION,
+        privateKey: node.privateKeyBuffer as Buffer,
+        chainCode: node.chainCodeBuffer,
+        depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+      });
+
+      expect(node.extendedKey).toStrictEqual(extendedKey);
     });
   });
 
