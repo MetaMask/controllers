@@ -24,9 +24,9 @@ import {
 export function getBIP44CoinTypePathString(
   coin_type: number,
 ): CoinTypeHDPathString {
-  return `m / ${BIP44PurposeNodeToken} / ${getUnhardenedBIP32NodeToken(
+  return `m / ${BIP44PurposeNodeToken} / ${getHardenedBIP32NodeToken(
     coin_type,
-  )}'`;
+  )}`;
 }
 
 type BIP44PathIndex = number | { index: number; hardened: boolean };
@@ -50,7 +50,7 @@ export type CoinTypeToAddressIndices = Pick<
  * For display purposes only.
  *
  * @param coinTypePath - The parent `coin_type` path.
- * @param coin_type - The `change` index to create a path visualization for.
+ * @param indices - The `account` and `change` index to create a path visualization for.
  * @returns The visualization of the BIP-44 path for the specified `coin_type`
  * and `change` indices.
  */
@@ -215,7 +215,7 @@ export function hexStringToBuffer(hexString: string | Buffer): Buffer {
 export function nullableHexStringToBuffer(
   hexString?: string | Buffer,
 ): Buffer | undefined {
-  if (hexString) {
+  if (hexString !== undefined) {
     return hexStringToBuffer(hexString);
   }
 
