@@ -98,16 +98,6 @@ describe('derivation', () => {
         /Invalid HD path segment: The segment must not be empty\./u,
       );
 
-      // Segments cannot exceed BIP-44 maximum depth
-      await expect(() =>
-        deriveKeyFromPath({
-          path: [...multipath, multipath[4], multipath[4]],
-          curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        /Invalid HD path segment: The segment cannot exceed a 0-indexed depth of 5\./u,
-      );
-
       // Malformed multipaths are disallowed
       await expect(() => {
         const [, ...rest] = multipath;

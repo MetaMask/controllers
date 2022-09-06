@@ -1,7 +1,6 @@
 import {
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
-  MAX_BIP_44_DEPTH,
   MIN_BIP_44_DEPTH,
   SLIP10Path,
 } from './constants';
@@ -139,12 +138,6 @@ export function validatePathSegment(
 ) {
   if ((path as any).length === 0) {
     throw new Error(`Invalid HD path segment: The segment must not be empty.`);
-  }
-
-  if (path.length - 1 > MAX_BIP_44_DEPTH) {
-    throw new Error(
-      `Invalid HD path segment: The segment cannot exceed a 0-indexed depth of 5.`,
-    );
   }
 
   let startsWithBip39 = false;
