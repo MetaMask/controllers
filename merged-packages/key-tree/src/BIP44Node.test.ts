@@ -30,6 +30,7 @@ describe('BIP44Node', () => {
       expect(node.depth).toStrictEqual(2);
       expect(node.toJSON()).toStrictEqual({
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         privateKey: node.privateKey,
@@ -110,6 +111,7 @@ describe('BIP44Node', () => {
       expect(node.depth).toStrictEqual(2);
       expect(node.toJSON()).toStrictEqual({
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         privateKey: node.privateKey,
@@ -528,6 +530,7 @@ describe('BIP44Node', () => {
       const nodeJson = node.toJSON();
       expect(nodeJson).toStrictEqual({
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         privateKey: node.privateKey,
@@ -537,6 +540,7 @@ describe('BIP44Node', () => {
 
       expect(JSON.parse(JSON.stringify(nodeJson))).toStrictEqual({
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         privateKey: node.privateKey,

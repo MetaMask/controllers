@@ -27,6 +27,12 @@ export type JsonSLIP10Node = {
   readonly depth: number;
 
   /**
+   * The fingerprint of the master node, i.e., the node at depth 0. May be
+   * undefined if this node was created from an extended key.
+   */
+  readonly masterFingerprint?: number;
+
+  /**
    * The fingerprint of the parent key, or 0 if this is a master node.
    */
   readonly parentFingerprint: number;
@@ -79,6 +85,7 @@ export type SLIP10NodeInterface = JsonSLIP10Node & {
 
 type SLIP10NodeConstructorOptions = {
   readonly depth: number;
+  readonly masterFingerprint?: number;
   readonly parentFingerprint: number;
   readonly index: number;
   readonly chainCode: Buffer;
@@ -89,6 +96,7 @@ type SLIP10NodeConstructorOptions = {
 
 type SLIP10ExtendedKeyOptions = {
   readonly depth: number;
+  readonly masterFingerprint?: number;
   readonly parentFingerprint: number;
   readonly index: number;
   readonly chainCode: string | Buffer;
@@ -133,6 +141,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
    */
   static async fromExtendedKey({
     depth,
+    masterFingerprint,
     parentFingerprint,
     index,
     privateKey,
@@ -152,6 +161,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
       return new SLIP10Node({
         depth,
+        masterFingerprint,
         parentFingerprint,
         index,
         chainCode: chainCodeBuffer,
@@ -169,6 +179,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
       return new SLIP10Node({
         depth,
+        masterFingerprint,
         parentFingerprint,
         index,
         chainCode: chainCodeBuffer,
@@ -230,6 +241,8 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   public readonly depth: number;
 
+  public readonly masterFingerprint?: number;
+
   public readonly parentFingerprint: number;
 
   public readonly index: number;
@@ -242,6 +255,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   constructor({
     depth,
+    masterFingerprint,
     parentFingerprint,
     index,
     chainCode,
@@ -250,6 +264,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     curve,
   }: SLIP10NodeConstructorOptions) {
     this.depth = depth;
+    this.masterFingerprint = masterFingerprint;
     this.parentFingerprint = parentFingerprint;
     this.index = index;
     this.chainCodeBuffer = chainCode;
@@ -296,6 +311,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
   public neuter(): SLIP10Node {
     return new SLIP10Node({
       depth: this.depth,
+      masterFingerprint: this.masterFingerprint,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
       chainCode: this.chainCodeBuffer,
@@ -325,6 +341,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
   public toJSON(): JsonSLIP10Node {
     return {
       depth: this.depth,
+      masterFingerprint: this.masterFingerprint,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
       curve: this.curve,

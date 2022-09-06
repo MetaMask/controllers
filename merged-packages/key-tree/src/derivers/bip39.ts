@@ -4,6 +4,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { BIP39Node } from '../constants';
 import { Curve, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
+import { getFingerprint } from '../utils';
 import { DeriveChildKeyArgs } from '.';
 
 /**
@@ -38,9 +39,14 @@ export async function createBip39KeyFromSeed(
   const privateKey = key.slice(0, 32);
   const chainCode = key.slice(32);
 
+  const masterFingerprint = getFingerprint(
+    await curve.getPublicKey(privateKey, true),
+  );
+
   return SLIP10Node.fromExtendedKey({
     privateKey,
     chainCode,
+    masterFingerprint,
     depth: 0,
     parentFingerprint: 0,
     index: 0,

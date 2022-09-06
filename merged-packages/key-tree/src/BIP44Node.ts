@@ -52,6 +52,12 @@ export type JsonBIP44Node = {
   readonly depth: BIP44Depth;
 
   /**
+   * The fingerprint of the master node, i.e., the node at depth 0. May be
+   * undefined if this node was created from an extended key.
+   */
+  readonly masterFingerprint?: number;
+
+  /**
    * The fingerprint of the parent key, or 0 if this is a master node.
    */
   readonly parentFingerprint: number;
@@ -247,6 +253,10 @@ export class BIP44Node implements BIP44NodeInterface {
     return this.#node.address;
   }
 
+  public get masterFingerprint(): number | undefined {
+    return this.#node.masterFingerprint;
+  }
+
   public get parentFingerprint(): number {
     return this.#node.parentFingerprint;
   }
@@ -340,6 +350,7 @@ export class BIP44Node implements BIP44NodeInterface {
   public toJSON(): JsonBIP44Node {
     return {
       depth: this.depth,
+      masterFingerprint: this.masterFingerprint,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
       privateKey: this.privateKey,

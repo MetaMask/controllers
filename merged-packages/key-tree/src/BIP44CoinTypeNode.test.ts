@@ -38,6 +38,7 @@ describe('BIP44CoinTypeNode', () => {
       expect(node.toJSON()).toStrictEqual({
         coin_type: coinType,
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         path: pathString,
@@ -169,6 +170,7 @@ describe('BIP44CoinTypeNode', () => {
       expect(node.toJSON()).toStrictEqual({
         coin_type: coinType,
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         path: pathString,
@@ -205,6 +207,7 @@ describe('BIP44CoinTypeNode', () => {
       expect(node.toJSON()).toStrictEqual({
         coin_type: coinType,
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         path: pathString,
@@ -437,6 +440,7 @@ describe('BIP44CoinTypeNode', () => {
       expect(nodeJson).toStrictEqual({
         coin_type: coinType,
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         path: pathString,
@@ -448,6 +452,7 @@ describe('BIP44CoinTypeNode', () => {
       expect(JSON.parse(JSON.stringify(nodeJson))).toStrictEqual({
         coin_type: coinType,
         depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
         path: pathString,

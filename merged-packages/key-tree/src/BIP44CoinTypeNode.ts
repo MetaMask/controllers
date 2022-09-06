@@ -199,6 +199,10 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.address;
   }
 
+  public get masterFingerprint(): number | undefined {
+    return this.#node.masterFingerprint;
+  }
+
   public get parentFingerprint(): number {
     return this.#node.parentFingerprint;
   }
