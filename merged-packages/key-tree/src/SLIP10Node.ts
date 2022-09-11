@@ -291,6 +291,10 @@ export class SLIP10Node implements SLIP10NodeInterface {
     return getCurveByName(this.curve).compressPublicKey(this.publicKeyBuffer);
   }
 
+  public get compressedPublicKey(): string {
+    return this.compressedPublicKeyBuffer.toString('hex');
+  }
+
   public get address(): string {
     if (this.curve !== 'secp256k1') {
       throw new Error(

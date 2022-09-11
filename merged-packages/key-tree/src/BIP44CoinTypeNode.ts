@@ -187,6 +187,10 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.publicKey;
   }
 
+  public get compressedPublicKey(): string {
+    return this.#node.compressedPublicKey;
+  }
+
   public get compressedPublicKeyBuffer(): Buffer {
     return this.#node.compressedPublicKeyBuffer;
   }

@@ -241,6 +241,10 @@ export class BIP44Node implements BIP44NodeInterface {
     return this.#node.publicKey;
   }
 
+  public get compressedPublicKey(): string {
+    return this.#node.compressedPublicKey;
+  }
+
   public get compressedPublicKeyBuffer(): Buffer {
     return this.#node.compressedPublicKeyBuffer;
   }

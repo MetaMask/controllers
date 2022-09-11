@@ -364,6 +364,25 @@ describe('BIP44CoinTypeNode', () => {
     });
   });
 
+  describe('compressedPublicKey', () => {
+    it('returns the compressed public key for a node', async () => {
+      const coinType = 60;
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:${coinType}'`,
+        ],
+      });
+
+      const parentNode = await BIP44CoinTypeNode.fromNode(node, coinType);
+
+      expect(parentNode.compressedPublicKey).toStrictEqual(
+        node.compressedPublicKey,
+      );
+    });
+  });
+
   describe('compressedPublicKeyBuffer', () => {
     it('returns the compressed public key for a node', async () => {
       const coinType = 60;

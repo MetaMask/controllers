@@ -431,6 +431,23 @@ describe('BIP44Node', () => {
     );
   });
 
+  describe('compressedPublicKey', () => {
+    it('returns the public key in compressed form', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+      });
+
+      expect(node.compressedPublicKey).toStrictEqual(
+        compressPublicKey(node.publicKeyBuffer).toString('hex'),
+      );
+    });
+  });
+
   describe('compressedPublicKeyBuffer', () => {
     it('returns the public key in compressed form', async () => {
       const node = await BIP44Node.fromDerivationPath({
