@@ -612,7 +612,24 @@ describe('SLIP10Node', () => {
         curve: 'secp256k1',
       });
 
-      expect(node.fingerprint).toBe(1498926763);
+      expect(node.fingerprint).toBe(3263250961);
+    });
+  });
+
+  describe('masterFingerprint', () => {
+    it('returns the master fingerprint for a node', async () => {
+      const masterNode = await SLIP10Node.fromDerivationPath({
+        derivationPath: [defaultBip39NodeToken],
+        curve: 'secp256k1',
+      });
+
+      const node = await masterNode.derive([
+        BIP44PurposeNodeToken,
+        `bip32:60'`,
+      ]);
+
+      expect(node.masterFingerprint).toBe(3293725253);
+      expect(node.masterFingerprint).toBe(masterNode.fingerprint);
     });
   });
 

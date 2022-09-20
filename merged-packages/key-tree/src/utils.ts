@@ -336,5 +336,5 @@ export const getFingerprint = (publicKey: Buffer): number => {
     );
   }
 
-  return Buffer.from(ripemd160(publicKey)).readUInt32BE(0);
+  return Buffer.from(ripemd160(sha256(publicKey))).readUInt32BE(0);
 };

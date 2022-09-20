@@ -372,7 +372,7 @@ describe('getFingerprint', () => {
       'xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi',
     );
 
-    expect(getFingerprint(node.compressedPublicKeyBuffer)).toBe(2391500305);
+    expect(getFingerprint(node.compressedPublicKeyBuffer)).toBe(876747070);
   });
 
   it('throws if the public key is not a valid buffer', async () => {
