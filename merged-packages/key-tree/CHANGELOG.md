@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.2]
+### Fixed
+- Export Buffer from `buffer` package explicitly ([#76](https://github.com/MetaMask/key-tree/pull/76))
+- Fix fingerprint derivation ([#78](https://github.com/MetaMask/key-tree/pull/78))
+
 ## [5.0.1]
 ### Fixed
 - Replace postinstall script with Yarn plugin ([#74](https://github.com/MetaMask/key-tree/pull/74))
@@ -84,7 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v5.0.1...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v5.0.2...HEAD
+[5.0.2]: https://github.com/MetaMask/key-tree/compare/v5.0.1...v5.0.2
 [5.0.1]: https://github.com/MetaMask/key-tree/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/MetaMask/key-tree/compare/v4.0.0...v5.0.0
 [4.0.0]: https://github.com/MetaMask/key-tree/compare/v3.0.1...v4.0.0
