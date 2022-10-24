@@ -48,8 +48,8 @@ describe('derivation', () => {
       );
 
       // validate addresses
-      keys.forEach(({ privateKeyBuffer }, index) => {
-        const address = privateKeyToEthAddress(privateKeyBuffer as Uint8Array);
+      keys.forEach(({ privateKeyBytes }, index) => {
+        const address = privateKeyToEthAddress(privateKeyBytes as Uint8Array);
         expect(bytesToHex(address)).toStrictEqual(expectedAddresses[index]);
       });
     });
@@ -73,8 +73,8 @@ describe('derivation', () => {
       );
 
       // validate addresses
-      keys.forEach(({ privateKeyBuffer }, index) => {
-        const address = privateKeyToEthAddress(privateKeyBuffer as Uint8Array);
+      keys.forEach(({ privateKeyBytes }, index) => {
+        const address = privateKeyToEthAddress(privateKeyBytes as Uint8Array);
         expect(bytesToHex(address)).toStrictEqual(expectedAddresses[index]);
       });
     });

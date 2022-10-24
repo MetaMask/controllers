@@ -6,11 +6,11 @@ import {
   getBIP44CoinTypeToAddressPathTuple,
   getHardenedBIP32NodeToken,
   getUnhardenedBIP32NodeToken,
-  isValidBufferKey,
-  nullableHexStringToBuffer,
-  getBuffer,
+  isValidBytesKey,
+  nullableHexStringToBytes,
+  getBytes,
   getFingerprint,
-  hexStringToBuffer,
+  hexStringToBytes,
   validateBIP32Index,
   isValidBIP32Index,
   isHardened,
@@ -206,66 +206,66 @@ describe('isHardened', () => {
   });
 });
 
-describe('hexStringToBuffer', () => {
-  it('returns the same buffer if a buffer is passed', () => {
-    const buffer = hexToBytes('123');
-    expect(hexStringToBuffer(buffer)).toBe(buffer);
+describe('hexStringToBytes', () => {
+  it('returns the same Uint8Array if a Uint8Array is passed', () => {
+    const bytes = hexToBytes('123');
+    expect(hexStringToBytes(bytes)).toBe(bytes);
   });
 
-  it('returns a buffer from a hex string', () => {
-    expect(hexStringToBuffer('1234')).toStrictEqual(hexToBytes('1234'));
-    expect(hexStringToBuffer('0x1234')).toStrictEqual(hexToBytes('1234'));
+  it('returns a Uint8Array from a hex string', () => {
+    expect(hexStringToBytes('1234')).toStrictEqual(hexToBytes('1234'));
+    expect(hexStringToBytes('0x1234')).toStrictEqual(hexToBytes('1234'));
   });
 
   it('throws if the string is not a valid hex string', () => {
-    expect(() => hexStringToBuffer('')).toThrow(
+    expect(() => hexStringToBytes('')).toThrow(
       'Value must be a hexadecimal string.',
     );
 
-    expect(() => hexStringToBuffer('0x0g')).toThrow(
+    expect(() => hexStringToBytes('0x0g')).toThrow(
       'Value must be a hexadecimal string.',
     );
   });
 });
 
-describe('nullableHexStringToBuffer', () => {
-  it('returns the same buffer if a buffer is passed', () => {
-    const buffer = hexToBytes('123');
-    expect(nullableHexStringToBuffer(buffer)).toBe(buffer);
+describe('nullableHexStringToBytes', () => {
+  it('returns the same Uint8Array if a Uint8Array is passed', () => {
+    const bytes = hexToBytes('123');
+    expect(nullableHexStringToBytes(bytes)).toBe(bytes);
   });
 
-  it('returns a buffer for a hexadecimal string', () => {
-    expect(nullableHexStringToBuffer('1234')).toStrictEqual(hexToBytes('1234'));
+  it('returns a Uint8Array for a hexadecimal string', () => {
+    expect(nullableHexStringToBytes('1234')).toStrictEqual(hexToBytes('1234'));
 
-    expect(nullableHexStringToBuffer('0x1234')).toStrictEqual(
+    expect(nullableHexStringToBytes('0x1234')).toStrictEqual(
       hexToBytes('1234'),
     );
   });
 
   it('returns undefined for falsy values', () => {
-    expect(nullableHexStringToBuffer(undefined)).toBeUndefined();
+    expect(nullableHexStringToBytes(undefined)).toBeUndefined();
   });
 
   it('throws if the string is not a valid hex string', () => {
-    expect(() => nullableHexStringToBuffer('')).toThrow(
+    expect(() => nullableHexStringToBytes('')).toThrow(
       'Value must be a hexadecimal string.',
     );
 
-    expect(() => nullableHexStringToBuffer('0x0g')).toThrow(
+    expect(() => nullableHexStringToBytes('0x0g')).toThrow(
       'Value must be a hexadecimal string.',
     );
   });
 });
 
-describe('isValidBufferKey', () => {
-  it('checks the buffer length', () => {
-    expect(isValidBufferKey(new Uint8Array(32).fill(1), 32)).toBe(true);
-    expect(isValidBufferKey(new Uint8Array(31).fill(1), 32)).toBe(false);
+describe('isValidBytesKey', () => {
+  it('checks the Uint8Array length', () => {
+    expect(isValidBytesKey(new Uint8Array(32).fill(1), 32)).toBe(true);
+    expect(isValidBytesKey(new Uint8Array(31).fill(1), 32)).toBe(false);
   });
 
-  it('checks if the buffer has at least one non-zero byte', () => {
-    expect(isValidBufferKey(new Uint8Array(32).fill(1), 32)).toBe(true);
-    expect(isValidBufferKey(new Uint8Array(32).fill(0), 32)).toBe(false);
+  it('checks if the Uint8Array has at least one non-zero byte', () => {
+    expect(isValidBytesKey(new Uint8Array(32).fill(1), 32)).toBe(true);
+    expect(isValidBytesKey(new Uint8Array(32).fill(0), 32)).toBe(false);
   });
 });
 
@@ -284,30 +284,30 @@ describe('isValidInteger', () => {
   );
 });
 
-describe('getBuffer', () => {
-  it('returns a buffer for a hexadecimal string', () => {
-    expect(getBuffer('0x1234', 2)).toStrictEqual(hexStringToBuffer('1234'));
-    expect(getBuffer('1234', 2)).toStrictEqual(hexStringToBuffer('1234'));
+describe('getBytes', () => {
+  it('returns a Uint8Array for a hexadecimal string', () => {
+    expect(getBytes('0x1234', 2)).toStrictEqual(hexStringToBytes('1234'));
+    expect(getBytes('1234', 2)).toStrictEqual(hexStringToBytes('1234'));
   });
 
-  it('returns the same buffer if a buffer is passed', () => {
-    const buffer = hexStringToBuffer('1234');
-    expect(getBuffer(buffer, 2)).toBe(buffer);
+  it('returns the same Uint8Array if a Uint8Array is passed', () => {
+    const bytes = hexStringToBytes('1234');
+    expect(getBytes(bytes, 2)).toBe(bytes);
   });
 
   it('throws if the length is invalid', () => {
-    expect(() => getBuffer('1234', 1)).toThrow(
-      'Invalid value: Must be a non-zero 1-byte buffer.',
+    expect(() => getBytes('1234', 1)).toThrow(
+      'Invalid value: Must be a non-zero 1-byte byte array.',
     );
 
-    expect(() => getBuffer(hexStringToBuffer('1234'), 1)).toThrow(
-      'Invalid value: Must be a non-zero 1-byte buffer.',
+    expect(() => getBytes(hexStringToBytes('1234'), 1)).toThrow(
+      'Invalid value: Must be a non-zero 1-byte byte array.',
     );
   });
 });
 
 describe('encodeBase58Check', () => {
-  it('encodes a buffer with Base58check', () => {
+  it('encodes a Uint8Array with Base58check', () => {
     expect(encodeBase58check(stringToBytes('foo bar'))).toBe('SQHFQMRT97ajZaP');
   });
 });
@@ -332,16 +332,16 @@ describe('getFingerprint', () => {
       'xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi',
     );
 
-    expect(getFingerprint(node.compressedPublicKeyBuffer)).toBe(876747070);
+    expect(getFingerprint(node.compressedPublicKeyBytes)).toBe(876747070);
   });
 
-  it('throws if the public key is not a valid buffer', async () => {
+  it('throws if the public key is not a valid Uint8Array', async () => {
     expect(() => getFingerprint(new Uint8Array(33).fill(0))).toThrow(
-      'Invalid public key: The key must be a 33-byte, non-zero Buffer.',
+      'Invalid public key: The key must be a 33-byte, non-zero byte array.',
     );
 
     expect(() => getFingerprint(new Uint8Array(65).fill(1))).toThrow(
-      'Invalid public key: The key must be a 33-byte, non-zero Buffer.',
+      'Invalid public key: The key must be a 33-byte, non-zero byte array.',
     );
   });
 });

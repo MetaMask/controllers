@@ -176,7 +176,7 @@ export function isHardened(bip32Token: string): boolean {
  * @param hexString - The hexadecimal string to convert.
  * @returns The `Uint8Array` corresponding to the hexadecimal string.
  */
-export function hexStringToBuffer(hexString: string | Uint8Array): Uint8Array {
+export function hexStringToBytes(hexString: string | Uint8Array): Uint8Array {
   if (hexString instanceof Uint8Array) {
     return hexString;
   }
@@ -188,11 +188,11 @@ export function hexStringToBuffer(hexString: string | Uint8Array): Uint8Array {
  * @param hexString - The hexadecimal string to convert.
  * @returns The `Uint8Array` corresponding to the hexadecimal string.
  */
-export function nullableHexStringToBuffer(
+export function nullableHexStringToBytes(
   hexString?: string | Uint8Array,
 ): Uint8Array | undefined {
   if (hexString !== undefined) {
-    return hexStringToBuffer(hexString);
+    return hexStringToBytes(hexString);
   }
 
   return undefined;
@@ -200,21 +200,21 @@ export function nullableHexStringToBuffer(
 
 /**
  * Tests whether the specified `Uint8Array` is a valid BIP-32 key.
- * A valid buffer key is 64 bytes long and has at least one non-zero byte.
+ * A valid bytes key is 64 bytes long and has at least one non-zero byte.
  *
- * @param buffer - The `Uint8Array` to test.
- * @param expectedLength - The expected length of the buffer.
- * @returns Whether the buffer represents a valid BIP-32 key.
+ * @param bytes - The `Uint8Array` to test.
+ * @param expectedLength - The expected length of the Uint8Array.
+ * @returns Whether the Uint8Array represents a valid BIP-32 key.
  */
-export function isValidBufferKey(
-  buffer: Uint8Array,
+export function isValidBytesKey(
+  bytes: Uint8Array,
   expectedLength: number,
 ): boolean {
-  if (buffer.length !== expectedLength) {
+  if (bytes.length !== expectedLength) {
     return false;
   }
 
-  for (const byte of buffer) {
+  for (const byte of bytes) {
     if (byte !== 0) {
       return true;
     }
@@ -234,24 +234,24 @@ export function isValidInteger(value: unknown): value is number {
 
 /**
  * Get a `Uint8Array` from a hexadecimal string or `Uint8Array`. Validates that the
- * length of the buffer matches the specified length, and that the buffer
+ * length of the `Uint8Array` matches the specified length, and that the `Uint8Array`
  * is not empty.
  *
  * @param value - The value to convert to a `Uint8Array`.
  * @param length - The length to validate the `Uint8Array` against.
  */
-export function getBuffer(value: unknown, length: number): Uint8Array {
+export function getBytes(value: unknown, length: number): Uint8Array {
   if (value instanceof Uint8Array) {
-    validateBuffer(value, length);
+    validateBytes(value, length);
 
     return value;
   }
 
   if (typeof value === 'string') {
-    const buffer = hexToBytes(value);
-    validateBuffer(buffer, length);
+    const bytes = hexToBytes(value);
+    validateBytes(bytes, length);
 
-    return buffer;
+    return bytes;
   }
 
   throw new Error(
@@ -259,12 +259,14 @@ export function getBuffer(value: unknown, length: number): Uint8Array {
   );
 }
 
-function validateBuffer(
-  buffer: Uint8Array,
+function validateBytes(
+  bytes: Uint8Array,
   length: number,
-): asserts buffer is Uint8Array {
-  if (!isValidBufferKey(buffer, length)) {
-    throw new Error(`Invalid value: Must be a non-zero ${length}-byte buffer.`);
+): asserts bytes is Uint8Array {
+  if (!isValidBytesKey(bytes, length)) {
+    throw new Error(
+      `Invalid value: Must be a non-zero ${length}-byte byte array.`,
+    );
   }
 }
 
@@ -292,15 +294,16 @@ export const encodeBase58check = (value: Uint8Array): string => {
  * @param publicKey - The compressed public key to get the fingerprint for.
  */
 export const getFingerprint = (publicKey: Uint8Array): number => {
-  if (!isValidBufferKey(publicKey, 33)) {
+  if (!isValidBytesKey(publicKey, 33)) {
     throw new Error(
-      `Invalid public key: The key must be a 33-byte, non-zero Buffer.`,
+      `Invalid public key: The key must be a 33-byte, non-zero byte array.`,
     );
   }
 
   const bytes = ripemd160(sha256(publicKey));
+
+  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-  // The equivalent of `Buffer.readUInt32BE(0)`.
   return view.getUint32(0, false);
 };

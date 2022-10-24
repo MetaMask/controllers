@@ -78,7 +78,7 @@ const coinTypeNode = await getCoinTypeNode();
 // Alternatively you can use an extended key (`xprv`) as well.
 const addressKeyDeriver = getBIP44AddressKeyDeriver(coinTypeNode);
 
-// These are Node.js Buffer representations of the extended private keys for
+// These are Uint8Array representations of the extended private keys for
 // the respective addresses.
 
 // m / 44' / 60' / 0' / 0 / 0

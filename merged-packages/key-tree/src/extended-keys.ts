@@ -1,8 +1,4 @@
-import {
-  decodeBase58check,
-  encodeBase58check,
-  isValidBufferKey,
-} from './utils';
+import { decodeBase58check, encodeBase58check, isValidBytesKey } from './utils';
 import { validateBIP44Depth } from './BIP44Node';
 import { compressPublicKey, decompressPublicKey } from './curves/secp256k1';
 
@@ -47,19 +43,16 @@ export type ExtendedKey = ExtendedPublicKey | ExtendedPrivateKey;
  * @param extendedKey - The extended key string to attempt to decode.
  */
 export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
-  const buffer = decodeBase58check(extendedKey);
+  const bytes = decodeBase58check(extendedKey);
 
-  if (buffer.length !== 78) {
+  if (bytes.length !== 78) {
     throw new Error(
-      `Invalid extended key: Expected a length of 78, got ${buffer.length}.`,
+      `Invalid extended key: Expected a length of 78, got ${bytes.length}.`,
     );
   }
 
-  const view = new DataView(
-    buffer.buffer,
-    buffer.byteOffset,
-    buffer.byteLength,
-  );
+  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   const version = view.getUint32(0, false);
   const depth = view.getUint8(4);
@@ -68,20 +61,21 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
   const parentFingerprint = view.getUint32(5, false);
   const index = view.getUint32(9, false);
 
-  const chainCode = buffer.slice(13, 45);
-  if (!isValidBufferKey(chainCode, 32)) {
+  const chainCode = bytes.slice(13, 45);
+  if (!isValidBytesKey(chainCode, 32)) {
     throw new Error(
-      `Invalid extended key: Chain code must be a 32-byte non-zero Buffer.`,
+      `Invalid extended key: Chain code must be a 32-byte non-zero byte array.`,
     );
   }
 
-  const key = buffer.slice(45, 78);
-  if (!isValidBufferKey(key, 33)) {
+  const key = bytes.slice(45, 78);
+  if (!isValidBytesKey(key, 33)) {
     throw new Error(
-      `Invalid extended key: Key must be a 33-byte non-zero Buffer.`,
+      `Invalid extended key: Key must be a 33-byte non-zero byte array.`,
     );
   }
 
+  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
   const keyView = new DataView(key.buffer, key.byteOffset, key.byteLength);
 
   if (version === PUBLIC_KEY_VERSION) {
@@ -132,6 +126,8 @@ export const encodeExtendedKey = (extendedKey: ExtendedKey): string => {
   const { version, depth, parentFingerprint, index, chainCode } = extendedKey;
 
   const bytes = new Uint8Array(78);
+
+  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   view.setUint32(0, version, false);

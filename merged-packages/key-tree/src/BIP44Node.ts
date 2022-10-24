@@ -221,16 +221,16 @@ export class BIP44Node implements BIP44NodeInterface {
     return this.#node.depth as BIP44Depth;
   }
 
-  public get privateKeyBuffer(): Uint8Array | undefined {
-    return this.#node.privateKeyBuffer;
+  public get privateKeyBytes(): Uint8Array | undefined {
+    return this.#node.privateKeyBytes;
   }
 
-  public get publicKeyBuffer(): Uint8Array {
-    return this.#node.publicKeyBuffer;
+  public get publicKeyBytes(): Uint8Array {
+    return this.#node.publicKeyBytes;
   }
 
-  public get chainCodeBuffer(): Uint8Array {
-    return this.#node.chainCodeBuffer;
+  public get chainCodeBytes(): Uint8Array {
+    return this.#node.chainCodeBytes;
   }
 
   public get privateKey(): string | undefined {
@@ -245,8 +245,8 @@ export class BIP44Node implements BIP44NodeInterface {
     return this.#node.compressedPublicKey;
   }
 
-  public get compressedPublicKeyBuffer(): Uint8Array {
-    return this.#node.compressedPublicKeyBuffer;
+  public get compressedPublicKeyBytes(): Uint8Array {
+    return this.#node.compressedPublicKeyBytes;
   }
 
   public get chainCode(): string {
@@ -278,21 +278,21 @@ export class BIP44Node implements BIP44NodeInterface {
       depth: this.depth,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
-      chainCode: this.chainCodeBuffer,
+      chainCode: this.chainCodeBytes,
     };
 
-    if (this.privateKeyBuffer) {
+    if (this.privateKeyBytes) {
       return encodeExtendedKey({
         ...data,
         version: PRIVATE_KEY_VERSION,
-        privateKey: this.privateKeyBuffer,
+        privateKey: this.privateKeyBytes,
       });
     }
 
     return encodeExtendedKey({
       ...data,
       version: PUBLIC_KEY_VERSION,
-      publicKey: this.publicKeyBuffer,
+      publicKey: this.publicKeyBytes,
     });
   }
 

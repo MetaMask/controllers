@@ -15,8 +15,8 @@ import {
   getBIP44CoinTypeToAddressPathTuple,
   getHardenedBIP32NodeToken,
   getUnhardenedBIP32NodeToken,
-  hexStringToBuffer,
-  nullableHexStringToBuffer,
+  hexStringToBytes,
+  nullableHexStringToBytes,
 } from './utils';
 import { deriveChildNode } from './SLIP10Node';
 import { SupportedCurve } from './curves';
@@ -80,9 +80,9 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
       depth: json.depth,
       index: json.index,
       parentFingerprint: json.parentFingerprint,
-      chainCode: hexStringToBuffer(json.chainCode),
-      privateKey: nullableHexStringToBuffer(json.privateKey),
-      publicKey: hexStringToBuffer(json.publicKey),
+      chainCode: hexStringToBytes(json.chainCode),
+      privateKey: nullableHexStringToBytes(json.privateKey),
+      publicKey: hexStringToBytes(json.publicKey),
     });
 
     return new BIP44CoinTypeNode(node, coin_type);
@@ -167,16 +167,16 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.depth;
   }
 
-  public get privateKeyBuffer(): Uint8Array | undefined {
-    return this.#node.privateKeyBuffer;
+  public get privateKeyBytes(): Uint8Array | undefined {
+    return this.#node.privateKeyBytes;
   }
 
-  public get publicKeyBuffer(): Uint8Array {
-    return this.#node.publicKeyBuffer;
+  public get publicKeyBytes(): Uint8Array {
+    return this.#node.publicKeyBytes;
   }
 
-  public get chainCodeBuffer(): Uint8Array {
-    return this.#node.chainCodeBuffer;
+  public get chainCodeBytes(): Uint8Array {
+    return this.#node.chainCodeBytes;
   }
 
   public get privateKey(): string | undefined {
@@ -191,8 +191,8 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.compressedPublicKey;
   }
 
-  public get compressedPublicKeyBuffer(): Uint8Array {
-    return this.#node.compressedPublicKeyBuffer;
+  public get compressedPublicKeyBytes(): Uint8Array {
+    return this.#node.compressedPublicKeyBytes;
   }
 
   public get chainCode(): string {

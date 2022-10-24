@@ -4,7 +4,7 @@ import { ed25519, secp256k1 } from './curves';
 import { SLIP10Node } from './SLIP10Node';
 import { BIP44PurposeNodeToken } from './constants';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
-import { hexStringToBuffer } from './utils';
+import { hexStringToBytes } from './utils';
 import { compressPublicKey } from './curves/secp256k1';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
@@ -26,8 +26,8 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.depth).toBe(0);
-      expect(node.privateKeyBuffer).toHaveLength(32);
-      expect(node.publicKeyBuffer).toHaveLength(65);
+      expect(node.privateKeyBytes).toHaveLength(32);
+      expect(node.publicKeyBytes).toHaveLength(65);
     });
 
     it('initializes a new node from a hexadecimal private key and chain code', async () => {
@@ -45,8 +45,8 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.depth).toBe(0);
-      expect(node.privateKeyBuffer).toHaveLength(32);
-      expect(node.publicKeyBuffer).toHaveLength(65);
+      expect(node.privateKeyBytes).toHaveLength(32);
+      expect(node.publicKeyBytes).toHaveLength(65);
     });
 
     it('initializes a new ed25519 node from a private key', async () => {
@@ -64,18 +64,18 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.depth).toBe(0);
-      expect(node.privateKeyBuffer).toHaveLength(32);
-      expect(node.publicKeyBuffer).toHaveLength(33);
+      expect(node.privateKeyBytes).toHaveLength(32);
+      expect(node.publicKeyBytes).toHaveLength(33);
     });
 
     it('initializes a new node from a public key', async () => {
-      const { publicKeyBuffer, chainCodeBuffer } = await deriveChildKey({
+      const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
         path: fixtures.local.mnemonic,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
-        publicKey: publicKeyBuffer,
-        chainCode: chainCodeBuffer,
+        publicKey: publicKeyBytes,
+        chainCode: chainCodeBytes,
         depth: 0,
         parentFingerprint: 0,
         index: 0,
@@ -83,19 +83,19 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.depth).toBe(0);
-      expect(node.privateKeyBuffer).toBeUndefined();
-      expect(node.publicKeyBuffer).toHaveLength(65);
+      expect(node.privateKeyBytes).toBeUndefined();
+      expect(node.publicKeyBytes).toHaveLength(65);
     });
 
     it('initializes a new ed25519 node from a public key', async () => {
-      const { publicKeyBuffer, chainCodeBuffer } = await deriveChildKey({
+      const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
         path: fixtures.local.mnemonic,
         curve: ed25519,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
-        publicKey: publicKeyBuffer,
-        chainCode: chainCodeBuffer,
+        publicKey: publicKeyBytes,
+        chainCode: chainCodeBytes,
         depth: 0,
         parentFingerprint: 0,
         index: 0,
@@ -103,8 +103,8 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.depth).toBe(0);
-      expect(node.privateKeyBuffer).toBeUndefined();
-      expect(node.publicKeyBuffer).toHaveLength(33);
+      expect(node.privateKeyBytes).toBeUndefined();
+      expect(node.publicKeyBytes).toHaveLength(33);
     });
 
     it('initializes a new node from a hexadecimal public key and chain code', async () => {
@@ -122,8 +122,8 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.depth).toBe(0);
-      expect(node.privateKeyBuffer).toBeUndefined();
-      expect(node.publicKeyBuffer).toHaveLength(65);
+      expect(node.privateKeyBytes).toBeUndefined();
+      expect(node.publicKeyBytes).toHaveLength(65);
     });
 
     it('initializes a new node from JSON', async () => {
@@ -242,7 +242,7 @@ describe('SLIP10Node', () => {
       ).rejects.toThrow('Value must be a hexadecimal string.');
     });
 
-    it('throws if the private key is not a Buffer or hexadecimal string', async () => {
+    it('throws if the private key is not a Uint8Array or hexadecimal string', async () => {
       await expect(
         SLIP10Node.fromExtendedKey({
           // @ts-expect-error Invalid private key type.
@@ -331,21 +331,18 @@ describe('SLIP10Node', () => {
       );
 
       // frozen / readonly
-      [
-        'depth',
-        'privateKeyBuffer',
-        'publicKeyBuffer',
-        'chainCodeBuffer',
-      ].forEach((property) => {
-        expect(() => (node[property] = new Uint8Array(64).fill(1))).toThrow(
-          expect.objectContaining({
-            name: 'TypeError',
-            message: expect.stringMatching(
-              `Cannot assign to read only property '${property}' of object`,
-            ),
-          }),
-        );
-      });
+      ['depth', 'privateKeyBytes', 'publicKeyBytes', 'chainCodeBytes'].forEach(
+        (property) => {
+          expect(() => (node[property] = new Uint8Array(64).fill(1))).toThrow(
+            expect.objectContaining({
+              name: 'TypeError',
+              message: expect.stringMatching(
+                `Cannot assign to read only property '${property}' of object`,
+              ),
+            }),
+          );
+        },
+      );
     });
 
     it('throws an error if no curve is specified', async () => {
@@ -465,7 +462,7 @@ describe('SLIP10Node', () => {
       'returns the public key for an ed25519 node',
       async ({ hexSeed, keys }) => {
         const { privateKey, chainCode } = await createBip39KeyFromSeed(
-          hexStringToBuffer(hexSeed),
+          hexStringToBytes(hexSeed),
           ed25519,
         );
 
@@ -493,7 +490,7 @@ describe('SLIP10Node', () => {
       'returns the public key for an secp256k1 node',
       async ({ hexSeed, keys }) => {
         const { privateKey, chainCode } = await createBip39KeyFromSeed(
-          hexStringToBuffer(hexSeed),
+          hexStringToBytes(hexSeed),
           secp256k1,
         );
 
@@ -531,12 +528,12 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.compressedPublicKey).toStrictEqual(
-        bytesToHex(compressPublicKey(node.publicKeyBuffer)),
+        bytesToHex(compressPublicKey(node.publicKeyBytes)),
       );
     });
   });
 
-  describe('compressedPublicKeyBuffer', () => {
+  describe('compressedPublicKeyBytes', () => {
     it('returns the public key in compressed form', async () => {
       const node = await SLIP10Node.fromDerivationPath({
         derivationPath: [
@@ -548,8 +545,8 @@ describe('SLIP10Node', () => {
         curve: 'secp256k1',
       });
 
-      expect(node.compressedPublicKeyBuffer).toStrictEqual(
-        compressPublicKey(node.publicKeyBuffer),
+      expect(node.compressedPublicKeyBytes).toStrictEqual(
+        compressPublicKey(node.publicKeyBytes),
       );
     });
   });
@@ -648,7 +645,7 @@ describe('SLIP10Node', () => {
 
       expect(neuterNode.publicKey).toBe(node.publicKey);
       expect(neuterNode.privateKey).toBeUndefined();
-      expect(neuterNode.privateKeyBuffer).toBeUndefined();
+      expect(neuterNode.privateKeyBytes).toBeUndefined();
     });
   });
 

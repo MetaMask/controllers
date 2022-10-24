@@ -5,7 +5,7 @@ import { deriveKeyFromPath } from '../src/derivation';
 import { createBip39KeyFromSeed } from '../src/derivers/bip39';
 import {
   getBIP44CoinTypeToAddressPathTuple,
-  hexStringToBuffer,
+  hexStringToBytes,
 } from '../src/utils';
 
 import fixtures from './fixtures';
@@ -138,7 +138,7 @@ describe('reference implementation tests', () => {
   describe('ethereumjs-wallet', () => {
     const { sampleAddressIndices, hexSeed, privateKey, address, path } =
       fixtures['ethereumjs-wallet'];
-    const seed = hexStringToBuffer(hexSeed);
+    const seed = hexStringToBytes(hexSeed);
 
     describe('BIP44Node', () => {
       it('derives the same keys as the reference implementation', async () => {
@@ -206,7 +206,7 @@ describe('reference implementation tests', () => {
     describe('deriveKeyFromPath', () => {
       it('derives the test vector keys', async () => {
         for (const vector of vectors) {
-          const seed = hexStringToBuffer(vector.hexSeed);
+          const seed = hexStringToBytes(vector.hexSeed);
           const node = await createBip39KeyFromSeed(seed);
 
           for (const keyObj of vector.keys) {
@@ -239,7 +239,7 @@ describe('reference implementation tests', () => {
         it('derives the test vector keys', async () => {
           for (const { hexSeed, keys } of vectors) {
             const node = await createBip39KeyFromSeed(
-              hexStringToBuffer(hexSeed),
+              hexStringToBytes(hexSeed),
               ed25519,
             );
 
@@ -265,7 +265,7 @@ describe('reference implementation tests', () => {
     describe('ed25519-hd-key', () => {
       const { sampleKeyIndices, hexSeed, privateKey, path } =
         fixtures.ed25519['ed25519-hd-key'];
-      const seed = hexStringToBuffer(hexSeed);
+      const seed = hexStringToBytes(hexSeed);
 
       describe('SLIP10Node', () => {
         it('derives the same keys as the reference implementation', async () => {

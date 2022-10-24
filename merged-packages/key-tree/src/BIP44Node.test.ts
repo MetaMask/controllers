@@ -1,7 +1,7 @@
 import { bytesToHex } from '@metamask/utils';
 import fixtures from '../test/fixtures';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
-import { hexStringToBuffer } from './utils';
+import { hexStringToBytes } from './utils';
 import { compressPublicKey } from './curves/secp256k1';
 import {
   encodeExtendedKey,
@@ -382,7 +382,7 @@ describe('BIP44Node', () => {
       'returns the public key for an secp256k1 node',
       async ({ index, publicKey }) => {
         const { privateKey, chainCode } = await createBip39KeyFromSeed(
-          hexStringToBuffer(hexSeed),
+          hexStringToBytes(hexSeed),
         );
 
         const node = await BIP44Node.fromExtendedKey({
@@ -411,7 +411,7 @@ describe('BIP44Node', () => {
       'returns the address for an secp256k1 node',
       async ({ index, address }) => {
         const { privateKey, chainCode } = await createBip39KeyFromSeed(
-          hexStringToBuffer(hexSeed),
+          hexStringToBytes(hexSeed),
         );
 
         const node = await BIP44Node.fromExtendedKey({
@@ -444,12 +444,12 @@ describe('BIP44Node', () => {
       });
 
       expect(node.compressedPublicKey).toStrictEqual(
-        bytesToHex(compressPublicKey(node.publicKeyBuffer)),
+        bytesToHex(compressPublicKey(node.publicKeyBytes)),
       );
     });
   });
 
-  describe('compressedPublicKeyBuffer', () => {
+  describe('compressedPublicKeyBytes', () => {
     it('returns the public key in compressed form', async () => {
       const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
@@ -460,8 +460,8 @@ describe('BIP44Node', () => {
         ],
       });
 
-      expect(node.compressedPublicKeyBuffer).toStrictEqual(
-        compressPublicKey(node.publicKeyBuffer),
+      expect(node.compressedPublicKeyBytes).toStrictEqual(
+        compressPublicKey(node.publicKeyBytes),
       );
     });
   });
@@ -479,8 +479,8 @@ describe('BIP44Node', () => {
 
       const extendedKey = encodeExtendedKey({
         version: PRIVATE_KEY_VERSION,
-        privateKey: node.privateKeyBuffer as Uint8Array,
-        chainCode: node.chainCodeBuffer,
+        privateKey: node.privateKeyBytes as Uint8Array,
+        chainCode: node.chainCodeBytes,
         depth: node.depth,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
@@ -503,8 +503,8 @@ describe('BIP44Node', () => {
 
       const extendedKey = encodeExtendedKey({
         version: PUBLIC_KEY_VERSION,
-        publicKey: neuteredNode.publicKeyBuffer,
-        chainCode: neuteredNode.chainCodeBuffer,
+        publicKey: neuteredNode.publicKeyBytes,
+        chainCode: neuteredNode.chainCodeBytes,
         depth: neuteredNode.depth,
         parentFingerprint: neuteredNode.parentFingerprint,
         index: neuteredNode.index,
@@ -529,7 +529,7 @@ describe('BIP44Node', () => {
 
       expect(neuterNode.publicKey).toBe(node.publicKey);
       expect(neuterNode.privateKey).toBeUndefined();
-      expect(neuterNode.privateKeyBuffer).toBeUndefined();
+      expect(neuterNode.privateKeyBytes).toBeUndefined();
     });
   });
 

@@ -110,7 +110,9 @@ describe('BIP44CoinTypeNode', () => {
       for (const input of inputs) {
         await expect(
           BIP44CoinTypeNode.fromJSON(input as any, arbitraryCoinType),
-        ).rejects.toThrow('Invalid value: Must be a non-zero 32-byte buffer.');
+        ).rejects.toThrow(
+          'Invalid value: Must be a non-zero 32-byte byte array.',
+        );
       }
 
       await expect(
@@ -201,8 +203,8 @@ describe('BIP44CoinTypeNode', () => {
 
       expect(node.coin_type).toStrictEqual(coinType);
       expect(node.depth).toStrictEqual(2);
-      expect(node.privateKeyBuffer).toHaveLength(32);
-      expect(node.publicKeyBuffer).toHaveLength(65);
+      expect(node.privateKeyBytes).toHaveLength(32);
+      expect(node.publicKeyBytes).toHaveLength(65);
       expect(node.path).toStrictEqual(pathString);
 
       expect(node.toJSON()).toStrictEqual({
@@ -384,7 +386,7 @@ describe('BIP44CoinTypeNode', () => {
     });
   });
 
-  describe('compressedPublicKeyBuffer', () => {
+  describe('compressedPublicKeyBytes', () => {
     it('returns the compressed public key for a node', async () => {
       const coinType = 60;
       const node = await BIP44Node.fromDerivationPath({
@@ -397,8 +399,8 @@ describe('BIP44CoinTypeNode', () => {
 
       const parentNode = await BIP44CoinTypeNode.fromNode(node, coinType);
 
-      expect(parentNode.compressedPublicKeyBuffer).toStrictEqual(
-        node.compressedPublicKeyBuffer,
+      expect(parentNode.compressedPublicKeyBytes).toStrictEqual(
+        node.compressedPublicKeyBytes,
       );
     });
   });
@@ -431,8 +433,8 @@ describe('BIP44CoinTypeNode', () => {
 
       const extendedKey = encodeExtendedKey({
         version: PRIVATE_KEY_VERSION,
-        privateKey: node.privateKeyBuffer as Uint8Array,
-        chainCode: node.chainCodeBuffer,
+        privateKey: node.privateKeyBytes as Uint8Array,
+        chainCode: node.chainCodeBytes,
         depth: node.depth,
         parentFingerprint: node.parentFingerprint,
         index: node.index,

@@ -7,8 +7,8 @@ import {
   concatBytes,
   hexToBytes,
 } from '@metamask/utils';
-import { BIP_32_HARDENED_OFFSET, BUFFER_KEY_LENGTH } from '../constants';
-import { isValidBufferKey } from '../utils';
+import { BIP_32_HARDENED_OFFSET, BYTES_KEY_LENGTH } from '../constants';
+import { isValidBytesKey } from '../utils';
 import { Curve, mod, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { DeriveChildKeyArgs, DerivedKeys } from '.';
@@ -20,13 +20,13 @@ import { DeriveChildKeyArgs, DerivedKeys } from '.';
  * length. It is the consumer's responsibility to ensure that the specified
  * key is a valid BIP-44 Ethereum `address_index` key.
  *
- * @param key - The `address_index` private key buffer to convert to an Ethereum
+ * @param key - The `address_index` private key bytes to convert to an Ethereum
  * address.
  * @returns The Ethereum address corresponding to the given key.
  */
 export function privateKeyToEthAddress(key: Uint8Array) {
   assert(
-    key instanceof Uint8Array && isValidBufferKey(key, BUFFER_KEY_LENGTH),
+    key instanceof Uint8Array && isValidBytesKey(key, BYTES_KEY_LENGTH),
     'Invalid key: The key must be a 32-byte, non-zero Uint8Array.',
   );
 
@@ -41,14 +41,14 @@ export function privateKeyToEthAddress(key: Uint8Array) {
  * length. It is the consumer's responsibility to ensure that the specified
  * key is a valid BIP-44 Ethereum `address_index` key.
  *
- * @param key - The `address_index` public key buffer to convert to an Ethereum
+ * @param key - The `address_index` public key bytes to convert to an Ethereum
  * address.
  * @returns The Ethereum address corresponding to the given key.
  */
 export function publicKeyToEthAddress(key: Uint8Array) {
   assert(
     key instanceof Uint8Array &&
-      isValidBufferKey(key, secp256k1.publicKeyLength),
+      isValidBytesKey(key, secp256k1.publicKeyLength),
     'Invalid key: The key must be a 65-byte, non-zero Uint8Array.',
   );
 
@@ -100,17 +100,17 @@ export async function deriveChildKey({
     );
   }
 
-  if (node.privateKeyBuffer) {
+  if (node.privateKeyBytes) {
     const secretExtension = await deriveSecretExtension({
-      privateKey: node.privateKeyBuffer,
+      privateKey: node.privateKeyBytes,
       childIndex,
       isHardened,
       curve,
     });
 
     const { privateKey, chainCode } = await generateKey({
-      privateKey: node.privateKeyBuffer,
-      chainCode: node.chainCodeBuffer,
+      privateKey: node.privateKeyBytes,
+      chainCode: node.chainCodeBytes,
       secretExtension,
       curve,
     });
@@ -127,13 +127,13 @@ export async function deriveChildKey({
   }
 
   const publicExtension = await derivePublicExtension({
-    parentPublicKey: node.compressedPublicKeyBuffer,
+    parentPublicKey: node.compressedPublicKeyBytes,
     childIndex,
   });
 
   const { publicKey, chainCode } = generatePublicKey({
-    publicKey: node.compressedPublicKeyBuffer,
-    chainCode: node.chainCodeBuffer,
+    publicKey: node.compressedPublicKeyBytes,
+    chainCode: node.chainCodeBytes,
     publicExtension,
     curve,
   });
@@ -202,19 +202,19 @@ async function derivePublicExtension({
 /**
  * Add a tweak to the private key: `(privateKey + tweak) % n`.
  *
- * @param privateKeyBuffer - The private key as 32 byte Uint8Array.
- * @param tweakBuffer - The tweak as 32 byte Uint8Array.
+ * @param privateKeyBytes - The private key as 32 byte Uint8Array.
+ * @param tweakBytes - The tweak as 32 byte Uint8Array.
  * @param curve - The curve to use.
  * @throws If the private key or tweak is invalid.
  * @returns The private key with the tweak added to it.
  */
 export function privateAdd(
-  privateKeyBuffer: Uint8Array,
-  tweakBuffer: Uint8Array,
+  privateKeyBytes: Uint8Array,
+  tweakBytes: Uint8Array,
   curve: Curve,
 ): Uint8Array {
-  const privateKey = bytesToBigInt(privateKeyBuffer);
-  const tweak = bytesToBigInt(tweakBuffer);
+  const privateKey = bytesToBigInt(privateKeyBytes);
+  const tweak = bytesToBigInt(tweakBytes);
 
   if (tweak >= curve.curve.n) {
     throw new Error('Invalid tweak: Tweak is larger than the curve order.');

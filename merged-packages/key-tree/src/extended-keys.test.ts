@@ -6,7 +6,7 @@ import {
   PRIVATE_KEY_VERSION,
   PUBLIC_KEY_VERSION,
 } from './extended-keys';
-import { hexStringToBuffer } from './utils';
+import { hexStringToBytes } from './utils';
 
 describe('decodeExtendedKey', () => {
   it('decodes an extended public key', () => {
@@ -35,10 +35,10 @@ describe('decodeExtendedKey', () => {
       depth: 0,
       parentFingerprint: 0,
       index: 0,
-      chainCode: hexStringToBuffer(
+      chainCode: hexStringToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
-      privateKey: hexStringToBuffer(
+      privateKey: hexStringToBytes(
         'e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35',
       ),
       version: PRIVATE_KEY_VERSION,
@@ -67,7 +67,7 @@ describe('decodeExtendedKey', () => {
       'xprv9s21ZrQH143K24Mfq5zL5MhWK9hUhhGbd45hLXo2Pq2oqzMMo63oStZzFAp8UkorEcJ4wSbGzEaLySRnFibyHm9Wvj72EK5vSiRn21B5B1e';
 
     expect(() => decodeExtendedKey(extendedKey)).toThrow(
-      'Invalid extended key: Chain code must be a 32-byte non-zero Buffer.',
+      'Invalid extended key: Chain code must be a 32-byte non-zero byte array.',
     );
   });
 
@@ -76,7 +76,7 @@ describe('decodeExtendedKey', () => {
       'xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChijLXZSun8bsGj49MuvWWsqL9fqS5fhiDUkRQvq8cj8L42RGwHP';
 
     expect(() => decodeExtendedKey(extendedKey)).toThrow(
-      'Invalid extended key: Key must be a 33-byte non-zero Buffer.',
+      'Invalid extended key: Key must be a 33-byte non-zero byte array.',
     );
   });
 
@@ -114,10 +114,10 @@ describe('encodeExtendedKey', () => {
       depth: 0,
       parentFingerprint: 0,
       index: 0,
-      chainCode: hexStringToBuffer(
+      chainCode: hexStringToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
-      publicKey: hexStringToBuffer(
+      publicKey: hexStringToBytes(
         '0439a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c23cbe7ded0e7ce6a594896b8f62888fdbc5c8821305e2ea42bf01e37300116281',
       ),
       version: PUBLIC_KEY_VERSION,
@@ -133,10 +133,10 @@ describe('encodeExtendedKey', () => {
       depth: 0,
       parentFingerprint: 0,
       index: 0,
-      chainCode: hexStringToBuffer(
+      chainCode: hexStringToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
-      privateKey: hexStringToBuffer(
+      privateKey: hexStringToBytes(
         'e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35',
       ),
       version: PRIVATE_KEY_VERSION,

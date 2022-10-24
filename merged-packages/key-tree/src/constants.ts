@@ -1,6 +1,6 @@
-export const BUFFER_EXTENDED_KEY_LENGTH = 64;
+export const BYTES_EXTENDED_KEY_LENGTH = 64;
 
-export const BUFFER_KEY_LENGTH = 32;
+export const BYTES_KEY_LENGTH = 32;
 
 export const HEXADECIMAL_KEY_LENGTH = 64;
 

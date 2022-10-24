@@ -62,10 +62,8 @@ describe('ed25519', () => {
 
     it.each(slip10)('returns the same public key', async ({ keys }) => {
       for (const { publicKey } of keys) {
-        const publicKeyBuffer = hexToBytes(publicKey);
-        expect(compressPublicKey(publicKeyBuffer)).toStrictEqual(
-          publicKeyBuffer,
-        );
+        const publicKeyBytes = hexToBytes(publicKey);
+        expect(compressPublicKey(publicKeyBytes)).toStrictEqual(publicKeyBytes);
       }
     });
   });
@@ -75,9 +73,9 @@ describe('ed25519', () => {
 
     it.each(slip10)('returns the same public key', async ({ keys }) => {
       for (const { publicKey } of keys) {
-        const publicKeyBuffer = hexToBytes(publicKey);
-        expect(decompressPublicKey(publicKeyBuffer)).toStrictEqual(
-          publicKeyBuffer,
+        const publicKeyBytes = hexToBytes(publicKey);
+        expect(decompressPublicKey(publicKeyBytes)).toStrictEqual(
+          publicKeyBytes,
         );
       }
     });

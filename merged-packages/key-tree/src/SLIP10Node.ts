@@ -1,6 +1,6 @@
 import { bytesToHex } from '@metamask/utils';
 import {
-  BUFFER_KEY_LENGTH,
+  BYTES_KEY_LENGTH,
   RootedSLIP10PathTuple,
   SLIP10PathTuple,
 } from './constants';
@@ -8,7 +8,7 @@ import { curves, getCurveByName, SupportedCurve } from './curves';
 import { deriveKeyFromPath } from './derivation';
 import { publicKeyToEthAddress } from './derivers/bip32';
 import {
-  getBuffer,
+  getBytes,
   getFingerprint,
   isValidInteger,
   validateBIP32Index,
@@ -65,18 +65,18 @@ export type JsonSLIP10Node = {
 };
 
 export type SLIP10NodeInterface = JsonSLIP10Node & {
-  chainCodeBuffer: Uint8Array;
+  chainCodeBytes: Uint8Array;
 
   /**
-   * The private key for this node, as a Node.js Buffer or browser-equivalent.
+   * The private key for this node, as a {@link Uint8Array}.
    * May be undefined if this node is a public key only node.
    */
-  privateKeyBuffer?: Uint8Array;
+  privateKeyBytes?: Uint8Array;
 
   /**
-   * The public key for this node, as a Node.js Buffer or browser-equivalent.
+   * The public key for this node, as a {@link Uint8Array}.
    */
-  publicKeyBuffer: Uint8Array;
+  publicKeyBytes: Uint8Array;
 
   /**
    * @returns A JSON-compatible representation of this node's data fields.
@@ -153,7 +153,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     chainCode,
     curve,
   }: SLIP10ExtendedKeyOptions) {
-    const chainCodeBuffer = getBuffer(chainCode, BUFFER_KEY_LENGTH);
+    const chainCodeBytes = getBytes(chainCode, BYTES_KEY_LENGTH);
 
     validateCurve(curve);
     validateBIP32Depth(depth);
@@ -161,22 +161,22 @@ export class SLIP10Node implements SLIP10NodeInterface {
     validateParentFingerprint(parentFingerprint);
 
     if (privateKey) {
-      const privateKeyBuffer = getBuffer(privateKey, BUFFER_KEY_LENGTH);
+      const privateKeyBytes = getBytes(privateKey, BYTES_KEY_LENGTH);
 
       return new SLIP10Node({
         depth,
         masterFingerprint,
         parentFingerprint,
         index,
-        chainCode: chainCodeBuffer,
-        privateKey: privateKeyBuffer,
-        publicKey: await getCurveByName(curve).getPublicKey(privateKeyBuffer),
+        chainCode: chainCodeBytes,
+        privateKey: privateKeyBytes,
+        publicKey: await getCurveByName(curve).getPublicKey(privateKeyBytes),
         curve,
       });
     }
 
     if (publicKey) {
-      const publicKeyBuffer = getBuffer(
+      const publicKeyBytes = getBytes(
         publicKey,
         getCurveByName(curve).publicKeyLength,
       );
@@ -186,8 +186,8 @@ export class SLIP10Node implements SLIP10NodeInterface {
         masterFingerprint,
         parentFingerprint,
         index,
-        chainCode: chainCodeBuffer,
-        publicKey: publicKeyBuffer,
+        chainCode: chainCodeBytes,
+        publicKey: publicKeyBytes,
         curve,
       });
     }
@@ -251,11 +251,11 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   public readonly index: number;
 
-  public readonly chainCodeBuffer: Uint8Array;
+  public readonly chainCodeBytes: Uint8Array;
 
-  public readonly privateKeyBuffer?: Uint8Array;
+  public readonly privateKeyBytes?: Uint8Array;
 
-  public readonly publicKeyBuffer: Uint8Array;
+  public readonly publicKeyBytes: Uint8Array;
 
   constructor({
     depth,
@@ -271,36 +271,36 @@ export class SLIP10Node implements SLIP10NodeInterface {
     this.masterFingerprint = masterFingerprint;
     this.parentFingerprint = parentFingerprint;
     this.index = index;
-    this.chainCodeBuffer = chainCode;
-    this.privateKeyBuffer = privateKey;
-    this.publicKeyBuffer = publicKey;
+    this.chainCodeBytes = chainCode;
+    this.privateKeyBytes = privateKey;
+    this.publicKeyBytes = publicKey;
     this.curve = curve;
 
     Object.freeze(this);
   }
 
   public get chainCode() {
-    return bytesToHex(this.chainCodeBuffer);
+    return bytesToHex(this.chainCodeBytes);
   }
 
   public get privateKey(): string | undefined {
-    if (this.privateKeyBuffer) {
-      return bytesToHex(this.privateKeyBuffer);
+    if (this.privateKeyBytes) {
+      return bytesToHex(this.privateKeyBytes);
     }
 
     return undefined;
   }
 
   public get publicKey(): string {
-    return bytesToHex(this.publicKeyBuffer);
+    return bytesToHex(this.publicKeyBytes);
   }
 
-  public get compressedPublicKeyBuffer(): Uint8Array {
-    return getCurveByName(this.curve).compressPublicKey(this.publicKeyBuffer);
+  public get compressedPublicKeyBytes(): Uint8Array {
+    return getCurveByName(this.curve).compressPublicKey(this.publicKeyBytes);
   }
 
   public get compressedPublicKey(): string {
-    return bytesToHex(this.compressedPublicKeyBuffer);
+    return bytesToHex(this.compressedPublicKeyBytes);
   }
 
   public get address(): string {
@@ -310,11 +310,11 @@ export class SLIP10Node implements SLIP10NodeInterface {
       );
     }
 
-    return bytesToHex(publicKeyToEthAddress(this.publicKeyBuffer));
+    return bytesToHex(publicKeyToEthAddress(this.publicKeyBytes));
   }
 
   public get fingerprint(): number {
-    return getFingerprint(this.compressedPublicKeyBuffer);
+    return getFingerprint(this.compressedPublicKeyBytes);
   }
 
   /**
@@ -326,8 +326,8 @@ export class SLIP10Node implements SLIP10NodeInterface {
       masterFingerprint: this.masterFingerprint,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
-      chainCode: this.chainCodeBuffer,
-      publicKey: this.publicKeyBuffer,
+      chainCode: this.chainCodeBytes,
+      publicKey: this.publicKeyBytes,
       curve: this.curve,
     });
   }
