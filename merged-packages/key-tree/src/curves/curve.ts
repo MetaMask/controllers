@@ -18,13 +18,13 @@ export type Curve = {
     n: bigint;
   };
   getPublicKey: (
-    privateKey: Uint8Array | string | bigint,
+    privateKey: Uint8Array,
     compressed?: boolean,
-  ) => Buffer | Promise<Buffer>;
-  isValidPrivateKey: (privateKey: Uint8Array | string | bigint) => boolean;
-  publicAdd: (publicKey: Buffer, tweak: Buffer) => Buffer;
-  compressPublicKey: (publicKey: Buffer) => Buffer;
-  decompressPublicKey: (publicKey: Buffer) => Buffer;
+  ) => Uint8Array | Promise<Uint8Array>;
+  isValidPrivateKey: (privateKey: Uint8Array) => boolean;
+  publicAdd: (publicKey: Uint8Array, tweak: Uint8Array) => Uint8Array;
+  compressPublicKey: (publicKey: Uint8Array) => Uint8Array;
+  decompressPublicKey: (publicKey: Uint8Array) => Uint8Array;
 };
 
 /**

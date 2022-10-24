@@ -167,15 +167,15 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.depth;
   }
 
-  public get privateKeyBuffer(): Buffer | undefined {
+  public get privateKeyBuffer(): Uint8Array | undefined {
     return this.#node.privateKeyBuffer;
   }
 
-  public get publicKeyBuffer(): Buffer {
+  public get publicKeyBuffer(): Uint8Array {
     return this.#node.publicKeyBuffer;
   }
 
-  public get chainCodeBuffer(): Buffer {
+  public get chainCodeBuffer(): Uint8Array {
     return this.#node.chainCodeBuffer;
   }
 
@@ -191,7 +191,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     return this.#node.compressedPublicKey;
   }
 
-  public get compressedPublicKeyBuffer(): Buffer {
+  public get compressedPublicKeyBuffer(): Uint8Array {
     return this.#node.compressedPublicKeyBuffer;
   }
 

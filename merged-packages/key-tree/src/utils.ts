@@ -1,7 +1,7 @@
-import { bytesToHex } from '@noble/hashes/utils';
 import { base58check as scureBase58check } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha256';
 import { ripemd160 } from '@noble/hashes/ripemd160';
+import { hexToBytes } from '@metamask/utils';
 import {
   BIP32Node,
   BIP44PurposeNodeToken,
@@ -173,48 +173,24 @@ export function isHardened(bip32Token: string): boolean {
 }
 
 /**
- * @param hexString - The hexadecimal string to strip.
- * @returns The hexadecimal string, without a `0x`-prefix, if any.
- */
-export function stripHexPrefix(hexString: string): string {
-  return hexString.replace(/^0x/iu, '');
-}
-
-/**
- * Tests whether the specified string is a valid hexadecimal string. The string
- * may or may not be `0x`-prefixed, and the test is case-insensitive.
- *
- * @param hexString - The string to test.
- * @returns Whether the specified string is a valid hexadecimal string. The
- * string may or may not be `0x`-prefixed.
- */
-export function isValidHexString(hexString: string): boolean {
-  return /^(?:0x)?[a-f0-9]+$/iu.test(hexString);
-}
-
-/**
  * @param hexString - The hexadecimal string to convert.
- * @returns The {@link Buffer} corresponding to the hexadecimal string.
+ * @returns The `Uint8Array` corresponding to the hexadecimal string.
  */
-export function hexStringToBuffer(hexString: string | Buffer): Buffer {
-  if (Buffer.isBuffer(hexString)) {
+export function hexStringToBuffer(hexString: string | Uint8Array): Uint8Array {
+  if (hexString instanceof Uint8Array) {
     return hexString;
   }
 
-  if (typeof hexString !== 'string' || !isValidHexString(hexString)) {
-    throw new Error(`Invalid hex string: "${hexString}".`);
-  }
-
-  return Buffer.from(stripHexPrefix(hexString), 'hex');
+  return hexToBytes(hexString);
 }
 
 /**
  * @param hexString - The hexadecimal string to convert.
- * @returns The {@link Buffer} corresponding to the hexadecimal string.
+ * @returns The `Uint8Array` corresponding to the hexadecimal string.
  */
 export function nullableHexStringToBuffer(
-  hexString?: string | Buffer,
-): Buffer | undefined {
+  hexString?: string | Uint8Array,
+): Uint8Array | undefined {
   if (hexString !== undefined) {
     return hexStringToBuffer(hexString);
   }
@@ -223,15 +199,15 @@ export function nullableHexStringToBuffer(
 }
 
 /**
- * Tests whether the specified {@link Buffer} is a valid BIP-32 key.
+ * Tests whether the specified `Uint8Array` is a valid BIP-32 key.
  * A valid buffer key is 64 bytes long and has at least one non-zero byte.
  *
- * @param buffer - The {@link Buffer} to test.
+ * @param buffer - The `Uint8Array` to test.
  * @param expectedLength - The expected length of the buffer.
  * @returns Whether the buffer represents a valid BIP-32 key.
  */
 export function isValidBufferKey(
-  buffer: Buffer,
+  buffer: Uint8Array,
   expectedLength: number,
 ): boolean {
   if (buffer.length !== expectedLength) {
@@ -257,60 +233,46 @@ export function isValidInteger(value: unknown): value is number {
 }
 
 /**
- * Get a BigInt from a byte array.
- *
- * @param bytes - The byte array to get the BigInt for.
- * @returns The byte array as BigInt.
- */
-export function bytesToNumber(bytes: Uint8Array): bigint {
-  return BigInt(`0x${bytesToHex(bytes)}`);
-}
-
-/**
- * Get a Buffer from a hexadecimal string or Buffer. Validates that the
- * length of the Buffer matches the specified length, and that the buffer
+ * Get a `Uint8Array` from a hexadecimal string or `Uint8Array`. Validates that the
+ * length of the buffer matches the specified length, and that the buffer
  * is not empty.
  *
- * @param value - The value to convert to a Buffer.
- * @param length - The length to validate the Buffer against.
+ * @param value - The value to convert to a `Uint8Array`.
+ * @param length - The length to validate the `Uint8Array` against.
  */
-export function getBuffer(value: unknown, length: number): Buffer {
-  if (value instanceof Buffer) {
+export function getBuffer(value: unknown, length: number): Uint8Array {
+  if (value instanceof Uint8Array) {
     validateBuffer(value, length);
 
     return value;
   }
 
   if (typeof value === 'string') {
-    if (!isValidHexString(value)) {
-      throw new Error(
-        `Invalid value: Must be a valid hex string of length: ${length * 2}.`,
-      );
-    }
-
-    const buffer = hexStringToBuffer(value);
+    const buffer = hexToBytes(value);
     validateBuffer(buffer, length);
 
     return buffer;
   }
 
-  throw new Error(`Invalid value: Expected a Buffer or hexadecimal string.`);
+  throw new Error(
+    `Invalid value: Expected an instance of Uint8Array or hexadecimal string.`,
+  );
 }
 
 function validateBuffer(
-  buffer: Buffer,
+  buffer: Uint8Array,
   length: number,
-): asserts buffer is Buffer {
+): asserts buffer is Uint8Array {
   if (!isValidBufferKey(buffer, length)) {
     throw new Error(`Invalid value: Must be a non-zero ${length}-byte buffer.`);
   }
 }
 
-export const decodeBase58check = (value: string): Buffer => {
+export const decodeBase58check = (value: string): Uint8Array => {
   const base58Check = scureBase58check(sha256);
 
   try {
-    return Buffer.from(base58Check.decode(value));
+    return base58Check.decode(value);
   } catch {
     throw new Error(
       `Invalid value: Value is not base58-encoded, or the checksum is invalid.`,
@@ -318,7 +280,7 @@ export const decodeBase58check = (value: string): Buffer => {
   }
 };
 
-export const encodeBase58check = (value: Buffer): string => {
+export const encodeBase58check = (value: Uint8Array): string => {
   const base58Check = scureBase58check(sha256);
 
   return base58Check.encode(value);
@@ -329,12 +291,16 @@ export const encodeBase58check = (value: Buffer): string => {
  *
  * @param publicKey - The compressed public key to get the fingerprint for.
  */
-export const getFingerprint = (publicKey: Buffer): number => {
+export const getFingerprint = (publicKey: Uint8Array): number => {
   if (!isValidBufferKey(publicKey, 33)) {
     throw new Error(
       `Invalid public key: The key must be a 33-byte, non-zero Buffer.`,
     );
   }
 
-  return Buffer.from(ripemd160(sha256(publicKey))).readUInt32BE(0);
+  const bytes = ripemd160(sha256(publicKey));
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // The equivalent of `Buffer.readUInt32BE(0)`.
+  return view.getUint32(0, false);
 };

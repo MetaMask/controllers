@@ -11,6 +11,14 @@ module.exports = {
         allow: ['^UNSAFE_', 'coin_type', 'address_index'],
       },
     ],
+
+    'no-restricted-globals': [
+      'error',
+      {
+        name: 'Buffer',
+        message: "Use 'Uint8Array' instead.",
+      },
+    ],
   },
 
   overrides: [

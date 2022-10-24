@@ -1,4 +1,4 @@
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes } from '@metamask/utils';
 import fixtures from '../../test/fixtures';
 import { curve, getPublicKey, isValidPrivateKey } from './secp256k1';
 
@@ -15,10 +15,10 @@ describe('secp256k1', () => {
 
   describe('isValidPrivateKey', () => {
     it('checks if a private key is valid', () => {
-      expect(isValidPrivateKey('0x0')).toBe(false);
-      expect(isValidPrivateKey(fixtures.bip32[0].keys[0].privateKey)).toBe(
-        true,
-      );
+      expect(isValidPrivateKey(hexToBytes('0x0'))).toBe(false);
+      expect(
+        isValidPrivateKey(hexToBytes(fixtures.bip32[0].keys[0].privateKey)),
+      ).toBe(true);
     });
   });
 
@@ -29,7 +29,9 @@ describe('secp256k1', () => {
       'returns the public key for a private key',
       async ({ keys }) => {
         for (const { privateKey, publicKey } of keys) {
-          expect(bytesToHex(await getPublicKey(privateKey))).toBe(publicKey);
+          expect(bytesToHex(await getPublicKey(hexToBytes(privateKey)))).toBe(
+            publicKey,
+          );
         }
       },
     );

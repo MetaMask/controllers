@@ -1,3 +1,4 @@
+import { bytesToHex } from '@metamask/utils';
 import fixtures from '../test/fixtures';
 import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
 import {
@@ -82,26 +83,26 @@ describe('BIP44CoinTypeNode', () => {
       const inputs = [
         {
           privateKey: '0xf00',
-          publicKey: Buffer.alloc(65, 1),
-          chainCode: Buffer.alloc(32, 1),
+          publicKey: new Uint8Array(65).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
           ...options,
         },
         {
-          privateKey: Buffer.allocUnsafe(64).fill(1).toString('hex'),
-          publicKey: Buffer.alloc(65, 1),
-          chainCode: Buffer.alloc(32, 1),
+          privateKey: bytesToHex(new Uint8Array(64).fill(1)),
+          publicKey: new Uint8Array(65).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
           ...options,
         },
         {
-          privateKey: Buffer.allocUnsafe(63).fill(1).toString('hex'),
-          publicKey: Buffer.alloc(65, 1),
-          chainCode: Buffer.alloc(32, 1),
+          privateKey: bytesToHex(new Uint8Array(63).fill(1)),
+          publicKey: new Uint8Array(65).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
           ...options,
         },
         {
-          privateKey: Buffer.alloc(64).toString('hex'),
-          publicKey: Buffer.alloc(65, 1),
-          chainCode: Buffer.alloc(32, 1),
+          privateKey: bytesToHex(new Uint8Array(64)),
+          publicKey: new Uint8Array(65).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
           ...options,
         },
       ];
@@ -116,13 +117,13 @@ describe('BIP44CoinTypeNode', () => {
         BIP44CoinTypeNode.fromJSON(
           {
             privateKey: 1,
-            publicKey: Buffer.alloc(65, 1),
-            chainCode: Buffer.alloc(32, 1),
+            publicKey: new Uint8Array(65).fill(1),
+            chainCode: new Uint8Array(32).fill(1),
             depth: 2,
           } as any,
           arbitraryCoinType,
         ),
-      ).rejects.toThrow('Invalid hex string: "1".');
+      ).rejects.toThrow('Value must be a hexadecimal string.');
     });
 
     it('throws if coin type is invalid', async () => {
@@ -430,7 +431,7 @@ describe('BIP44CoinTypeNode', () => {
 
       const extendedKey = encodeExtendedKey({
         version: PRIVATE_KEY_VERSION,
-        privateKey: node.privateKeyBuffer as Buffer,
+        privateKey: node.privateKeyBuffer as Uint8Array,
         chainCode: node.chainCodeBuffer,
         depth: node.depth,
         parentFingerprint: node.parentFingerprint,

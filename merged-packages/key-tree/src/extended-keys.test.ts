@@ -1,3 +1,4 @@
+import { hexToBytes } from '@metamask/utils';
 import {
   decodeExtendedKey,
   encodeExtendedKey,
@@ -16,10 +17,10 @@ describe('decodeExtendedKey', () => {
       depth: 0,
       parentFingerprint: 0,
       index: 0,
-      chainCode: hexStringToBuffer(
+      chainCode: hexToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
-      publicKey: hexStringToBuffer(
+      publicKey: hexToBytes(
         '0439a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c23cbe7ded0e7ce6a594896b8f62888fdbc5c8821305e2ea42bf01e37300116281',
       ),
       version: PUBLIC_KEY_VERSION,

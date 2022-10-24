@@ -1,3 +1,4 @@
+import { bytesToHex } from '@metamask/utils';
 import fixtures from '../test/fixtures';
 import { HDPathTuple } from './constants';
 import { deriveKeyFromPath } from './derivation';
@@ -48,10 +49,8 @@ describe('derivation', () => {
 
       // validate addresses
       keys.forEach(({ privateKeyBuffer }, index) => {
-        const address = privateKeyToEthAddress(privateKeyBuffer as Buffer);
-        expect(`0x${address.toString('hex')}`).toStrictEqual(
-          expectedAddresses[index],
-        );
+        const address = privateKeyToEthAddress(privateKeyBuffer as Uint8Array);
+        expect(bytesToHex(address)).toStrictEqual(expectedAddresses[index]);
       });
     });
 
@@ -75,10 +74,8 @@ describe('derivation', () => {
 
       // validate addresses
       keys.forEach(({ privateKeyBuffer }, index) => {
-        const address = privateKeyToEthAddress(privateKeyBuffer as Buffer);
-        expect(`0x${address.toString('hex')}`).toStrictEqual(
-          expectedAddresses[index],
-        );
+        const address = privateKeyToEthAddress(privateKeyBuffer as Uint8Array);
+        expect(bytesToHex(address)).toStrictEqual(expectedAddresses[index]);
       });
     });
 
@@ -288,15 +285,15 @@ describe('derivation', () => {
   describe('privateKeyToEthAddress', () => {
     it('throws for invalid inputs', () => {
       [
-        Buffer.allocUnsafe(31).fill(1),
-        Buffer.alloc(32, 0),
+        new Uint8Array(31).fill(1),
+        new Uint8Array(32).fill(0),
         'foo',
         {},
         null,
         undefined,
       ].forEach((invalidInput) => {
         expect(() => privateKeyToEthAddress(invalidInput as any)).toThrow(
-          'Invalid key: The key must be a 32-byte, non-zero Buffer.',
+          'Invalid key: The key must be a 32-byte, non-zero Uint8Array.',
         );
       });
     });

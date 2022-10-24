@@ -1,3 +1,4 @@
+import { bytesToHex } from '@metamask/utils';
 import {
   BUFFER_KEY_LENGTH,
   RootedSLIP10PathTuple,
@@ -64,18 +65,18 @@ export type JsonSLIP10Node = {
 };
 
 export type SLIP10NodeInterface = JsonSLIP10Node & {
-  chainCodeBuffer: Buffer;
+  chainCodeBuffer: Uint8Array;
 
   /**
    * The private key for this node, as a Node.js Buffer or browser-equivalent.
    * May be undefined if this node is a public key only node.
    */
-  privateKeyBuffer?: Buffer;
+  privateKeyBuffer?: Uint8Array;
 
   /**
    * The public key for this node, as a Node.js Buffer or browser-equivalent.
    */
-  publicKeyBuffer: Buffer;
+  publicKeyBuffer: Uint8Array;
 
   /**
    * @returns A JSON-compatible representation of this node's data fields.
@@ -88,9 +89,9 @@ type SLIP10NodeConstructorOptions = {
   readonly masterFingerprint?: number;
   readonly parentFingerprint: number;
   readonly index: number;
-  readonly chainCode: Buffer;
-  readonly privateKey?: Buffer;
-  readonly publicKey: Buffer;
+  readonly chainCode: Uint8Array;
+  readonly privateKey?: Uint8Array;
+  readonly publicKey: Uint8Array;
   readonly curve: SupportedCurve;
 };
 
@@ -99,9 +100,9 @@ type SLIP10ExtendedKeyOptions = {
   readonly masterFingerprint?: number;
   readonly parentFingerprint: number;
   readonly index: number;
-  readonly chainCode: string | Buffer;
-  readonly privateKey?: string | Buffer;
-  readonly publicKey?: string | Buffer;
+  readonly chainCode: string | Uint8Array;
+  readonly privateKey?: string | Uint8Array;
+  readonly publicKey?: string | Uint8Array;
   readonly curve: SupportedCurve;
 };
 
@@ -130,6 +131,9 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * validation fails.
    *
    * @param depth - The depth of the node.
+   * @param masterFingerprint - The fingerprint of the master node, i.e., the
+   * node at depth 0. May be undefined if this node was created from an extended
+   * key.
    * @param parentFingerprint - The fingerprint of the parent key, or 0 if
    * the node is a master node.
    * @param index - The index of the node, or 0 if the node is a master node.
@@ -166,7 +170,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
         index,
         chainCode: chainCodeBuffer,
         privateKey: privateKeyBuffer,
-        publicKey: await getCurveByName(curve).getPublicKey(privateKey),
+        publicKey: await getCurveByName(curve).getPublicKey(privateKeyBuffer),
         curve,
       });
     }
@@ -247,11 +251,11 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   public readonly index: number;
 
-  public readonly chainCodeBuffer: Buffer;
+  public readonly chainCodeBuffer: Uint8Array;
 
-  public readonly privateKeyBuffer?: Buffer;
+  public readonly privateKeyBuffer?: Uint8Array;
 
-  public readonly publicKeyBuffer: Buffer;
+  public readonly publicKeyBuffer: Uint8Array;
 
   constructor({
     depth,
@@ -276,23 +280,27 @@ export class SLIP10Node implements SLIP10NodeInterface {
   }
 
   public get chainCode() {
-    return this.chainCodeBuffer.toString('hex');
+    return bytesToHex(this.chainCodeBuffer);
   }
 
   public get privateKey(): string | undefined {
-    return this.privateKeyBuffer?.toString('hex');
+    if (this.privateKeyBuffer) {
+      return bytesToHex(this.privateKeyBuffer);
+    }
+
+    return undefined;
   }
 
   public get publicKey(): string {
-    return this.publicKeyBuffer.toString('hex');
+    return bytesToHex(this.publicKeyBuffer);
   }
 
-  public get compressedPublicKeyBuffer(): Buffer {
+  public get compressedPublicKeyBuffer(): Uint8Array {
     return getCurveByName(this.curve).compressPublicKey(this.publicKeyBuffer);
   }
 
   public get compressedPublicKey(): string {
-    return this.compressedPublicKeyBuffer.toString('hex');
+    return bytesToHex(this.compressedPublicKeyBuffer);
   }
 
   public get address(): string {
@@ -302,7 +310,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       );
     }
 
-    return `0x${publicKeyToEthAddress(this.publicKeyBuffer).toString('hex')}`;
+    return bytesToHex(publicKeyToEthAddress(this.publicKeyBuffer));
   }
 
   public get fingerprint(): number {

@@ -23,9 +23,9 @@ type BIP44ExtendedKeyOptions = {
   readonly depth: number;
   readonly parentFingerprint: number;
   readonly index: number;
-  readonly chainCode: Buffer | string;
-  readonly privateKey?: Buffer | string;
-  readonly publicKey?: Buffer | string;
+  readonly chainCode: Uint8Array | string;
+  readonly privateKey?: Uint8Array | string;
+  readonly publicKey?: Uint8Array | string;
 };
 
 type BIP44DerivationPathOptions = {
@@ -221,15 +221,15 @@ export class BIP44Node implements BIP44NodeInterface {
     return this.#node.depth as BIP44Depth;
   }
 
-  public get privateKeyBuffer(): Buffer | undefined {
+  public get privateKeyBuffer(): Uint8Array | undefined {
     return this.#node.privateKeyBuffer;
   }
 
-  public get publicKeyBuffer(): Buffer {
+  public get publicKeyBuffer(): Uint8Array {
     return this.#node.publicKeyBuffer;
   }
 
-  public get chainCodeBuffer(): Buffer {
+  public get chainCodeBuffer(): Uint8Array {
     return this.#node.chainCodeBuffer;
   }
 
@@ -245,7 +245,7 @@ export class BIP44Node implements BIP44NodeInterface {
     return this.#node.compressedPublicKey;
   }
 
-  public get compressedPublicKeyBuffer(): Buffer {
+  public get compressedPublicKeyBuffer(): Uint8Array {
     return this.#node.compressedPublicKeyBuffer;
   }
 

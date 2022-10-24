@@ -1,4 +1,5 @@
 import { CURVE } from '@noble/secp256k1';
+import { bytesToHex } from '@metamask/utils';
 import { hexStringToBuffer } from '../utils';
 import fixtures from '../../test/fixtures';
 import { secp256k1 } from '../curves';
@@ -59,20 +60,18 @@ describe('privateKeyToEthAddress', () => {
     const { privateKey, address } = fixtures['ethereumjs-wallet'];
 
     expect(
-      `0x${privateKeyToEthAddress(hexStringToBuffer(privateKey)).toString(
-        'hex',
-      )}`,
+      bytesToHex(privateKeyToEthAddress(hexStringToBuffer(privateKey))),
     ).toBe(address);
   });
 
   it('throws for invalid private keys', () => {
     // @ts-expect-error Invalid public key type.
     expect(() => privateKeyToEthAddress('foo')).toThrow(
-      'Invalid key: The key must be a 32-byte, non-zero Buffer.',
+      'Invalid key: The key must be a 32-byte, non-zero Uint8Array.',
     );
 
-    expect(() => privateKeyToEthAddress(Buffer.alloc(31).fill(1))).toThrow(
-      'Invalid key: The key must be a 32-byte, non-zero Buffer.',
+    expect(() => privateKeyToEthAddress(new Uint8Array(31).fill(1))).toThrow(
+      'Invalid key: The key must be a 32-byte, non-zero Uint8Array.',
     );
   });
 });
@@ -82,20 +81,18 @@ describe('publicKeyToEthAddress', () => {
     const { publicKey, address } = fixtures['ethereumjs-wallet'];
 
     expect(
-      `0x${publicKeyToEthAddress(hexStringToBuffer(publicKey)).toString(
-        'hex',
-      )}`,
+      bytesToHex(publicKeyToEthAddress(hexStringToBuffer(publicKey))),
     ).toBe(address);
   });
 
   it('throws for invalid public keys', () => {
     // @ts-expect-error Invalid public key type.
     expect(() => publicKeyToEthAddress('foo')).toThrow(
-      'Invalid key: The key must be a 65-byte, non-zero Buffer.',
+      'Invalid key: The key must be a 65-byte, non-zero Uint8Array.',
     );
 
-    expect(() => publicKeyToEthAddress(Buffer.alloc(64).fill(1))).toThrow(
-      'Invalid key: The key must be a 65-byte, non-zero Buffer.',
+    expect(() => publicKeyToEthAddress(new Uint8Array(64).fill(1))).toThrow(
+      'Invalid key: The key must be a 65-byte, non-zero Uint8Array.',
     );
   });
 });

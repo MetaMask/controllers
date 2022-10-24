@@ -1,3 +1,4 @@
+import { bytesToHex, hexToBytes } from '@metamask/utils';
 import fixtures from '../test/fixtures';
 import { ed25519, secp256k1 } from './curves';
 import { SLIP10Node } from './SLIP10Node';
@@ -157,7 +158,7 @@ describe('SLIP10Node', () => {
     it('throws if no public or private key is specified', async () => {
       await expect(
         SLIP10Node.fromExtendedKey({
-          chainCode: Buffer.alloc(32, 1),
+          chainCode: new Uint8Array(32).fill(1),
           depth: 0,
           parentFingerprint: 0,
           index: 0,
@@ -188,8 +189,8 @@ describe('SLIP10Node', () => {
             depth: input as any,
             parentFingerprint: 0,
             index: 0,
-            publicKey: Buffer.alloc(65, 1),
-            chainCode: Buffer.alloc(32, 1),
+            publicKey: new Uint8Array(65).fill(1),
+            chainCode: new Uint8Array(32).fill(1),
             curve: 'secp256k1',
           }),
         ).rejects.toThrow(
@@ -218,8 +219,8 @@ describe('SLIP10Node', () => {
             depth: 0,
             parentFingerprint: input as any,
             index: 0,
-            publicKey: Buffer.alloc(65, 1),
-            chainCode: Buffer.alloc(32, 1),
+            publicKey: new Uint8Array(65).fill(1),
+            chainCode: new Uint8Array(32).fill(1),
             curve: 'secp256k1',
           }),
         ).rejects.toThrow(
@@ -232,15 +233,13 @@ describe('SLIP10Node', () => {
       await expect(
         SLIP10Node.fromExtendedKey({
           privateKey: 'foo',
-          chainCode: Buffer.alloc(32, 1),
+          chainCode: new Uint8Array(32).fill(1),
           depth: 0,
           parentFingerprint: 0,
           index: 0,
           curve: 'secp256k1',
         }),
-      ).rejects.toThrow(
-        'Invalid value: Must be a valid hex string of length: 64.',
-      );
+      ).rejects.toThrow('Value must be a hexadecimal string.');
     });
 
     it('throws if the private key is not a Buffer or hexadecimal string', async () => {
@@ -248,14 +247,14 @@ describe('SLIP10Node', () => {
         SLIP10Node.fromExtendedKey({
           // @ts-expect-error Invalid private key type.
           privateKey: 123,
-          chainCode: Buffer.alloc(32, 1),
+          chainCode: new Uint8Array(32).fill(1),
           depth: 0,
           parentFingerprint: 0,
           index: 0,
           curve: 'secp256k1',
         }),
       ).rejects.toThrow(
-        'Invalid value: Expected a Buffer or hexadecimal string.',
+        'Invalid value: Expected an instance of Uint8Array or hexadecimal string.',
       );
     });
   });
@@ -338,7 +337,7 @@ describe('SLIP10Node', () => {
         'publicKeyBuffer',
         'chainCodeBuffer',
       ].forEach((property) => {
-        expect(() => (node[property] = Buffer.allocUnsafe(64).fill(1))).toThrow(
+        expect(() => (node[property] = new Uint8Array(64).fill(1))).toThrow(
           expect.objectContaining({
             name: 'TypeError',
             message: expect.stringMatching(
@@ -532,7 +531,7 @@ describe('SLIP10Node', () => {
       });
 
       expect(node.compressedPublicKey).toStrictEqual(
-        compressPublicKey(node.publicKeyBuffer).toString('hex'),
+        bytesToHex(compressPublicKey(node.publicKeyBuffer)),
       );
     });
   });
@@ -563,7 +562,7 @@ describe('SLIP10Node', () => {
       'returns the address for an secp256k1 node',
       async ({ index, address }) => {
         const { privateKey, chainCode } = await createBip39KeyFromSeed(
-          hexStringToBuffer(hexSeed),
+          hexToBytes(hexSeed),
           secp256k1,
         );
 

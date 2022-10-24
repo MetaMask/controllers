@@ -1,8 +1,14 @@
 import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
+import {
+  assert,
+  bytesToBigInt,
+  concatBytes,
+  hexToBytes,
+} from '@metamask/utils';
 import { BIP_32_HARDENED_OFFSET, BUFFER_KEY_LENGTH } from '../constants';
-import { bytesToNumber, hexStringToBuffer, isValidBufferKey } from '../utils';
+import { isValidBufferKey } from '../utils';
 import { Curve, mod, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { DeriveChildKeyArgs, DerivedKeys } from '.';
@@ -18,10 +24,11 @@ import { DeriveChildKeyArgs, DerivedKeys } from '.';
  * address.
  * @returns The Ethereum address corresponding to the given key.
  */
-export function privateKeyToEthAddress(key: Buffer) {
-  if (!Buffer.isBuffer(key) || !isValidBufferKey(key, BUFFER_KEY_LENGTH)) {
-    throw new Error('Invalid key: The key must be a 32-byte, non-zero Buffer.');
-  }
+export function privateKeyToEthAddress(key: Uint8Array) {
+  assert(
+    key instanceof Uint8Array && isValidBufferKey(key, BUFFER_KEY_LENGTH),
+    'Invalid key: The key must be a 32-byte, non-zero Uint8Array.',
+  );
 
   const publicKey = secp256k1.getPublicKey(key, false);
   return publicKeyToEthAddress(publicKey);
@@ -38,15 +45,14 @@ export function privateKeyToEthAddress(key: Buffer) {
  * address.
  * @returns The Ethereum address corresponding to the given key.
  */
-export function publicKeyToEthAddress(key: Buffer) {
-  if (
-    !Buffer.isBuffer(key) ||
-    !isValidBufferKey(key, secp256k1.publicKeyLength)
-  ) {
-    throw new Error('Invalid key: The key must be a 65-byte, non-zero Buffer.');
-  }
+export function publicKeyToEthAddress(key: Uint8Array) {
+  assert(
+    key instanceof Uint8Array &&
+      isValidBufferKey(key, secp256k1.publicKeyLength),
+    'Invalid key: The key must be a 65-byte, non-zero Uint8Array.',
+  );
 
-  return Buffer.from(keccak256(key.slice(1)).slice(-20));
+  return keccak256(key.slice(1)).slice(-20);
 }
 
 /**
@@ -123,7 +129,6 @@ export async function deriveChildKey({
   const publicExtension = await derivePublicExtension({
     parentPublicKey: node.compressedPublicKeyBuffer,
     childIndex,
-    curve,
   });
 
   const { publicKey, chainCode } = generatePublicKey({
@@ -145,7 +150,7 @@ export async function deriveChildKey({
 }
 
 type DeriveSecretExtensionArgs = {
-  privateKey: Buffer;
+  privateKey: Uint8Array;
   childIndex: number;
   isHardened: boolean;
   curve: Curve;
@@ -166,33 +171,32 @@ async function deriveSecretExtension({
 }: DeriveSecretExtensionArgs) {
   if (isHardened) {
     // Hardened child
-    const indexBuffer = Buffer.allocUnsafe(4);
-    indexBuffer.writeUInt32BE(childIndex + BIP_32_HARDENED_OFFSET, 0);
-    const pk = privateKey;
-    const zb = Buffer.alloc(1, 0);
-    return Buffer.concat([zb, pk, indexBuffer]);
+    const indexBytes = new Uint8Array(4);
+    const view = new DataView(indexBytes.buffer);
+
+    view.setUint32(0, childIndex + BIP_32_HARDENED_OFFSET, false);
+    return concatBytes([new Uint8Array([0]), privateKey, indexBytes]);
   }
 
   // Normal child
-  const indexBuffer = Buffer.allocUnsafe(4);
-  indexBuffer.writeUInt32BE(childIndex, 0);
   const parentPublicKey = await curve.getPublicKey(privateKey, true);
-  return Buffer.concat([parentPublicKey, indexBuffer]);
+  return derivePublicExtension({ parentPublicKey, childIndex });
 }
 
 type DerivePublicExtensionArgs = {
-  parentPublicKey: Buffer;
+  parentPublicKey: Uint8Array;
   childIndex: number;
-  curve: Curve;
 };
 
 async function derivePublicExtension({
   parentPublicKey,
   childIndex,
 }: DerivePublicExtensionArgs) {
-  const indexBuffer = Buffer.alloc(4);
-  indexBuffer.writeUInt32BE(childIndex, 0);
-  return Buffer.concat([parentPublicKey, indexBuffer]);
+  const indexBytes = new Uint8Array(4);
+  const view = new DataView(indexBytes.buffer);
+
+  view.setUint32(0, childIndex, false);
+  return concatBytes([parentPublicKey, indexBytes]);
 }
 
 /**
@@ -208,28 +212,30 @@ export function privateAdd(
   privateKeyBuffer: Uint8Array,
   tweakBuffer: Uint8Array,
   curve: Curve,
-): Buffer {
-  const privateKey = bytesToNumber(privateKeyBuffer);
-  const tweak = bytesToNumber(tweakBuffer);
+): Uint8Array {
+  const privateKey = bytesToBigInt(privateKeyBuffer);
+  const tweak = bytesToBigInt(tweakBuffer);
 
   if (tweak >= curve.curve.n) {
     throw new Error('Invalid tweak: Tweak is larger than the curve order.');
   }
 
   const added = mod(privateKey + tweak, curve.curve.n);
-  if (!curve.isValidPrivateKey(added)) {
+  const bytes = hexToBytes(added.toString(16).padStart(64, '0'));
+
+  if (!curve.isValidPrivateKey(bytes)) {
     throw new Error(
       'Invalid private key or tweak: The resulting private key is invalid.',
     );
   }
 
-  return hexStringToBuffer(added.toString(16).padStart(64, '0'));
+  return bytes;
 }
 
 type GenerateKeyArgs = {
-  privateKey: Buffer;
-  chainCode: Buffer;
-  secretExtension: Buffer;
+  privateKey: Uint8Array;
+  chainCode: Uint8Array;
+  secretExtension: Uint8Array;
   curve: Curve;
 };
 
@@ -244,10 +250,10 @@ async function generateKey({
   chainCode,
   secretExtension,
   curve,
-}: GenerateKeyArgs): Promise<DerivedKeys & { privateKey: Buffer }> {
+}: GenerateKeyArgs): Promise<DerivedKeys & { privateKey: Uint8Array }> {
   const entropy = hmac(sha512, chainCode, secretExtension);
-  const keyMaterial = Buffer.from(entropy.slice(0, 32));
-  const childChainCode = Buffer.from(entropy.slice(32));
+  const keyMaterial = entropy.slice(0, 32);
+  const childChainCode = entropy.slice(32);
 
   // If curve is ed25519: The returned child key ki is parse256(IL).
   // https://github.com/satoshilabs/slips/blob/133ea52a8e43d338b98be208907e144277e44c0e/slip-0010.md#private-parent-key--private-child-key
@@ -263,9 +269,9 @@ async function generateKey({
 }
 
 type GeneratePublicKeyArgs = {
-  publicKey: Buffer;
-  chainCode: Buffer;
-  publicExtension: Buffer;
+  publicKey: Uint8Array;
+  chainCode: Uint8Array;
+  publicExtension: Uint8Array;
   curve: Curve;
 };
 
@@ -280,10 +286,10 @@ function generatePublicKey({
   const childChainCode = entropy.slice(32);
 
   // This function may fail if the resulting key is invalid.
-  const childPublicKey = curve.publicAdd(publicKey, Buffer.from(keyMaterial));
+  const childPublicKey = curve.publicAdd(publicKey, keyMaterial);
 
   return {
-    publicKey: Buffer.from(childPublicKey),
-    chainCode: Buffer.from(childChainCode),
+    publicKey: childPublicKey,
+    chainCode: childChainCode,
   };
 }

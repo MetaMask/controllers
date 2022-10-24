@@ -23,17 +23,17 @@ type ExtendedKeyLike = {
   depth: number;
   parentFingerprint: number;
   index: number;
-  chainCode: Buffer;
+  chainCode: Uint8Array;
 };
 
 type ExtendedPublicKey = ExtendedKeyLike & {
   version: typeof PUBLIC_KEY_VERSION;
-  publicKey: Buffer;
+  publicKey: Uint8Array;
 };
 
 type ExtendedPrivateKey = ExtendedKeyLike & {
   version: typeof PRIVATE_KEY_VERSION;
-  privateKey: Buffer;
+  privateKey: Uint8Array;
 };
 
 export type ExtendedKey = ExtendedPublicKey | ExtendedPrivateKey;
@@ -55,12 +55,18 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
     );
   }
 
-  const version = buffer.readUInt32BE(0);
-  const depth = buffer.readUInt8(4);
+  const view = new DataView(
+    buffer.buffer,
+    buffer.byteOffset,
+    buffer.byteLength,
+  );
+
+  const version = view.getUint32(0, false);
+  const depth = view.getUint8(4);
   validateBIP44Depth(depth);
 
-  const parentFingerprint = buffer.readUInt32BE(5);
-  const index = buffer.readUInt32BE(9);
+  const parentFingerprint = view.getUint32(5, false);
+  const index = view.getUint32(9, false);
 
   const chainCode = buffer.slice(13, 45);
   if (!isValidBufferKey(chainCode, 32)) {
@@ -76,8 +82,10 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
     );
   }
 
+  const keyView = new DataView(key.buffer, key.byteOffset, key.byteLength);
+
   if (version === PUBLIC_KEY_VERSION) {
-    if (key.readUInt8(0) !== 0x02 && key.readUInt8(0) !== 0x03) {
+    if (keyView.getUint8(0) !== 0x02 && keyView.getUint8(0) !== 0x03) {
       throw new Error(
         `Invalid extended key: Public key must start with 0x02 or 0x03.`,
       );
@@ -94,7 +102,7 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
   }
 
   if (version === PRIVATE_KEY_VERSION) {
-    if (key.readUInt8(0) !== 0x00) {
+    if (keyView.getUint8(0) !== 0x00) {
       throw new Error(
         `Invalid extended key: Private key must start with 0x00.`,
       );
@@ -122,26 +130,28 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
  */
 export const encodeExtendedKey = (extendedKey: ExtendedKey): string => {
   const { version, depth, parentFingerprint, index, chainCode } = extendedKey;
-  const buffer = Buffer.alloc(78);
 
-  buffer.writeUInt32BE(version, 0);
-  buffer.writeUInt8(depth, 4);
-  buffer.writeUInt32BE(parentFingerprint, 5);
-  buffer.writeUInt32BE(index, 9);
+  const bytes = new Uint8Array(78);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-  chainCode.copy(buffer, 13);
+  view.setUint32(0, version, false);
+  view.setUint8(4, depth);
+  view.setUint32(5, parentFingerprint, false);
+  view.setUint32(9, index, false);
+
+  bytes.set(chainCode, 13);
 
   if (extendedKey.version === PUBLIC_KEY_VERSION) {
     const { publicKey } = extendedKey;
     const compressedPublicKey = compressPublicKey(publicKey);
 
-    compressedPublicKey.copy(buffer, 45);
+    bytes.set(compressedPublicKey, 45);
   }
 
   if (extendedKey.version === PRIVATE_KEY_VERSION) {
     const { privateKey } = extendedKey;
-    privateKey.copy(buffer, 46);
+    bytes.set(privateKey, 46);
   }
 
-  return encodeBase58check(buffer);
+  return encodeBase58check(bytes);
 };

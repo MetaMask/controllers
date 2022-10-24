@@ -1,3 +1,4 @@
+import { bytesToHex } from '@metamask/utils';
 import fixtures from '../test/fixtures';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import { hexStringToBuffer } from './utils';
@@ -131,7 +132,7 @@ describe('BIP44Node', () => {
 
       // getter
       ['depth', 'privateKey', 'publicKey', 'address'].forEach((property) => {
-        expect(() => (node[property] = Buffer.allocUnsafe(64).fill(1))).toThrow(
+        expect(() => (node[property] = new Uint8Array(64).fill(1))).toThrow(
           expect.objectContaining({
             name: 'TypeError',
             message: expect.stringMatching(
@@ -443,7 +444,7 @@ describe('BIP44Node', () => {
       });
 
       expect(node.compressedPublicKey).toStrictEqual(
-        compressPublicKey(node.publicKeyBuffer).toString('hex'),
+        bytesToHex(compressPublicKey(node.publicKeyBuffer)),
       );
     });
   });
@@ -478,7 +479,7 @@ describe('BIP44Node', () => {
 
       const extendedKey = encodeExtendedKey({
         version: PRIVATE_KEY_VERSION,
-        privateKey: node.privateKeyBuffer as Buffer,
+        privateKey: node.privateKeyBuffer as Uint8Array,
         chainCode: node.chainCodeBuffer,
         depth: node.depth,
         parentFingerprint: node.parentFingerprint,

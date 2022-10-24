@@ -1,3 +1,4 @@
+import { hexToBytes, stringToBytes } from '@metamask/utils';
 import {
   getBIP32NodeToken,
   getBIP44ChangePathString,
@@ -13,9 +14,6 @@ import {
   validateBIP32Index,
   isValidBIP32Index,
   isHardened,
-  stripHexPrefix,
-  isValidHexString,
-  bytesToNumber,
   encodeBase58check,
   decodeBase58check,
 } from './utils';
@@ -208,66 +206,39 @@ describe('isHardened', () => {
   });
 });
 
-describe('stripHexPrefix', () => {
-  it('strips the hex prefix from a string', () => {
-    expect(stripHexPrefix('0x123')).toBe('123');
-    expect(stripHexPrefix('0x')).toBe('');
-  });
-
-  it('does not change a string without a prefix', () => {
-    expect(stripHexPrefix('123')).toBe('123');
-    expect(stripHexPrefix('')).toBe('');
-  });
-});
-
-describe('isValidHexString', () => {
-  it('returns true if the string is a valid hex string', () => {
-    expect(isValidHexString('0x123')).toBe(true);
-    expect(isValidHexString('0x0')).toBe(true);
-  });
-
-  it('returns false if the string is not a valid hex string', () => {
-    expect(isValidHexString('')).toBe(false);
-    expect(isValidHexString('0x')).toBe(false);
-    expect(isValidHexString('0x0g')).toBe(false);
-  });
-});
-
 describe('hexStringToBuffer', () => {
   it('returns the same buffer if a buffer is passed', () => {
-    const buffer = Buffer.from('123', 'hex');
+    const buffer = hexToBytes('123');
     expect(hexStringToBuffer(buffer)).toBe(buffer);
   });
 
   it('returns a buffer from a hex string', () => {
-    expect(hexStringToBuffer('1234')).toStrictEqual(Buffer.from('1234', 'hex'));
-    expect(hexStringToBuffer('0x1234')).toStrictEqual(
-      Buffer.from('1234', 'hex'),
-    );
+    expect(hexStringToBuffer('1234')).toStrictEqual(hexToBytes('1234'));
+    expect(hexStringToBuffer('0x1234')).toStrictEqual(hexToBytes('1234'));
   });
 
   it('throws if the string is not a valid hex string', () => {
-    expect(() => hexStringToBuffer('')).toThrow('Invalid hex string: "".');
-    expect(() => hexStringToBuffer('0x')).toThrow('Invalid hex string: "0x".');
+    expect(() => hexStringToBuffer('')).toThrow(
+      'Value must be a hexadecimal string.',
+    );
+
     expect(() => hexStringToBuffer('0x0g')).toThrow(
-      'Invalid hex string: "0x0g".',
+      'Value must be a hexadecimal string.',
     );
   });
 });
 
 describe('nullableHexStringToBuffer', () => {
   it('returns the same buffer if a buffer is passed', () => {
-    const buffer = Buffer.from('123', 'hex');
+    const buffer = hexToBytes('123');
     expect(nullableHexStringToBuffer(buffer)).toBe(buffer);
   });
 
   it('returns a buffer for a hexadecimal string', () => {
-    expect(nullableHexStringToBuffer('1234')).toStrictEqual(
-      Buffer.from('1234', 'hex'),
-    );
+    expect(nullableHexStringToBuffer('1234')).toStrictEqual(hexToBytes('1234'));
 
     expect(nullableHexStringToBuffer('0x1234')).toStrictEqual(
-      Buffer.from('1234', 'hex'),
+      hexToBytes('1234'),
     );
   });
 
@@ -277,28 +248,24 @@ describe('nullableHexStringToBuffer', () => {
 
   it('throws if the string is not a valid hex string', () => {
     expect(() => nullableHexStringToBuffer('')).toThrow(
-      'Invalid hex string: "".',
-    );
-
-    expect(() => nullableHexStringToBuffer('0x')).toThrow(
-      'Invalid hex string: "0x".',
+      'Value must be a hexadecimal string.',
     );
 
     expect(() => nullableHexStringToBuffer('0x0g')).toThrow(
-      'Invalid hex string: "0x0g".',
+      'Value must be a hexadecimal string.',
     );
   });
 });
 
 describe('isValidBufferKey', () => {
   it('checks the buffer length', () => {
-    expect(isValidBufferKey(Buffer.alloc(32).fill(1), 32)).toBe(true);
-    expect(isValidBufferKey(Buffer.alloc(31).fill(1), 32)).toBe(false);
+    expect(isValidBufferKey(new Uint8Array(32).fill(1), 32)).toBe(true);
+    expect(isValidBufferKey(new Uint8Array(31).fill(1), 32)).toBe(false);
   });
 
   it('checks if the buffer has at least one non-zero byte', () => {
-    expect(isValidBufferKey(Buffer.alloc(32).fill(1), 32)).toBe(true);
-    expect(isValidBufferKey(Buffer.alloc(32).fill(0), 32)).toBe(false);
+    expect(isValidBufferKey(new Uint8Array(32).fill(1), 32)).toBe(true);
+    expect(isValidBufferKey(new Uint8Array(32).fill(0), 32)).toBe(false);
   });
 });
 
@@ -315,13 +282,6 @@ describe('isValidInteger', () => {
       expect(isValidBIP32Index(input)).toBe(false);
     },
   );
-});
-
-describe('bytesToNumber', () => {
-  it('returns a bigint from a buffer', () => {
-    expect(bytesToNumber(Buffer.from('123', 'hex'))).toBe(BigInt(BigInt(18)));
-    expect(bytesToNumber(Buffer.from('456', 'hex'))).toBe(BigInt(BigInt(69)));
-  });
 });
 
 describe('getBuffer', () => {
@@ -348,14 +308,14 @@ describe('getBuffer', () => {
 
 describe('encodeBase58Check', () => {
   it('encodes a buffer with Base58check', () => {
-    expect(encodeBase58check(Buffer.from('foo bar'))).toBe('SQHFQMRT97ajZaP');
+    expect(encodeBase58check(stringToBytes('foo bar'))).toBe('SQHFQMRT97ajZaP');
   });
 });
 
 describe('decodeBase58Check', () => {
   it('decodes a Base58check encoded string', () => {
     expect(decodeBase58check('SQHFQMRT97ajZaP')).toStrictEqual(
-      Buffer.from('foo bar'),
+      stringToBytes('foo bar'),
     );
   });
 
@@ -376,11 +336,11 @@ describe('getFingerprint', () => {
   });
 
   it('throws if the public key is not a valid buffer', async () => {
-    expect(() => getFingerprint(Buffer.alloc(33).fill(0))).toThrow(
+    expect(() => getFingerprint(new Uint8Array(33).fill(0))).toThrow(
       'Invalid public key: The key must be a 33-byte, non-zero Buffer.',
     );
 
-    expect(() => getFingerprint(Buffer.alloc(65).fill(1))).toThrow(
+    expect(() => getFingerprint(new Uint8Array(65).fill(1))).toThrow(
       'Invalid public key: The key must be a 33-byte, non-zero Buffer.',
     );
   });

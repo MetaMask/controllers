@@ -7,9 +7,9 @@ export type DerivedKeys = {
   /**
    * The derived private key, can be undefined if public key derivation was used.
    */
-  privateKey?: Buffer;
-  publicKey: Buffer;
-  chainCode: Buffer;
+  privateKey?: Uint8Array;
+  publicKey: Uint8Array;
+  chainCode: Uint8Array;
 };
 
 export type DeriveChildKeyArgs = {

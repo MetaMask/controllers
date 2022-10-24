@@ -1,6 +1,5 @@
-import { bytesToHex } from '@noble/hashes/utils';
+import { hexToBytes, bytesToHex } from '@metamask/utils';
 import fixtures from '../../test/fixtures';
-import { hexStringToBuffer } from '../utils';
 import {
   compressPublicKey,
   curve,
@@ -38,10 +37,13 @@ describe('ed25519', () => {
       'returns the 0-padded public key for a private key',
       async ({ keys }) => {
         for (const { privateKey, publicKey } of keys) {
-          expect(bytesToHex(await getPublicKey(privateKey))).toBe(publicKey);
-          expect(bytesToHex(await getPublicKey(privateKey, true))).toBe(
+          expect(bytesToHex(await getPublicKey(hexToBytes(privateKey)))).toBe(
             publicKey,
           );
+
+          expect(
+            bytesToHex(await getPublicKey(hexToBytes(privateKey), true)),
+          ).toBe(publicKey);
         }
       },
     );
@@ -49,7 +51,7 @@ describe('ed25519', () => {
 
   describe('publicAdd', () => {
     it('throws an error', () => {
-      expect(() => publicAdd(Buffer.alloc(1), Buffer.alloc(1))).toThrow(
+      expect(() => publicAdd(new Uint8Array([1]), new Uint8Array([1]))).toThrow(
         'Ed25519 does not support public key derivation.',
       );
     });
@@ -60,7 +62,7 @@ describe('ed25519', () => {
 
     it.each(slip10)('returns the same public key', async ({ keys }) => {
       for (const { publicKey } of keys) {
-        const publicKeyBuffer = hexStringToBuffer(publicKey);
+        const publicKeyBuffer = hexToBytes(publicKey);
         expect(compressPublicKey(publicKeyBuffer)).toStrictEqual(
           publicKeyBuffer,
         );
@@ -73,7 +75,7 @@ describe('ed25519', () => {
 
     it.each(slip10)('returns the same public key', async ({ keys }) => {
       for (const { publicKey } of keys) {
-        const publicKeyBuffer = hexStringToBuffer(publicKey);
+        const publicKeyBuffer = hexToBytes(publicKey);
         expect(decompressPublicKey(publicKeyBuffer)).toStrictEqual(
           publicKeyBuffer,
         );
