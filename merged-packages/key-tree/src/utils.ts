@@ -1,7 +1,7 @@
 import { base58check as scureBase58check } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha256';
 import { ripemd160 } from '@noble/hashes/ripemd160';
-import { hexToBytes } from '@metamask/utils';
+import { createDataView, hexToBytes } from '@metamask/utils';
 import {
   BIP32Node,
   BIP44PurposeNodeToken,
@@ -301,9 +301,7 @@ export const getFingerprint = (publicKey: Uint8Array): number => {
   }
 
   const bytes = ripemd160(sha256(publicKey));
-
-  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const view = createDataView(bytes);
 
   return view.getUint32(0, false);
 };

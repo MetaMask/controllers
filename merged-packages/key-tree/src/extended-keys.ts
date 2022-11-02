@@ -1,3 +1,4 @@
+import { createDataView } from '@metamask/utils';
 import { decodeBase58check, encodeBase58check, isValidBytesKey } from './utils';
 import { validateBIP44Depth } from './BIP44Node';
 import { compressPublicKey, decompressPublicKey } from './curves/secp256k1';
@@ -51,8 +52,7 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
     );
   }
 
-  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const view = createDataView(bytes);
 
   const version = view.getUint32(0, false);
   const depth = view.getUint8(4);
@@ -75,8 +75,7 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
     );
   }
 
-  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
-  const keyView = new DataView(key.buffer, key.byteOffset, key.byteLength);
+  const keyView = createDataView(key);
 
   if (version === PUBLIC_KEY_VERSION) {
     if (keyView.getUint8(0) !== 0x02 && keyView.getUint8(0) !== 0x03) {
@@ -127,8 +126,7 @@ export const encodeExtendedKey = (extendedKey: ExtendedKey): string => {
 
   const bytes = new Uint8Array(78);
 
-  // TODO: Replace with `@metamask/utils`' `createDataView` when it's available.
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const view = createDataView(bytes);
 
   view.setUint32(0, version, false);
   view.setUint8(4, depth);
