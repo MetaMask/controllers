@@ -84,7 +84,7 @@ export type SLIP10NodeInterface = JsonSLIP10Node & {
   toJSON(): JsonSLIP10Node;
 };
 
-type SLIP10NodeConstructorOptions = {
+export type SLIP10NodeConstructorOptions = {
   readonly depth: number;
   readonly masterFingerprint?: number;
   readonly parentFingerprint: number;
@@ -95,7 +95,7 @@ type SLIP10NodeConstructorOptions = {
   readonly curve: SupportedCurve;
 };
 
-type SLIP10ExtendedKeyOptions = {
+export type SLIP10ExtendedKeyOptions = {
   readonly depth: number;
   readonly masterFingerprint?: number;
   readonly parentFingerprint: number;
@@ -106,7 +106,7 @@ type SLIP10ExtendedKeyOptions = {
   readonly curve: SupportedCurve;
 };
 
-type SLIP10DerivationPathOptions = {
+export type SLIP10DerivationPathOptions = {
   readonly derivationPath: RootedSLIP10PathTuple;
   readonly curve: SupportedCurve;
 };

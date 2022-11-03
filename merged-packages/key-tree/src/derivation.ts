@@ -1,3 +1,4 @@
+import { assert } from '@metamask/utils';
 import {
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
@@ -98,10 +99,7 @@ export async function deriveKeyFromPath(
       const derivedNode = await promise;
 
       const [pathType, pathPart] = pathNode.split(':');
-      /* istanbul ignore if: should be impossible */
-      if (!hasDeriver(pathType)) {
-        throw new Error(`Unknown derivation type: "${pathType}"`);
-      }
+      assert(hasDeriver(pathType), `Unknown derivation type: "${pathType}".`);
 
       const deriver = derivers[pathType] as Deriver;
       return await deriver.deriveChildKey({

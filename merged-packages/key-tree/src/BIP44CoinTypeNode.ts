@@ -26,6 +26,7 @@ export type CoinTypeHDPathTuple = [
   typeof BIP44PurposeNodeToken,
   HardenedBIP32Node,
 ];
+
 export const BIP_44_COIN_TYPE_DEPTH = 2;
 
 export type JsonBIP44CoinTypeNode = JsonBIP44Node & {
@@ -334,7 +335,7 @@ export async function deriveBIP44AddressKey(
   return new BIP44Node(childNode);
 }
 
-type BIP44AddressKeyDeriver = {
+export type BIP44AddressKeyDeriver = {
   /**
    * @param address_index - The `address_index` value.
    * @param isHardened - Whether the derived index is hardened.
