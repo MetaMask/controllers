@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0]
+### Changed
+- BREAKING: Rename all occurrences of `Buffer` with `Bytes` or `Uint8Array` ([#84](https://github.com/MetaMask/key-tree/pull/84))
+  - All `[...]Buffer` fields have been replaced with `[...]Bytes`, e.g., `BIP44Node.privateKeyBuffer` is now `BIP44Node.privateKeyBytes`.
+  - This change does not affect the string fields, like `BIP44Node.privateKey`.
+- BREAKING: Swap out Buffer with browser-compatible Uint8Array ([#83](https://github.com/MetaMask/key-tree/pull/83))
+  - All functions returning `Buffer`s now return `Uint8Array`s instead.
+- Bump @metamask/utils to 3.3.0 ([#85](https://github.com/MetaMask/key-tree/pull/85))
+
 ## [5.0.2]
 ### Fixed
 - Export Buffer from `buffer` package explicitly ([#76](https://github.com/MetaMask/key-tree/pull/76))
@@ -89,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v5.0.2...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v6.0.0...HEAD
+[6.0.0]: https://github.com/MetaMask/key-tree/compare/v5.0.2...v6.0.0
 [5.0.2]: https://github.com/MetaMask/key-tree/compare/v5.0.1...v5.0.2
 [5.0.1]: https://github.com/MetaMask/key-tree/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/MetaMask/key-tree/compare/v4.0.0...v5.0.0
