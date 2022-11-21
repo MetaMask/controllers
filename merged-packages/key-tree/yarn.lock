@@ -896,13 +896,13 @@ __metadata:
   linkType: soft
 
 "@metamask/utils@npm:^3.3.0":
-  version: 3.3.0
-  resolution: "@metamask/utils@npm:3.3.0"
+  version: 3.3.1
+  resolution: "@metamask/utils@npm:3.3.1"
   dependencies:
     "@types/debug": ^4.1.7
     debug: ^4.3.4
     superstruct: ^0.16.7
-  checksum: 263c26722b7339fced997cc2aa38ccb34d178f532ff025c7e789818ad5ef2317439eda694a4c0bf5ff3cabdeced3c170b9ad23d2f178ddd5fd225f6ec2bce259
+  checksum: 5b6b6b54fdff4bc3f77b31ef50c23adca8fdf21d81d4f68d3d9c2b383b145cd61c2435f5ba0a11344484ae1f6d2355fab82eec58ce6b19eb35b476928b2e4ee6
   languageName: node
   linkType: hard
 
