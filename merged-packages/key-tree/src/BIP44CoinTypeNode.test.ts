@@ -1,6 +1,5 @@
 import { bytesToHex } from '@metamask/utils';
-import fixtures from '../test/fixtures';
-import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
+
 import {
   BIP_44_COIN_TYPE_DEPTH,
   BIP44Node,
@@ -9,6 +8,8 @@ import {
   deriveBIP44AddressKey,
   getBIP44AddressKeyDeriver,
 } from '.';
+import fixtures from '../test/fixtures';
+import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 
@@ -31,7 +32,7 @@ describe('BIP44CoinTypeNode', () => {
       );
 
       expect(node.coin_type).toStrictEqual(coinType);
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
       expect(node.privateKey).toStrictEqual(bip44Node.privateKey);
       expect(node.publicKey).toStrictEqual(bip44Node.publicKey);
       expect(node.path).toStrictEqual(pathString);
@@ -165,7 +166,7 @@ describe('BIP44CoinTypeNode', () => {
       const node = await BIP44CoinTypeNode.fromNode(bip44Node, coinType);
 
       expect(node.coin_type).toStrictEqual(coinType);
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
       expect(node.privateKey).toStrictEqual(bip44Node.privateKey);
       expect(node.publicKey).toStrictEqual(bip44Node.publicKey);
       expect(node.path).toStrictEqual(pathString);
@@ -202,7 +203,7 @@ describe('BIP44CoinTypeNode', () => {
       const pathString = `m / bip32:44' / bip32:${coinType}'`;
 
       expect(node.coin_type).toStrictEqual(coinType);
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
       expect(node.privateKeyBytes).toHaveLength(32);
       expect(node.publicKeyBytes).toHaveLength(65);
       expect(node.path).toStrictEqual(pathString);
@@ -455,7 +456,7 @@ describe('BIP44CoinTypeNode', () => {
       const pathString = `m / bip32:44' / bip32:${coinType}'`;
 
       expect(node.coin_type).toStrictEqual(coinType);
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
       expect(node.path).toStrictEqual(pathString);
 
       const nodeJson = node.toJSON();

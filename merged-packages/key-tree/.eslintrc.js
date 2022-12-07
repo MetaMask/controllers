@@ -11,14 +11,6 @@ module.exports = {
         allow: ['^UNSAFE_', 'coin_type', 'address_index'],
       },
     ],
-
-    'no-restricted-globals': [
-      'error',
-      {
-        name: 'Buffer',
-        message: "Use 'Uint8Array' instead.",
-      },
-    ],
   },
 
   overrides: [
@@ -34,6 +26,48 @@ module.exports = {
       extends: ['@metamask/eslint-config-typescript'],
       rules: {
         '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
+
+        // This rule is copied from the base config, but changed to allow for
+        // `snake_case` properties. This is because we use those a lot in this
+        // repository, and replacing them would be a breaking change.
+        '@typescript-eslint/naming-convention': [
+          'error',
+          {
+            selector: 'default',
+            format: ['camelCase', 'snake_case'],
+            leadingUnderscore: 'allow',
+            trailingUnderscore: 'forbid',
+          },
+          {
+            selector: 'enumMember',
+            format: ['PascalCase'],
+          },
+          {
+            selector: 'interface',
+            format: ['PascalCase'],
+            custom: {
+              regex: '^I[A-Z]',
+              match: false,
+            },
+          },
+          {
+            selector: 'objectLiteralMethod',
+            format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+          },
+          {
+            selector: 'objectLiteralProperty',
+            format: ['camelCase', 'PascalCase', 'UPPER_CASE', 'snake_case'],
+          },
+          {
+            selector: 'typeLike',
+            format: ['PascalCase'],
+          },
+          {
+            selector: 'variable',
+            format: ['camelCase', 'UPPER_CASE', 'PascalCase'],
+            leadingUnderscore: 'allow',
+          },
+        ],
       },
     },
 
@@ -69,5 +103,5 @@ module.exports = {
     },
   ],
 
-  ignorePatterns: ['!.eslintrc.js', '!.prettierrc.js', 'dist/'],
+  ignorePatterns: ['!.eslintrc.js', '!.prettierrc.js', 'dist/', 'docs/'],
 };

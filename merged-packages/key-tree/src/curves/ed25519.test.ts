@@ -1,4 +1,5 @@
 import { hexToBytes, bytesToHex } from '@metamask/utils';
+
 import fixtures from '../../test/fixtures';
 import {
   compressPublicKey,
@@ -60,7 +61,7 @@ describe('ed25519', () => {
   describe('compressPublicKey', () => {
     const { slip10 } = fixtures.ed25519;
 
-    it.each(slip10)('returns the same public key', async ({ keys }) => {
+    it.each(slip10)('returns the same public key', ({ keys }) => {
       for (const { publicKey } of keys) {
         const publicKeyBytes = hexToBytes(publicKey);
         expect(compressPublicKey(publicKeyBytes)).toStrictEqual(publicKeyBytes);
@@ -71,7 +72,7 @@ describe('ed25519', () => {
   describe('decompressPublicKey', () => {
     const { slip10 } = fixtures.ed25519;
 
-    it.each(slip10)('returns the same public key', async ({ keys }) => {
+    it.each(slip10)('returns the same public key', ({ keys }) => {
       for (const { publicKey } of keys) {
         const publicKeyBytes = hexToBytes(publicKey);
         expect(decompressPublicKey(publicKeyBytes)).toStrictEqual(

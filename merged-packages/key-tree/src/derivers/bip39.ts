@@ -1,23 +1,30 @@
-import { mnemonicToSeed } from '@scure/bip39';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
+import { mnemonicToSeed } from '@scure/bip39';
+
+import { DeriveChildKeyArgs } from '.';
 import { BIP39Node } from '../constants';
 import { Curve, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { getFingerprint } from '../utils';
-import { DeriveChildKeyArgs } from '.';
 
 /**
- * @param mnemonic
+ * Convert a BIP-39 mnemonic phrase to a multi path.
+ *
+ * @param mnemonic - The BIP-39 mnemonic phrase to convert.
+ * @returns The multi path.
  */
 export function bip39MnemonicToMultipath(mnemonic: string): BIP39Node {
   return `bip39:${mnemonic.toLowerCase().trim()}`;
 }
 
-// this creates a child key using bip39, ignoring the parent key
 /**
- * @param pathPart
- * @param curve
+ * Create a {@link SLIP10Node} from a BIP-39 mnemonic phrase.
+ *
+ * @param options - The options for creating the node.
+ * @param options.path - The multi path.
+ * @param options.curve - The curve to use for derivation.
+ * @returns The node.
  */
 export async function deriveChildKey({
   path,
@@ -27,9 +34,12 @@ export async function deriveChildKey({
 }
 
 /**
+ * Create a {@link SLIP10Node} from a BIP-39 seed.
+ *
  * @param seed - The cryptographic seed bytes.
  * @param curve - The curve to use.
- * @returns An object containing the corresponding BIP-39 master key and chain code.
+ * @returns An object containing the corresponding BIP-39 master key and chain
+ * code.
  */
 export async function createBip39KeyFromSeed(
   seed: Uint8Array,

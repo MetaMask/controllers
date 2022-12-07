@@ -1,11 +1,12 @@
 import { bytesToHex, hexToBytes } from '@metamask/utils';
+
 import fixtures from '../test/fixtures';
-import { ed25519, secp256k1 } from './curves';
-import { SLIP10Node } from './SLIP10Node';
 import { BIP44PurposeNodeToken } from './constants';
-import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
-import { hexStringToBytes } from './utils';
+import { ed25519, secp256k1 } from './curves';
 import { compressPublicKey } from './curves/secp256k1';
+import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
+import { SLIP10Node } from './SLIP10Node';
+import { hexStringToBytes } from './utils';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 
@@ -194,7 +195,9 @@ describe('SLIP10Node', () => {
             curve: 'secp256k1',
           }),
         ).rejects.toThrow(
-          `Invalid HD tree path depth: The depth must be a positive integer. Received: "${input}"`,
+          `Invalid HD tree path depth: The depth must be a positive integer. Received: "${String(
+            input,
+          )}"`,
         );
       }
     });
@@ -224,7 +227,9 @@ describe('SLIP10Node', () => {
             curve: 'secp256k1',
           }),
         ).rejects.toThrow(
-          `Invalid parent fingerprint: The fingerprint must be a positive integer. Received: "${input}"`,
+          `Invalid parent fingerprint: The fingerprint must be a positive integer. Received: "${String(
+            input,
+          )}"`,
         );
       }
     });
@@ -271,7 +276,7 @@ describe('SLIP10Node', () => {
         curve: 'secp256k1',
       });
 
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
       expect(node.toJSON()).toStrictEqual({
         depth: node.depth,
         masterFingerprint: node.masterFingerprint,
@@ -397,7 +402,7 @@ describe('SLIP10Node', () => {
       const node = await SLIP10Node.fromDerivationPath({
         derivationPath: [defaultBip39NodeToken],
         curve: 'secp256k1',
-      }).then((n) => n.neuter());
+      }).then((privateNode) => privateNode.neuter());
 
       const childNode = await node.derive(['bip32:0']);
 
@@ -660,7 +665,7 @@ describe('SLIP10Node', () => {
         curve: 'secp256k1',
       });
 
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
 
       const nodeJson = node.toJSON();
       expect(nodeJson).toStrictEqual({

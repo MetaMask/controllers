@@ -1,7 +1,8 @@
-import { base58check as scureBase58check } from '@scure/base';
-import { sha256 } from '@noble/hashes/sha256';
-import { ripemd160 } from '@noble/hashes/ripemd160';
 import { createDataView, hexToBytes } from '@metamask/utils';
+import { ripemd160 } from '@noble/hashes/ripemd160';
+import { sha256 } from '@noble/hashes/sha256';
+import { base58check as scureBase58check } from '@scure/base';
+
 import {
   BIP32Node,
   BIP44PurposeNodeToken,
@@ -59,8 +60,8 @@ export function getBIP44ChangePathString(
   indices: Omit<CoinTypeToAddressIndices, 'address_index'>,
 ): ChangeHDPathString {
   return `${coinTypePath} / ${getHardenedBIP32NodeToken(
-    indices.account || 0,
-  )} / ${getBIP32NodeToken(indices.change || 0)}`;
+    indices.account ?? 0,
+  )} / ${getBIP32NodeToken(indices.change ?? 0)}`;
 }
 
 /**
@@ -157,6 +158,8 @@ export function validateBIP32Index(addressIndex: number) {
 }
 
 /**
+ * Check if the index is a valid BIP-32 index.
+ *
  * @param index - The BIP-32 index to test.
  * @returns Whether the index is a non-negative integer number.
  */
@@ -165,6 +168,10 @@ export function isValidBIP32Index(index: number): boolean {
 }
 
 /**
+ * Check if the value is a hardened BIP-32 index. This only checks if the value
+ * ends with a `'` character, and does not validate that the index is a valid
+ * BIP-32 index.
+ *
  * @param bip32Token - The token to test.
  * @returns Whether the token is hardened, i.e. ends with `'`.
  */
@@ -173,6 +180,10 @@ export function isHardened(bip32Token: string): boolean {
 }
 
 /**
+ * Get a `Uint8Array` from a hexadecimal string or a `Uint8Array`. If the input
+ * is a hexadecimal string, it is converted to a `Uint8Array`. If the input is
+ * a `Uint8Array`, it is returned as-is.
+ *
  * @param hexString - The hexadecimal string to convert.
  * @returns The `Uint8Array` corresponding to the hexadecimal string.
  */
@@ -185,6 +196,9 @@ export function hexStringToBytes(hexString: string | Uint8Array): Uint8Array {
 }
 
 /**
+ * The same as {@link hexStringToBytes}, but returns `undefined` if the input
+ * is `undefined`.
+ *
  * @param hexString - The hexadecimal string to convert.
  * @returns The `Uint8Array` corresponding to the hexadecimal string.
  */
@@ -239,6 +253,7 @@ export function isValidInteger(value: unknown): value is number {
  *
  * @param value - The value to convert to a `Uint8Array`.
  * @param length - The length to validate the `Uint8Array` against.
+ * @returns The `Uint8Array` corresponding to the hexadecimal string.
  */
 export function getBytes(value: unknown, length: number): Uint8Array {
   if (value instanceof Uint8Array) {
@@ -259,6 +274,14 @@ export function getBytes(value: unknown, length: number): Uint8Array {
   );
 }
 
+/**
+ * Validate that the specified `Uint8Array` is not empty and has the specified
+ * length.
+ *
+ * @param bytes - The `Uint8Array` to validate.
+ * @param length - The length to validate the `Uint8Array` against.
+ * @throws An error if the `Uint8Array` is empty or has the wrong length.
+ */
 function validateBytes(
   bytes: Uint8Array,
   length: number,
@@ -292,6 +315,7 @@ export const encodeBase58check = (value: Uint8Array): string => {
  * Get the fingerprint of a compressed public key as number.
  *
  * @param publicKey - The compressed public key to get the fingerprint for.
+ * @returns The fingerprint of the public key.
  */
 export const getFingerprint = (publicKey: Uint8Array): number => {
   if (!isValidBytesKey(publicKey, 33)) {

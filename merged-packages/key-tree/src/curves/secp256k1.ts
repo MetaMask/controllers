@@ -1,9 +1,9 @@
+import { stringToBytes } from '@metamask/utils';
 import {
   getPublicKey as getSecp256k1PublicKey,
   Point,
   utils,
 } from '@noble/secp256k1';
-import { stringToBytes } from '@metamask/utils';
 
 export { CURVE as curve } from '@noble/secp256k1';
 

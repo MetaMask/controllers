@@ -1,5 +1,9 @@
-import { BIP44Node, SLIP10Node } from '../src';
-import { BIP44PurposeNodeToken, HDPathTuple } from '../src/constants';
+import {
+  BIP44Node,
+  SLIP10Node,
+  BIP44PurposeNodeToken,
+  HDPathTuple,
+} from '../src';
 import { ed25519 } from '../src/curves';
 import { deriveKeyFromPath } from '../src/derivation';
 import { createBip39KeyFromSeed } from '../src/derivers/bip39';
@@ -7,7 +11,6 @@ import {
   getBIP44CoinTypeToAddressPathTuple,
   hexStringToBytes,
 } from '../src/utils';
-
 import fixtures from './fixtures';
 
 describe('reference implementation tests', () => {

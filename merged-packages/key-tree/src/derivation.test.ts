@@ -1,11 +1,12 @@
 import { bytesToHex } from '@metamask/utils';
+
 import fixtures from '../test/fixtures';
 import { HDPathTuple } from './constants';
 import { deriveKeyFromPath } from './derivation';
 import { derivers } from './derivers';
-import { getUnhardenedBIP32NodeToken } from './utils';
 import { privateKeyToEthAddress } from './derivers/bip32';
 import { SLIP10Node } from './SLIP10Node';
+import { getUnhardenedBIP32NodeToken } from './utils';
 
 const {
   bip32: { deriveChildKey: bip32Derive },
@@ -25,7 +26,7 @@ describe('derivation', () => {
     it('derives full BIP-44 paths', async () => {
       // generate keys
       const keys = await Promise.all(
-        expectedAddresses.map((_, index) => {
+        expectedAddresses.map(async (_, index) => {
           const bip32Part = [
             ...ethereumBip32PathParts,
             getUnhardenedBIP32NodeToken(index),
@@ -64,7 +65,7 @@ describe('derivation', () => {
       });
 
       const keys = await Promise.all(
-        expectedAddresses.map((_, index) => {
+        expectedAddresses.map(async (_, index) => {
           return deriveKeyFromPath({
             path: [`bip32:${index}`],
             node,
@@ -89,14 +90,14 @@ describe('derivation', () => {
       });
 
       // Empty segments are forbidden
-      await expect(() =>
+      await expect(async () =>
         deriveKeyFromPath({ path: [], curve: 'secp256k1' }),
       ).rejects.toThrow(
         /Invalid HD path segment: The segment must not be empty\./u,
       );
 
       // Malformed multipaths are disallowed
-      await expect(() => {
+      await expect(async () => {
         const [, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part.replace('bip39', 'foo') as any, ...rest],
@@ -106,7 +107,7 @@ describe('derivation', () => {
         /Invalid HD path segment: The path segment is malformed\./u,
       );
 
-      await expect(() => {
+      await expect(async () => {
         const [, bip32Part1, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace('bip32', 'bar') as any, ...rest],
@@ -116,7 +117,7 @@ describe('derivation', () => {
         /Invalid HD path segment: The path segment is malformed\./u,
       );
 
-      await expect(() => {
+      await expect(async () => {
         const [, bip32Part1, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace(`44'`, 'xyz') as any, ...rest],
@@ -126,7 +127,7 @@ describe('derivation', () => {
         /Invalid HD path segment: The path segment is malformed\./u,
       );
 
-      await expect(() => {
+      await expect(async () => {
         const [, bip32Part1, ...rest] = multipath;
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace(`'`, '"') as any, ...rest],
@@ -221,7 +222,7 @@ describe('derivation', () => {
       /* eslint-enable require-atomic-updates */
 
       const keys = await Promise.all(
-        expectedAddresses.map((_, index) => {
+        expectedAddresses.map(async (_, index) => {
           return bip32Derive({ path: `${index}`, node });
         }),
       );

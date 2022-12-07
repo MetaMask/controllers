@@ -1,3 +1,4 @@
+import { BIP44Node, BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
 import {
   BIP39Node,
   BIP44Depth,
@@ -6,7 +7,8 @@ import {
   CoinTypeHDPathString,
   HardenedBIP32Node,
 } from './constants';
-import { BIP44Node, BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
+import { SupportedCurve } from './curves';
+import { deriveChildNode } from './SLIP10Node';
 import {
   CoinTypeToAddressIndices,
   getBIP32NodeToken,
@@ -18,8 +20,6 @@ import {
   hexStringToBytes,
   nullableHexStringToBytes,
 } from './utils';
-import { deriveChildNode } from './SLIP10Node';
-import { SupportedCurve } from './curves';
 
 export type CoinTypeHDPathTuple = [
   BIP39Node,
@@ -147,7 +147,8 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     validateCoinType(coin_type);
     validateCoinTypeNodeDepth(node.depth);
 
-    return new BIP44CoinTypeNode(node, coin_type);
+    // TODO: Make this function not async in a future version.
+    return Promise.resolve(new BIP44CoinTypeNode(node, coin_type));
   }
 
   readonly #node: BIP44Node;
@@ -156,6 +157,8 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
 
   public readonly coin_type: number;
 
+  // Constructors cannot use hash names.
+  // eslint-disable-next-line no-restricted-syntax
   private constructor(node: BIP44Node, coin_type: number) {
     this.#node = node;
     this.coin_type = coin_type;
@@ -246,7 +249,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
    * @param indices.account - The `account` index. Default: `0`
    * @param indices.change - The `change` index. Default: `0`
    * @param indices.address_index - The `address_index` index.
-   * @returns
+   * @returns The derived BIP-44 `address_index` node.
    */
   async deriveBIP44AddressKey({
     account = 0,
@@ -312,8 +315,10 @@ function validateCoinType(coin_type: unknown): asserts coin_type is number {
  * `0 / 1 / 2 / 3 / 4 / 5`
  *
  * @param parentKeyOrNode - The `coin_type` parent key to derive from.
- * @param indices - The `account`, `change`, and `address_index` used for
- * derivation.
+ * @param indices - The BIP-44 index values to use in key derivation.
+ * @param indices.account - The `account` index. Default: `0`.
+ * @param indices.change - The `change` index. Default: `0`.
+ * @param indices.address_index - The `address_index` index.
  * @returns The derived `address_index` key for the specified derivation path.
  */
 export async function deriveBIP44AddressKey(
@@ -388,7 +393,7 @@ export async function getBIP44AddressKeyDeriver(
   node: BIP44CoinTypeNode | JsonBIP44CoinTypeNode | string,
   accountAndChangeIndices?: Omit<CoinTypeToAddressIndices, 'address_index'>,
 ) {
-  const { account = 0, change = 0 } = accountAndChangeIndices || {};
+  const { account = 0, change = 0 } = accountAndChangeIndices ?? {};
 
   const actualNode = await getNode(node);
 

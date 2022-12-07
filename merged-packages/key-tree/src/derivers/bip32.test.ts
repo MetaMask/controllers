@@ -1,8 +1,9 @@
-import { CURVE } from '@noble/secp256k1';
 import { bytesToHex } from '@metamask/utils';
-import { hexStringToBytes } from '../utils';
+import { CURVE } from '@noble/secp256k1';
+
 import fixtures from '../../test/fixtures';
 import { secp256k1 } from '../curves';
+import { hexStringToBytes } from '../utils';
 import {
   privateAdd,
   privateKeyToEthAddress,

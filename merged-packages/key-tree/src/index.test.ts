@@ -9,8 +9,8 @@ import {
 // This is purely for coverage shenanigans
 describe('index', () => {
   it('has expected exports', () => {
-    expect(MAX_BIP_44_DEPTH).toStrictEqual(5);
-    expect(MIN_BIP_44_DEPTH).toStrictEqual(0);
+    expect(MAX_BIP_44_DEPTH).toBe(5);
+    expect(MIN_BIP_44_DEPTH).toBe(0);
 
     expect(SLIP10Node).toBeDefined();
     expect(secp256k1).toBeDefined();

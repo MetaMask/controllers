@@ -1,17 +1,18 @@
-import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
-import { hmac } from '@noble/hashes/hmac';
-import { sha512 } from '@noble/hashes/sha512';
 import {
   assert,
   bytesToBigInt,
   concatBytes,
   hexToBytes,
 } from '@metamask/utils';
+import { hmac } from '@noble/hashes/hmac';
+import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
+import { sha512 } from '@noble/hashes/sha512';
+
+import { DeriveChildKeyArgs, DerivedKeys } from '.';
 import { BIP_32_HARDENED_OFFSET, BYTES_KEY_LENGTH } from '../constants';
-import { isValidBytesKey } from '../utils';
 import { Curve, mod, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
-import { DeriveChildKeyArgs, DerivedKeys } from '.';
+import { isValidBytesKey } from '../utils';
 
 /**
  * Converts a BIP-32 private key to an Ethereum address.
@@ -58,9 +59,10 @@ export function publicKeyToEthAddress(key: Uint8Array) {
 /**
  * Derive a BIP-32 child key with a given path from a parent key.
  *
- * @param path - The derivation path part to derive.
- * @param node - The node to derive from.
- * @param curve - The curve to use for derivation.
+ * @param options - The options for deriving a child key.
+ * @param options.path - The derivation path part to derive.
+ * @param options.node - The node to derive from.
+ * @param options.curve - The curve to use for derivation.
  * @returns A tuple containing the derived private key, public key and chain
  * code.
  */
@@ -126,7 +128,7 @@ export async function deriveChildKey({
     });
   }
 
-  const publicExtension = await derivePublicExtension({
+  const publicExtension = derivePublicExtension({
     parentPublicKey: node.compressedPublicKeyBytes,
     childIndex,
   });
@@ -156,12 +158,15 @@ type DeriveSecretExtensionArgs = {
   curve: Curve;
 };
 
-// the bip32 secret extension is created from the parent private or public key and the child index
 /**
- * @param options
- * @param options.privateKey
- * @param options.childIndex
- * @param options.isHardened
+ * Derive a BIP-32 secret extension from a parent key and child index.
+ *
+ * @param options - The options for deriving a secret extension.
+ * @param options.privateKey - The parent private key bytes.
+ * @param options.childIndex - The child index to derive.
+ * @param options.isHardened - Whether the child index is hardened.
+ * @param options.curve - The curve to use for derivation.
+ * @returns The secret extension bytes.
  */
 async function deriveSecretExtension({
   privateKey,
@@ -188,7 +193,15 @@ type DerivePublicExtensionArgs = {
   childIndex: number;
 };
 
-async function derivePublicExtension({
+/**
+ * Derive a BIP-32 public extension from a parent key and child index.
+ *
+ * @param options - The options for deriving a public extension.
+ * @param options.parentPublicKey - The parent public key bytes.
+ * @param options.childIndex - The child index to derive.
+ * @returns The public extension bytes.
+ */
+function derivePublicExtension({
   parentPublicKey,
   childIndex,
 }: DerivePublicExtensionArgs) {
@@ -240,10 +253,14 @@ type GenerateKeyArgs = {
 };
 
 /**
- * @param options
- * @param options.privateKey
- * @param options.chainCode
- * @param options.secretExtension
+ * Derive a BIP-32 key from a parent key and secret extension.
+ *
+ * @param options - The options for deriving a key.
+ * @param options.privateKey - The parent private key bytes.
+ * @param options.chainCode - The parent chain code bytes.
+ * @param options.secretExtension - The secret extension bytes.
+ * @param options.curve - The curve to use for derivation.
+ * @returns The derived key.
  */
 async function generateKey({
   privateKey,
@@ -275,6 +292,16 @@ type GeneratePublicKeyArgs = {
   curve: Curve;
 };
 
+/**
+ * Derive a BIP-32 public key from a parent key and public extension.
+ *
+ * @param options - The options for deriving a public key.
+ * @param options.publicKey - The parent public key bytes.
+ * @param options.chainCode - The parent chain code bytes.
+ * @param options.publicExtension - The public extension bytes.
+ * @param options.curve - The curve to use for derivation.
+ * @returns The derived public key.
+ */
 function generatePublicKey({
   publicKey,
   chainCode,

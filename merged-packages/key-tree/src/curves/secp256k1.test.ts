@@ -1,4 +1,5 @@
 import { bytesToHex, hexToBytes } from '@metamask/utils';
+
 import fixtures from '../../test/fixtures';
 import { curve, getPublicKey, isValidPrivateKey } from './secp256k1';
 
@@ -25,15 +26,12 @@ describe('secp256k1', () => {
   describe('getPublicKey', () => {
     const { bip32 } = fixtures;
 
-    it.each(bip32)(
-      'returns the public key for a private key',
-      async ({ keys }) => {
-        for (const { privateKey, publicKey } of keys) {
-          expect(bytesToHex(await getPublicKey(hexToBytes(privateKey)))).toBe(
-            publicKey,
-          );
-        }
-      },
-    );
+    it.each(bip32)('returns the public key for a private key', ({ keys }) => {
+      for (const { privateKey, publicKey } of keys) {
+        expect(bytesToHex(getPublicKey(hexToBytes(privateKey)))).toBe(
+          publicKey,
+        );
+      }
+    });
   });
 });

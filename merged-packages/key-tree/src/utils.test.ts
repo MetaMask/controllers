@@ -1,4 +1,6 @@
 import { hexToBytes, stringToBytes } from '@metamask/utils';
+
+import { BIP44Node } from './BIP44Node';
 import {
   getBIP32NodeToken,
   getBIP44ChangePathString,
@@ -17,8 +19,6 @@ import {
   encodeBase58check,
   decodeBase58check,
 } from './utils';
-
-import { BIP44Node } from './BIP44Node';
 
 // Inputs used for testing non-negative integers
 const inputs = [-1, 1.1, NaN, {}, null, undefined] as number[];
@@ -335,7 +335,7 @@ describe('getFingerprint', () => {
     expect(getFingerprint(node.compressedPublicKeyBytes)).toBe(876747070);
   });
 
-  it('throws if the public key is not a valid Uint8Array', async () => {
+  it('throws if the public key is not a valid Uint8Array', () => {
     expect(() => getFingerprint(new Uint8Array(33).fill(0))).toThrow(
       'Invalid public key: The key must be a 33-byte, non-zero byte array.',
     );

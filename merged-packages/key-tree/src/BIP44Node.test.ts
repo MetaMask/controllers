@@ -1,14 +1,15 @@
 import { bytesToHex } from '@metamask/utils';
+
+import { BIP44Node, BIP44PurposeNodeToken } from '.';
 import fixtures from '../test/fixtures';
-import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
-import { hexStringToBytes } from './utils';
 import { compressPublicKey } from './curves/secp256k1';
+import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import {
   encodeExtendedKey,
   PRIVATE_KEY_VERSION,
   PUBLIC_KEY_VERSION,
 } from './extended-keys';
-import { BIP44Node, BIP44PurposeNodeToken } from '.';
+import { hexStringToBytes } from './utils';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 
@@ -28,7 +29,7 @@ describe('BIP44Node', () => {
         index: 0,
       });
 
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
       expect(node.toJSON()).toStrictEqual({
         depth: node.depth,
         masterFingerprint: node.masterFingerprint,
@@ -109,7 +110,7 @@ describe('BIP44Node', () => {
         ],
       });
 
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
       expect(node.toJSON()).toStrictEqual({
         depth: node.depth,
         masterFingerprint: node.masterFingerprint,
@@ -543,7 +544,7 @@ describe('BIP44Node', () => {
         ],
       });
 
-      expect(node.depth).toStrictEqual(2);
+      expect(node.depth).toBe(2);
 
       const nodeJson = node.toJSON();
       expect(nodeJson).toStrictEqual({

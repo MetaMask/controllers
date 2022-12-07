@@ -9,15 +9,15 @@ import {
   RootedSLIP10PathTuple,
   SLIP10Path,
 } from './constants';
-import { isHardened } from './utils';
-import { SLIP10Node, validateBIP32Depth } from './SLIP10Node';
+import { SupportedCurve } from './curves';
 import {
   decodeExtendedKey,
   encodeExtendedKey,
   PRIVATE_KEY_VERSION,
   PUBLIC_KEY_VERSION,
 } from './extended-keys';
-import { SupportedCurve } from './curves';
+import { SLIP10Node, validateBIP32Depth } from './SLIP10Node';
+import { isHardened } from './utils';
 
 export type BIP44ExtendedKeyOptions = {
   readonly depth: number;
@@ -120,11 +120,11 @@ export class BIP44Node implements BIP44NodeInterface {
    *
    * @param options - An object containing the extended key, or an extended
    * public (xpub) or private (xprv) key.
-   * @param options.depth The depth of the node.
-   * @param options.privateKey The private key for the node.
-   * @param options.publicKey The public key for the node. If a private key is
+   * @param options.depth - The depth of the node.
+   * @param options.privateKey - The private key for the node.
+   * @param options.publicKey - The public key for the node. If a private key is
    * specified, this parameter is ignored.
-   * @param options.chainCode The chain code for the node.
+   * @param options.chainCode - The chain code for the node.
    */
   static async fromExtendedKey(
     options: BIP44ExtendedKeyOptions | string,
@@ -198,7 +198,8 @@ export class BIP44Node implements BIP44NodeInterface {
    *
    * `0 / 1 / 2 / 3 / 4 / 5`
    *
-   * @param derivationPath The rooted HD tree path that will be used
+   * @param options - An object containing the derivation path.
+   * @param options.derivationPath - The rooted HD tree path that will be used
    * to derive the key of this node.
    */
   static async fromDerivationPath({
@@ -307,7 +308,9 @@ export class BIP44Node implements BIP44NodeInterface {
   }
 
   /**
-   * Returns a neutered version of this node, i.e. a node without a private key.
+   * Get a neutered version of this node, i.e. a node without a private key.
+   *
+   * @returns A neutered version of this node.
    */
   public neuter(): BIP44Node {
     const node = this.#node.neuter();

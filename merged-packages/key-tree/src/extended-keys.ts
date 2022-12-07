@@ -1,7 +1,8 @@
 import { createDataView } from '@metamask/utils';
-import { decodeBase58check, encodeBase58check, isValidBytesKey } from './utils';
+
 import { validateBIP44Depth } from './BIP44Node';
 import { compressPublicKey, decompressPublicKey } from './curves/secp256k1';
+import { decodeBase58check, encodeBase58check, isValidBytesKey } from './utils';
 
 // https://github.com/bitcoin/bips/blob/274fa400d630ba757bec0c03b35ebe2345197108/bip-0032.mediawiki#Serialization_format
 export const PUBLIC_KEY_VERSION = 0x0488b21e;
@@ -42,6 +43,7 @@ export type ExtendedKey = ExtendedPublicKey | ExtendedPrivateKey;
  * Throws an error if the extended key is invalid.
  *
  * @param extendedKey - The extended key string to attempt to decode.
+ * @returns The decoded extended key.
  */
 export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
   const bytes = decodeBase58check(extendedKey);
@@ -120,6 +122,7 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
  * Encodes an extended public or private key. Assumes that all the inputs are verified beforehand.
  *
  * @param extendedKey - The extended key data to encode.
+ * @returns The encoded extended key.
  */
 export const encodeExtendedKey = (extendedKey: ExtendedKey): string => {
   const { version, depth, parentFingerprint, index, chainCode } = extendedKey;

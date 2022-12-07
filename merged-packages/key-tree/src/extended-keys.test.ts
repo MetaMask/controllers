@@ -1,4 +1,5 @@
 import { hexToBytes } from '@metamask/utils';
+
 import {
   decodeExtendedKey,
   encodeExtendedKey,

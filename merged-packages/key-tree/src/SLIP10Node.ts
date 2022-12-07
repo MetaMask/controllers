@@ -1,4 +1,7 @@
 import { bytesToHex } from '@metamask/utils';
+
+import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
+import { BIP44Node } from './BIP44Node';
 import {
   BYTES_KEY_LENGTH,
   RootedSLIP10PathTuple,
@@ -13,8 +16,6 @@ import {
   isValidInteger,
   validateBIP32Index,
 } from './utils';
-import { BIP44Node } from './BIP44Node';
-import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
 
 /**
  * A wrapper for SLIP-10 Hierarchical Deterministic (HD) tree nodes, i.e.
@@ -130,18 +131,19 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * All parameters are stringently validated, and an error is thrown if
    * validation fails.
    *
-   * @param depth - The depth of the node.
-   * @param masterFingerprint - The fingerprint of the master node, i.e., the
+   * @param options - The options for the new node.
+   * @param options.depth - The depth of the node.
+   * @param options.masterFingerprint - The fingerprint of the master node, i.e., the
    * node at depth 0. May be undefined if this node was created from an extended
    * key.
-   * @param parentFingerprint - The fingerprint of the parent key, or 0 if
+   * @param options.parentFingerprint - The fingerprint of the parent key, or 0 if
    * the node is a master node.
-   * @param index - The index of the node, or 0 if the node is a master node.
-   * @param privateKey - The private key for the node.
-   * @param publicKey - The public key for the node. If a private key is
+   * @param options.index - The index of the node, or 0 if the node is a master node.
+   * @param options.privateKey - The private key for the node.
+   * @param options.publicKey - The public key for the node. If a private key is
    * specified, this parameter is ignored.
-   * @param chainCode - The chain code for the node.
-   * @param curve - The curve used by the node.
+   * @param options.chainCode - The chain code for the node.
+   * @param options.curve - The curve used by the node.
    */
   static async fromExtendedKey({
     depth,
@@ -214,9 +216,11 @@ export class SLIP10Node implements SLIP10NodeInterface {
    *
    * `0 / 1 / 2 / 3 / 4 / 5`
    *
-   * @param derivationPath - The rooted HD tree path that will be used
+   * @param options - The options for the new node.
+   * @param options.derivationPath - The rooted HD tree path that will be used
    * to derive the key of this node.
-   * @param curve - The curve used by the node.
+   * @param options.curve - The curve used by the node.
+   * @returns A new SLIP-10 node.
    */
   static async fromDerivationPath({
     derivationPath,
@@ -318,7 +322,9 @@ export class SLIP10Node implements SLIP10NodeInterface {
   }
 
   /**
-   * Returns a neutered version of this node, i.e. a node without a private key.
+   * Get a neutered version of this node, i.e. a node without a private key.
+   *
+   * @returns A neutered version of this node.
    */
   public neuter(): SLIP10Node {
     return new SLIP10Node({
@@ -394,7 +400,9 @@ function validateCurve(
 export function validateBIP32Depth(depth: unknown): asserts depth is number {
   if (!isValidInteger(depth)) {
     throw new Error(
-      `Invalid HD tree path depth: The depth must be a positive integer. Received: "${depth}".`,
+      `Invalid HD tree path depth: The depth must be a positive integer. Received: "${String(
+        depth,
+      )}".`,
     );
   }
 }
@@ -410,7 +418,9 @@ export function validateParentFingerprint(
 ): asserts parentFingerprint is number {
   if (!isValidInteger(parentFingerprint)) {
     throw new Error(
-      `Invalid parent fingerprint: The fingerprint must be a positive integer. Received: "${parentFingerprint}".`,
+      `Invalid parent fingerprint: The fingerprint must be a positive integer. Received: "${String(
+        parentFingerprint,
+      )}".`,
     );
   }
 }
@@ -423,8 +433,9 @@ type DeriveChildNodeArgs = {
 /**
  * Derives a child key from the given parent key.
  *
- * @param node - The node to derive from.
- * @param path - The path to the child node / key.
+ * @param options - The options to use when deriving the child key.
+ * @param options.node - The node to derive from.
+ * @param options.path - The path to the child node / key.
  * @returns The derived key and depth.
  */
 export async function deriveChildNode({

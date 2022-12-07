@@ -1,6 +1,7 @@
 import { utils } from '@noble/secp256k1';
-import * as secp256k1 from './secp256k1';
+
 import * as ed25519 from './ed25519';
+import * as secp256k1 from './secp256k1';
 
 export type SupportedCurve = keyof typeof curves;
 
@@ -31,6 +32,7 @@ export type Curve = {
  * Get a curve by name.
  *
  * @param curveName - The name of the curve to get.
+ * @returns The curve.
  */
 export function getCurveByName(curveName: SupportedCurve): Curve {
   return curves[curveName];

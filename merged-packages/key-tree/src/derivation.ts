@@ -1,15 +1,16 @@
 import { assert } from '@metamask/utils';
+
+import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
+import { BIP44Node } from './BIP44Node';
 import {
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
   MIN_BIP_44_DEPTH,
   SLIP10Path,
 } from './constants';
+import { getCurveByName, SupportedCurve } from './curves';
 import { Deriver, derivers } from './derivers';
 import { SLIP10Node } from './SLIP10Node';
-import { BIP44Node } from './BIP44Node';
-import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
-import { getCurveByName, SupportedCurve } from './curves';
 
 /**
  * Ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
@@ -47,15 +48,14 @@ type DeriveKeyFromPathArgs =
  * - If the path starts with a BIP-32 node, a parent key must be provided.
  * - If the path starts with a BIP-39 node, a parent key must NOT be provided.
  * - The path cannot exceed 5 BIP-32 nodes in length, optionally preceded by
- *   a single BIP-39 node.
+ * a single BIP-39 node.
  *
  * WARNING: It is the consumer's responsibility to ensure that the path is valid
  * relative to its parent key.
  *
- * @param args
+ * @param args - The arguments for deriving a key from a path.
  * @param args.path - A full or partial HD path, e.g.:
- * bip39:SEED_PHRASE/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0
- *
+ * `bip39:SEED_PHRASE/bip32:44'/bip32:60'/bip32:0'/bip32:0/bip32:0`.
  * BIP-39 seed phrases must be lowercase, space-delimited, and 12-24 words long.
  * @param args.node - The node to derive from.
  * @param args.depth - The depth of the segment.
@@ -113,7 +113,10 @@ export async function deriveKeyFromPath(
 }
 
 /**
- * @param pathType
+ * Check if the given path type is a valid deriver.
+ *
+ * @param pathType - The path type to check.
+ * @returns Whether the path type is a valid deriver.
  */
 function hasDeriver(pathType: string): pathType is keyof typeof derivers {
   return pathType in derivers;
@@ -121,13 +124,13 @@ function hasDeriver(pathType: string): pathType is keyof typeof derivers {
 
 /**
  * The path segment must be one of the following:
- * - A lone BIP-32 path node
- * - A lone BIP-39 path node
- * - A multipath
+ * - A lone BIP-32 path node.
+ * - A lone BIP-39 path node.
+ * - A multipath.
  *
  * @param path - The path segment string to validate.
- * @param hasKey
- * @param depth
+ * @param hasKey - Whether the path segment has a key.
+ * @param depth - The depth of the segment.
  */
 export function validatePathSegment(
   path: SLIP10Path,
@@ -152,7 +155,9 @@ export function validatePathSegment(
 
   if (depth === MIN_BIP_44_DEPTH && (!startsWithBip39 || path.length !== 1)) {
     throw new Error(
-      `Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of ${MIN_BIP_44_DEPTH}. Received: "${path}".`,
+      `Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of ${MIN_BIP_44_DEPTH}. Received: "${String(
+        path,
+      )}".`,
     );
   }
 
@@ -169,6 +174,11 @@ export function validatePathSegment(
   }
 }
 
+/**
+ * Get the error for a malformed path segment.
+ *
+ * @returns The error.
+ */
 function getMalformedError() {
-  throw new Error('Invalid HD path segment: The path segment is malformed.');
+  return new Error('Invalid HD path segment: The path segment is malformed.');
 }
