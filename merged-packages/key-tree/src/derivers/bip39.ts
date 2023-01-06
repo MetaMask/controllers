@@ -1,6 +1,7 @@
+import { mnemonicToSeed } from '@metamask/scure-bip39';
+import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
-import { mnemonicToSeed } from '@scure/bip39';
 
 import { DeriveChildKeyArgs } from '.';
 import { BIP39Node } from '../constants';
@@ -30,7 +31,10 @@ export async function deriveChildKey({
   path,
   curve,
 }: DeriveChildKeyArgs): Promise<SLIP10Node> {
-  return createBip39KeyFromSeed(await mnemonicToSeed(path), curve);
+  return createBip39KeyFromSeed(
+    await mnemonicToSeed(path, englishWordlist),
+    curve,
+  );
 }
 
 /**
