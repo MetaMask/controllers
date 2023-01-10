@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.0]
+### Changed
+- Update BIP-39 implementation from `@scure/bip39` to MetaMask fork version `@metamask/scure-bip39` ([#101](https://github.com/MetaMask/key-tree/pull/101))
+ - The `@metamask/scure-bip39` fork accepts secret recovery phrases in `Uint8Array` format making it possible to use more secure patterns of passing secret recovery phrases around. This change is non-breaking however, as the `mnemonicToSeed` function used in this package still accepts secret recovery phrases in string format.
+
 ## [6.0.0]
 ### Changed
 - BREAKING: Rename all occurrences of `Buffer` with `Bytes` or `Uint8Array` ([#84](https://github.com/MetaMask/key-tree/pull/84))
@@ -98,7 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v6.0.0...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v6.1.0...HEAD
+[6.1.0]: https://github.com/MetaMask/key-tree/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/MetaMask/key-tree/compare/v5.0.2...v6.0.0
 [5.0.2]: https://github.com/MetaMask/key-tree/compare/v5.0.1...v5.0.2
 [5.0.1]: https://github.com/MetaMask/key-tree/compare/v5.0.0...v5.0.1
