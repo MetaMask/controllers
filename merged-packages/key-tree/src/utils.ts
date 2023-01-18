@@ -1,4 +1,5 @@
-import { createDataView, hexToBytes } from '@metamask/utils';
+import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english';
+import { assert, createDataView, hexToBytes } from '@metamask/utils';
 import { ripemd160 } from '@noble/hashes/ripemd160';
 import { sha256 } from '@noble/hashes/sha256';
 import { base58check as scureBase58check } from '@scure/base';
@@ -329,3 +330,25 @@ export const getFingerprint = (publicKey: Uint8Array): number => {
 
   return view.getUint32(0, false);
 };
+
+/**
+ * Get a secret recovery phrase (or mnemonic phrase) in string form as a
+ * `Uint8Array`. The secret recovery phrase is split into words, and each word
+ * is converted to a number using the BIP-39 word list. The numbers are then
+ * converted to bytes, and the bytes are concatenated into a single
+ * `Uint8Array`.
+ *
+ * @param mnemonicPhrase - The secret recovery phrase to convert.
+ * @returns The `Uint8Array` corresponding to the secret recovery phrase.
+ */
+export function mnemonicPhraseToBytes(mnemonicPhrase: string): Uint8Array {
+  const words = mnemonicPhrase.split(' ');
+  const indices = words.map((word) => {
+    const index = englishWordlist.indexOf(word);
+    assert(index !== -1, `Invalid mnemonic phrase: Unknown word "${word}".`);
+
+    return index;
+  });
+
+  return new Uint8Array(new Uint16Array(indices).buffer);
+}

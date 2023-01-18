@@ -1,3 +1,5 @@
+import { assert } from '@metamask/utils';
+
 import {
   BIP44Depth,
   BIP44PurposeNodeToken,
@@ -407,16 +409,23 @@ function validateBIP44DerivationPath(
   path.forEach((nodeToken, index) => {
     const currentDepth = startingDepth + index;
 
+    if (currentDepth === MIN_BIP_44_DEPTH) {
+      if (
+        !(nodeToken instanceof Uint8Array) &&
+        !BIP_39_PATH_REGEX.test(nodeToken)
+      ) {
+        throw new Error(
+          'Invalid derivation path: The "m" / seed node (depth 0) must be a BIP-39 node.',
+        );
+      }
+
+      return;
+    }
+
+    assert(typeof nodeToken === 'string');
+
     // eslint-disable-next-line default-case
     switch (currentDepth) {
-      case MIN_BIP_44_DEPTH:
-        if (!BIP_39_PATH_REGEX.test(nodeToken)) {
-          throw new Error(
-            'Invalid derivation path: The "m" / seed node (depth 0) must be a BIP-39 node.',
-          );
-        }
-        break;
-
       case 1:
         if (nodeToken !== BIP44PurposeNodeToken) {
           throw new Error(

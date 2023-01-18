@@ -6,9 +6,10 @@ import { ed25519, secp256k1 } from './curves';
 import { compressPublicKey } from './curves/secp256k1';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import { SLIP10Node } from './SLIP10Node';
-import { hexStringToBytes } from './utils';
+import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
+const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
 
 describe('SLIP10Node', () => {
   describe('fromExtendedKey', () => {
@@ -287,6 +288,28 @@ describe('SLIP10Node', () => {
         publicKey: node.publicKey,
         chainCode: node.chainCode,
       });
+    });
+
+    it('initializes a new node from a derivation path with a Uint8Array', async () => {
+      const node = await SLIP10Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39BytesToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'secp256k1',
+      });
+
+      const stringNode = await SLIP10Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'secp256k1',
+      });
+
+      expect(node.toJSON()).toStrictEqual(stringNode.toJSON());
     });
 
     it('throws if the derivation path is empty', async () => {

@@ -1,5 +1,8 @@
+import { mnemonicToSeed } from '@metamask/scure-bip39';
+import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english';
 import { hexToBytes, stringToBytes } from '@metamask/utils';
 
+import fixtures from '../test/fixtures';
 import { BIP44Node } from './BIP44Node';
 import {
   getBIP32NodeToken,
@@ -18,6 +21,7 @@ import {
   isHardened,
   encodeBase58check,
   decodeBase58check,
+  mnemonicPhraseToBytes,
 } from './utils';
 
 // Inputs used for testing non-negative integers
@@ -344,4 +348,16 @@ describe('getFingerprint', () => {
       'Invalid public key: The key must be a 33-byte, non-zero byte array.',
     );
   });
+});
+
+describe('mnemonicPhraseToBytes', () => {
+  it.each([fixtures.local.mnemonic, fixtures['eth-hd-keyring'].mnemonic])(
+    'converts a mnemonic phrase to a Uint8Array',
+    async (mnemonicPhrase) => {
+      const array = mnemonicPhraseToBytes(mnemonicPhrase);
+      expect(await mnemonicToSeed(array, wordlist)).toStrictEqual(
+        await mnemonicToSeed(mnemonicPhrase, wordlist),
+      );
+    },
+  );
 });

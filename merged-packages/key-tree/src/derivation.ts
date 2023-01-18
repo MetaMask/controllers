@@ -92,12 +92,15 @@ export async function deriveKeyFromPath(
     depth,
   );
 
-  // derive through each part of path
-  // `pathSegment` needs to be cast to `string[]` because `HDPathTuple.reduce()` doesn't work
-  return await (path as readonly string[]).reduce<Promise<SLIP10Node>>(
-    async (promise, pathNode) => {
-      const derivedNode = await promise;
+  // Derive through each part of path. `pathSegment` needs to be cast because
+  // `HDPathTuple.reduce()` doesn't work. Note that the first element of the
+  // path can be a Uint8Array.
+  return await (path as readonly [Uint8Array | string, ...string[]]).reduce<
+    Promise<SLIP10Node>
+  >(async (promise, pathNode, index) => {
+    const derivedNode = await promise;
 
+    if (typeof pathNode === 'string') {
       const [pathType, pathPart] = pathNode.split(':');
       assert(hasDeriver(pathType), `Unknown derivation type: "${pathType}".`);
 
@@ -107,9 +110,16 @@ export async function deriveKeyFromPath(
         node: derivedNode,
         curve: getCurveByName(curve),
       });
-    },
-    Promise.resolve(node as SLIP10Node),
-  );
+    }
+
+    // Only the first path segment can be a Uint8Array.
+    assert(index === 0, getMalformedError());
+
+    return await derivers.bip39.deriveChildKey({
+      path: pathNode,
+      node: derivedNode,
+    });
+  }, Promise.resolve(node as SLIP10Node));
 }
 
 /**
@@ -144,11 +154,19 @@ export function validatePathSegment(
   let startsWithBip39 = false;
   path.forEach((node, index) => {
     if (index === 0) {
-      startsWithBip39 = BIP_39_PATH_REGEX.test(node);
-      if (!startsWithBip39 && !BIP_32_PATH_REGEX.test(node)) {
+      startsWithBip39 =
+        node instanceof Uint8Array || BIP_39_PATH_REGEX.test(node);
+
+      if (
+        // TypeScript is unable to infer that `node` is a string here, so we
+        // need to explicitly check it again.
+        !(node instanceof Uint8Array) &&
+        !startsWithBip39 &&
+        !BIP_32_PATH_REGEX.test(node)
+      ) {
         throw getMalformedError();
       }
-    } else if (!BIP_32_PATH_REGEX.test(node)) {
+    } else if (node instanceof Uint8Array || !BIP_32_PATH_REGEX.test(node)) {
       throw getMalformedError();
     }
   });

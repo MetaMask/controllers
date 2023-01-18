@@ -10,8 +10,10 @@ import {
 } from '.';
 import fixtures from '../test/fixtures';
 import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
+import { mnemonicPhraseToBytes } from './utils';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
+const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
 
 describe('BIP44CoinTypeNode', () => {
   describe('fromJSON', () => {
@@ -219,6 +221,22 @@ describe('BIP44CoinTypeNode', () => {
         publicKey: node.publicKey,
         chainCode: node.chainCode,
       });
+    });
+
+    it('initializes a BIP44CoinTypeNode with a Uint8Array', async () => {
+      const node = await BIP44CoinTypeNode.fromDerivationPath([
+        defaultBip39BytesToken,
+        BIP44PurposeNodeToken,
+        `bip32:60'`,
+      ]);
+
+      const stringNode = await BIP44CoinTypeNode.fromDerivationPath([
+        defaultBip39NodeToken,
+        BIP44PurposeNodeToken,
+        `bip32:60'`,
+      ]);
+
+      expect(node.toJSON()).toStrictEqual(stringNode.toJSON());
     });
 
     it('throws if derivation path has invalid depth', async () => {

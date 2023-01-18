@@ -9,9 +9,10 @@ import {
   PRIVATE_KEY_VERSION,
   PUBLIC_KEY_VERSION,
 } from './extended-keys';
-import { hexStringToBytes } from './utils';
+import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
+const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
 
 describe('BIP44Node', () => {
   describe('fromExtendedKey', () => {
@@ -120,6 +121,26 @@ describe('BIP44Node', () => {
         publicKey: node.publicKey,
         chainCode: node.chainCode,
       });
+    });
+
+    it('initializes a new node from a derivation path with a Uint8Array', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39BytesToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+      });
+
+      const stringNode = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+      });
+
+      expect(node.toJSON()).toStrictEqual(stringNode.toJSON());
     });
 
     it('throws an error if attempting to modify the fields of a node', async () => {

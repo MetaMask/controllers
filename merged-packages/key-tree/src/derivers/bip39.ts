@@ -4,7 +4,7 @@ import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 
 import { DeriveChildKeyArgs } from '.';
-import { BIP39Node } from '../constants';
+import { BIP39StringNode } from '../constants';
 import { Curve, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { getFingerprint } from '../utils';
@@ -15,7 +15,7 @@ import { getFingerprint } from '../utils';
  * @param mnemonic - The BIP-39 mnemonic phrase to convert.
  * @returns The multi path.
  */
-export function bip39MnemonicToMultipath(mnemonic: string): BIP39Node {
+export function bip39MnemonicToMultipath(mnemonic: string): BIP39StringNode {
   return `bip39:${mnemonic.toLowerCase().trim()}`;
 }
 

@@ -18,7 +18,8 @@ export type BIP44Depth = MinBIP44Depth | 1 | 2 | 3 | 4 | MaxBIP44Depth;
 // m  / 44' / 60' / 0' / 0 / 0
 
 export type AnonymizedBIP39Node = 'm';
-export type BIP39Node = `bip39:${string}`;
+export type BIP39StringNode = `bip39:${string}`;
+export type BIP39Node = BIP39StringNode | Uint8Array;
 export type HardenedBIP32Node = `bip32:${number}'`;
 export type UnhardenedBIP32Node = `bip32:${number}`;
 export type BIP32Node = HardenedBIP32Node | UnhardenedBIP32Node;

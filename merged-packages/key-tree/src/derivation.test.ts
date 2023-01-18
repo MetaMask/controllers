@@ -2,11 +2,11 @@ import { bytesToHex } from '@metamask/utils';
 
 import fixtures from '../test/fixtures';
 import { HDPathTuple } from './constants';
-import { deriveKeyFromPath } from './derivation';
+import { deriveKeyFromPath, validatePathSegment } from './derivation';
 import { derivers } from './derivers';
 import { privateKeyToEthAddress } from './derivers/bip32';
 import { SLIP10Node } from './SLIP10Node';
-import { getUnhardenedBIP32NodeToken } from './utils';
+import { getUnhardenedBIP32NodeToken, mnemonicPhraseToBytes } from './utils';
 
 const {
   bip32: { deriveChildKey: bip32Derive },
@@ -43,6 +43,30 @@ describe('derivation', () => {
             `bip32:0`,
             `bip32:${index}`,
           ]);
+
+          return deriveKeyFromPath({ path: multipath, curve: 'secp256k1' });
+        }),
+      );
+
+      // validate addresses
+      keys.forEach(({ privateKeyBytes }, index) => {
+        const address = privateKeyToEthAddress(privateKeyBytes as Uint8Array);
+        expect(bytesToHex(address)).toStrictEqual(expectedAddresses[index]);
+      });
+    });
+
+    it('derives from Uint8Array BIP-39 nodes', async () => {
+      const keys = await Promise.all(
+        expectedAddresses.map(async (_, index) => {
+          const bip32Part = [
+            ...ethereumBip32PathParts,
+            getUnhardenedBIP32NodeToken(index),
+          ] as const;
+
+          const multipath = [
+            mnemonicPhraseToBytes(mnemonic),
+            ...bip32Part,
+          ] as HDPathTuple;
 
           return deriveKeyFromPath({ path: multipath, curve: 'secp256k1' });
         }),
@@ -298,5 +322,38 @@ describe('derivation', () => {
         );
       });
     });
+  });
+});
+
+describe('validatePathSegment', () => {
+  it('accepts a Uint8Array or string path for the first segment', () => {
+    expect(() =>
+      validatePathSegment(
+        [mnemonicPhraseToBytes(fixtures.local.mnemonic)],
+        false,
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      validatePathSegment([`bip39:${fixtures.local.mnemonic}`], false),
+    ).not.toThrow();
+  });
+
+  it('does not accept a Uint8Array for BIP-32 segments', () => {
+    expect(() =>
+      validatePathSegment(
+        // @ts-expect-error Invalid type.
+        [`bip39:${fixtures.local.mnemonic}`, new Uint8Array(32)],
+        false,
+      ),
+    ).toThrow('Invalid HD path segment: The path segment is malformed.');
+
+    expect(() =>
+      validatePathSegment(
+        // @ts-expect-error Invalid type.
+        [`bip39:${fixtures.local.mnemonic}`, `bip32:0`, new Uint8Array(32)],
+        false,
+      ),
+    ).toThrow('Invalid HD path segment: The path segment is malformed.');
   });
 });

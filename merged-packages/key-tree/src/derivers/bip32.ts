@@ -71,6 +71,8 @@ export async function deriveChildKey({
   node,
   curve = secp256k1,
 }: DeriveChildKeyArgs): Promise<SLIP10Node> {
+  assert(typeof path === 'string', 'Invalid path: Must be a string.');
+
   const isHardened = path.includes(`'`);
   if (!isHardened && !curve.deriveUnhardenedKeys) {
     throw new Error(

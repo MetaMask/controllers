@@ -13,7 +13,7 @@ export type DerivedKeys = {
 };
 
 export type DeriveChildKeyArgs = {
-  path: string;
+  path: Uint8Array | string;
   curve?: Curve;
   node?: SLIP10Node;
 };
