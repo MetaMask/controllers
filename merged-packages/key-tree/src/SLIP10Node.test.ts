@@ -312,6 +312,28 @@ describe('SLIP10Node', () => {
       expect(node.toJSON()).toStrictEqual(stringNode.toJSON());
     });
 
+    it('initializes a new node from a derivation path with a Uint8Array using ed25519', async () => {
+      const node = await SLIP10Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39BytesToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'ed25519',
+      });
+
+      const stringNode = await SLIP10Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'ed25519',
+      });
+
+      expect(node.toJSON()).toStrictEqual(stringNode.toJSON());
+    });
+
     it('throws if the derivation path is empty', async () => {
       await expect(
         SLIP10Node.fromDerivationPath({

@@ -118,6 +118,7 @@ export async function deriveKeyFromPath(
     return await derivers.bip39.deriveChildKey({
       path: pathNode,
       node: derivedNode,
+      curve: getCurveByName(curve),
     });
   }, Promise.resolve(node as SLIP10Node));
 }
