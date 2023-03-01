@@ -228,6 +228,11 @@ export function privateAdd(
   tweakBytes: Uint8Array,
   curve: Curve,
 ): Uint8Array {
+  assert(
+    isValidBytesKey(tweakBytes, 32),
+    'Invalid tweak: Tweak must be a non-zero 32-byte Uint8Array.',
+  );
+
   const privateKey = bytesToBigInt(privateKeyBytes);
   const tweak = bytesToBigInt(tweakBytes);
 

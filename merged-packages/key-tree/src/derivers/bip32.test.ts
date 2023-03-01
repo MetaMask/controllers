@@ -1,4 +1,4 @@
-import { bytesToHex } from '@metamask/utils';
+import { bytesToHex, hexToBytes } from '@metamask/utils';
 import { CURVE } from '@noble/secp256k1';
 
 import fixtures from '../../test/fixtures';
@@ -13,6 +13,10 @@ import {
 const privateAddFixtures = fixtures['secp256k1-node'].privateAdd;
 
 describe('privateAdd', () => {
+  const PRIVATE_KEY = hexStringToBytes(
+    '51f34c9afc9d5b43e085688db58bb923c012bb07e42a8eaf18a8400aa9a167fb',
+  );
+
   it.each(privateAddFixtures)(
     'adds a tweak to a private key',
     ({ privateKey, tweak, result }) => {
@@ -29,12 +33,9 @@ describe('privateAdd', () => {
   );
 
   it('throws if the tweak is larger than the curve order', () => {
-    const privateKey = hexStringToBytes(
-      '51f34c9afc9d5b43e085688db58bb923c012bb07e42a8eaf18a8400aa9a167fb',
-    );
     const tweak = hexStringToBytes(CURVE.n.toString(16));
 
-    expect(() => privateAdd(privateKey, tweak, secp256k1)).toThrow(
+    expect(() => privateAdd(PRIVATE_KEY, tweak, secp256k1)).toThrow(
       'Invalid tweak: Tweak is larger than the curve order.',
     );
   });
@@ -53,6 +54,23 @@ describe('privateAdd', () => {
     expect(() => privateAdd(privateKey, tweak, secp256k1)).toThrow(
       'Invalid private key or tweak: The resulting private key is invalid.',
     );
+  });
+
+  it.each([
+    '0x7ebc0a630524c2d5ac55a98b8527a8ab2e842cd7b4037baadc463e597183408200',
+    '0xa0a86d020f4c512b8639c38ecb9a3792f1575d3a4ad832e2523fd447c67170',
+    '0x0efd64c97a920e71d90cf54589fb8a93',
+    '0x1',
+  ])('throws if the tweak is not 32 bytes long', (tweak) => {
+    expect(() => privateAdd(PRIVATE_KEY, hexToBytes(tweak), secp256k1)).toThrow(
+      'Invalid tweak: Tweak must be a non-zero 32-byte Uint8Array.',
+    );
+  });
+
+  it('throws if the tweak is zero', () => {
+    expect(() =>
+      privateAdd(PRIVATE_KEY, new Uint8Array(32).fill(0), secp256k1),
+    ).toThrow('Invalid tweak: Tweak must be a non-zero 32-byte Uint8Array.');
   });
 });
 
