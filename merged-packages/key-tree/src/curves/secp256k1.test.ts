@@ -1,7 +1,7 @@
 import { bytesToHex, hexToBytes } from '@metamask/utils';
 
 import fixtures from '../../test/fixtures';
-import { curve, getPublicKey, isValidPrivateKey } from './secp256k1';
+import { curve, getPublicKey, isValidPrivateKey, publicAdd } from './secp256k1';
 
 describe('secp256k1', () => {
   describe('curve', () => {
@@ -32,6 +32,29 @@ describe('secp256k1', () => {
           publicKey,
         );
       }
+    });
+  });
+
+  describe('publicAdd', () => {
+    const PUBLIC_KEY = getPublicKey(
+      hexToBytes(fixtures.bip32[0].keys[0].privateKey),
+    );
+
+    it.each([
+      '0x7ebc0a630524c2d5ac55a98b8527a8ab2e842cd7b4037baadc463e597183408200',
+      '0xa0a86d020f4c512b8639c38ecb9a3792f1575d3a4ad832e2523fd447c67170',
+      '0x0efd64c97a920e71d90cf54589fb8a93',
+      '0x1',
+    ])('throws if the tweak is not 32 bytes long', (tweak) => {
+      expect(() => publicAdd(PUBLIC_KEY, hexToBytes(tweak))).toThrow(
+        'Invalid tweak: Tweak must be a non-zero 32-byte Uint8Array.',
+      );
+    });
+
+    it('throws if the tweak is zero', () => {
+      expect(() => publicAdd(PUBLIC_KEY, new Uint8Array(32).fill(0))).toThrow(
+        'Invalid tweak: Tweak must be a non-zero 32-byte Uint8Array.',
+      );
     });
   });
 });

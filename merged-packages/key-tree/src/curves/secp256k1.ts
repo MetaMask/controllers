@@ -1,9 +1,11 @@
-import { stringToBytes } from '@metamask/utils';
+import { assert, stringToBytes } from '@metamask/utils';
 import {
   getPublicKey as getSecp256k1PublicKey,
   Point,
   utils,
 } from '@noble/secp256k1';
+
+import { isValidBytesKey } from '../utils';
 
 export { CURVE as curve } from '@noble/secp256k1';
 
@@ -31,13 +33,17 @@ export const publicAdd = (
   publicKey: Uint8Array,
   tweak: Uint8Array,
 ): Uint8Array => {
+  assert(
+    isValidBytesKey(tweak, 32),
+    'Invalid tweak: Tweak must be a non-zero 32-byte Uint8Array.',
+  );
+
   const point = Point.fromHex(publicKey);
 
   // The returned child key Ki is point(parse256(IL)) + Kpar.
   // This multiplies the tweak with the base point of the curve (Gx, Gy).
   // https://github.com/bitcoin/bips/blob/274fa400d630ba757bec0c03b35ebe2345197108/bip-0032.mediawiki#public-parent-key--public-child-key
   const newPoint = point.add(Point.fromPrivateKey(tweak));
-
   newPoint.assertValidity();
 
   return newPoint.toRawBytes(false);
