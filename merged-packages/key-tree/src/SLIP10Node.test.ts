@@ -410,6 +410,7 @@ describe('SLIP10Node', () => {
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
+        specification: node.specification,
       });
     });
 
@@ -519,18 +520,35 @@ describe('SLIP10Node', () => {
     });
 
     it('throws an error if no curve is specified', async () => {
-      // @ts-expect-error No curve specified, but required in type
-      await expect(SLIP10Node.fromDerivationPath({})).rejects.toThrow(
-        'Invalid curve: Must specify a curve.',
-      );
+      await expect(
+        // @ts-expect-error No curve specified, but required in type
+        SLIP10Node.fromDerivationPath({
+          specification: 'bip32',
+        }),
+      ).rejects.toThrow('Invalid curve: Must specify a curve.');
     });
 
     it('throws an error for unsupported curves', async () => {
       await expect(
-        // @ts-expect-error Invalid curve name for type
-        SLIP10Node.fromDerivationPath({ curve: 'foo bar' }),
+        SLIP10Node.fromDerivationPath({
+          // @ts-expect-error Invalid curve name for type
+          curve: 'foo bar',
+          specification: 'bip32',
+        }),
       ).rejects.toThrow(
         'Invalid curve: Only the following curves are supported: secp256k1, ed25519.',
+      );
+    });
+
+    it('throws an error for unsupported specifications', async () => {
+      await expect(
+        SLIP10Node.fromDerivationPath({
+          curve: 'secp256k1',
+          // @ts-expect-error Invalid specification name for type
+          specification: 'foo bar',
+        }),
+      ).rejects.toThrow(
+        'Invalid specification: Must be one of bip32, slip10. Received "foo bar".',
       );
     });
   });
@@ -845,6 +863,7 @@ describe('SLIP10Node', () => {
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
+        specification: node.specification,
       });
 
       expect(JSON.parse(JSON.stringify(nodeJson))).toStrictEqual({
@@ -856,6 +875,7 @@ describe('SLIP10Node', () => {
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
+        specification: node.specification,
       });
     });
   });

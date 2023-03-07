@@ -7,15 +7,19 @@ import {
   RootedSLIP10PathTuple,
   SLIP10PathTuple,
 } from './constants';
-import { curves, getCurveByName, SupportedCurve } from './curves';
+import { getCurveByName, SupportedCurve } from './curves';
 import { deriveKeyFromPath } from './derivation';
+import { Specification } from './derivers';
 import { publicKeyToEthAddress } from './derivers/bip32';
 import {
   getBytes,
   getBytesUnsafe,
   getFingerprint,
+  getSpecification,
   isValidInteger,
   validateBIP32Index,
+  validateCurve,
+  validateSpecification,
 } from './utils';
 
 /**
@@ -64,6 +68,21 @@ export type JsonSLIP10Node = {
    * The name of the curve used by the node.
    */
   readonly curve: SupportedCurve;
+
+  /**
+   * The specification used to derive this node. Defaults to `bip32` when the
+   * `secp256k1` curve is used, and `slip10` when the `ed25519` curve is used.
+   *
+   * While SLIP-10 and BIP-32 are largely compatible when the `secp256k1` curve
+   * is used, they differ in the way they handle key derivation errors. The
+   * probability of this happening is extremely low, but it is possible. When
+   * full compatibility with one of these specifications is required, this field
+   * should be set to the appropriate value.
+   *
+   * Note that `ed25519` is not supported by BIP-32, so the `bip32`
+   * specification is not available for this curve.
+   */
+  readonly specification: Specification;
 };
 
 export type SLIP10NodeInterface = JsonSLIP10Node & {
@@ -95,6 +114,7 @@ export type SLIP10NodeConstructorOptions = {
   readonly privateKey?: Uint8Array;
   readonly publicKey: Uint8Array;
   readonly curve: SupportedCurve;
+  readonly specification?: Specification;
 };
 
 export type SLIP10ExtendedKeyOptions = {
@@ -106,11 +126,13 @@ export type SLIP10ExtendedKeyOptions = {
   readonly privateKey?: string | Uint8Array;
   readonly publicKey?: string | Uint8Array;
   readonly curve: SupportedCurve;
+  readonly specification?: Specification;
 };
 
 export type SLIP10DerivationPathOptions = {
   readonly derivationPath: RootedSLIP10PathTuple;
   readonly curve: SupportedCurve;
+  readonly specification?: Specification;
 };
 
 export class SLIP10Node implements SLIP10NodeInterface {
@@ -145,6 +167,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * specified, this parameter is ignored.
    * @param options.chainCode - The chain code for the node.
    * @param options.curve - The curve used by the node.
+   * @param options.specification - The specification used to derive this node.
    */
   static async fromExtendedKey({
     depth,
@@ -155,10 +178,12 @@ export class SLIP10Node implements SLIP10NodeInterface {
     publicKey,
     chainCode,
     curve,
+    specification = getSpecification(curve),
   }: SLIP10ExtendedKeyOptions) {
     const chainCodeBytes = getBytes(chainCode, BYTES_KEY_LENGTH);
 
     validateCurve(curve);
+    validateSpecification(specification);
     validateBIP32Depth(depth);
     validateBIP32Index(index);
     validateRootIndex(index, depth);
@@ -188,6 +213,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
           privateKey: privateKeyBytes,
           publicKey: await curveObject.getPublicKey(privateKeyBytes),
           curve,
+          specification,
         },
         this.#constructorGuard,
       );
@@ -205,6 +231,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
           chainCode: chainCodeBytes,
           publicKey: publicKeyBytes,
           curve,
+          specification,
         },
         this.#constructorGuard,
       );
@@ -236,13 +263,17 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @param options.derivationPath - The rooted HD tree path that will be used
    * to derive the key of this node.
    * @param options.curve - The curve used by the node.
+   * @param options.specification - The specification used to derive the key.
+   * Defaults to `slip10`.
    * @returns A new SLIP-10 node.
    */
   static async fromDerivationPath({
     derivationPath,
     curve,
+    specification = getSpecification(curve),
   }: SLIP10DerivationPathOptions) {
     validateCurve(curve);
+    validateSpecification(specification);
 
     if (!derivationPath) {
       throw new Error('Invalid options: Must provide a derivation path.');
@@ -258,12 +289,15 @@ export class SLIP10Node implements SLIP10NodeInterface {
       path: derivationPath,
       depth: derivationPath.length - 1,
       curve,
+      specification,
     });
   }
 
   static #constructorGuard = Symbol('SLIP10Node.constructor');
 
   public readonly curve: SupportedCurve;
+
+  public readonly specification: Specification;
 
   public readonly depth: number;
 
@@ -290,6 +324,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       privateKey,
       publicKey,
       curve,
+      specification = getSpecification(curve),
     }: SLIP10NodeConstructorOptions,
     constructorGuard?: symbol,
   ) {
@@ -306,6 +341,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     this.privateKeyBytes = privateKey;
     this.publicKeyBytes = publicKey;
     this.curve = curve;
+    this.specification = specification;
 
     Object.freeze(this);
   }
@@ -382,6 +418,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     return await deriveChildNode({
       path,
       node: this,
+      specification: this.specification,
     });
   }
 
@@ -396,28 +433,8 @@ export class SLIP10Node implements SLIP10NodeInterface {
       privateKey: this.privateKey,
       publicKey: this.publicKey,
       chainCode: this.chainCode,
+      specification: this.specification,
     };
-  }
-}
-
-/**
- * Validates the curve name.
- *
- * @param curveName - The name of the curve to validate.
- */
-function validateCurve(
-  curveName: unknown,
-): asserts curveName is SupportedCurve {
-  if (!curveName || typeof curveName !== 'string') {
-    throw new Error('Invalid curve: Must specify a curve.');
-  }
-
-  if (!Object.keys(curves).includes(curveName)) {
-    throw new Error(
-      `Invalid curve: Only the following curves are supported: ${Object.keys(
-        curves,
-      ).join(', ')}.`,
-    );
   }
 }
 
@@ -524,6 +541,7 @@ export function validateRootIndex(index: number, depth: number) {
 type DeriveChildNodeArgs = {
   path: SLIP10PathTuple;
   node: SLIP10Node | BIP44Node | BIP44CoinTypeNode;
+  specification: Specification;
 };
 
 /**
@@ -532,11 +550,14 @@ type DeriveChildNodeArgs = {
  * @param options - The options to use when deriving the child key.
  * @param options.node - The node to derive from.
  * @param options.path - The path to the child node / key.
+ * @param options.specification - The specification to use when deriving the
+ * child key.
  * @returns The derived key and depth.
  */
 export async function deriveChildNode({
   path,
   node,
+  specification,
 }: DeriveChildNodeArgs): Promise<SLIP10Node> {
   if (path.length === 0) {
     throw new Error(
@@ -553,5 +574,6 @@ export async function deriveChildNode({
     path,
     node,
     depth: newDepth,
+    specification,
   });
 }

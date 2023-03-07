@@ -1,5 +1,6 @@
 import {
   assert,
+  assertExhaustive,
   bytesToBigInt,
   concatBytes,
   hexToBytes,
@@ -8,11 +9,16 @@ import { hmac } from '@noble/hashes/hmac';
 import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
 import { sha512 } from '@noble/hashes/sha512';
 
-import { DeriveChildKeyArgs, DerivedKeys } from '.';
+import { DeriveChildKeyArgs, DerivedKeys, Specification } from '.';
 import { BIP_32_HARDENED_OFFSET, BYTES_KEY_LENGTH } from '../constants';
 import { Curve, mod, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
-import { isValidBytesKey } from '../utils';
+import {
+  isValidBytesKey,
+  numberToUint32,
+  validateBIP32Index,
+  validateSpecification,
+} from '../utils';
 
 /**
  * Converts a BIP-32 private key to an Ethereum address.
@@ -63,15 +69,22 @@ export function publicKeyToEthAddress(key: Uint8Array) {
  * @param options.path - The derivation path part to derive.
  * @param options.node - The node to derive from.
  * @param options.curve - The curve to use for derivation.
+ * @param options.specification - The specification to use for derivation.
  * @returns A tuple containing the derived private key, public key and chain
  * code.
  */
 export async function deriveChildKey({
   path,
   node,
-  curve = secp256k1,
+  curve,
+  specification,
 }: DeriveChildKeyArgs): Promise<SLIP10Node> {
   assert(typeof path === 'string', 'Invalid path: Must be a string.');
+  validateSpecification(specification);
+  assert(
+    curve.name !== 'ed25519' || specification === 'slip10',
+    'Invalid specification: The ed25519 curve only supports "slip10".',
+  );
 
   const isHardened = path.includes(`'`);
   if (!isHardened && !curve.deriveUnhardenedKeys) {
@@ -112,21 +125,22 @@ export async function deriveChildKey({
       curve,
     });
 
-    const { privateKey, chainCode } = await generateKey({
-      privateKey: node.privateKeyBytes,
+    const entropy = generateEntropy({
       chainCode: node.chainCodeBytes,
-      secretExtension,
-      curve,
+      extension: secretExtension,
     });
 
-    return SLIP10Node.fromExtendedKey({
-      privateKey,
-      chainCode,
-      depth: node.depth + 1,
+    return derivePrivateChildKey({
+      entropy,
+      privateKey: node.privateKeyBytes,
+      chainCode: node.chainCodeBytes,
+      depth: node.depth,
       masterFingerprint: node.masterFingerprint,
       parentFingerprint: node.fingerprint,
-      index: childIndex + (isHardened ? BIP_32_HARDENED_OFFSET : 0),
-      curve: curve.name,
+      childIndex,
+      isHardened,
+      curve,
+      specification,
     });
   }
 
@@ -135,22 +149,289 @@ export async function deriveChildKey({
     childIndex,
   });
 
-  const { publicKey, chainCode } = generatePublicKey({
-    publicKey: node.compressedPublicKeyBytes,
+  const entropy = generateEntropy({
     chainCode: node.chainCodeBytes,
-    publicExtension,
-    curve,
+    extension: publicExtension,
   });
 
-  return SLIP10Node.fromExtendedKey({
-    publicKey,
-    chainCode,
-    depth: node.depth + 1,
+  return derivePublicChildKey({
+    entropy,
+    publicKey: node.compressedPublicKeyBytes,
+    chainCode: node.chainCodeBytes,
+    depth: node.depth,
     masterFingerprint: node.masterFingerprint,
     parentFingerprint: node.fingerprint,
-    index: childIndex,
-    curve: curve.name,
+    childIndex,
+    curve,
+    specification,
   });
+}
+
+type DerivePrivateChildKeyArgs = {
+  entropy: Uint8Array;
+  privateKey: Uint8Array;
+  chainCode: Uint8Array;
+  depth: number;
+  masterFingerprint?: number;
+  parentFingerprint: number;
+  childIndex: number;
+  isHardened: boolean;
+  curve: Curve;
+  specification: Specification;
+};
+
+/**
+ * Derive a BIP-32 private child key with a given path from a parent key.
+ *
+ * @param args - The arguments for deriving a private child key.
+ * @param args.entropy - The entropy to use for derivation.
+ * @param args.privateKey - The parent private key to use for derivation.
+ * @param args.chainCode - The parent chain code to use for derivation.
+ * @param args.depth - The depth of the parent node.
+ * @param args.masterFingerprint - The fingerprint of the master node.
+ * @param args.parentFingerprint - The fingerprint of the parent node.
+ * @param args.childIndex - The child index to derive.
+ * @param args.isHardened - Whether the child index is hardened.
+ * @param args.curve - The curve to use for derivation.
+ * @param args.specification - The specification to use for derivation.
+ * @returns The derived {@link SLIP10Node}.
+ */
+async function derivePrivateChildKey({
+  entropy,
+  privateKey,
+  chainCode,
+  depth,
+  masterFingerprint,
+  parentFingerprint,
+  childIndex,
+  isHardened,
+  curve,
+  specification,
+}: DerivePrivateChildKeyArgs): Promise<SLIP10Node> {
+  const actualChildIndex =
+    childIndex + (isHardened ? BIP_32_HARDENED_OFFSET : 0);
+
+  try {
+    const { privateKey: childPrivateKey, chainCode: childChainCode } =
+      await generateKey({
+        privateKey,
+        entropy,
+        curve,
+      });
+
+    return await SLIP10Node.fromExtendedKey({
+      privateKey: childPrivateKey,
+      chainCode: childChainCode,
+      depth: depth + 1,
+      masterFingerprint,
+      parentFingerprint,
+      index: actualChildIndex,
+      curve: curve.name,
+      specification,
+    });
+  } catch (error) {
+    // `ed25519` keys are always valid, so this error should never be thrown.
+    if (curve.name === 'ed25519') {
+      throw error;
+    }
+
+    // In the case of an invalid key being generated, BIP-32 and SLIP-10 specify
+    // a different method for handling it. BIP-32 specifies that the child index
+    // should be incremented by one and the derivation should be attempted
+    // again. SLIP-10 specifies that the generated chain code should be used
+    // instead of the parent chain code.
+
+    switch (specification) {
+      case 'bip32': {
+        validateBIP32Index(childIndex + 1);
+
+        const secretExtension = await deriveSecretExtension({
+          privateKey,
+          childIndex: childIndex + 1,
+          isHardened,
+          curve,
+        });
+
+        const newEntropy = generateEntropy({
+          chainCode,
+          extension: secretExtension,
+        });
+
+        // As per BIP-32, if the resulting key is invalid, the key is generated
+        // from the next child index instead.
+        return await derivePrivateChildKey({
+          entropy: newEntropy,
+          privateKey,
+          chainCode,
+          depth,
+          masterFingerprint,
+          parentFingerprint,
+          childIndex: childIndex + 1,
+          isHardened,
+          curve,
+          specification,
+        });
+      }
+
+      case 'slip10': {
+        // As per SLIP-10, if the resulting key is invalid, the new entropy is
+        // generated as follows:
+        // Key material (32 bytes), child chain code (32 bytes) =
+        //   HMAC-SHA512(parent chain code, 0x01 || chain code from invalid key || index).
+        const newEntropy = generateEntropy({
+          chainCode,
+          extension: concatBytes([
+            0x01,
+            entropy.slice(32, 64),
+            numberToUint32(actualChildIndex),
+          ]),
+        });
+
+        return await derivePrivateChildKey({
+          entropy: newEntropy,
+          privateKey,
+          chainCode,
+          depth,
+          masterFingerprint,
+          parentFingerprint,
+          childIndex,
+          isHardened,
+          curve,
+          specification,
+        });
+      }
+
+      /* c8 ignore next 2 */
+      default:
+        return assertExhaustive(specification);
+    }
+  }
+}
+
+type DerivePublicChildKeyArgs = {
+  entropy: Uint8Array;
+  publicKey: Uint8Array;
+  chainCode: Uint8Array;
+  depth: number;
+  masterFingerprint?: number;
+  parentFingerprint: number;
+  childIndex: number;
+  curve: Curve;
+  specification: Specification;
+};
+
+/**
+ * Derive a BIP-32 public child key with a given path from a parent key.
+ *
+ * @param args - The arguments for deriving a public child key.
+ * @param args.entropy - The entropy to use for derivation.
+ * @param args.publicKey - The parent public key to use for derivation.
+ * @param args.chainCode - The parent chain code to use for derivation.
+ * @param args.depth - The depth of the parent node.
+ * @param args.masterFingerprint - The fingerprint of the master node.
+ * @param args.parentFingerprint - The fingerprint of the parent node.
+ * @param args.childIndex - The child index to derive.
+ * @param args.curve - The curve to use for derivation.
+ * @param args.specification - The specification to use for derivation.
+ * @returns The derived {@link SLIP10Node}.
+ */
+async function derivePublicChildKey({
+  entropy,
+  publicKey,
+  chainCode,
+  depth,
+  masterFingerprint,
+  parentFingerprint,
+  childIndex,
+  curve,
+  specification,
+}: DerivePublicChildKeyArgs): Promise<SLIP10Node> {
+  try {
+    const { publicKey: childPublicKey, chainCode: childChainCode } =
+      generatePublicKey({
+        publicKey,
+        entropy,
+        curve,
+      });
+
+    return await SLIP10Node.fromExtendedKey({
+      publicKey: childPublicKey,
+      chainCode: childChainCode,
+      depth: depth + 1,
+      masterFingerprint,
+      parentFingerprint,
+      index: childIndex,
+      curve: curve.name,
+      specification,
+    });
+  } catch (error) {
+    // In the case of an invalid key being generated, BIP-32 and SLIP-10 specify
+    // a different method for handling it. BIP-32 specifies that the child index
+    // should be incremented by one and the derivation should be attempted
+    // again. SLIP-10 specifies that the generated chain code should be used
+    // instead of the parent chain code.
+
+    switch (specification) {
+      case 'bip32': {
+        validateBIP32Index(childIndex + 1);
+
+        const publicExtension = derivePublicExtension({
+          parentPublicKey: publicKey,
+          childIndex: childIndex + 1,
+        });
+
+        const newEntropy = generateEntropy({
+          chainCode,
+          extension: publicExtension,
+        });
+
+        // As per BIP-32, if the resulting key is invalid, the key is generated
+        // from the next child index instead.
+        return await derivePublicChildKey({
+          entropy: newEntropy,
+          publicKey,
+          chainCode,
+          depth,
+          masterFingerprint,
+          parentFingerprint,
+          childIndex: childIndex + 1,
+          curve,
+          specification,
+        });
+      }
+
+      case 'slip10': {
+        // As per SLIP-10, if the resulting key is invalid, the new entropy is
+        // generated as follows:
+        // Key material (32 bytes), child chain code (32 bytes) =
+        //   HMAC-SHA512(parent chain code, 0x01 || chain code from invalid key || index).
+        const newEntropy = generateEntropy({
+          chainCode,
+          extension: concatBytes([
+            0x01,
+            entropy.slice(32, 64),
+            numberToUint32(childIndex),
+          ]),
+        });
+
+        return await derivePublicChildKey({
+          entropy: newEntropy,
+          publicKey,
+          chainCode,
+          depth,
+          masterFingerprint,
+          parentFingerprint,
+          childIndex,
+          curve,
+          specification,
+        });
+      }
+
+      /* c8 ignore next 2 */
+      default:
+        return assertExhaustive(specification);
+    }
+  }
 }
 
 type DeriveSecretExtensionArgs = {
@@ -178,11 +459,11 @@ async function deriveSecretExtension({
 }: DeriveSecretExtensionArgs) {
   if (isHardened) {
     // Hardened child
-    const indexBytes = new Uint8Array(4);
-    const view = new DataView(indexBytes.buffer);
-
-    view.setUint32(0, childIndex + BIP_32_HARDENED_OFFSET, false);
-    return concatBytes([new Uint8Array([0]), privateKey, indexBytes]);
+    return concatBytes([
+      new Uint8Array([0]),
+      privateKey,
+      numberToUint32(childIndex + BIP_32_HARDENED_OFFSET),
+    ]);
   }
 
   // Normal child
@@ -252,10 +533,27 @@ export function privateAdd(
   return bytes;
 }
 
+type GenerateEntropyArgs = {
+  chainCode: Uint8Array;
+  extension: Uint8Array;
+};
+
+/**
+ * Generate 64 bytes of (deterministic) entropy from a chain code and secret
+ * extension.
+ *
+ * @param args - The arguments for generating entropy.
+ * @param args.chainCode - The parent chain code bytes.
+ * @param args.extension - The extension bytes.
+ * @returns The generated entropy bytes.
+ */
+function generateEntropy({ chainCode, extension }: GenerateEntropyArgs) {
+  return hmac(sha512, chainCode, extension);
+}
+
 type GenerateKeyArgs = {
   privateKey: Uint8Array;
-  chainCode: Uint8Array;
-  secretExtension: Uint8Array;
+  entropy: Uint8Array;
   curve: Curve;
 };
 
@@ -264,18 +562,15 @@ type GenerateKeyArgs = {
  *
  * @param options - The options for deriving a key.
  * @param options.privateKey - The parent private key bytes.
- * @param options.chainCode - The parent chain code bytes.
- * @param options.secretExtension - The secret extension bytes.
+ * @param options.entropy - The entropy bytes.
  * @param options.curve - The curve to use for derivation.
  * @returns The derived key.
  */
 async function generateKey({
   privateKey,
-  chainCode,
-  secretExtension,
+  entropy,
   curve,
 }: GenerateKeyArgs): Promise<DerivedKeys & { privateKey: Uint8Array }> {
-  const entropy = hmac(sha512, chainCode, secretExtension);
   const keyMaterial = entropy.slice(0, 32);
   const childChainCode = entropy.slice(32);
 
@@ -294,8 +589,7 @@ async function generateKey({
 
 type GeneratePublicKeyArgs = {
   publicKey: Uint8Array;
-  chainCode: Uint8Array;
-  publicExtension: Uint8Array;
+  entropy: Uint8Array;
   curve: Curve;
 };
 
@@ -304,18 +598,15 @@ type GeneratePublicKeyArgs = {
  *
  * @param options - The options for deriving a public key.
  * @param options.publicKey - The parent public key bytes.
- * @param options.chainCode - The parent chain code bytes.
- * @param options.publicExtension - The public extension bytes.
+ * @param options.entropy - The entropy bytes.
  * @param options.curve - The curve to use for derivation.
  * @returns The derived public key.
  */
 function generatePublicKey({
   publicKey,
-  chainCode,
-  publicExtension,
+  entropy,
   curve,
 }: GeneratePublicKeyArgs): DerivedKeys {
-  const entropy = hmac(sha512, chainCode, publicExtension);
   const keyMaterial = entropy.slice(0, 32);
   const childChainCode = entropy.slice(32);
 

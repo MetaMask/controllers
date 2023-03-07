@@ -3,6 +3,8 @@ export const BYTES_KEY_LENGTH = 32;
 export const MIN_BIP_44_DEPTH = 0;
 export const MAX_BIP_44_DEPTH = 5;
 
+export const MAX_BIP_32_INDEX = 0xffffffff;
+
 export type MinBIP44Depth = typeof MIN_BIP_44_DEPTH;
 export type MaxBIP44Depth = typeof MAX_BIP_44_DEPTH;
 export type BIP44Depth = MinBIP44Depth | 1 | 2 | 3 | 4 | MaxBIP44Depth;

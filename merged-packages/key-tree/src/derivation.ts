@@ -9,7 +9,7 @@ import {
   SLIP10Path,
 } from './constants';
 import { getCurveByName, SupportedCurve } from './curves';
-import { Deriver, derivers } from './derivers';
+import { Deriver, derivers, Specification } from './derivers';
 import { SLIP10Node } from './SLIP10Node';
 
 /**
@@ -27,6 +27,7 @@ import { SLIP10Node } from './SLIP10Node';
 type BaseDeriveKeyFromPathArgs = {
   path: SLIP10Path;
   depth?: number;
+  specification?: Specification;
 };
 
 type DeriveKeyFromPathNodeArgs = BaseDeriveKeyFromPathArgs & {
@@ -109,6 +110,7 @@ export async function deriveKeyFromPath(
         path: pathPart,
         node: derivedNode,
         curve: getCurveByName(curve),
+        specification: args.specification,
       });
     }
 
@@ -119,6 +121,7 @@ export async function deriveKeyFromPath(
       path: pathNode,
       node: derivedNode,
       curve: getCurveByName(curve),
+      specification: args.specification,
     });
   }, Promise.resolve(node as SLIP10Node));
 }
