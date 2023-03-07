@@ -1,4 +1,4 @@
-import { bytesToHex } from '@metamask/utils';
+import { assert, bytesToHex } from '@metamask/utils';
 
 import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
 import { BIP44Node } from './BIP44Node';
@@ -12,6 +12,7 @@ import { deriveKeyFromPath } from './derivation';
 import { publicKeyToEthAddress } from './derivers/bip32';
 import {
   getBytes,
+  getBytesUnsafe,
   getFingerprint,
   isValidInteger,
   validateBIP32Index,
@@ -162,8 +163,14 @@ export class SLIP10Node implements SLIP10NodeInterface {
     validateBIP32Index(index);
     validateParentFingerprint(parentFingerprint);
 
+    const curveObject = getCurveByName(curve);
+
     if (privateKey) {
-      const privateKeyBytes = getBytes(privateKey, BYTES_KEY_LENGTH);
+      const privateKeyBytes = getBytesUnsafe(privateKey, BYTES_KEY_LENGTH);
+      assert(
+        curveObject.isValidPrivateKey(privateKeyBytes),
+        `Invalid private key: Value is not a valid ${curve} private key.`,
+      );
 
       return new SLIP10Node({
         depth,
@@ -172,16 +179,13 @@ export class SLIP10Node implements SLIP10NodeInterface {
         index,
         chainCode: chainCodeBytes,
         privateKey: privateKeyBytes,
-        publicKey: await getCurveByName(curve).getPublicKey(privateKeyBytes),
+        publicKey: await curveObject.getPublicKey(privateKeyBytes),
         curve,
       });
     }
 
     if (publicKey) {
-      const publicKeyBytes = getBytes(
-        publicKey,
-        getCurveByName(curve).publicKeyLength,
-      );
+      const publicKeyBytes = getBytes(publicKey, curveObject.publicKeyLength);
 
       return new SLIP10Node({
         depth,

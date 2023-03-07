@@ -276,6 +276,35 @@ export function getBytes(value: unknown, length: number): Uint8Array {
 }
 
 /**
+ * Get a `Uint8Array` from a hexadecimal string or `Uint8Array`. Validates that
+ * the length of the `Uint8Array` matches the specified length.
+ *
+ * This function is "unsafe," in the sense that it does not validate that the
+ * `Uint8Array` is not empty (i.e., all bytes are zero).
+ *
+ * @param value - The value to convert to a `Uint8Array`.
+ * @param length - The length to validate the `Uint8Array` against.
+ * @returns The `Uint8Array` corresponding to the hexadecimal string.
+ */
+export function getBytesUnsafe(value: unknown, length: number): Uint8Array {
+  if (value instanceof Uint8Array) {
+    assert(
+      value.length === length,
+      `Invalid value: Must be a ${length}-byte byte array.`,
+    );
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return getBytesUnsafe(hexToBytes(value), length);
+  }
+
+  throw new Error(
+    `Invalid value: Expected an instance of Uint8Array or hexadecimal string.`,
+  );
+}
+
+/**
  * Validate that the specified `Uint8Array` is not empty and has the specified
  * length.
  *

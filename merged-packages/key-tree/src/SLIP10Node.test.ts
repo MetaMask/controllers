@@ -70,6 +70,21 @@ describe('SLIP10Node', () => {
       expect(node.publicKeyBytes).toHaveLength(33);
     });
 
+    it('initializes a new ed25519 node from a zero private key', async () => {
+      const node = await SLIP10Node.fromExtendedKey({
+        privateKey: new Uint8Array(32).fill(0),
+        chainCode: new Uint8Array(32).fill(1),
+        depth: 0,
+        parentFingerprint: 0,
+        index: 0,
+        curve: 'ed25519',
+      });
+
+      expect(node.depth).toBe(0);
+      expect(node.privateKeyBytes).toStrictEqual(new Uint8Array(32).fill(0));
+      expect(node.publicKeyBytes).toHaveLength(33);
+    });
+
     it('initializes a new node from a public key', async () => {
       const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
         path: fixtures.local.mnemonic,
@@ -261,6 +276,21 @@ describe('SLIP10Node', () => {
         }),
       ).rejects.toThrow(
         'Invalid value: Expected an instance of Uint8Array or hexadecimal string.',
+      );
+    });
+
+    it('throws if the private key is zero for secp256k1', async () => {
+      await expect(
+        SLIP10Node.fromExtendedKey({
+          privateKey: new Uint8Array(32).fill(0),
+          chainCode: new Uint8Array(32).fill(1),
+          depth: 0,
+          parentFingerprint: 0,
+          index: 0,
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow(
+        'Invalid private key: Value is not a valid secp256k1 private key.',
       );
     });
   });

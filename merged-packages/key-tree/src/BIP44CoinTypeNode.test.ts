@@ -113,9 +113,7 @@ describe('BIP44CoinTypeNode', () => {
       for (const input of inputs) {
         await expect(
           BIP44CoinTypeNode.fromJSON(input as any, arbitraryCoinType),
-        ).rejects.toThrow(
-          'Invalid value: Must be a non-zero 32-byte byte array.',
-        );
+        ).rejects.toThrow('Invalid value: Must be a 32-byte byte array.');
       }
 
       await expect(
