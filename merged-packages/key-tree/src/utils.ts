@@ -330,7 +330,7 @@ export const decodeBase58check = (value: string): Uint8Array => {
     return base58Check.decode(value);
   } catch {
     throw new Error(
-      `Invalid value: Value is not base58-encoded, or the checksum is invalid.`,
+      `Invalid extended key: Value is not base58-encoded, or the checksum is invalid.`,
     );
   }
 };

@@ -12,6 +12,31 @@ const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
 
 describe('SLIP10Node', () => {
+  describe('constructor', () => {
+    it('throws an error when the constructor guard is not provided', async () => {
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+        curve: secp256k1,
+      });
+
+      expect(
+        () =>
+          // @ts-expect-error - Constructor is private.
+          new SLIP10Node({
+            privateKey,
+            chainCode,
+            depth: 0,
+            masterFingerprint: 0,
+            parentFingerprint: 0,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+      ).toThrow(
+        'SLIP10Node can only be constructed using `SLIP10Node.fromJSON`, `SLIP10Node.fromExtendedKey`, or `SLIP10Node.fromDerivationPath`.',
+      );
+    });
+  });
+
   describe('fromExtendedKey', () => {
     it('initializes a new node from a private key', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
@@ -298,6 +323,67 @@ describe('SLIP10Node', () => {
         }),
       ).rejects.toThrow(
         'Invalid private key: Value is not a valid secp256k1 private key.',
+      );
+    });
+
+    it('throws if the depth is zero and the parent fingerprint is not zero', async () => {
+      await expect(
+        SLIP10Node.fromExtendedKey({
+          privateKey: new Uint8Array(32).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
+          depth: 0,
+          parentFingerprint: 1,
+          index: 0,
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow(
+        'Invalid parent fingerprint: The fingerprint of the root node must be 0. Received: "1".',
+      );
+    });
+
+    it('throws if the depth is not zero and the parent fingerprint is zero', async () => {
+      await expect(
+        SLIP10Node.fromExtendedKey({
+          privateKey: new Uint8Array(32).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
+          depth: 1,
+          parentFingerprint: 0,
+          index: 0,
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow(
+        'Invalid parent fingerprint: The fingerprint of a child node must not be 0. Received: "0".',
+      );
+    });
+
+    it('throws if the depth is >= 2 and the parent fingerprint is equal to the master fingerprint', async () => {
+      await expect(
+        SLIP10Node.fromExtendedKey({
+          privateKey: new Uint8Array(32).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
+          depth: 2,
+          parentFingerprint: 1,
+          masterFingerprint: 1,
+          index: 0,
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow(
+        'Invalid parent fingerprint: The fingerprint of a child node cannot be equal to the master fingerprint. Received: "1".',
+      );
+    });
+
+    it('throws if the depth is zero and the index is not zero', async () => {
+      await expect(
+        SLIP10Node.fromExtendedKey({
+          privateKey: new Uint8Array(32).fill(1),
+          chainCode: new Uint8Array(32).fill(1),
+          depth: 0,
+          parentFingerprint: 0,
+          index: 1,
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow(
+        'Invalid index: The index of the root node must be 0. Received: "1".',
       );
     });
   });

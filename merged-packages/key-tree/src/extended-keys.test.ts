@@ -51,7 +51,7 @@ describe('decodeExtendedKey', () => {
       'xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMP';
 
     expect(() => decodeExtendedKey(extendedKey)).toThrow(
-      'Invalid value: Value is not base58-encoded, or the checksum is invalid.',
+      'Invalid extended key: Value is not base58-encoded, or the checksum is invalid.',
     );
   });
 

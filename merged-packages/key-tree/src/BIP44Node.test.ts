@@ -27,7 +27,7 @@ describe('BIP44Node', () => {
         privateKey,
         chainCode,
         depth: 2,
-        parentFingerprint: 0,
+        parentFingerprint: 1,
         index: 0,
       });
 
@@ -54,7 +54,7 @@ describe('BIP44Node', () => {
         privateKey,
         chainCode,
         depth: 2,
-        parentFingerprint: 0,
+        parentFingerprint: 1,
         index: 0,
       });
 
@@ -101,6 +101,15 @@ describe('BIP44Node', () => {
         `Invalid HD tree path depth: The depth must be a positive integer N such that 0 <= N <= 5. Received: "6"`,
       );
     });
+
+    it.each(fixtures.bip32InvalidExtendedKeys)(
+      'throws if the extended key is invalid',
+      async (extendedKey) => {
+        await expect(BIP44Node.fromExtendedKey(extendedKey)).rejects.toThrow(
+          /Invalid extended key: .*\./u,
+        );
+      },
+    );
   });
 
   describe('fromDerivationPath', () => {

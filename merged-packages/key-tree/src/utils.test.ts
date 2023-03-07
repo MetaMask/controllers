@@ -374,7 +374,7 @@ describe('decodeBase58Check', () => {
 
   it('throws if the checksum is invalid', () => {
     expect(() => decodeBase58check('SQHFQMRT97ajZff')).toThrow(
-      'Invalid value: Value is not base58-encoded, or the checksum is invalid.',
+      'Invalid extended key: Value is not base58-encoded, or the checksum is invalid.',
     );
   });
 });

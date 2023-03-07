@@ -80,7 +80,7 @@ describe('BIP44CoinTypeNode', () => {
       const options = {
         depth: 2,
         index: 0,
-        parentFingerprint: 0,
+        parentFingerprint: 1,
       };
 
       const inputs = [
