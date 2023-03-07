@@ -2,6 +2,7 @@ import { bytesToHex } from '@metamask/utils';
 
 import fixtures from '../test/fixtures';
 import { HDPathTuple } from './constants';
+import { secp256k1 } from './curves';
 import { deriveKeyFromPath, validatePathSegment } from './derivation';
 import { derivers } from './derivers';
 import { privateKeyToEthAddress } from './derivers/bip32';
@@ -223,31 +224,35 @@ describe('derivation', () => {
       let node: SLIP10Node;
 
       /* eslint-disable require-atomic-updates */
-      node = await bip39Derive({ path: mnemonic });
+      node = await bip39Derive({ path: mnemonic, curve: secp256k1 });
       node = await bip32Derive({
         path: `44'`,
         node,
+        curve: secp256k1,
       });
 
       node = await bip32Derive({
         path: `60'`,
         node,
+        curve: secp256k1,
       });
 
       node = await bip32Derive({
         path: `0'`,
         node,
+        curve: secp256k1,
       });
 
       node = await bip32Derive({
         path: `0`,
         node,
+        curve: secp256k1,
       });
       /* eslint-enable require-atomic-updates */
 
       const keys = await Promise.all(
         expectedAddresses.map(async (_, index) => {
-          return bip32Derive({ path: `${index}`, node });
+          return bip32Derive({ path: `${index}`, node, curve: secp256k1 });
         }),
       );
 
@@ -258,7 +263,7 @@ describe('derivation', () => {
     });
 
     it('throws for invalid inputs', async () => {
-      const node = await bip39Derive({ path: mnemonic });
+      const node = await bip39Derive({ path: mnemonic, curve: secp256k1 });
       const inputs = [
         String(-1),
         String(1.1),
@@ -274,6 +279,7 @@ describe('derivation', () => {
           bip32Derive({
             path: input,
             node,
+            curve: secp256k1,
           }),
         ).rejects.toThrow(
           'Invalid BIP-32 index: The index must be a non-negative decimal integer less than 2147483648.',
@@ -285,6 +291,7 @@ describe('derivation', () => {
       await expect(
         bip32Derive({
           path: '0',
+          curve: secp256k1,
         }),
       ).rejects.toThrow(
         'Invalid parameters: Must specify a node to derive from.',
@@ -292,13 +299,14 @@ describe('derivation', () => {
     });
 
     it('throws when trying to derive from a public key node', async () => {
-      const node = await bip39Derive({ path: mnemonic });
+      const node = await bip39Derive({ path: mnemonic, curve: secp256k1 });
       const publicNode = node.neuter();
 
       await expect(
         bip32Derive({
           path: `0'`,
           node: publicNode,
+          curve: secp256k1,
         }),
       ).rejects.toThrow(
         'Invalid parameters: Cannot derive hardened child keys without a private key.',

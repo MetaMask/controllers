@@ -4,7 +4,7 @@ import {
   BIP44PurposeNodeToken,
   HDPathTuple,
 } from '../src';
-import { ed25519 } from '../src/curves';
+import { ed25519, secp256k1 } from '../src/curves';
 import { deriveKeyFromPath } from '../src/derivation';
 import { createBip39KeyFromSeed } from '../src/derivers/bip39';
 import {
@@ -145,7 +145,7 @@ describe('reference implementation tests', () => {
 
     describe('BIP44Node', () => {
       it('derives the same keys as the reference implementation', async () => {
-        const parentNode = await createBip39KeyFromSeed(seed);
+        const parentNode = await createBip39KeyFromSeed(seed, secp256k1);
         const node = await parentNode.derive(path.ours.tuple);
 
         expect(node.privateKey).toStrictEqual(privateKey);
@@ -161,7 +161,7 @@ describe('reference implementation tests', () => {
       });
 
       it('derives the same keys as the reference implementation using public key derivation', async () => {
-        const parentNode = await createBip39KeyFromSeed(seed);
+        const parentNode = await createBip39KeyFromSeed(seed, secp256k1);
         const node = await parentNode.derive(path.ours.tuple);
 
         expect(node.privateKey).toStrictEqual(privateKey);
@@ -180,7 +180,7 @@ describe('reference implementation tests', () => {
 
     describe('deriveKeyFromPath', () => {
       it('derives the same keys as the reference implementation', async () => {
-        const node = await createBip39KeyFromSeed(seed);
+        const node = await createBip39KeyFromSeed(seed, secp256k1);
         const childNode = await deriveKeyFromPath({
           path: path.ours.tuple,
           node,
@@ -210,7 +210,7 @@ describe('reference implementation tests', () => {
       it('derives the test vector keys', async () => {
         for (const vector of vectors) {
           const seed = hexStringToBytes(vector.hexSeed);
-          const node = await createBip39KeyFromSeed(seed);
+          const node = await createBip39KeyFromSeed(seed, secp256k1);
 
           for (const keyObj of vector.keys) {
             const { path, privateKey } = keyObj;

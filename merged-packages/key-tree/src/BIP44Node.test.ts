@@ -1,6 +1,6 @@
 import { bytesToHex } from '@metamask/utils';
 
-import { BIP44Node, BIP44PurposeNodeToken } from '.';
+import { BIP44Node, BIP44PurposeNodeToken, secp256k1 } from '.';
 import fixtures from '../test/fixtures';
 import { compressPublicKey } from './curves/secp256k1';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
@@ -19,6 +19,7 @@ describe('BIP44Node', () => {
     it('initializes a new node from a private key', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       // Ethereum coin type node
@@ -45,6 +46,7 @@ describe('BIP44Node', () => {
     it('initializes a new node from JSON', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       // Ethereum coin type node
@@ -84,6 +86,7 @@ describe('BIP44Node', () => {
     it('throws if the depth is invalid', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       await expect(
@@ -405,6 +408,7 @@ describe('BIP44Node', () => {
       async ({ index, publicKey }) => {
         const { privateKey, chainCode } = await createBip39KeyFromSeed(
           hexStringToBytes(hexSeed),
+          secp256k1,
         );
 
         const node = await BIP44Node.fromExtendedKey({
@@ -434,6 +438,7 @@ describe('BIP44Node', () => {
       async ({ index, address }) => {
         const { privateKey, chainCode } = await createBip39KeyFromSeed(
           hexStringToBytes(hexSeed),
+          secp256k1,
         );
 
         const node = await BIP44Node.fromExtendedKey({

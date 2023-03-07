@@ -16,6 +16,7 @@ describe('SLIP10Node', () => {
     it('initializes a new node from a private key', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
@@ -35,6 +36,7 @@ describe('SLIP10Node', () => {
     it('initializes a new node from a hexadecimal private key and chain code', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
@@ -54,6 +56,7 @@ describe('SLIP10Node', () => {
     it('initializes a new ed25519 node from a private key', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: ed25519,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
@@ -88,6 +91,7 @@ describe('SLIP10Node', () => {
     it('initializes a new node from a public key', async () => {
       const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
@@ -127,6 +131,7 @@ describe('SLIP10Node', () => {
     it('initializes a new node from a hexadecimal public key and chain code', async () => {
       const { publicKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
@@ -146,6 +151,7 @@ describe('SLIP10Node', () => {
     it('initializes a new node from JSON', async () => {
       const node = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       expect(await SLIP10Node.fromJSON(node.toJSON())).toStrictEqual(node);
@@ -154,6 +160,7 @@ describe('SLIP10Node', () => {
     it('initializes a new node from JSON with a public key', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
+        curve: secp256k1,
       });
 
       const node = await SLIP10Node.fromExtendedKey({
