@@ -2,6 +2,8 @@
 
 An interface over [SLIP-10] and [BIP-44] key derivation paths.
 
+This library was audited by Cure53 in February 2023. The audit report can be found [here (PDF)](./audits/Cure53-2023-02.pdf).
+
 ## Installation
 
 `yarn add @metamask/key-tree`
