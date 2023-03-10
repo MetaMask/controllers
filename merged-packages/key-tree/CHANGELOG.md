@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.0.0]
+### Added
+- BREAKING: Add SLIP-10 (`slip10:`) path type ([#124](https://github.com/MetaMask/key-tree/pull/124))
+  - `bip32:` can no longer be used to derive ed25519 keys
+
+### Changed
+- Handle errors when resulting public or private key is invalid ([#120](https://github.com/MetaMask/key-tree/pull/120))
+  - Rather than throwing an error, a new key will be derived instead, as per the SLIP-10 or BIP-32 specification
+- Improve extended key validation ([#121](https://github.com/MetaMask/key-tree/pull/121))
+- Validate that master private key and seed are within bounds ([#118](https://github.com/MetaMask/key-tree/pull/118))
+- Allow zero private key for `ed25519` ([#122](https://github.com/MetaMask/key-tree/pull/122))
+  - Previously a zero private key `0x000..000` would be rejected when using ed25519, but all private keys are valid for ed25519
+
 ## [6.2.1]
 ### Fixed
 - Add missing curve parameter ([#110](https://github.com/MetaMask/key-tree/pull/110))
@@ -113,7 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v6.2.1...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v7.0.0...HEAD
+[7.0.0]: https://github.com/MetaMask/key-tree/compare/v6.2.1...v7.0.0
 [6.2.1]: https://github.com/MetaMask/key-tree/compare/v6.2.0...v6.2.1
 [6.2.0]: https://github.com/MetaMask/key-tree/compare/v6.1.0...v6.2.0
 [6.1.0]: https://github.com/MetaMask/key-tree/compare/v6.0.0...v6.1.0
