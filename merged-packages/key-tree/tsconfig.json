@@ -7,7 +7,8 @@
     "moduleResolution": "Node",
     "sourceMap": true,
     "strict": true,
-    "target": "ES2017"
+    "target": "ES2017",
+    "resolveJsonModule": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "scripts"]
 }

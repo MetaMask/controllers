@@ -16,6 +16,7 @@
     "build": "tsc --project tsconfig.build.json",
     "build:clean": "rimraf dist && yarn build",
     "build:docs": "typedoc",
+    "generate-vectors": "ts-node scripts/generate-vectors.ts > ./test/vectors/derivation.json",
     "lint": "yarn lint:eslint && yarn lint:misc --check",
     "lint:eslint": "eslint . --cache --ext js,ts",
     "lint:fix": "yarn lint:eslint --fix && yarn lint:misc --write",
@@ -68,6 +69,7 @@
     "rimraf": "^3.0.2",
     "simple-git-hooks": "^2.8.0",
     "ts-jest": "^27.0.6",
+    "ts-node": "^10.9.1",
     "typedoc": "^0.23.19",
     "typescript": "~4.8.4"
   },
