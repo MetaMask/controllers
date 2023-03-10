@@ -1,6 +1,6 @@
 # @metamask/key-tree
 
-An interface over [SLIP-10] and [BIP-44] key derivation paths.
+An interface over [SLIP-10], [BIP-32], and [BIP-44] key derivation paths.
 
 This library was audited by Cure53 in February 2023. The audit report can be found [here (PDF)](./audits/Cure53-2023-02.pdf).
 
@@ -14,8 +14,8 @@ or
 
 ## Usage
 
-This package is designed to accommodate the creation of keys for any level of a SLIP-10 or BIP-44 path.
-Recall that a BIP-44 HD tree path consists of the following nodes (and depths):
+This package is designed to accommodate the creation of keys for any level of a [SLIP-10] or [BIP-44] path.
+Recall that a [BIP-44] HD tree path consists of the following nodes (and depths):
 
 > `m / 44' / coin_type' / account' / change / address_index`
 >
@@ -26,8 +26,8 @@ and `address_index` usually furnishes key pairs intended for user addresses / ac
 For details, refer to the [BIP-44] specification.
 For the authoritative list of protocol `coin_type` indices, see [SLIP-44].
 
-The [SLIP-10] interface provides a more generic way for deriving keys, which is not constrained to the BIP-44 path
-nodes. Currently only Secp256k1 and Ed25519 are supported for SLIP-10, but NIST P-256 may be added if there is
+The [SLIP-10] interface provides a more generic way for deriving keys, which is not constrained to the [BIP-44] path
+nodes. Currently only Secp256k1 and Ed25519 are supported for [SLIP-10], but NIST P-256 may be added if there is
 sufficient demand for it.
 
 This package exports a few classes intended to facilitate the creation of keys in contexts with different privileges.
@@ -41,11 +41,11 @@ import { BIP44CoinTypeNode } from '@metamask/key-tree';
 const coinType = 60;
 
 // Imagine that this takes place in some privileged context with access to
-// the user's mnemonic.
-const mnemonic = getMnemonic();
+// the user's secret recovery phrase.
+const secretRecoveryPhrase = getSecretRecoveryPhrase();
 
 const coinTypeNode = await BIP44CoinTypeNode.fromDerivationPath([
-  `bip39:${mnemonic}`,
+  `bip39:${secretRecoveryPhrase}`,
   `bip32:44'`, // By BIP-44, the "purpose" node must be "44'"
   `bip32:${coinType}'`,
 ]);
@@ -103,14 +103,29 @@ import { SLIP10Node } from '@metamask/key-tree';
 
 // Create a SLIP10Node from a derivation path. You can also specify a key and depth instead.
 const node = await SLIP10Node.fromDerivationPath({
-  curve: 'secp256k1', // or 'ed25519'
-  derivationPath: [`bip39:${mnemonic}`, `bip32:0'`],
+  curve: 'secp256k1',
+  derivationPath: [`bip39:${secretRecoveryPhrase}`, `slip10:0'`],
+});
+
+// SLIP-10 supports Ed25519 as well.
+const ed25519Node = await SLIP10Node.fromDerivationPath({
+  curve: 'ed25519',
+  derivationPath: [`bip39:${secretRecoveryPhrase}`, `slip10:0'`],
 });
 
 // Derive the child node at m / 0' / 1' / 2'. This results in a new SLIP10Node.
-// Note that you cannot derive unhardened child nodes when using Ed25519
-const childNode = await node.derive([`bip32:1'`, `bip32:2'`]);
+// Note that you cannot derive unhardened child nodes when using Ed25519.
+const childNode = await node.derive([`slip10:1'`, `slip10:2'`]);
 ```
+
+The `SLIP10Node` class supports both `bip32:` and `slip10:` paths. While [BIP-32] and [SLIP-10] are mostly compatible with
+each other, there are some differences:
+
+- Ed25519 is only supported by [SLIP-10], so you must use `slip10:` paths when deriving Ed25519 keys.
+- Key derivation errors (i.e., invalid keys being derived) are handled slightly different. While the chance of
+  encountering such an error is extremely low, it is possible.
+
+If you require full compatibility with one or the other, you can choose between the `bip32:` and `slip10:` path types.
 
 There are other ways of deriving keys in addition to the above example.
 See the docstrings in the [BIP44Node](./src/BIP44Node.ts), [BIP44CoinTypeNode](./src/BIP44CoinTypeNode.ts) and
@@ -118,14 +133,15 @@ See the docstrings in the [BIP44Node](./src/BIP44Node.ts), [BIP44CoinTypeNode](.
 
 ### Internals
 
-This package also has methods for deriving arbitrary BIP-32 keys, and generating seeds from BIP-39 mnemonics.
+This package also has methods for deriving arbitrary [SLIP-10] and [BIP-32] keys, and generating seeds from [BIP-39]
+secret recovery phrases.
 These methods do not constitute a safe key derivation API, and their use is **strongly discouraged**.
 Nevertheless, since those methods were the main exports of this package prior to version `3.0.0`, consumers can
 still access them by importing `@metamask/key-tree/derivation`.
 
 ## Security
 
-This package is rigorously tested against reference implementations and the [BIP-32] specification.
+This package is rigorously tested against reference implementations and the [SLIP-10] and [BIP-32] specifications.
 See the [reference implementation tests](./test/reference-implementations.test.ts) for details.
 
 ## Further Reading
