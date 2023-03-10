@@ -48,7 +48,6 @@ describe('derivation', () => {
           return deriveKeyFromPath({
             path: multipath,
             curve: 'secp256k1',
-            specification: 'bip32',
           });
         }),
       );
@@ -76,7 +75,6 @@ describe('derivation', () => {
           return deriveKeyFromPath({
             path: multipath,
             curve: 'secp256k1',
-            specification: 'bip32',
           });
         }),
       );
@@ -95,7 +93,6 @@ describe('derivation', () => {
       const node = await deriveKeyFromPath({
         path: multipath,
         curve: 'secp256k1',
-        specification: 'bip32',
       });
 
       const keys = await Promise.all(
@@ -103,7 +100,6 @@ describe('derivation', () => {
           return deriveKeyFromPath({
             path: [`bip32:${index}`],
             node,
-            specification: 'bip32',
           });
         }),
       );
@@ -122,7 +118,6 @@ describe('derivation', () => {
       const node = await deriveKeyFromPath({
         path: multipath,
         curve: 'secp256k1',
-        specification: 'bip32',
       });
 
       // Empty segments are forbidden
@@ -158,7 +153,6 @@ describe('derivation', () => {
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace(`44'`, 'xyz') as any, ...rest],
           curve: 'secp256k1',
-          specification: 'bip32',
         });
       }).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -169,7 +163,6 @@ describe('derivation', () => {
         return deriveKeyFromPath({
           path: [bip39Part, bip32Part1.replace(`'`, '"') as any, ...rest],
           curve: 'secp256k1',
-          specification: 'bip32',
         });
       }).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -180,7 +173,6 @@ describe('derivation', () => {
           path: [bip39Part, ethereumBip32PathParts[0]],
           curve: 'secp256k1',
           depth: 0,
-          specification: 'bip32',
         }),
       ).rejects.toThrow(
         /Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of 0\. Received:/u,
@@ -191,7 +183,6 @@ describe('derivation', () => {
         deriveKeyFromPath({
           path: [bip39Part.replace('r', 'R') as any],
           curve: 'secp256k1',
-          specification: 'bip32',
         }),
       ).rejects.toThrow(
         /Invalid HD path segment: The path segment is malformed\./u,
@@ -199,7 +190,7 @@ describe('derivation', () => {
 
       // Multipaths that start with bip39 segment require _no_ parentKey
       await expect(
-        deriveKeyFromPath({ path: [bip39Part], node, specification: 'bip32' }),
+        deriveKeyFromPath({ path: [bip39Part], node }),
       ).rejects.toThrow(
         /Invalid derivation parameters: May not specify parent key if the path segment starts with a BIP-39 node\./u,
       );
@@ -209,7 +200,6 @@ describe('derivation', () => {
         deriveKeyFromPath({
           path: [`bip32:1'`],
           curve: 'secp256k1',
-          specification: 'bip32',
         }),
       ).rejects.toThrow(
         /Invalid derivation parameters: Must specify parent key if the first node of the path segment is not a BIP-39 node\./u,
@@ -220,7 +210,6 @@ describe('derivation', () => {
       await expect(
         deriveKeyFromPath({
           path: [bip39MnemonicToMultipath(mnemonic)],
-          specification: 'bip32',
         }),
       ).rejects.toThrow(
         'Invalid arguments: Must specify either a parent node or curve.',
@@ -252,28 +241,24 @@ describe('derivation', () => {
         path: `44'`,
         node,
         curve: secp256k1,
-        specification: 'bip32',
       });
 
       node = await bip32Derive({
         path: `60'`,
         node,
         curve: secp256k1,
-        specification: 'bip32',
       });
 
       node = await bip32Derive({
         path: `0'`,
         node,
         curve: secp256k1,
-        specification: 'bip32',
       });
 
       node = await bip32Derive({
         path: `0`,
         node,
         curve: secp256k1,
-        specification: 'bip32',
       });
       /* eslint-enable require-atomic-updates */
 
@@ -283,7 +268,6 @@ describe('derivation', () => {
             path: `${index}`,
             node,
             curve: secp256k1,
-            specification: 'bip32',
           });
         }),
       );
@@ -312,10 +296,9 @@ describe('derivation', () => {
             path: input,
             node,
             curve: secp256k1,
-            specification: 'bip32',
           }),
         ).rejects.toThrow(
-          'Invalid BIP-32 index: The index must be a non-negative decimal integer less than 2147483648.',
+          'Invalid path: The index must be a non-negative decimal integer less than 2147483648.',
         );
       }
     });
@@ -325,7 +308,6 @@ describe('derivation', () => {
         bip32Derive({
           path: '0',
           curve: secp256k1,
-          specification: 'bip32',
         }),
       ).rejects.toThrow(
         'Invalid parameters: Must specify a node to derive from.',
@@ -341,7 +323,6 @@ describe('derivation', () => {
           path: `0'`,
           node: publicNode,
           curve: secp256k1,
-          specification: 'bip32',
         }),
       ).rejects.toThrow(
         'Invalid parameters: Cannot derive hardened child keys without a private key.',
@@ -398,5 +379,25 @@ describe('validatePathSegment', () => {
         false,
       ),
     ).toThrow('Invalid HD path segment: The path segment is malformed.');
+  });
+
+  it('checks if each segment starts with the same type', () => {
+    expect(() =>
+      validatePathSegment(['slip10:0', 'slip10:1'], true),
+    ).not.toThrow();
+
+    expect(() =>
+      // @ts-expect-error Invalid type.
+      validatePathSegment(['bip32:0', 'slip10:1'], true),
+    ).toThrow(
+      "Invalid HD path segment: Cannot mix 'bip32' and 'slip10' path segments.",
+    );
+
+    expect(() =>
+      // @ts-expect-error Invalid type.
+      validatePathSegment(['slip10:0', 'bip32:1'], true),
+    ).toThrow(
+      "Invalid HD path segment: Cannot mix 'bip32' and 'slip10' path segments.",
+    );
   });
 });

@@ -46,7 +46,6 @@ describe('reference implementation tests', () => {
         const node = await deriveKeyFromPath({
           path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
           curve: 'secp256k1',
-          specification: 'bip32',
         });
 
         for (let index = 0; index < addresses.length; index++) {
@@ -54,7 +53,6 @@ describe('reference implementation tests', () => {
           const { address } = await deriveKeyFromPath({
             path: getBIP44CoinTypeToAddressPathTuple({ address_index: index }),
             node,
-            specification: 'bip32',
           });
 
           expect(address).toStrictEqual(expectedAddress);
@@ -122,7 +120,6 @@ describe('reference implementation tests', () => {
         const node = await deriveKeyFromPath({
           path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
           curve: 'secp256k1',
-          specification: 'bip32',
         });
 
         const numberOfAccounts = 5;
@@ -132,7 +129,6 @@ describe('reference implementation tests', () => {
             await deriveKeyFromPath({
               path: getBIP44CoinTypeToAddressPathTuple({ address_index: i }),
               node,
-              specification: 'bip32',
             }).then(({ address }) => address),
           );
         }
@@ -188,7 +184,6 @@ describe('reference implementation tests', () => {
         const childNode = await deriveKeyFromPath({
           path: path.ours.tuple,
           node,
-          specification: 'bip32',
         });
 
         expect(childNode.privateKey).toStrictEqual(privateKey);
@@ -198,7 +193,6 @@ describe('reference implementation tests', () => {
           const childChildNode = await deriveKeyFromPath({
             path: [`bip32:${index}`],
             node: childNode,
-            specification: 'bip32',
           });
 
           expect(childChildNode.address).toStrictEqual(theirAddress);
@@ -230,7 +224,6 @@ describe('reference implementation tests', () => {
               targetNode = await deriveKeyFromPath({
                 path: path.ours.tuple as HDPathTuple,
                 node,
-                specification: 'bip32',
               });
             }
 
@@ -259,9 +252,8 @@ describe('reference implementation tests', () => {
                 targetNode = node;
               } else {
                 targetNode = await deriveKeyFromPath({
-                  path: path.ours.tuple as HDPathTuple,
+                  path: path.ours.tuple,
                   node,
-                  specification: 'slip10',
                 });
               }
 
@@ -291,7 +283,7 @@ describe('reference implementation tests', () => {
             privateKey: theirPrivateKey,
             publicKey: theirPublicKey,
           } of sampleKeyIndices) {
-            const childNode = await node.derive([`bip32:${index}'`]);
+            const childNode = await node.derive([`slip10:${index}'`]);
 
             expect(childNode.privateKey).toStrictEqual(theirPrivateKey);
             expect(childNode.publicKey).toStrictEqual(theirPublicKey);
@@ -304,9 +296,8 @@ describe('reference implementation tests', () => {
           // Ethereum coin type key
           const node = await createBip39KeyFromSeed(seed, ed25519);
           const childNode = await deriveKeyFromPath({
-            path: [BIP44PurposeNodeToken, `bip32:0'`, `bip32:0'`, `bip32:1'`],
+            path: [`slip10:44'`, `slip10:0'`, `slip10:0'`, `slip10:1'`],
             node,
-            specification: 'slip10',
           });
 
           for (const {
@@ -314,9 +305,8 @@ describe('reference implementation tests', () => {
             privateKey: theirPrivateKey,
           } of sampleKeyIndices) {
             const { privateKey: ourPrivateKey } = await deriveKeyFromPath({
-              path: [`bip32:${index}'`],
+              path: [`slip10:${index}'`],
               node: childNode,
-              specification: 'slip10',
             });
 
             expect(ourPrivateKey).toStrictEqual(theirPrivateKey);

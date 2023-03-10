@@ -548,8 +548,8 @@ export default {
           {
             path: {
               ours: {
-                tuple: [`bip32:0'`],
-                string: `bip32:0'`,
+                tuple: [`slip10:0'`],
+                string: `slip10:0'`,
               },
               theirs: `m/0'`,
             },
@@ -561,8 +561,8 @@ export default {
           {
             path: {
               ours: {
-                tuple: [`bip32:0'`, `bip32:1'`],
-                string: `bip32:0'/bip32:1'`,
+                tuple: [`slip10:0'`, `slip10:1'`],
+                string: `slip10:0'/slip10:1'`,
               },
               theirs: `m/0'/1'`,
             },
@@ -574,8 +574,8 @@ export default {
           {
             path: {
               ours: {
-                tuple: [`bip32:0'`, `bip32:1'`, `bip32:2'`],
-                string: `bip32:0'/bip32:1'/bip32:2'`,
+                tuple: [`slip10:0'`, `slip10:1'`, `slip10:2'`],
+                string: `slip10:0'/slip10:1'/slip10:2'`,
               },
               theirs: `m/0'/1'/2'`,
             },
@@ -587,8 +587,8 @@ export default {
           {
             path: {
               ours: {
-                tuple: [`bip32:0'`, `bip32:1'`, `bip32:2'`, `bip32:2'`],
-                string: `bip32:0'/bip32:1'/bip32:2'/bip32:2'`,
+                tuple: [`slip10:0'`, `slip10:1'`, `slip10:2'`, `slip10:2'`],
+                string: `slip10:0'/slip10:1'/slip10:2'/slip10:2'`,
               },
               theirs: `m/0'/1'/2'/2'`,
             },
@@ -601,13 +601,13 @@ export default {
             path: {
               ours: {
                 tuple: [
-                  `bip32:0'`,
-                  `bip32:1'`,
-                  `bip32:2'`,
-                  `bip32:2'`,
-                  `bip32:1000000000'`,
+                  `slip10:0'`,
+                  `slip10:1'`,
+                  `slip10:2'`,
+                  `slip10:2'`,
+                  `slip10:1000000000'`,
                 ],
-                string: `bip32:0'/bip32:1'/bip32:2'/bip32:2'/bip32:1000000000'`,
+                string: `slip10:0'/slip10:1'/slip10:2'/slip10:2'/slip10:1000000000'`,
               },
               theirs: `m/0'/1'/2'/2'/1000000000'`,
             },
@@ -638,8 +638,8 @@ export default {
           {
             path: {
               ours: {
-                tuple: [`bip32:0'`],
-                string: `bip32:0'`,
+                tuple: [`slip10:0'`],
+                string: `slip10:0'`,
               },
               theirs: `m/0'`,
             },
@@ -651,8 +651,8 @@ export default {
           {
             path: {
               ours: {
-                tuple: [`bip32:0'`, `bip32:2147483647'`],
-                string: `bip32:0'/bip32:2147483647'`,
+                tuple: [`slip10:0'`, `slip10:2147483647'`],
+                string: `slip10:0'/slip10:2147483647'`,
               },
               theirs: `m/0'/2147483647'`,
             },
@@ -664,8 +664,8 @@ export default {
           {
             path: {
               ours: {
-                tuple: [`bip32:0'`, `bip32:2147483647'`, `bip32:1'`],
-                string: `bip32:0'/bip32:2147483647'/bip32:1'`,
+                tuple: [`slip10:0'`, `slip10:2147483647'`, `slip10:1'`],
+                string: `slip10:0'/slip10:2147483647'/slip10:1'`,
               },
               theirs: `m/0'/2147483647'/1'`,
             },
@@ -678,12 +678,12 @@ export default {
             path: {
               ours: {
                 tuple: [
-                  `bip32:0'`,
-                  `bip32:2147483647'`,
-                  `bip32:1'`,
-                  `bip32:2147483646'`,
+                  `slip10:0'`,
+                  `slip10:2147483647'`,
+                  `slip10:1'`,
+                  `slip10:2147483646'`,
                 ],
-                string: `bip32:0'/bip32:2147483647'/bip32:1'/bip32:2147483646'`,
+                string: `slip10:0'/slip10:2147483647'/slip10:1'/slip10:2147483646'`,
               },
               theirs: `m/0'/2147483647'/1'/2147483646'`,
             },
@@ -696,13 +696,13 @@ export default {
             path: {
               ours: {
                 tuple: [
-                  `bip32:0'`,
-                  `bip32:2147483647'`,
-                  `bip32:1'`,
-                  `bip32:2147483646'`,
-                  `bip32:2'`,
+                  `slip10:0'`,
+                  `slip10:2147483647'`,
+                  `slip10:1'`,
+                  `slip10:2147483646'`,
+                  `slip10:2'`,
                 ],
-                string: `bip32:0'/bip32:2147483647'/bip32:1'/bip32:2147483646'/bip32:2'`,
+                string: `slip10:0'/slip10:2147483647'/slip10:1'/slip10:2147483646'/slip10:2'`,
               },
               theirs: `m/0'/2147483647'/1'/2147483646'/2'`,
             },
@@ -728,8 +728,8 @@ export default {
       // implementation, not any reference values, this is fine.
       path: {
         ours: {
-          tuple: [`bip32:44'`, `bip32:0'`, `bip32:0'`, `bip32:1'`],
-          string: [`bip32:44'/bip32:0'/bip32:0'/bip32:1'`],
+          tuple: [`slip10:44'`, `slip10:0'`, `slip10:0'`, `slip10:1'`],
+          string: [`slip10:44'/slip10:0'/slip10:0'/slip10:1'`],
         },
         theirs: `m/44'/0'/0'/1'`,
       },
@@ -875,8 +875,8 @@ export default {
         {
           path: {
             ours: {
-              tuple: [`bip32:3`],
-              string: `bip32:3`,
+              tuple: [`slip10:3`],
+              string: `slip10:3`,
             },
             theirs: `m/3`,
           },
@@ -888,8 +888,8 @@ export default {
         {
           path: {
             ours: {
-              tuple: [`bip32:3`, `bip32:0`],
-              string: `bip32:3/bip32:0`,
+              tuple: [`slip10:3`, `slip10:0`],
+              string: `slip10:3/slip10:0`,
             },
             theirs: `m/3/0`,
           },
@@ -901,8 +901,8 @@ export default {
         {
           path: {
             ours: {
-              tuple: [`bip32:123'`],
-              string: `bip32:123'`,
+              tuple: [`slip10:123'`],
+              string: `slip10:123'`,
             },
             theirs: `m/123'`,
           },
@@ -914,8 +914,8 @@ export default {
         {
           path: {
             ours: {
-              tuple: [`bip32:123'`, `bip32:456'`],
-              string: `bip32:123'/bip32:456'`,
+              tuple: [`slip10:123'`, `slip10:456'`],
+              string: `slip10:123'/slip10:456'`,
             },
             theirs: `m/123'/456'`,
           },

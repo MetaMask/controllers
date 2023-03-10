@@ -335,7 +335,6 @@ export async function deriveBIP44AddressKey(
   const childNode = await deriveChildNode({
     path,
     node,
-    specification: 'bip32',
   });
 
   return new BIP44Node(childNode);
@@ -414,7 +413,6 @@ export async function getBIP44AddressKeyDeriver(
           : getUnhardenedBIP32NodeToken(address_index),
       ],
       node: actualNode,
-      specification: 'bip32',
     });
 
     return new BIP44Node(slip10Node);

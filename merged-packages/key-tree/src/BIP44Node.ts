@@ -178,7 +178,6 @@ export class BIP44Node implements BIP44NodeInterface {
       parentFingerprint,
       index,
       curve: 'secp256k1',
-      specification: 'bip32',
     });
 
     return new BIP44Node(node);
@@ -214,7 +213,6 @@ export class BIP44Node implements BIP44NodeInterface {
     const node = await SLIP10Node.fromDerivationPath({
       derivationPath,
       curve: 'secp256k1',
-      specification: 'bip32',
     });
 
     return new BIP44Node(node);

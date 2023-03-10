@@ -22,11 +22,18 @@ export type BIP44Depth = MinBIP44Depth | 1 | 2 | 3 | 4 | MaxBIP44Depth;
 export type AnonymizedBIP39Node = 'm';
 export type BIP39StringNode = `bip39:${string}`;
 export type BIP39Node = BIP39StringNode | Uint8Array;
+
 export type HardenedBIP32Node = `bip32:${number}'`;
 export type UnhardenedBIP32Node = `bip32:${number}`;
 export type BIP32Node = HardenedBIP32Node | UnhardenedBIP32Node;
 
+export type HardenedSLIP10Node = `slip10:${number}'`;
+export type UnhardenedSLIP10Node = `slip10:${number}`;
+export type SLIP10PathNode = HardenedSLIP10Node | UnhardenedSLIP10Node;
+
 export const BIP44PurposeNodeToken = `bip32:44'`;
+
+export const UNPREFIXED_PATH_REGEX = /^\d+$/u;
 
 /**
  * e.g.
@@ -34,6 +41,13 @@ export const BIP44PurposeNodeToken = `bip32:44'`;
  * -  bip32:0'
  */
 export const BIP_32_PATH_REGEX = /^bip32:\d+'?$/u;
+
+/**
+ * e.g.
+ * -  slip10:0
+ * -  slip10:0'
+ */
+export const SLIP_10_PATH_REGEX = /^slip10:\d+'?$/u;
 
 /**
  * bip39:<SPACE_DELMITED_SEED_PHRASE>
@@ -138,8 +152,12 @@ export type PartialHDPathTuple =
  */
 export type HDPathTuple = RootedHDPathTuple | PartialHDPathTuple;
 
-export type RootedSLIP10PathTuple = readonly [BIP39Node, ...BIP32Node[]];
-export type SLIP10PathTuple = readonly BIP32Node[];
+export type RootedSLIP10PathTuple = readonly [
+  BIP39Node,
+  ...(BIP32Node[] | SLIP10PathNode[]),
+];
+
+export type SLIP10PathTuple = readonly BIP32Node[] | readonly SLIP10PathNode[];
 export type SLIP10Path = RootedSLIP10PathTuple | SLIP10PathTuple;
 
 export type FullHDPathTuple = RootedHDPathTuple5;

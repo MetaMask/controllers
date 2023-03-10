@@ -4,11 +4,11 @@ import { assert } from '@metamask/utils';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 
-import { DeriveChildKeyArgs, Specification } from '.';
+import { DeriveChildKeyArgs } from '.';
 import { BIP39StringNode, BYTES_KEY_LENGTH } from '../constants';
 import { Curve } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
-import { getFingerprint, getSpecification } from '../utils';
+import { getFingerprint } from '../utils';
 
 /**
  * Convert a BIP-39 mnemonic phrase to a multi path.
@@ -43,14 +43,12 @@ export async function deriveChildKey({
  *
  * @param seed - The cryptographic seed bytes.
  * @param curve - The curve to use.
- * @param specification - The specification to use.
  * @returns An object containing the corresponding BIP-39 master key and chain
  * code.
  */
 export async function createBip39KeyFromSeed(
   seed: Uint8Array,
   curve: Curve,
-  specification: Specification = getSpecification(curve.name),
 ): Promise<SLIP10Node> {
   assert(
     seed.length >= 16 && seed.length <= 64,
@@ -78,6 +76,5 @@ export async function createBip39KeyFromSeed(
     parentFingerprint: 0,
     index: 0,
     curve: curve.name,
-    specification,
   });
 }

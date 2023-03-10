@@ -23,7 +23,6 @@ import {
   decodeBase58check,
   mnemonicPhraseToBytes,
   getBytesUnsafe,
-  getSpecification,
 } from './utils';
 
 // Inputs used for testing non-negative integers
@@ -410,14 +409,4 @@ describe('mnemonicPhraseToBytes', () => {
       );
     },
   );
-});
-
-describe('getSpecification', () => {
-  it('returns BIP-32 for secp256k1', () => {
-    expect(getSpecification('secp256k1')).toBe('bip32');
-  });
-
-  it('returns SLIP-10 for ed25519', () => {
-    expect(getSpecification('ed25519')).toBe('slip10');
-  });
 });

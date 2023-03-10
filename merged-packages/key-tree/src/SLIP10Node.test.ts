@@ -410,7 +410,6 @@ describe('SLIP10Node', () => {
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
-        specification: node.specification,
       });
     });
 
@@ -438,20 +437,12 @@ describe('SLIP10Node', () => {
 
     it('initializes a new node from a derivation path with a Uint8Array using ed25519', async () => {
       const node = await SLIP10Node.fromDerivationPath({
-        derivationPath: [
-          defaultBip39BytesToken,
-          BIP44PurposeNodeToken,
-          `bip32:60'`,
-        ],
+        derivationPath: [defaultBip39BytesToken, `slip10:44'`, `slip10:60'`],
         curve: 'ed25519',
       });
 
       const stringNode = await SLIP10Node.fromDerivationPath({
-        derivationPath: [
-          defaultBip39NodeToken,
-          BIP44PurposeNodeToken,
-          `bip32:60'`,
-        ],
+        derivationPath: [defaultBip39NodeToken, `slip10:44'`, `slip10:60'`],
         curve: 'ed25519',
       });
 
@@ -522,9 +513,7 @@ describe('SLIP10Node', () => {
     it('throws an error if no curve is specified', async () => {
       await expect(
         // @ts-expect-error No curve specified, but required in type
-        SLIP10Node.fromDerivationPath({
-          specification: 'bip32',
-        }),
+        SLIP10Node.fromDerivationPath({}),
       ).rejects.toThrow('Invalid curve: Must specify a curve.');
     });
 
@@ -537,18 +526,6 @@ describe('SLIP10Node', () => {
         }),
       ).rejects.toThrow(
         'Invalid curve: Only the following curves are supported: secp256k1, ed25519.',
-      );
-    });
-
-    it('throws an error for unsupported specifications', async () => {
-      await expect(
-        SLIP10Node.fromDerivationPath({
-          curve: 'secp256k1',
-          // @ts-expect-error Invalid specification name for type
-          specification: 'foo bar',
-        }),
-      ).rejects.toThrow(
-        'Invalid specification: Must be one of bip32, slip10. Received "foo bar".',
       );
     });
   });
@@ -630,14 +607,14 @@ describe('SLIP10Node', () => {
       const node = await SLIP10Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
-          BIP44PurposeNodeToken,
-          `bip32:3'`,
-          `bip32:0'`,
+          `slip10:44'`,
+          `slip10:3'`,
+          `slip10:0'`,
         ],
         curve: 'ed25519',
       });
 
-      await expect(node.derive(['bip32:0'])).rejects.toThrow(
+      await expect(node.derive(['slip10:0'])).rejects.toThrow(
         'Invalid path: Cannot derive unhardened child keys with ed25519.',
       );
     });
@@ -774,11 +751,7 @@ describe('SLIP10Node', () => {
 
     it('throws an error when trying to get an address for an ed25519 node', async () => {
       const node = await SLIP10Node.fromDerivationPath({
-        derivationPath: [
-          defaultBip39NodeToken,
-          BIP44PurposeNodeToken,
-          `bip32:60'`,
-        ],
+        derivationPath: [defaultBip39NodeToken, `slip10:44'`, `slip10:60'`],
         curve: 'ed25519',
       });
 
@@ -863,7 +836,6 @@ describe('SLIP10Node', () => {
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
-        specification: node.specification,
       });
 
       expect(JSON.parse(JSON.stringify(nodeJson))).toStrictEqual({
@@ -875,7 +847,6 @@ describe('SLIP10Node', () => {
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
-        specification: node.specification,
       });
     });
   });
