@@ -99,6 +99,10 @@ async function getRandomKeyVector(
     privateKey: child.privateKey,
     publicKey: child.compressedPublicKey,
     chainCode: child.chainCode,
+    parentFingerprint: child.parentFingerprint,
+    masterFingerprint: child.masterFingerprint,
+    index: child.index,
+    depth: child.depth,
   };
 }
 
@@ -126,6 +130,10 @@ async function getRandomVector(
     privateKey: node.privateKey,
     publicKey: node.compressedPublicKey,
     chainCode: node.chainCode,
+    parentFingerprint: node.parentFingerprint,
+    masterFingerprint: node.masterFingerprint,
+    index: node.index,
+    depth: node.depth,
     keys: await Promise.all(
       new Array(amount)
         .fill(0)
