@@ -29,3 +29,4 @@ export {
 } from './BIP44CoinTypeNode';
 export * from './constants';
 export type { CoinTypeToAddressIndices } from './utils';
+export { isValidBIP32PathSegment } from './utils';

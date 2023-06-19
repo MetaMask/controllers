@@ -13,6 +13,8 @@ import {
   HardenedBIP32Node,
   MAX_BIP_32_INDEX,
   UnhardenedBIP32Node,
+  UNPREFIXED_BIP_32_PATH_REGEX,
+  UnprefixedNode,
 } from './constants';
 import { curves, SupportedCurve } from './curves';
 
@@ -168,6 +170,29 @@ export function validateBIP32Index(addressIndex: number) {
  */
 export function isValidBIP32Index(index: number): boolean {
   return isValidInteger(index) && index <= MAX_BIP_32_INDEX;
+}
+
+/**
+ * Check if the value is a valid BIP-32 path segment, i.e., a string of the form
+ * `0'`.
+ *
+ * @param segment - The BIP-32 path segment to test.
+ * @returns Whether the path segment is a valid BIP-32 path segment.
+ */
+export function isValidBIP32PathSegment(
+  segment: string,
+): segment is UnprefixedNode {
+  if (typeof segment !== 'string') {
+    return false;
+  }
+
+  const match = segment.match(UNPREFIXED_BIP_32_PATH_REGEX);
+  if (!match?.groups) {
+    return false;
+  }
+
+  const index = parseInt(match.groups.index, 10);
+  return isValidBIP32Index(index);
 }
 
 /**

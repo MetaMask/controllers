@@ -23,6 +23,7 @@ import {
   decodeBase58check,
   mnemonicPhraseToBytes,
   getBytesUnsafe,
+  isValidBIP32PathSegment,
 } from './utils';
 
 // Inputs used for testing non-negative integers
@@ -195,6 +196,25 @@ describe('isValidBIP32Index', () => {
   it.each(inputs)('returns false if the index is invalid', (input) => {
     expect(isValidBIP32Index(input)).toBe(false);
   });
+});
+
+describe('isValidBIP32PathSegment', () => {
+  it('returns true if the path segment is valid', () => {
+    expect(isValidBIP32PathSegment(`0`)).toBe(true);
+    expect(isValidBIP32PathSegment(`0'`)).toBe(true);
+    expect(isValidBIP32PathSegment(`1`)).toBe(true);
+    expect(isValidBIP32PathSegment(`1'`)).toBe(true);
+    expect(isValidBIP32PathSegment(`1000`)).toBe(true);
+    expect(isValidBIP32PathSegment(`1000'`)).toBe(true);
+  });
+
+  it.each(['foo', `123''`, `'123'`, `123'/456'`, ...inputs])(
+    'returns false if the path segment is invalid',
+    (input) => {
+      // @ts-expect-error Invalid type.
+      expect(isValidBIP32PathSegment(input)).toBe(false);
+    },
+  );
 });
 
 describe('isHardened', () => {

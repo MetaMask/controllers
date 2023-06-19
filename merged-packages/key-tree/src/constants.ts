@@ -19,6 +19,8 @@ export type BIP44Depth = MinBIP44Depth | 1 | 2 | 3 | 4 | MaxBIP44Depth;
 // always "0". Here's an example Ethereum HD path for account "0":
 // m  / 44' / 60' / 0' / 0 / 0
 
+export type UnprefixedNode = `${number}'`;
+
 export type AnonymizedBIP39Node = 'm';
 export type BIP39StringNode = `bip39:${string}`;
 export type BIP39Node = BIP39StringNode | Uint8Array;
@@ -34,6 +36,13 @@ export type SLIP10PathNode = HardenedSLIP10Node | UnhardenedSLIP10Node;
 export const BIP44PurposeNodeToken = `bip32:44'`;
 
 export const UNPREFIXED_PATH_REGEX = /^\d+$/u;
+
+/**
+ * e.g.
+ * -  0
+ * -  0'
+ */
+export const UNPREFIXED_BIP_32_PATH_REGEX = /^(?<index>\d+)'?$/u;
 
 /**
  * e.g.
