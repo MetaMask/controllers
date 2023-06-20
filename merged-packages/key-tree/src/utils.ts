@@ -12,6 +12,7 @@ import {
   CoinTypeToAddressTuple,
   HardenedBIP32Node,
   MAX_BIP_32_INDEX,
+  MAX_UNHARDENED_BIP_32_INDEX,
   UnhardenedBIP32Node,
   UNPREFIXED_BIP_32_PATH_REGEX,
   UnprefixedNode,
@@ -192,7 +193,7 @@ export function isValidBIP32PathSegment(
   }
 
   const index = parseInt(match.groups.index, 10);
-  return isValidBIP32Index(index);
+  return isValidInteger(index) && index <= MAX_UNHARDENED_BIP_32_INDEX;
 }
 
 /**
