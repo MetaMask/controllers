@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.1.0]
+### Added
+- Add `isValidBIP32PathSegment` function ([#131](https://github.com/MetaMask/key-tree/pull/131))
+
+### Changed
+- Bump `@metamask/utils` to `6.0.1` ([#132](https://github.com/MetaMask/key-tree/pull/132))
+
 ## [7.0.0]
 ### Added
 - BREAKING: Add SLIP-10 (`slip10:`) path type ([#124](https://github.com/MetaMask/key-tree/pull/124))
@@ -126,7 +133,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v7.0.0...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v7.1.0...HEAD
+[7.1.0]: https://github.com/MetaMask/key-tree/compare/v7.0.0...v7.1.0
 [7.0.0]: https://github.com/MetaMask/key-tree/compare/v6.2.1...v7.0.0
 [6.2.1]: https://github.com/MetaMask/key-tree/compare/v6.2.0...v6.2.1
 [6.2.0]: https://github.com/MetaMask/key-tree/compare/v6.1.0...v6.2.0
