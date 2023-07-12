@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
 set -e
 set -o pipefail
 
@@ -9,4 +8,4 @@ if [[ -n $SKIP_PREPACK ]]; then
   exit 0
 fi
 
-yarn build
+yarn build:clean

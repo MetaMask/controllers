@@ -1,3 +1,5 @@
+import { assert } from '@metamask/utils';
+
 import { BIP44Node, BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
 import {
   BIP39Node,
@@ -112,11 +114,13 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
       derivationPath,
     });
 
-    // Split the bip32 string token and extract the coin_type index
-    const coinType = Number.parseInt(
-      derivationPath[BIP_44_COIN_TYPE_DEPTH].split(':')[1].replace(`'`, ''),
-      10,
-    );
+    // Split the bip32 string token and extract the coin_type index.
+    const pathPart = derivationPath[BIP_44_COIN_TYPE_DEPTH].split(
+      ':',
+    )[1]?.replace(`'`, '');
+
+    assert(pathPart, 'Invalid derivation path.');
+    const coinType = Number.parseInt(pathPart, 10);
 
     return new BIP44CoinTypeNode(node, coinType);
   }

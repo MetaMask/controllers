@@ -103,6 +103,9 @@ export async function deriveKeyFromPath(
 
     if (typeof pathNode === 'string') {
       const [pathType, pathPart] = pathNode.split(':');
+
+      assert(pathType);
+      assert(pathPart);
       assert(hasDeriver(pathType), `Unknown derivation type: "${pathType}".`);
 
       const deriver = derivers[pathType] as Deriver;
@@ -199,7 +202,8 @@ export function validatePathSegment(
 
   const pathWithoutKey = (startsWithBip39 ? path.slice(1) : path) as string[];
   if (pathWithoutKey.length > 0) {
-    const firstSegmentType = pathWithoutKey[0].split(':')[0];
+    const firstSegmentType = pathWithoutKey[0]?.split(':')[0];
+    assert(firstSegmentType);
     assert(
       pathWithoutKey.every((segment) =>
         segment.startsWith(`${firstSegmentType}:`),

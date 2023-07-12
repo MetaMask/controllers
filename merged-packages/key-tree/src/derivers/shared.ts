@@ -100,18 +100,18 @@ type BaseDeriveNodeArgs = {
   isHardened: boolean;
   depth: number;
   parentFingerprint: number;
-  masterFingerprint?: number;
+  masterFingerprint?: number | undefined;
   curve: Curve;
 };
 
 type DerivePrivateKeyArgs = BaseDeriveNodeArgs & {
   privateKey: Uint8Array;
-  publicKey?: never;
+  publicKey?: never | undefined;
 };
 
 type DerivePublicKeyArgs = BaseDeriveNodeArgs & {
   publicKey: Uint8Array;
-  privateKey?: never;
+  privateKey?: never | undefined;
 };
 
 export type DeriveNodeArgs = DerivePrivateKeyArgs | DerivePublicKeyArgs;
@@ -277,7 +277,7 @@ type DerivePrivateChildKeyArgs = {
   entropy: Uint8Array;
   privateKey: Uint8Array;
   depth: number;
-  masterFingerprint?: number;
+  masterFingerprint?: number | undefined;
   parentFingerprint: number;
   childIndex: number;
   isHardened: boolean;
@@ -365,7 +365,7 @@ type DerivePublicChildKeyArgs = {
   entropy: Uint8Array;
   publicKey: Uint8Array;
   depth: number;
-  masterFingerprint?: number;
+  masterFingerprint?: number | undefined;
   parentFingerprint: number;
   childIndex: number;
   curve: Curve;
@@ -519,6 +519,8 @@ function getValidatedPath(
   validatePath(path, node, curve);
 
   const indexPart = path.split(`'`)[0];
+
+  assert(indexPart);
   const childIndex = parseInt(indexPart, 10);
 
   if (

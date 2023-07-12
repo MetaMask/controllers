@@ -15,18 +15,9 @@ module.exports = {
 
   overrides: [
     {
-      files: ['*.d.ts'],
-      rules: {
-        'import/unambiguous': 'off',
-      },
-    },
-
-    {
       files: ['*.ts'],
       extends: ['@metamask/eslint-config-typescript'],
       rules: {
-        '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
-
         // This rule is copied from the base config, but changed to allow for
         // `snake_case` properties. This is because we use those a lot in this
         // repository, and replacing them would be a breaking change.
@@ -81,27 +72,18 @@ module.exports = {
 
     {
       files: ['*.test.ts', '*.test.js'],
-      extends: ['@metamask/eslint-config-jest'],
-    },
-
-    // Allow expect(value).toMatchSnapshot in this file only
-    {
-      files: ['./test/reference-implementations.test.ts'],
-      rules: {
-        'jest/no-restricted-matchers': [
-          'error',
-          {
-            resolves: 'Use `expect(await promise)` instead.',
-            toBeFalsy: 'Avoid `toBeFalsy`',
-            toBeTruthy: 'Avoid `toBeTruthy`',
-            // toMatchSnapshot: ...
-            toThrowErrorMatchingSnapshot:
-              'Use `toThrowErrorMatchingInlineSnapshot()` instead',
-          },
-        ],
-      },
+      extends: [
+        '@metamask/eslint-config-jest',
+        '@metamask/eslint-config-nodejs',
+      ],
     },
   ],
 
-  ignorePatterns: ['!.eslintrc.js', '!.prettierrc.js', 'dist/', 'docs/'],
+  ignorePatterns: [
+    '!.eslintrc.js',
+    '!.prettierrc.js',
+    'dist/',
+    'docs/',
+    '.yarn/',
+  ],
 };

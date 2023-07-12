@@ -1,0 +1,12 @@
+{
+  "ignores": [
+    "@lavamoat/allow-scripts",
+    "@lavamoat/preinstall-always-fail",
+    "@metamask/auto-changelog",
+    "@types/*",
+    "prettier-plugin-packagejson",
+    "simple-git-hooks",
+    "ts-node",
+    "typedoc"
+  ]
+}

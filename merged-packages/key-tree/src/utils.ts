@@ -188,7 +188,7 @@ export function isValidBIP32PathSegment(
   }
 
   const match = segment.match(UNPREFIXED_BIP_32_PATH_REGEX);
-  if (!match?.groups) {
+  if (typeof match?.groups?.index === 'undefined') {
     return false;
   }
 

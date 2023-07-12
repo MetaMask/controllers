@@ -1,14 +1,17 @@
 {
   "compilerOptions": {
     "esModuleInterop": true,
-    "inlineSources": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
     "lib": ["ES2020"],
     "module": "CommonJS",
-    "moduleResolution": "Node",
-    "sourceMap": true,
+    "moduleResolution": "node",
+    "noEmit": true,
+    "noErrorTruncation": true,
+    "noUncheckedIndexedAccess": true,
     "strict": true,
-    "target": "ES2017",
+    "target": "es2020",
     "resolveJsonModule": true
   },
-  "include": ["src", "test", "scripts"]
+  "exclude": ["./dist/**/*"]
 }

@@ -34,7 +34,7 @@ export type JsonSLIP10Node = {
    * The fingerprint of the master node, i.e., the node at depth 0. May be
    * undefined if this node was created from an extended key.
    */
-  readonly masterFingerprint?: number;
+  readonly masterFingerprint?: number | undefined;
 
   /**
    * The fingerprint of the parent key, or 0 if this is a master node.
@@ -49,7 +49,7 @@ export type JsonSLIP10Node = {
   /**
    * The (optional) private key of this node.
    */
-  readonly privateKey?: string;
+  readonly privateKey?: string | undefined;
 
   /**
    * The public key of this node.
@@ -74,7 +74,7 @@ export type SLIP10NodeInterface = JsonSLIP10Node & {
    * The private key for this node, as a {@link Uint8Array}.
    * May be undefined if this node is a public key only node.
    */
-  privateKeyBytes?: Uint8Array;
+  privateKeyBytes?: Uint8Array | undefined;
 
   /**
    * The public key for this node, as a {@link Uint8Array}.
@@ -89,23 +89,23 @@ export type SLIP10NodeInterface = JsonSLIP10Node & {
 
 export type SLIP10NodeConstructorOptions = {
   readonly depth: number;
-  readonly masterFingerprint?: number;
+  readonly masterFingerprint?: number | undefined;
   readonly parentFingerprint: number;
   readonly index: number;
   readonly chainCode: Uint8Array;
-  readonly privateKey?: Uint8Array;
+  readonly privateKey?: Uint8Array | undefined;
   readonly publicKey: Uint8Array;
   readonly curve: SupportedCurve;
 };
 
 export type SLIP10ExtendedKeyOptions = {
   readonly depth: number;
-  readonly masterFingerprint?: number;
+  readonly masterFingerprint?: number | undefined;
   readonly parentFingerprint: number;
   readonly index: number;
   readonly chainCode: string | Uint8Array;
-  readonly privateKey?: string | Uint8Array;
-  readonly publicKey?: string | Uint8Array;
+  readonly privateKey?: string | Uint8Array | undefined;
+  readonly publicKey?: string | Uint8Array | undefined;
   readonly curve: SupportedCurve;
 };
 
@@ -268,7 +268,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   public readonly depth: number;
 
-  public readonly masterFingerprint?: number;
+  public readonly masterFingerprint?: number | undefined;
 
   public readonly parentFingerprint: number;
 
@@ -276,7 +276,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   public readonly chainCodeBytes: Uint8Array;
 
-  public readonly privateKeyBytes?: Uint8Array;
+  public readonly privateKeyBytes?: Uint8Array | undefined;
 
   public readonly publicKeyBytes: Uint8Array;
 

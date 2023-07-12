@@ -26,8 +26,8 @@ export type BIP44ExtendedKeyOptions = {
   readonly parentFingerprint: number;
   readonly index: number;
   readonly chainCode: Uint8Array | string;
-  readonly privateKey?: Uint8Array | string;
-  readonly publicKey?: Uint8Array | string;
+  readonly privateKey?: Uint8Array | string | undefined;
+  readonly publicKey?: Uint8Array | string | undefined;
 };
 
 export type BIP44DerivationPathOptions = {
@@ -57,7 +57,7 @@ export type JsonBIP44Node = {
    * The fingerprint of the master node, i.e., the node at depth 0. May be
    * undefined if this node was created from an extended key.
    */
-  readonly masterFingerprint?: number;
+  readonly masterFingerprint?: number | undefined;
 
   /**
    * The fingerprint of the parent key, or 0 if this is a master node.
@@ -73,7 +73,7 @@ export type JsonBIP44Node = {
    * The hexadecimal string representation of the private key for this node.
    * May be `undefined` if the node is a public node.
    */
-  readonly privateKey?: string;
+  readonly privateKey?: string | undefined;
 
   /**
    * The hexadecimal string representation of the public key for this node.
