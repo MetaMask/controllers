@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.0.0]
+### Changed
+- **BREAKING:** Build the package as both CJS and ESM ([#140](https://github.com/MetaMask/key-tree/pull/139))
+  - Distribution files have been moved from `dist` to `dist/cjs` (and `dist/esm`). If you are explicitly importing from `dist`, you have to update the import.
+- Bump `@metamask/utils` to `6.2.0` ([#140](https://github.com/MetaMask/key-tree/pull/140))
+
 ## [7.1.1]
 ### Fixed
 - Fix `isValidBIP32PathSegment` to correctly check if BIP-32 path segment is `<= 2^31-1` ([#134](https://github.com/MetaMask/key-tree/pull/134))
@@ -19,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [7.0.0]
 ### Added
-- BREAKING: Add SLIP-10 (`slip10:`) path type ([#124](https://github.com/MetaMask/key-tree/pull/124))
+- **BREAKING:** Add SLIP-10 (`slip10:`) path type ([#124](https://github.com/MetaMask/key-tree/pull/124))
   - `bip32:` can no longer be used to derive ed25519 keys
 
 ### Changed
@@ -47,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.0.0]
 ### Changed
-- BREAKING: Rename all occurrences of `Buffer` with `Bytes` or `Uint8Array` ([#84](https://github.com/MetaMask/key-tree/pull/84))
+- **BREAKING:** Rename all occurrences of `Buffer` with `Bytes` or `Uint8Array` ([#84](https://github.com/MetaMask/key-tree/pull/84))
   - All `[...]Buffer` fields have been replaced with `[...]Bytes`, e.g., `BIP44Node.privateKeyBuffer` is now `BIP44Node.privateKeyBytes`.
   - This change does not affect the string fields, like `BIP44Node.privateKey`.
 - BREAKING: Swap out Buffer with browser-compatible Uint8Array ([#83](https://github.com/MetaMask/key-tree/pull/83))
@@ -137,7 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v7.1.1...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v8.0.0...HEAD
+[8.0.0]: https://github.com/MetaMask/key-tree/compare/v7.1.1...v8.0.0
 [7.1.1]: https://github.com/MetaMask/key-tree/compare/v7.1.0...v7.1.1
 [7.1.0]: https://github.com/MetaMask/key-tree/compare/v7.0.0...v7.1.0
 [7.0.0]: https://github.com/MetaMask/key-tree/compare/v6.2.1...v7.0.0
