@@ -1085,15 +1085,16 @@ __metadata:
   linkType: hard
 
 "@metamask/utils@npm:^6.0.1":
-  version: 6.0.1
-  resolution: "@metamask/utils@npm:6.0.1"
+  version: 6.2.0
+  resolution: "@metamask/utils@npm:6.2.0"
   dependencies:
     "@ethereumjs/tx": ^4.1.2
+    "@noble/hashes": ^1.3.1
     "@types/debug": ^4.1.7
     debug: ^4.3.4
     semver: ^7.3.8
     superstruct: ^1.0.3
-  checksum: 6eeed00986866d4a674bf65c5f9e264fc133a368dbf0e28b9b090a7c04a89c3c543e8de8a752eff770d283b43a8e02648ba34b9077627dc7ee8c063b6167a2da
+  checksum: 0bc675358ecc09b3bc04da613d73666295d7afa51ff6b8554801585966900b24b8545bd93b8b2e9a17db867ebe421fe884baf3558ec4ca3199fa65504f677c1b
   languageName: node
   linkType: hard
 
@@ -1145,7 +1146,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:^1.0.0, @noble/hashes@npm:^1.3.0, @noble/hashes@npm:~1.3.0":
+"@noble/hashes@npm:^1.0.0, @noble/hashes@npm:^1.3.0, @noble/hashes@npm:^1.3.1, @noble/hashes@npm:~1.3.0":
   version: 1.3.1
   resolution: "@noble/hashes@npm:1.3.1"
   checksum: 7fdefc0f7a0c1ec27acc6ff88841793e3f93ec4ce6b8a6a12bfc0dd70ae6b7c4c82fe305fdfeda1735d5ad4a9eebe761e6693b3d355689c559e91242f4bc95b1
