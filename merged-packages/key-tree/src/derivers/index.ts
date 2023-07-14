@@ -28,3 +28,5 @@ export const derivers = {
   bip39,
   slip10,
 };
+
+export { createBip39KeyFromSeed } from './bip39';

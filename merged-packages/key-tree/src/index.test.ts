@@ -5,6 +5,8 @@ import {
   secp256k1,
   ed25519,
   isValidBIP32PathSegment,
+  createBip39KeyFromSeed,
+  mnemonicPhraseToBytes,
 } from '.';
 
 // This is purely for coverage shenanigans
@@ -17,5 +19,7 @@ describe('index', () => {
     expect(secp256k1).toBeDefined();
     expect(ed25519).toBeDefined();
     expect(isValidBIP32PathSegment).toBeDefined();
+    expect(createBip39KeyFromSeed).toBeDefined();
+    expect(mnemonicPhraseToBytes).toBeDefined();
   });
 });
