@@ -5,7 +5,6 @@
     "@metamask/auto-changelog",
     "@types/*",
     "prettier-plugin-packagejson",
-    "simple-git-hooks",
     "ts-node",
     "typedoc"
   ]

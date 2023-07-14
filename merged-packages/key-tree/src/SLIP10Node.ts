@@ -1,13 +1,11 @@
 import { assert, bytesToHex } from '@metamask/utils';
 
-import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
-import { BIP44Node } from './BIP44Node';
-import {
-  BYTES_KEY_LENGTH,
-  RootedSLIP10PathTuple,
-  SLIP10PathTuple,
-} from './constants';
-import { getCurveByName, SupportedCurve } from './curves';
+import type { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
+import type { BIP44Node } from './BIP44Node';
+import type { RootedSLIP10PathTuple, SLIP10PathTuple } from './constants';
+import { BYTES_KEY_LENGTH } from './constants';
+import type { SupportedCurve } from './curves';
+import { getCurveByName } from './curves';
 import { deriveKeyFromPath } from './derivation';
 import { publicKeyToEthAddress } from './derivers/bip32';
 import {

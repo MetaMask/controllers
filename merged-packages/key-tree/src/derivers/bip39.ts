@@ -4,9 +4,10 @@ import { assert } from '@metamask/utils';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 
-import { DeriveChildKeyArgs } from '.';
-import { BIP39StringNode, BYTES_KEY_LENGTH } from '../constants';
-import { Curve } from '../curves';
+import type { DeriveChildKeyArgs } from '.';
+import type { BIP39StringNode } from '../constants';
+import { BYTES_KEY_LENGTH } from '../constants';
+import type { Curve } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { getFingerprint } from '../utils';
 

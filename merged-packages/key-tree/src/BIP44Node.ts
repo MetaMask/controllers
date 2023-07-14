@@ -1,17 +1,19 @@
 import { assert } from '@metamask/utils';
 
-import {
+import type {
   BIP44Depth,
+  PartialHDPathTuple,
+  RootedSLIP10PathTuple,
+  SLIP10Path,
+} from './constants';
+import {
   BIP44PurposeNodeToken,
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
   MAX_BIP_44_DEPTH,
   MIN_BIP_44_DEPTH,
-  PartialHDPathTuple,
-  RootedSLIP10PathTuple,
-  SLIP10Path,
 } from './constants';
-import { SupportedCurve } from './curves';
+import type { SupportedCurve } from './curves';
 import {
   decodeExtendedKey,
   encodeExtendedKey,

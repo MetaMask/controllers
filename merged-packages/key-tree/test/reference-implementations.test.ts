@@ -1,9 +1,5 @@
-import {
-  BIP44Node,
-  SLIP10Node,
-  BIP44PurposeNodeToken,
-  HDPathTuple,
-} from '../src';
+import type { SLIP10Node, HDPathTuple } from '../src';
+import { BIP44Node, BIP44PurposeNodeToken } from '../src';
 import { ed25519, secp256k1 } from '../src/curves';
 import { deriveKeyFromPath } from '../src/derivation';
 import { createBip39KeyFromSeed } from '../src/derivers/bip39';

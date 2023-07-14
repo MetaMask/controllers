@@ -2,15 +2,14 @@ import { bytesToHex } from '@metamask/utils';
 // eslint-disable-next-line import/no-nodejs-modules
 import { randomInt, randomBytes } from 'crypto';
 
+import type { BIP32Node, SLIP10Node } from '../src';
 import {
-  BIP32Node,
   BIP_32_HARDENED_OFFSET,
   ed25519,
   MAX_BIP_32_INDEX,
   secp256k1,
-  SLIP10Node,
 } from '../src';
-import { Curve } from '../src/curves';
+import type { Curve } from '../src/curves';
 import { createBip39KeyFromSeed } from '../src/derivers/bip39';
 
 /**

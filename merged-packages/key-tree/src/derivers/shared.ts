@@ -7,9 +7,10 @@ import {
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 
-import { DeriveChildKeyArgs, DerivedKeys } from '.';
+import type { DeriveChildKeyArgs, DerivedKeys } from '.';
 import { BIP_32_HARDENED_OFFSET, UNPREFIXED_PATH_REGEX } from '../constants';
-import { Curve, mod } from '../curves';
+import type { Curve } from '../curves';
+import { mod } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { isValidBytesKey, numberToUint32 } from '../utils';
 

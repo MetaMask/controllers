@@ -4,20 +4,23 @@ import { ripemd160 } from '@noble/hashes/ripemd160';
 import { sha256 } from '@noble/hashes/sha256';
 import { base58check as scureBase58check } from '@scure/base';
 
-import {
+import type {
   BIP32Node,
-  BIP44PurposeNodeToken,
   ChangeHDPathString,
   CoinTypeHDPathString,
   CoinTypeToAddressTuple,
   HardenedBIP32Node,
-  MAX_BIP_32_INDEX,
-  MAX_UNHARDENED_BIP_32_INDEX,
   UnhardenedBIP32Node,
-  UNPREFIXED_BIP_32_PATH_REGEX,
   UnprefixedNode,
 } from './constants';
-import { curves, SupportedCurve } from './curves';
+import {
+  BIP44PurposeNodeToken,
+  MAX_BIP_32_INDEX,
+  MAX_UNHARDENED_BIP_32_INDEX,
+  UNPREFIXED_BIP_32_PATH_REGEX,
+} from './constants';
+import type { SupportedCurve } from './curves';
+import { curves } from './curves';
 
 /**
  * Gets a string representation of a BIP-44 path of depth 2, i.e.:

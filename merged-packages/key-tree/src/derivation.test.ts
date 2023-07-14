@@ -1,12 +1,12 @@
 import { bytesToHex } from '@metamask/utils';
 
 import fixtures from '../test/fixtures';
-import { HDPathTuple } from './constants';
+import type { HDPathTuple } from './constants';
 import { secp256k1 } from './curves';
 import { deriveKeyFromPath, validatePathSegment } from './derivation';
 import { derivers } from './derivers';
 import { privateKeyToEthAddress } from './derivers/bip32';
-import { SLIP10Node } from './SLIP10Node';
+import type { SLIP10Node } from './SLIP10Node';
 import { getUnhardenedBIP32NodeToken, mnemonicPhraseToBytes } from './utils';
 
 const {

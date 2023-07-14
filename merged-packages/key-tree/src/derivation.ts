@@ -2,15 +2,17 @@ import { assert } from '@metamask/utils';
 
 import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
 import { BIP44Node } from './BIP44Node';
+import type { SLIP10Path } from './constants';
 import {
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
   MIN_BIP_44_DEPTH,
-  SLIP10Path,
   SLIP_10_PATH_REGEX,
 } from './constants';
-import { getCurveByName, SupportedCurve } from './curves';
-import { Deriver, derivers } from './derivers';
+import type { SupportedCurve } from './curves';
+import { getCurveByName } from './curves';
+import type { Deriver } from './derivers';
+import { derivers } from './derivers';
 import { SLIP10Node } from './SLIP10Node';
 
 /**

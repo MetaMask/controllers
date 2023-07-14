@@ -1,13 +1,13 @@
 import { assert } from '@metamask/utils';
 import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
 
-import { DeriveChildKeyArgs } from '.';
+import type { DeriveChildKeyArgs } from '.';
 import { BYTES_KEY_LENGTH } from '../constants';
 import { secp256k1 } from '../curves';
-import { SLIP10Node } from '../SLIP10Node';
+import type { SLIP10Node } from '../SLIP10Node';
 import { isValidBytesKey, validateBIP32Index } from '../utils';
+import type { DeriveNodeArgs } from './shared';
 import {
-  DeriveNodeArgs,
   deriveChildKey as sharedDeriveChildKey,
   deriveSecretExtension,
   generateEntropy,

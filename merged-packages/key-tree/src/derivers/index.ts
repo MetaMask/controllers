@@ -1,5 +1,5 @@
-import { Curve } from '../curves';
-import { SLIP10Node } from '../SLIP10Node';
+import type { Curve } from '../curves';
+import type { SLIP10Node } from '../SLIP10Node';
 import * as bip32 from './bip32';
 import * as bip39 from './bip39';
 import * as slip10 from './slip10';

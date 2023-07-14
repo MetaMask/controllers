@@ -1,9 +1,9 @@
 import { hexToBytes } from '@metamask/utils';
 
+import type { ExtendedKey } from './extended-keys';
 import {
   decodeExtendedKey,
   encodeExtendedKey,
-  ExtendedKey,
   PRIVATE_KEY_VERSION,
   PUBLIC_KEY_VERSION,
 } from './extended-keys';

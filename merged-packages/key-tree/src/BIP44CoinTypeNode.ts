@@ -1,18 +1,19 @@
 import { assert } from '@metamask/utils';
 
-import { BIP44Node, BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
-import {
+import type { BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
+import { BIP44Node } from './BIP44Node';
+import type {
   BIP39Node,
   BIP44Depth,
   BIP44PurposeNodeToken,
-  BIP_32_HARDENED_OFFSET,
   CoinTypeHDPathString,
   HardenedBIP32Node,
 } from './constants';
-import { SupportedCurve } from './curves';
+import { BIP_32_HARDENED_OFFSET } from './constants';
+import type { SupportedCurve } from './curves';
 import { deriveChildNode } from './SLIP10Node';
+import type { CoinTypeToAddressIndices } from './utils';
 import {
-  CoinTypeToAddressIndices,
   getBIP32NodeToken,
   getBIP44ChangePathString,
   getBIP44CoinTypePathString,
