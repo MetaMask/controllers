@@ -1,8 +1,7 @@
 import { concatBytes, stringToBytes } from '@metamask/utils';
-import { getPublicKey as getEd25519PublicKey } from '@noble/ed25519';
+import { ed25519 } from '@noble/curves/ed25519';
 
-export { CURVE as curve } from '@noble/ed25519';
-
+export const curve = ed25519.CURVE;
 export const name = 'ed25519';
 
 // Secret is defined in SLIP-10:
@@ -18,11 +17,11 @@ export const deriveUnhardenedKeys = false;
 
 export const publicKeyLength = 33;
 
-export const getPublicKey = async (
+export const getPublicKey = (
   privateKey: Uint8Array,
   _compressed?: boolean,
-): Promise<Uint8Array> => {
-  const publicKey = await getEd25519PublicKey(privateKey);
+): Uint8Array => {
+  const publicKey = ed25519.getPublicKey(privateKey);
   return concatBytes([new Uint8Array([0]), publicKey]);
 };
 

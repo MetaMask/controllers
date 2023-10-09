@@ -1,8 +1,8 @@
 import { hexToBytes } from '@metamask/utils';
-import { CURVE } from '@noble/secp256k1';
 
 import fixtures from '../../test/fixtures';
 import { secp256k1 } from '../curves';
+import { curve } from '../curves/secp256k1';
 import { hexStringToBytes } from '../utils';
 import { privateAdd } from './shared';
 
@@ -27,7 +27,7 @@ describe('privateAdd', () => {
   );
 
   it('throws if the tweak is larger than the curve order', () => {
-    const tweak = hexStringToBytes(CURVE.n.toString(16));
+    const tweak = hexStringToBytes(curve.n.toString(16));
 
     expect(() => privateAdd(PRIVATE_KEY, tweak, secp256k1)).toThrow(
       'Invalid tweak: Tweak is larger than the curve order.',

@@ -63,7 +63,9 @@ describe('deriveChildKey', () => {
 
     // This should never be the case.
     const error = new Error('Unable to derive child key.');
-    jest.spyOn(ed25519, 'getPublicKey').mockRejectedValueOnce(error);
+    jest.spyOn(ed25519, 'getPublicKey').mockImplementationOnce(() => {
+      throw error;
+    });
 
     await expect(
       deriveChildKey({
