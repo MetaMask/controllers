@@ -9,7 +9,7 @@ import { ed25519 } from '../src/curves';
 import { createBip39KeyFromSeed } from '../src/derivers/bip39';
 import derivationVectors from './vectors/derivation.json';
 
-type Vector = typeof derivationVectors.bip32.hardened[0];
+type Vector = (typeof derivationVectors.bip32.hardened)[0];
 
 type Options = {
   publicDerivation?: boolean;
