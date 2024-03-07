@@ -41,3 +41,9 @@ export const decompressPublicKey = (publicKey: Uint8Array): Uint8Array => {
   // Ed25519 public keys don't have a compressed form.
   return publicKey;
 };
+
+export const privateKeyLength = 32;
+
+export const masterNodeGenerationSpec = 'slip10';
+
+export const compressedPublicKeyLength = 33;

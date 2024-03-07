@@ -512,7 +512,7 @@ function validatePath(
  * @param curve - The curve to validate the path against.
  * @returns The child index and whether it is hardened.
  */
-function getValidatedPath(
+export function getValidatedPath(
   path: string | Uint8Array,
   node: SLIP10Node,
   curve: Curve,

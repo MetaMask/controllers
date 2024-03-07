@@ -55,3 +55,9 @@ export const decompressPublicKey = (publicKey: Uint8Array): Uint8Array => {
   const point = secp256k1.ProjectivePoint.fromHex(publicKey);
   return point.toRawBytes(false);
 };
+
+export const privateKeyLength = 32;
+
+export const masterNodeGenerationSpec = 'slip10';
+
+export const compressedPublicKeyLength = 33;

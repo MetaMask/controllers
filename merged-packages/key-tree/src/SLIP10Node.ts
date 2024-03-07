@@ -171,7 +171,10 @@ export class SLIP10Node implements SLIP10NodeInterface {
     const curveObject = getCurveByName(curve);
 
     if (privateKey) {
-      const privateKeyBytes = getBytesUnsafe(privateKey, BYTES_KEY_LENGTH);
+      const privateKeyBytes = getBytesUnsafe(
+        privateKey,
+        curveObject.privateKeyLength,
+      );
       assert(
         curveObject.isValidPrivateKey(privateKeyBytes),
         `Invalid private key: Value is not a valid ${curve} private key.`,
@@ -344,7 +347,10 @@ export class SLIP10Node implements SLIP10NodeInterface {
   }
 
   public get fingerprint(): number {
-    return getFingerprint(this.compressedPublicKeyBytes);
+    return getFingerprint(
+      this.compressedPublicKeyBytes,
+      getCurveByName(this.curve).compressedPublicKeyLength,
+    );
   }
 
   /**

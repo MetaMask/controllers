@@ -376,12 +376,16 @@ export const encodeBase58check = (value: Uint8Array): string => {
  * Get the fingerprint of a compressed public key as number.
  *
  * @param publicKey - The compressed public key to get the fingerprint for.
+ * @param compressedPublicKeyLength - The length of the compressed public key.
  * @returns The fingerprint of the public key.
  */
-export const getFingerprint = (publicKey: Uint8Array): number => {
-  if (!isValidBytesKey(publicKey, 33)) {
+export const getFingerprint = (
+  publicKey: Uint8Array,
+  compressedPublicKeyLength: number,
+): number => {
+  if (!isValidBytesKey(publicKey, compressedPublicKeyLength)) {
     throw new Error(
-      `Invalid public key: The key must be a 33-byte, non-zero byte array.`,
+      `Invalid public key: The key must be a ${compressedPublicKeyLength}-byte, non-zero byte array.`,
     );
   }
 
@@ -438,13 +442,14 @@ export function validateCurve(
  * Get a 4-byte-long `Uint8Array` from a numeric value.
  *
  * @param value - The value to convert to a `Uint8Array`.
+ * @param littleEndian - Whether to use little endian byte order.
  * @returns The `Uint8Array` corresponding to the `bigint` value.
  */
-export function numberToUint32(value: number) {
+export function numberToUint32(value: number, littleEndian = false) {
   const bytes = new Uint8Array(4);
   const view = createDataView(bytes);
 
-  view.setUint32(0, value, false);
+  view.setUint32(0, value, littleEndian);
 
   return bytes;
 }

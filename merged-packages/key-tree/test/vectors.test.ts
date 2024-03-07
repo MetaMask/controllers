@@ -1,15 +1,24 @@
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
-
 import { hexToBytes } from '@metamask/utils';
 
 import type { SLIP10PathTuple } from '../src';
 import { secp256k1 } from '../src';
 import type { Curve } from '../src/curves';
-import { ed25519 } from '../src/curves';
-import { createBip39KeyFromSeed } from '../src/derivers/bip39';
+import { ed25519Bip32, ed25519 } from '../src/curves';
+import {
+  createBip39KeyFromSeed,
+  entropyToCip3MasterNode,
+} from '../src/derivers/bip39';
 import derivationVectors from './vectors/derivation.json';
 
 type Vector = (typeof derivationVectors.bip32.hardened)[0];
+
+const masterNodeFromSeed = async (seed: Uint8Array, curve: Curve) => {
+  return curve.masterNodeGenerationSpec === 'slip10'
+    ? createBip39KeyFromSeed(seed, curve)
+    : // in the context of tests, we assume seed to be just random bytes which we use here as entropy
+      entropyToCip3MasterNode(seed, curve);
+};
 
 type Options = {
   publicDerivation?: boolean;
@@ -50,8 +59,7 @@ function generateTests(
 ) {
   describe(`seed: ${hexSeed}`, () => {
     it('derives the correct master keys', async () => {
-      const node = await createBip39KeyFromSeed(hexToBytes(hexSeed), curve);
-
+      const node = await masterNodeFromSeed(hexToBytes(hexSeed), curve);
       expect(node.privateKey).toBe(privateKey);
       expect(node.compressedPublicKey).toBe(publicKey);
       expect(node.chainCode).toBe(chainCode);
@@ -64,7 +72,7 @@ function generateTests(
     it('derives the correct child keys', async () => {
       expect.assertions(keys.length * 7);
 
-      const node = await createBip39KeyFromSeed(hexToBytes(hexSeed), curve);
+      const node = await masterNodeFromSeed(hexToBytes(hexSeed), curve);
 
       for (const key of keys) {
         const childNode = await node.derive(key.path.tuple as SLIP10PathTuple);
@@ -83,10 +91,9 @@ function generateTests(
       it('derives the correct public child keys', async () => {
         expect.assertions(keys.length * 7);
 
-        const node = await createBip39KeyFromSeed(
-          hexToBytes(hexSeed),
-          curve,
-        ).then((privateNode) => privateNode.neuter());
+        const node = await masterNodeFromSeed(hexToBytes(hexSeed), curve).then(
+          (privateNode) => privateNode.neuter(),
+        );
 
         for (const key of keys) {
           const childNode = await node.derive(
@@ -157,6 +164,29 @@ describe('vectors', () => {
     describe('mixed', () => {
       for (const vector of derivationVectors.slip10.mixed) {
         generateTests(vector);
+      }
+    });
+  });
+
+  describe('cip3', () => {
+    describe('hardened', () => {
+      for (const vector of derivationVectors.cip3.hardened) {
+        generateTests(vector, { curve: ed25519Bip32 });
+      }
+    });
+
+    describe('unhardened', () => {
+      for (const vector of derivationVectors.cip3.unhardened) {
+        generateTests(vector, {
+          publicDerivation: true,
+          curve: ed25519Bip32,
+        });
+      }
+    });
+
+    describe('mixed', () => {
+      for (const vector of derivationVectors.cip3.mixed) {
+        generateTests(vector, { curve: ed25519Bip32 });
       }
     });
   });

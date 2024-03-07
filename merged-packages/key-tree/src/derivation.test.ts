@@ -1,7 +1,7 @@
 import { bytesToHex } from '@metamask/utils';
 
 import fixtures from '../test/fixtures';
-import type { HDPathTuple } from './constants';
+import type { HDPathTuple, SLIP10Path } from './constants';
 import { secp256k1 } from './curves';
 import { deriveKeyFromPath, validatePathSegment } from './derivation';
 import { derivers } from './derivers';
@@ -24,6 +24,26 @@ const ethereumBip32PathParts = [
 
 describe('derivation', () => {
   describe('deriveKeyFromPath', () => {
+    it('derives the correct account key for cip3', async () => {
+      const fixture = fixtures.cip3[0];
+
+      const { accountNode } = fixture.nodes;
+      // generate parent key
+      const bip39Part = bip39MnemonicToMultipath(fixture.mnemonic);
+      const accountPath = fixture.derivationPath.slice(0, 3);
+
+      const cardanoBip32Path = accountPath.map(
+        (pathElement) => `cip3:${pathElement}`,
+      );
+      const multipath = [bip39Part, ...cardanoBip32Path] as SLIP10Path;
+      const node = await deriveKeyFromPath({
+        path: multipath,
+        curve: 'ed25519Bip32',
+      });
+
+      expect(node.privateKey).toBe(accountNode.privateKey);
+    });
+
     it('derives full BIP-44 paths', async () => {
       // generate keys
       const keys = await Promise.all(

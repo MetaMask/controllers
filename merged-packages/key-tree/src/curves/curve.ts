@@ -1,4 +1,5 @@
 import * as ed25519 from './ed25519';
+import * as ed25519Bip32 from './ed25519Bip32';
 import * as secp256k1 from './secp256k1';
 
 export type SupportedCurve = keyof typeof curves;
@@ -6,10 +7,20 @@ export type SupportedCurve = keyof typeof curves;
 export const curves = {
   secp256k1,
   ed25519,
+  ed25519Bip32,
 };
 
+type CurveSpecification =
+  | {
+      masterNodeGenerationSpec: 'slip10';
+      name: Extract<SupportedCurve, 'secp256k1' | 'ed25519'>;
+    }
+  | {
+      name: Extract<SupportedCurve, 'ed25519Bip32'>;
+      masterNodeGenerationSpec: 'cip3';
+    };
+
 export type Curve = {
-  name: SupportedCurve;
   secret: Uint8Array;
   deriveUnhardenedKeys: boolean;
   publicKeyLength: number;
@@ -24,7 +35,9 @@ export type Curve = {
   publicAdd: (publicKey: Uint8Array, tweak: Uint8Array) => Uint8Array;
   compressPublicKey: (publicKey: Uint8Array) => Uint8Array;
   decompressPublicKey: (publicKey: Uint8Array) => Uint8Array;
-};
+  privateKeyLength: number;
+  compressedPublicKeyLength: number;
+} & CurveSpecification;
 
 /**
  * Get a curve by name.

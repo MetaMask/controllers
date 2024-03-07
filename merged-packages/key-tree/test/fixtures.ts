@@ -445,6 +445,190 @@ export default {
       ],
     },
   ],
+  cip3: [
+    {
+      // taken from CIP-03 test vectors https://github.com/cardano-foundation/CIPs/blob/09d7d8ee1bd64f7e6b20b5a6cae088039dce00cb/CIP-0003/Icarus.md#test-vectors
+      mnemonic:
+        'eight country switch draw meat scout mystery blade tip drift useless good keep usage title',
+      entropyHex: '46e62370a138a182a498b8e2885bc032379ddf38',
+      derivationPath: [`1852'`, `1815'`, `0'`, `0`, `0`],
+      nodes: {
+        bip39Node: {
+          depth: 0,
+          masterFingerprint: 1247889873,
+          parentFingerprint: 0,
+          index: 0,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0xc065afd2832cd8b087c4d9ab7011f481ee1e0721e78ea5dd609f3ab3f156d245d176bd8fd4ec60b4731c3918a2a72a0226c0cd119ec35b47e4d55884667f552a',
+          publicKey:
+            '0x757e95578798ef733ad93be322fb043053d56b445d3fe502bcf7cb4a6b0f0c6a',
+          chainCode:
+            '0x23f7fdcd4a10c6cd2c7393ac61d877873e248f417634aa3d812af327ffe9d620',
+        },
+        // rest of the nodes generated using cardano-serialization-lib
+        // https://gist.github.com/PeterBenc/342ded2c787b8140912076c7e210e3db
+        purposeNode: {
+          depth: 1,
+          masterFingerprint: 1247889873,
+          parentFingerprint: 1247889873,
+          index: 2147485500,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0x98f25c3313e03b7843072514c5f024782072406b37569403423d2361f356d2459ecc73a09adb2aa37e9f8530fd1e6745eee1ea248a85417a700e774182c7fa3d',
+          publicKey:
+            '0xd4674357f268cdb95e6b6f3c6eb2fe32f3b59932acbd1baddea4320005225d66',
+          chainCode:
+            '0x864cf884b7faf31f33733e6fc900d4446394d8d6ee55610473ef24c6bb3fb91f',
+        },
+        coinTypeNode: {
+          depth: 2,
+          masterFingerprint: 1247889873,
+          parentFingerprint: 186342781,
+          index: 2147485463,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0x504e9dc3ed6d22231a0e43cd250fcda7757b42aa9affae5f20dea1fef956d2450cc3d2abd5b6a6626d73d789a6ad77cd0e5d92e093dc5a1484c71e4f996f495e',
+          publicKey:
+            '0x9490b1415b20f286a76092d5b091f8240c169cbe5fd0695b66fbf43934ec6461',
+          chainCode:
+            '0xb84879a6adef2f9d283e8a1815cfb946ee5ce70873632097bb723ac2565d8002',
+        },
+        accountNode: {
+          depth: 3,
+          masterFingerprint: 1247889873,
+          parentFingerprint: 1372272135,
+          index: 2147483648,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0xf80081fa05eece83236e612463aafad20d6b92eee67479a1977959540057d2452173fe9a0fccf61cf2cc7c52638f2ded6c08002a71424ca5b93681ee7a385828',
+          publicKey:
+            '0x7f376415131590bf8cc88e8466fd24a6f95eebd6c2271d89cb51a81402618c9b',
+          chainCode:
+            '0x332b13689518700be3c6d330d72490c42e8a98b7495889a27851e543319fb095',
+        },
+        changeNode: {
+          depth: 4,
+          masterFingerprint: 1247889873,
+          parentFingerprint: 3705424019,
+          index: 0,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0x00b5105515ee89a7718c0bdbe05c9613a17a5907f5943dacfde9802f0157d2458bddfc042979fb8b30cb13437edc7ec7c1836676e063780d5db0b8ae84babe4e',
+          publicKey:
+            '0x4fc838b965349324a94379b4fe9ec2319c6574f30ac55c8e4e76de55f2981296',
+          chainCode:
+            '0x47b1b5663a3bddf78d9698ca580263af68a907eed0dd6421ef2daf62c20d61b9',
+        },
+        addressIndexNode: {
+          depth: 5,
+          masterFingerprint: 1247889873,
+          parentFingerprint: 3669962052,
+          index: 0,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0x00df3ecf0e02979dd9ee569d09412c1f370f476054aaa1ef3cf5a08c0557d245a6ad0fe81ab55e36178f5866dc8f83cf57239fdeee35c737ef887964aae20500',
+          publicKey:
+            '0xcc9809944150c00f3913cd2b103e9b42fe6243fc36a76f9eb800692e2bda3f2e',
+          chainCode:
+            '0x2b2dd0a9b83141f6650c40abec9ed52ecaa6a567825cb2c7a14b9452bca0c020',
+        },
+      },
+    },
+    {
+      // fixture for 24-word mnemonic since trezor implementation of mnemonic to entropy for cardano had a bug that manifested only for 24 word mnemonics and it caused trezor to deviate
+      // https://github.com/cardano-foundation/CIPs/blob/master/CIP-0003/Icarus.md#trezor
+      // note that this test case has different result since we do not deviate from the standard
+      // https://github.com/trezor/trezor-firmware/pull/1388/files#diff-17c19a8d23037f23062138997edf774fde43ab9dfbf7726d1f701edb6a2f133eR105
+      mnemonic:
+        'balance exotic ranch knife glory slow tape favorite yard gym awake ill exist useless parent aim pig stay effort into square gasp credit butter',
+      entropyHex:
+        '11aa02c63dd639987772a0fecd0040b874fde028082aa49a9d1abaed36c04cc0',
+      derivationPath: [`1852'`, `1815'`, `0'`, `0`, `0`],
+      nodes: {
+        bip39Node: {
+          depth: 0,
+          masterFingerprint: 2293781934,
+          parentFingerprint: 0,
+          index: 0,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0xe04d93999044f13fb435c6db11798e60e14064ebebcf563163e12331738c7748024836e762355f74ce59ef15e0af7ad50e6978a412543ab0bbc3a38451852206',
+          publicKey:
+            '0x3478b7d11022ab519ae6f1747d8078eb07740903fe1f7aff5909292ae39177f5',
+          chainCode:
+            '0x88f086ca813a0ce774983cfb6c88611996b2571ae2f1da894ca2fd639218d7c1',
+        },
+        // rest of the nodes generated using cardano-serialization-lib
+        // https://gist.github.com/PeterBenc/342ded2c787b8140912076c7e210e3db
+        purposeNode: {
+          depth: 1,
+          masterFingerprint: 2293781934,
+          parentFingerprint: 2293781934,
+          index: 2147485500,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0x305c7df2d77b116892dd47019a0913ad0769216e16b73d0fca6088dd748c774843861f9f2a07aff8e51c7807d92bc6ee432154a992227c0df2821d96c3a2763d',
+          publicKey:
+            '0x5a067a7fdfb79a5160b5a1b3d297e035ef193a9b464b08bfacbaab08b0798cb2',
+          chainCode:
+            '0xf13851cc3517cb6b3603ce00a7570c50f41c2c4d20edbfcdee160190f1ef9362',
+        },
+        coinTypeNode: {
+          depth: 2,
+          masterFingerprint: 2293781934,
+          parentFingerprint: 2022252320,
+          index: 2147485463,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0xd08b653d6f960079db25f38e8428f7f2891bd1c92b63ad7e0015265c768c77485bf55f8ccbb0a7188ebafcbd30219300ce3b86f54b11e236961efc814688810e',
+          publicKey:
+            '0x18bd1deaaa518b0ea46669c54c51606d505555ffc4cc6592f4bc57b41653e118',
+          chainCode:
+            '0xeb6b4805fa0f23448e20cdbb15b977cb908f4c744c0a2c0c4ee78608190d5e8a',
+        },
+        accountNode: {
+          depth: 3,
+          masterFingerprint: 2293781934,
+          parentFingerprint: 3388798503,
+          index: 2147483648,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0xe81381a5e59e98dc7eaffecc83d918ad8331938eedf3429d7d29dbfa768c774899268aba2b299d9513de3a33c134fedd19d209701456fe86757c9f64230c010f',
+          publicKey:
+            '0xce43a6e8929052830856bb58c132e5fe32c2f95697edd700a549c0bb3bf47d6f',
+          chainCode:
+            '0xa83a29374a48f18c8a423a34eb1c34dabe72b74669776999b9e87ff6bb48df7a',
+        },
+        changeNode: {
+          depth: 4,
+          masterFingerprint: 2293781934,
+          parentFingerprint: 2105312604,
+          index: 0,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0x5049005d5a97d5ea60753fb511460079a56b9981bc2e75f05e40dd46788c7748d664152bff95f76efdd0052643eb096eea6f18b6793365563bcaa12b3aa04fed',
+          publicKey:
+            '0xd756d64d9accf0a209bd7f1d2bd23500038191ff90635554fc05bff5ddd940bf',
+          chainCode:
+            '0x9534f22f806433f52d280508d89943cec05685072bbc82fa714e0d55f23f17fd',
+        },
+        addressIndexNode: {
+          depth: 5,
+          masterFingerprint: 2293781934,
+          parentFingerprint: 2627281642,
+          index: 0,
+          curve: 'ed25519Bip32',
+          privateKey:
+            '0xf0e6e40de5b8ae0d9c48f8ce7f829231aff420d792ff995dc56040f97b8c7748377ede2ad5468ce8103d2f3af977bb081c3c6aba76b36b72e56a7ba38559224d',
+          publicKey:
+            '0x40c5df588f7f2d3ccd51947dc3f9add61bb0e315d8f392a8bdce5587590bd21b',
+          chainCode:
+            '0x329c850f00e15cfa47ee8b74154c8a545fb8af4557586de29a9cd0ae72325b2f',
+        },
+      },
+    },
+  ],
 
   // The BIP-32 specification invalid extended key test vectors.
   // https://github.com/bitcoin/bips/blob/a3a397c82384220fc871852c809f73898a4d547c/bip-0032.mediawiki#test-vector-5

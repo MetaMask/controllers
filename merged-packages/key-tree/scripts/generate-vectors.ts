@@ -8,9 +8,10 @@ import {
   ed25519,
   MAX_BIP_32_INDEX,
   secp256k1,
+  ed25519Bip32,
 } from '../src';
-import type { Curve } from '../src/curves';
-import { createBip39KeyFromSeed } from '../src/derivers/bip39';
+import { type Curve } from '../src/curves';
+import { deriveChildKey } from '../src/derivers/bip39';
 
 /**
  * Get a random boolean value.
@@ -58,7 +59,7 @@ function getRandomSeed(length = randomInt(16, 64)) {
  * @returns A random BIP-32 path.
  */
 function getRandomPath(
-  spec: 'bip32' | 'slip10',
+  spec: 'bip32' | 'slip10' | 'cip3',
   length = randomInt(1, 20),
   hardened?: boolean,
 ) {
@@ -84,7 +85,7 @@ function getRandomPath(
  */
 async function getRandomKeyVector(
   node: SLIP10Node,
-  spec: 'bip32' | 'slip10',
+  spec: 'bip32' | 'slip10' | 'cip3',
   hardened?: boolean,
 ) {
   const path = getRandomPath(spec, undefined, hardened);
@@ -116,13 +117,13 @@ async function getRandomKeyVector(
  * @param curve - The curve to use. Defaults to secp256k1.
  */
 async function getRandomVector(
-  spec: 'bip32' | 'slip10',
+  spec: 'bip32' | 'slip10' | 'cip3',
   amount = 10,
   hardened?: boolean,
   curve: Curve = secp256k1,
 ) {
   const seed = getRandomSeed();
-  const node = await createBip39KeyFromSeed(seed, curve);
+  const node = await deriveChildKey({ path: seed, curve });
 
   return {
     hexSeed: bytesToHex(seed),
@@ -153,7 +154,7 @@ async function getRandomVector(
  * @returns The random vectors.
  */
 async function getRandomVectors(
-  spec: 'bip32' | 'slip10',
+  spec: 'bip32' | 'slip10' | 'cip3',
   amount = 10,
   hardened?: boolean,
   curve: Curve = secp256k1,
@@ -184,6 +185,11 @@ async function getOutput() {
       },
       unhardened: await getRandomVectors('slip10', 50, false),
       mixed: await getRandomVectors('bip32', 50),
+    },
+    cip3: {
+      hardened: await getRandomVectors('cip3', 50, true, ed25519Bip32),
+      unhardened: await getRandomVectors('cip3', 50, false, ed25519Bip32),
+      mixed: await getRandomVectors('cip3', 50, undefined, ed25519Bip32),
     },
   };
 }

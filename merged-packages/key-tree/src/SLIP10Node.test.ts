@@ -525,7 +525,7 @@ describe('SLIP10Node', () => {
           specification: 'bip32',
         }),
       ).rejects.toThrow(
-        'Invalid curve: Only the following curves are supported: secp256k1, ed25519.',
+        'Invalid curve: Only the following curves are supported: secp256k1, ed25519, ed25519Bip32.',
       );
     });
   });
