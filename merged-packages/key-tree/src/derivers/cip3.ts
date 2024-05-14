@@ -184,7 +184,7 @@ export const derivePrivateKey = async ({
   // 8[ZL] + kPL
   const childKl = add(trunc28Mul8(zl), parentKl);
   // ZR + kPR
-  const childKr = add(zr, mod2Pow256(parentKr));
+  const childKr = add(zr, parentKr);
   return concatBytes([childKl, childKr]);
 };
 
