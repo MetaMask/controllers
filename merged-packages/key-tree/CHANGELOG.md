@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.1.0]
+### Added
+- Add support for Cardano key derivation according to CIP3-Icarus ([#158](https://github.com/MetaMask/key-tree/pull/158), [#170](https://github.com/MetaMask/key-tree/pull/170), [#171](https://github.com/MetaMask/key-tree/pull/171), [#172](https://github.com/MetaMask/key-tree/pull/172))
+- Export `getBIP44CoinTypeToAddressPathTuple` function ([#173](https://github.com/MetaMask/key-tree/pull/173))
+
+### Changed
+- Replace `@noble/ed25519` and `@noble/secp256k1` with `@noble/curves` ([#154](https://github.com/MetaMask/key-tree/pull/154))
+- Bump several MetaMask dependencies ([#151](https://github.com/MetaMask/key-tree/pull/151), [#165](https://github.com/MetaMask/key-tree/pull/165), [#167](https://github.com/MetaMask/key-tree/pull/167))
+
 ## [9.0.0]
 ### Changed
 - **BREAKING:** Disallow importing from `./dist` paths ([#147](https://github.com/MetaMask/key-tree/pull/147))
@@ -153,7 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v9.0.0...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v9.1.0...HEAD
+[9.1.0]: https://github.com/MetaMask/key-tree/compare/v9.0.0...v9.1.0
 [9.0.0]: https://github.com/MetaMask/key-tree/compare/v8.0.0...v9.0.0
 [8.0.0]: https://github.com/MetaMask/key-tree/compare/v7.1.1...v8.0.0
 [7.1.1]: https://github.com/MetaMask/key-tree/compare/v7.1.0...v7.1.1
