@@ -2,7 +2,7 @@
 
 An interface over [SLIP-10], [BIP-32], and [BIP-44] key derivation paths.
 
-This library was audited by Cure53 in February 2023. The audit report can be found [here (PDF)](./audits/Cure53-2023-02.pdf).
+This library was audited by Cure53 in February 2023, and April 2024. The audit reports can be found [here](./audits).
 
 ## Installation
 
