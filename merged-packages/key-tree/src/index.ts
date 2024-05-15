@@ -29,5 +29,9 @@ export {
 } from './BIP44CoinTypeNode';
 export * from './constants';
 export type { CoinTypeToAddressIndices } from './utils';
-export { isValidBIP32PathSegment, mnemonicPhraseToBytes } from './utils';
+export {
+  getBIP44CoinTypeToAddressPathTuple,
+  isValidBIP32PathSegment,
+  mnemonicPhraseToBytes,
+} from './utils';
 export { createBip39KeyFromSeed } from './derivers';

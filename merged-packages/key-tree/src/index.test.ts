@@ -8,6 +8,7 @@ import {
   createBip39KeyFromSeed,
   mnemonicPhraseToBytes,
   ed25519Bip32,
+  getBIP44CoinTypeToAddressPathTuple,
 } from '.';
 
 // This is purely for coverage shenanigans
@@ -23,5 +24,6 @@ describe('index', () => {
     expect(isValidBIP32PathSegment).toBeDefined();
     expect(createBip39KeyFromSeed).toBeDefined();
     expect(mnemonicPhraseToBytes).toBeDefined();
+    expect(getBIP44CoinTypeToAddressPathTuple).toBeDefined();
   });
 });
