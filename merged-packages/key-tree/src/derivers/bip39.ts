@@ -106,6 +106,11 @@ export async function entropyToCip3MasterNode(
   entropy: Uint8Array,
   curve: Extract<Curve, { masterNodeGenerationSpec: 'cip3' }>,
 ): Promise<SLIP10Node> {
+  assert(
+    entropy.length >= 16 && entropy.length <= 64,
+    'Invalid entropy: The entropy must be between 16 and 64 bytes long.',
+  );
+
   const rootNode = pbkdf2(sha512, curve.secret, entropy, {
     c: 4096,
     dkLen: 96,

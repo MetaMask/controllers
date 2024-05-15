@@ -83,9 +83,10 @@ describe('createBip39KeyFromSeed', () => {
 });
 
 describe('Cip3', () => {
-  fixtures.cip3.forEach((fixture) => {
-    describe('entropyToCip3MasterNode', () => {
-      it('derives the correct bip39 key for ed25519Bip32 curve', async () => {
+  describe('entropyToCip3MasterNode', () => {
+    it.each(fixtures.cip3)(
+      'derives the correct bip39 key for ed25519Bip32 curve',
+      async (fixture) => {
         const result = await entropyToCip3MasterNode(
           hexToBytes(fixture.entropyHex),
           ed25519Bip32,
@@ -93,11 +94,30 @@ describe('Cip3', () => {
         const { bip39Node } = fixture.nodes;
         expect(result.privateKey).toBe(bip39Node.privateKey);
         expect(result.chainCode).toBe(bip39Node.chainCode);
-      });
+      },
+    );
+
+    it('throws if the entropy is less than 16 bytes', async () => {
+      await expect(
+        entropyToCip3MasterNode(new Uint8Array(15), ed25519Bip32),
+      ).rejects.toThrow(
+        'Invalid entropy: The entropy must be between 16 and 64 bytes long.',
+      );
     });
 
-    describe('deriveChildKey', () => {
-      it('derives the correct child key for ed25519Bip32 curve from mnemonic', async () => {
+    it('throws if the entropy is greater than 64 bytes', async () => {
+      await expect(
+        entropyToCip3MasterNode(new Uint8Array(65), ed25519Bip32),
+      ).rejects.toThrow(
+        'Invalid entropy: The entropy must be between 16 and 64 bytes long.',
+      );
+    });
+  });
+
+  describe('deriveChildKey', () => {
+    it.each(fixtures.cip3)(
+      'derives the correct child key for ed25519Bip32 curve from mnemonic',
+      async (fixture) => {
         const result = await deriveChildKey({
           path: fixture.mnemonic,
           curve: ed25519Bip32,
@@ -105,7 +125,7 @@ describe('Cip3', () => {
         const { bip39Node } = fixture.nodes;
         expect(result.privateKey).toBe(bip39Node.privateKey);
         expect(result.chainCode).toBe(bip39Node.chainCode);
-      });
-    });
+      },
+    );
   });
 });
