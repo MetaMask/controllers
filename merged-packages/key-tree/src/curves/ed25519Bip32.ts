@@ -3,6 +3,7 @@ import {
   bytesToHex,
   hexToBigInt,
   remove0x,
+  assert,
 } from '@metamask/utils';
 import { mod } from '@noble/curves/abstract/modular';
 import { ed25519 } from '@noble/curves/ed25519';
@@ -21,15 +22,46 @@ export const name = 'ed25519Bip32';
 export const secret = stringToBytes('');
 
 /**
- * Always returns true.
- * For root node derivation, https://github.com/cardano-foundation/CIPs/blob/09d7d8ee1bd64f7e6b20b5a6cae088039dce00cb/CIP-0003/Icarus.md does not mention any cases when the private key is invalid.
- * For child node derivation, https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf does not mention any cases when the private key is invalid.
+ * Get a byte from a private key at a given index.
  *
- * @param _privateKey - The private key to check.
- * @returns True.
+ * @param privateKey - The private key.
+ * @param index - The index of the byte to get.
+ * @returns The byte at the given index.
+ * @throws If the private key is too short.
  */
-export const isValidPrivateKey = (_privateKey: Uint8Array | string | bigint) =>
-  true;
+function getByte(privateKey: Uint8Array, index: number): number {
+  const byte = privateKey[index];
+  assert(byte !== undefined, 'Private key is too short.');
+
+  return byte;
+}
+
+/**
+ * Check if a private key is valid.
+ *
+ * @param privateKey - The private key to check.
+ * @returns Whether the private key is valid.
+ */
+export const isValidPrivateKey = (privateKey: Uint8Array) => {
+  /* eslint-disable no-bitwise */
+  // Lowest 3 bits of the first byte must be zero
+  if ((getByte(privateKey, 0) & 0b00000111) !== 0) {
+    return false;
+  }
+
+  // The highest bit of the last byte must be zero
+  if ((getByte(privateKey, 31) & 0b10000000) !== 0) {
+    return false;
+  }
+
+  // The second highest bit of the last byte must be one
+  if ((getByte(privateKey, 31) & 0b01000000) !== 0b01000000) {
+    return false;
+  }
+  /* eslint-enable no-bitwise */
+
+  return true;
+};
 
 export const deriveUnhardenedKeys = true;
 
