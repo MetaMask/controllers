@@ -1287,7 +1287,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ts-bridge/cli@npm:^0.1.4":
+"@ts-bridge/cli@npm:0.1.4":
   version: 0.1.4
   resolution: "@ts-bridge/cli@npm:0.1.4"
   dependencies:
@@ -1304,6 +1304,26 @@ __metadata:
     ts-bridge: ./dist/index.js
     tsbridge: ./dist/index.js
   checksum: f42e18505d56bd684c4fb15c346a05c2eb11cde36a7f6d5e8d09b69a5638f93b9b42c9063982d698ea1465a746c700edc293677381fbabe42f11924bb4888144
+  languageName: node
+  linkType: hard
+
+"@ts-bridge/cli@patch:@ts-bridge/cli@npm%3A0.1.4#./.yarn/patches/@ts-bridge-cli-npm-0.1.4-7b3932d7f6.patch::locator=%40metamask%2Fkey-tree%40workspace%3A.":
+  version: 0.1.4
+  resolution: "@ts-bridge/cli@patch:@ts-bridge/cli@npm%3A0.1.4#./.yarn/patches/@ts-bridge-cli-npm-0.1.4-7b3932d7f6.patch::version=0.1.4&hash=a25589&locator=%40metamask%2Fkey-tree%40workspace%3A."
+  dependencies:
+    chalk: ^5.3.0
+    resolve.exports: ^2.0.2
+    yargs: ^17.7.2
+  peerDependencies:
+    "@ts-bridge/shims": ^0.1.1
+    typescript: ">=4.8.0"
+  peerDependenciesMeta:
+    "@ts-bridge/shims":
+      optional: true
+  bin:
+    ts-bridge: ./dist/index.js
+    tsbridge: ./dist/index.js
+  checksum: b250a9d478663335e86b8460b9e4af787730f7ff4555ef7ba65942811702ac3bb572991cb0c178aa5f98943783bb78ea80fcd5fa20fc0ddad71c7aba963fac78
   languageName: node
   linkType: hard
 

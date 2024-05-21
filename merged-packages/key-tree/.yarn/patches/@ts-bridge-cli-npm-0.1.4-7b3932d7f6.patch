@@ -1,0 +1,12 @@
+diff --git a/dist/build-type.js b/dist/build-type.js
+index 715b7f8a8df344c5becfd4f13b41e45941061b52..62f0b617ee6f63a0367593ae2ee20d8f309011df 100644
+--- a/dist/build-type.js
++++ b/dist/build-type.js
+@@ -8,7 +8,6 @@ export const BUILD_TYPES = {
+         declarationExtension: '.d.mts',
+         target: ModuleKind.ESNext,
+         getTransformers: (options) => [
+-            getNamedImportTransformer(options),
+             getTargetTransformer(ModuleKind.ESNext),
+         ],
+         getShimsTransformers: (options) => [
