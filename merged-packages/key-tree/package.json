@@ -1,6 +1,6 @@
 {
   "name": "@metamask/key-tree",
-  "version": "9.1.0",
+  "version": "9.1.1",
   "description": "An interface over BIP-32 and BIP-39 key derivation paths",
   "homepage": "https://github.com/MetaMask/key-tree#readme",
   "bugs": {
