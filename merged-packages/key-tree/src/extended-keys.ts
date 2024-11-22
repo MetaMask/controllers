@@ -37,8 +37,8 @@ type ExtendedPrivateKey = ExtendedKeyLike & {
 export type ExtendedKey = ExtendedPublicKey | ExtendedPrivateKey;
 
 /**
- * Decodes an extended public or private key. In the case of an extended public key, the public key
- * is returned in the uncompressed form.
+ * Decode an extended public or private key. In the case of an extended public
+ * key, the public key is returned in the uncompressed form.
  *
  * Throws an error if the extended key is invalid.
  *

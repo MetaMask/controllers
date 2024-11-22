@@ -14,12 +14,7 @@ import {
   MIN_BIP_44_DEPTH,
 } from './constants';
 import type { SupportedCurve } from './curves';
-import {
-  decodeExtendedKey,
-  encodeExtendedKey,
-  PRIVATE_KEY_VERSION,
-  PUBLIC_KEY_VERSION,
-} from './extended-keys';
+import { decodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
 import { SLIP10Node, validateBIP32Depth } from './SLIP10Node';
 import { isHardened } from './utils';
 
@@ -279,26 +274,7 @@ export class BIP44Node implements BIP44NodeInterface {
   }
 
   public get extendedKey(): string {
-    const data = {
-      depth: this.depth,
-      parentFingerprint: this.parentFingerprint,
-      index: this.index,
-      chainCode: this.chainCodeBytes,
-    };
-
-    if (this.privateKeyBytes) {
-      return encodeExtendedKey({
-        ...data,
-        version: PRIVATE_KEY_VERSION,
-        privateKey: this.privateKeyBytes,
-      });
-    }
-
-    return encodeExtendedKey({
-      ...data,
-      version: PUBLIC_KEY_VERSION,
-      publicKey: this.publicKeyBytes,
-    });
+    return this.#node.extendedKey;
   }
 
   public get curve(): SupportedCurve {

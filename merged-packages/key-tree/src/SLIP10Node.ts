@@ -9,6 +9,12 @@ import { getCurveByName } from './curves';
 import { deriveKeyFromPath } from './derivation';
 import { publicKeyToEthAddress } from './derivers/bip32';
 import {
+  decodeExtendedKey,
+  encodeExtendedKey,
+  PRIVATE_KEY_VERSION,
+  PUBLIC_KEY_VERSION,
+} from './extended-keys';
+import {
   getBytes,
   getBytesUnsafe,
   getFingerprint,
@@ -124,6 +130,18 @@ export class SLIP10Node implements SLIP10NodeInterface {
   }
 
   /**
+   * Create a new SLIP-10 node from a BIP-32 serialised extended key string.
+   * The key may be either public or private. Note that `secp256k1` is assumed
+   * as the curve for the key.
+   *
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * @param extendedKey - The BIP-32 extended key string.
+   */
+  static async fromExtendedKey(extendedKey: string): Promise<SLIP10Node>;
+
+  /**
    * Create a new SLIP-10 node from a key and chain code. You must specify
    * either a private key or a public key. When specifying a private key,
    * the public key will be derived from the private key.
@@ -145,16 +163,83 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @param options.chainCode - The chain code for the node.
    * @param options.curve - The curve used by the node.
    */
-  static async fromExtendedKey({
-    depth,
-    masterFingerprint,
-    parentFingerprint,
-    index,
-    privateKey,
-    publicKey,
-    chainCode,
-    curve,
-  }: SLIP10ExtendedKeyOptions) {
+  static async fromExtendedKey(
+    // These signatures could technically be combined, but it's easier to
+    // document them separately.
+    // eslint-disable-next-line @typescript-eslint/unified-signatures
+    options: SLIP10ExtendedKeyOptions,
+  ): Promise<SLIP10Node>;
+
+  /**
+   * Create a new SLIP-10 node from a key and chain code. You must specify
+   * either a private key or a public key. When specifying a private key,
+   * the public key will be derived from the private key.
+   *
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * @param options - The options for the new node. This can be an object
+   * containing the extended key options, or a string containing the extended
+   * key.
+   * @param options.depth - The depth of the node.
+   * @param options.masterFingerprint - The fingerprint of the master node, i.e., the
+   * node at depth 0. May be undefined if this node was created from an extended
+   * key.
+   * @param options.parentFingerprint - The fingerprint of the parent key, or 0 if
+   * the node is a master node.
+   * @param options.index - The index of the node, or 0 if the node is a master node.
+   * @param options.privateKey - The private key for the node.
+   * @param options.publicKey - The public key for the node. If a private key is
+   * specified, this parameter is ignored.
+   * @param options.chainCode - The chain code for the node.
+   * @param options.curve - The curve used by the node.
+   */
+  static async fromExtendedKey(
+    options: SLIP10ExtendedKeyOptions | string,
+  ): Promise<SLIP10Node> {
+    if (typeof options === 'string') {
+      const extendedKey = decodeExtendedKey(options);
+
+      const { chainCode, depth, parentFingerprint, index } = extendedKey;
+
+      if (extendedKey.version === PRIVATE_KEY_VERSION) {
+        const { privateKey } = extendedKey;
+
+        return SLIP10Node.fromExtendedKey({
+          depth,
+          parentFingerprint,
+          index,
+          privateKey,
+          chainCode,
+          // BIP-32 key serialisation assumes `secp256k1`.
+          curve: 'secp256k1',
+        });
+      }
+
+      const { publicKey } = extendedKey;
+
+      return SLIP10Node.fromExtendedKey({
+        depth,
+        parentFingerprint,
+        index,
+        publicKey,
+        chainCode,
+        // BIP-32 key serialisation assumes `secp256k1`.
+        curve: 'secp256k1',
+      });
+    }
+
+    const {
+      depth,
+      masterFingerprint,
+      parentFingerprint,
+      index,
+      privateKey,
+      publicKey,
+      chainCode,
+      curve,
+    } = options;
+
     const chainCodeBytes = getBytes(chainCode, BYTES_KEY_LENGTH);
 
     validateCurve(curve);
@@ -351,6 +436,43 @@ export class SLIP10Node implements SLIP10NodeInterface {
       this.compressedPublicKeyBytes,
       getCurveByName(this.curve).compressedPublicKeyLength,
     );
+  }
+
+  /**
+   * Get the extended public or private key for the SLIP-10 node. SLIP-10
+   * doesn't specify a format for extended keys, so we use the BIP-32 format.
+   *
+   * This property is only supported for `secp256k1` nodes, as other curves
+   * don't specify a standard format for extended keys.
+   *
+   * @returns The extended public or private key for the node.
+   */
+  public get extendedKey(): string {
+    assert(
+      this.curve === 'secp256k1',
+      'Unable to get extended key for this node: Only secp256k1 is supported.',
+    );
+
+    const data = {
+      depth: this.depth,
+      parentFingerprint: this.parentFingerprint,
+      index: this.index,
+      chainCode: this.chainCodeBytes,
+    };
+
+    if (this.privateKeyBytes) {
+      return encodeExtendedKey({
+        ...data,
+        version: PRIVATE_KEY_VERSION,
+        privateKey: this.privateKeyBytes,
+      });
+    }
+
+    return encodeExtendedKey({
+      ...data,
+      version: PUBLIC_KEY_VERSION,
+      publicKey: this.publicKeyBytes,
+    });
   }
 
   /**

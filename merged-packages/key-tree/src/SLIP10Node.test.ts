@@ -5,6 +5,7 @@ import { BIP44PurposeNodeToken } from './constants';
 import { ed25519, secp256k1 } from './curves';
 import { compressPublicKey } from './curves/secp256k1';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
+import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
 import { SLIP10Node } from './SLIP10Node';
 import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
 
@@ -38,353 +39,454 @@ describe('SLIP10Node', () => {
   });
 
   describe('fromExtendedKey', () => {
-    it('initializes a new node from a private key', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: secp256k1,
-      });
+    describe('using an object', () => {
+      it('initializes a new node from a private key', async () => {
+        const { privateKeyBytes, chainCodeBytes } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
 
-      const node = await SLIP10Node.fromExtendedKey({
-        privateKey,
-        chainCode,
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'secp256k1',
-      });
-
-      expect(node.depth).toBe(0);
-      expect(node.privateKeyBytes).toHaveLength(32);
-      expect(node.publicKeyBytes).toHaveLength(65);
-    });
-
-    it('initializes a new node from a hexadecimal private key and chain code', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: secp256k1,
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        privateKey,
-        chainCode,
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'secp256k1',
-      });
-
-      expect(node.depth).toBe(0);
-      expect(node.privateKeyBytes).toHaveLength(32);
-      expect(node.publicKeyBytes).toHaveLength(65);
-    });
-
-    it('initializes a new ed25519 node from a private key', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: ed25519,
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        privateKey,
-        chainCode,
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'ed25519',
-      });
-
-      expect(node.depth).toBe(0);
-      expect(node.privateKeyBytes).toHaveLength(32);
-      expect(node.publicKeyBytes).toHaveLength(33);
-    });
-
-    it('initializes a new ed25519 node from a zero private key', async () => {
-      const node = await SLIP10Node.fromExtendedKey({
-        privateKey: new Uint8Array(32).fill(0),
-        chainCode: new Uint8Array(32).fill(1),
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'ed25519',
-      });
-
-      expect(node.depth).toBe(0);
-      expect(node.privateKeyBytes).toStrictEqual(new Uint8Array(32).fill(0));
-      expect(node.publicKeyBytes).toHaveLength(33);
-    });
-
-    it('initializes a new node from a public key', async () => {
-      const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: secp256k1,
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        publicKey: publicKeyBytes,
-        chainCode: chainCodeBytes,
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'secp256k1',
-      });
-
-      expect(node.depth).toBe(0);
-      expect(node.privateKeyBytes).toBeUndefined();
-      expect(node.publicKeyBytes).toHaveLength(65);
-    });
-
-    it('initializes a new ed25519 node from a public key', async () => {
-      const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: ed25519,
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        publicKey: publicKeyBytes,
-        chainCode: chainCodeBytes,
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'ed25519',
-      });
-
-      expect(node.depth).toBe(0);
-      expect(node.privateKeyBytes).toBeUndefined();
-      expect(node.publicKeyBytes).toHaveLength(33);
-    });
-
-    it('initializes a new node from a hexadecimal public key and chain code', async () => {
-      const { publicKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: secp256k1,
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        publicKey,
-        chainCode,
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'secp256k1',
-      });
-
-      expect(node.depth).toBe(0);
-      expect(node.privateKeyBytes).toBeUndefined();
-      expect(node.publicKeyBytes).toHaveLength(65);
-    });
-
-    it('initializes a new node from JSON', async () => {
-      const node = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: secp256k1,
-      });
-
-      expect(await SLIP10Node.fromJSON(node.toJSON())).toStrictEqual(node);
-    });
-
-    it('initializes a new node from JSON with a public key', async () => {
-      const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
-        curve: secp256k1,
-      });
-
-      const node = await SLIP10Node.fromExtendedKey({
-        privateKey,
-        chainCode,
-        depth: 0,
-        parentFingerprint: 0,
-        index: 0,
-        curve: 'secp256k1',
-      });
-
-      const neuteredNode = node.neuter();
-
-      expect(await SLIP10Node.fromJSON(neuteredNode.toJSON())).toStrictEqual(
-        neuteredNode,
-      );
-    });
-
-    it('throws if no public or private key is specified', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
-          chainCode: new Uint8Array(32).fill(1),
+        const node = await SLIP10Node.fromExtendedKey({
+          privateKey: privateKeyBytes,
+          chainCode: chainCodeBytes,
           depth: 0,
           parentFingerprint: 0,
           index: 0,
           curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        'Invalid options: Must provide either a private key or a public key.',
-      );
-    });
+        });
 
-    it('throws if the depth is invalid', async () => {
-      const inputs = [
-        -1,
-        0.1,
-        -0.1,
-        NaN,
-        Infinity,
-        '0',
-        'zero',
-        {},
-        null,
-        undefined,
-      ];
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toHaveLength(32);
+        expect(node.publicKeyBytes).toHaveLength(65);
+      });
 
-      for (const input of inputs) {
-        await expect(
-          SLIP10Node.fromExtendedKey({
-            depth: input as any,
-            parentFingerprint: 0,
-            index: 0,
-            publicKey: new Uint8Array(65).fill(1),
-            chainCode: new Uint8Array(32).fill(1),
-            curve: 'secp256k1',
-          }),
-        ).rejects.toThrow(
-          `Invalid HD tree path depth: The depth must be a positive integer. Received: "${String(
-            input,
-          )}"`,
-        );
-      }
-    });
+      it('initializes a new node from a hexadecimal private key and chain code', async () => {
+        const { privateKey, chainCode } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
 
-    it('throws if the parent fingerprint is invalid', async () => {
-      const inputs = [
-        -1,
-        0.1,
-        -0.1,
-        NaN,
-        Infinity,
-        '0',
-        'zero',
-        {},
-        null,
-        undefined,
-      ];
-
-      for (const input of inputs) {
-        await expect(
-          SLIP10Node.fromExtendedKey({
-            depth: 0,
-            parentFingerprint: input as any,
-            index: 0,
-            publicKey: new Uint8Array(65).fill(1),
-            chainCode: new Uint8Array(32).fill(1),
-            curve: 'secp256k1',
-          }),
-        ).rejects.toThrow(
-          `Invalid parent fingerprint: The fingerprint must be a positive integer. Received: "${String(
-            input,
-          )}"`,
-        );
-      }
-    });
-
-    it('throws if the private key is invalid', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
-          privateKey: 'foo',
-          chainCode: new Uint8Array(32).fill(1),
+        const node = await SLIP10Node.fromExtendedKey({
+          privateKey,
+          chainCode,
           depth: 0,
           parentFingerprint: 0,
           index: 0,
           curve: 'secp256k1',
-        }),
-      ).rejects.toThrow('Value must be a hexadecimal string.');
-    });
+        });
 
-    it('throws if the private key is not a Uint8Array or hexadecimal string', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
-          // @ts-expect-error Invalid private key type.
-          privateKey: 123,
-          chainCode: new Uint8Array(32).fill(1),
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toHaveLength(32);
+        expect(node.publicKeyBytes).toHaveLength(65);
+      });
+
+      it('initializes a new ed25519 node from a private key', async () => {
+        const { privateKey, chainCode } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: ed25519,
+        });
+
+        const node = await SLIP10Node.fromExtendedKey({
+          privateKey,
+          chainCode,
           depth: 0,
           parentFingerprint: 0,
           index: 0,
-          curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        'Invalid value: Expected an instance of Uint8Array or hexadecimal string.',
-      );
-    });
+          curve: 'ed25519',
+        });
 
-    it('throws if the private key is zero for secp256k1', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toHaveLength(32);
+        expect(node.publicKeyBytes).toHaveLength(33);
+      });
+
+      it('initializes a new ed25519 node from a zero private key', async () => {
+        const node = await SLIP10Node.fromExtendedKey({
           privateKey: new Uint8Array(32).fill(0),
           chainCode: new Uint8Array(32).fill(1),
           depth: 0,
           parentFingerprint: 0,
           index: 0,
+          curve: 'ed25519',
+        });
+
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toStrictEqual(new Uint8Array(32).fill(0));
+        expect(node.publicKeyBytes).toHaveLength(33);
+      });
+
+      it('initializes a new node from a public key', async () => {
+        const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
+
+        const node = await SLIP10Node.fromExtendedKey({
+          publicKey: publicKeyBytes,
+          chainCode: chainCodeBytes,
+          depth: 0,
+          parentFingerprint: 0,
+          index: 0,
           curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        'Invalid private key: Value is not a valid secp256k1 private key.',
-      );
+        });
+
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toBeUndefined();
+        expect(node.publicKeyBytes).toHaveLength(65);
+      });
+
+      it('initializes a new ed25519 node from a public key', async () => {
+        const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: ed25519,
+        });
+
+        const node = await SLIP10Node.fromExtendedKey({
+          publicKey: publicKeyBytes,
+          chainCode: chainCodeBytes,
+          depth: 0,
+          parentFingerprint: 0,
+          index: 0,
+          curve: 'ed25519',
+        });
+
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toBeUndefined();
+        expect(node.publicKeyBytes).toHaveLength(33);
+      });
+
+      it('initializes a new node from a hexadecimal public key and chain code', async () => {
+        const { publicKey, chainCode } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
+
+        const node = await SLIP10Node.fromExtendedKey({
+          publicKey,
+          chainCode,
+          depth: 0,
+          parentFingerprint: 0,
+          index: 0,
+          curve: 'secp256k1',
+        });
+
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toBeUndefined();
+        expect(node.publicKeyBytes).toHaveLength(65);
+      });
+
+      it('initializes a new node from JSON', async () => {
+        const node = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
+
+        expect(await SLIP10Node.fromJSON(node.toJSON())).toStrictEqual(node);
+      });
+
+      it('initializes a new node from JSON with a public key', async () => {
+        const { privateKey, chainCode } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
+
+        const node = await SLIP10Node.fromExtendedKey({
+          privateKey,
+          chainCode,
+          depth: 0,
+          parentFingerprint: 0,
+          index: 0,
+          curve: 'secp256k1',
+        });
+
+        const neuteredNode = node.neuter();
+
+        expect(await SLIP10Node.fromJSON(neuteredNode.toJSON())).toStrictEqual(
+          neuteredNode,
+        );
+      });
+
+      it('throws if no public or private key is specified', async () => {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 0,
+            parentFingerprint: 0,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          'Invalid options: Must provide either a private key or a public key.',
+        );
+      });
+
+      it('throws if the depth is invalid', async () => {
+        const inputs = [
+          -1,
+          0.1,
+          -0.1,
+          NaN,
+          Infinity,
+          '0',
+          'zero',
+          {},
+          null,
+          undefined,
+        ];
+
+        for (const input of inputs) {
+          await expect(
+            SLIP10Node.fromExtendedKey({
+              depth: input as any,
+              parentFingerprint: 0,
+              index: 0,
+              publicKey: new Uint8Array(65).fill(1),
+              chainCode: new Uint8Array(32).fill(1),
+              curve: 'secp256k1',
+            }),
+          ).rejects.toThrow(
+            `Invalid HD tree path depth: The depth must be a positive integer. Received: "${String(
+              input,
+            )}"`,
+          );
+        }
+      });
+
+      it('throws if the parent fingerprint is invalid', async () => {
+        const inputs = [
+          -1,
+          0.1,
+          -0.1,
+          NaN,
+          Infinity,
+          '0',
+          'zero',
+          {},
+          null,
+          undefined,
+        ];
+
+        for (const input of inputs) {
+          await expect(
+            SLIP10Node.fromExtendedKey({
+              depth: 0,
+              parentFingerprint: input as any,
+              index: 0,
+              publicKey: new Uint8Array(65).fill(1),
+              chainCode: new Uint8Array(32).fill(1),
+              curve: 'secp256k1',
+            }),
+          ).rejects.toThrow(
+            `Invalid parent fingerprint: The fingerprint must be a positive integer. Received: "${String(
+              input,
+            )}"`,
+          );
+        }
+      });
+
+      it('throws if the private key is invalid', async () => {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            privateKey: 'foo',
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 0,
+            parentFingerprint: 0,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow('Value must be a hexadecimal string.');
+      });
+
+      it('throws if the private key is not a Uint8Array or hexadecimal string', async () => {
+        await expect(
+          // @ts-expect-error Invalid private key type.
+          SLIP10Node.fromExtendedKey({
+            privateKey: 123,
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 0,
+            parentFingerprint: 0,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          'Invalid value: Expected an instance of Uint8Array or hexadecimal string.',
+        );
+      });
+
+      it('throws if the private key is zero for secp256k1', async () => {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            privateKey: new Uint8Array(32).fill(0),
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 0,
+            parentFingerprint: 0,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          'Invalid private key: Value is not a valid secp256k1 private key.',
+        );
+      });
+
+      it('throws if the depth is zero and the parent fingerprint is not zero', async () => {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            privateKey: new Uint8Array(32).fill(1),
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 0,
+            parentFingerprint: 1,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          'Invalid parent fingerprint: The fingerprint of the root node must be 0. Received: "1".',
+        );
+      });
+
+      it('throws if the depth is not zero and the parent fingerprint is zero', async () => {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            privateKey: new Uint8Array(32).fill(1),
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 1,
+            parentFingerprint: 0,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          'Invalid parent fingerprint: The fingerprint of a child node must not be 0. Received: "0".',
+        );
+      });
+
+      it('throws if the depth is >= 2 and the parent fingerprint is equal to the master fingerprint', async () => {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            privateKey: new Uint8Array(32).fill(1),
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 2,
+            parentFingerprint: 1,
+            masterFingerprint: 1,
+            index: 0,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          'Invalid parent fingerprint: The fingerprint of a child node cannot be equal to the master fingerprint. Received: "1".',
+        );
+      });
+
+      it('throws if the depth is zero and the index is not zero', async () => {
+        await expect(
+          SLIP10Node.fromExtendedKey({
+            privateKey: new Uint8Array(32).fill(1),
+            chainCode: new Uint8Array(32).fill(1),
+            depth: 0,
+            parentFingerprint: 0,
+            index: 1,
+            curve: 'secp256k1',
+          }),
+        ).rejects.toThrow(
+          'Invalid index: The index of the root node must be 0. Received: "1".',
+        );
+      });
     });
 
-    it('throws if the depth is zero and the parent fingerprint is not zero', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
-          privateKey: new Uint8Array(32).fill(1),
+    describe('using a BIP-32 serialised extended key', () => {
+      it('initializes a new node from a private key', async () => {
+        const { extendedKey, privateKey, chainCode } = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
+
+        const node = await SLIP10Node.fromExtendedKey(extendedKey);
+
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toHaveLength(32);
+        expect(node.publicKeyBytes).toHaveLength(65);
+        expect(node.privateKey).toBe(privateKey);
+        expect(node.chainCode).toBe(chainCode);
+      });
+
+      it('initializes a new node from a public key', async () => {
+        const baseNode = await deriveChildKey({
+          path: fixtures.local.mnemonic,
+          curve: secp256k1,
+        });
+
+        const { extendedKey, publicKey } = baseNode.neuter();
+
+        const node = await SLIP10Node.fromExtendedKey(extendedKey);
+
+        expect(node.depth).toBe(0);
+        expect(node.privateKeyBytes).toBeUndefined();
+        expect(node.publicKeyBytes).toHaveLength(65);
+        expect(node.publicKey).toBe(publicKey);
+      });
+
+      it('throws if the extended key is invalid', async () => {
+        await expect(SLIP10Node.fromExtendedKey('foo')).rejects.toThrow(
+          'Invalid extended key: Value is not base58-encoded, or the checksum is invalid.',
+        );
+      });
+
+      it('throws if the private key is zero', async () => {
+        const extendedKey = encodeExtendedKey({
+          version: PRIVATE_KEY_VERSION,
+          depth: 0,
+          parentFingerprint: 0,
+          index: 0,
           chainCode: new Uint8Array(32).fill(1),
+          privateKey: new Uint8Array(32).fill(0),
+        });
+
+        await expect(SLIP10Node.fromExtendedKey(extendedKey)).rejects.toThrow(
+          'Invalid extended key: Key must be a 33-byte non-zero byte array.',
+        );
+      });
+
+      it('throws if the depth is zero and the parent fingerprint is not zero', async () => {
+        const extendedKey = encodeExtendedKey({
+          version: PRIVATE_KEY_VERSION,
           depth: 0,
           parentFingerprint: 1,
           index: 0,
-          curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        'Invalid parent fingerprint: The fingerprint of the root node must be 0. Received: "1".',
-      );
-    });
-
-    it('throws if the depth is not zero and the parent fingerprint is zero', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
-          privateKey: new Uint8Array(32).fill(1),
           chainCode: new Uint8Array(32).fill(1),
+          privateKey: new Uint8Array(32).fill(1),
+        });
+
+        await expect(SLIP10Node.fromExtendedKey(extendedKey)).rejects.toThrow(
+          'Invalid parent fingerprint: The fingerprint of the root node must be 0. Received: "1".',
+        );
+      });
+
+      it('throws if the depth is not zero and the parent fingerprint is zero', async () => {
+        const extendedKey = encodeExtendedKey({
+          version: PRIVATE_KEY_VERSION,
           depth: 1,
           parentFingerprint: 0,
           index: 0,
-          curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        'Invalid parent fingerprint: The fingerprint of a child node must not be 0. Received: "0".',
-      );
-    });
-
-    it('throws if the depth is >= 2 and the parent fingerprint is equal to the master fingerprint', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
-          privateKey: new Uint8Array(32).fill(1),
           chainCode: new Uint8Array(32).fill(1),
-          depth: 2,
-          parentFingerprint: 1,
-          masterFingerprint: 1,
-          index: 0,
-          curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        'Invalid parent fingerprint: The fingerprint of a child node cannot be equal to the master fingerprint. Received: "1".',
-      );
-    });
-
-    it('throws if the depth is zero and the index is not zero', async () => {
-      await expect(
-        SLIP10Node.fromExtendedKey({
           privateKey: new Uint8Array(32).fill(1),
-          chainCode: new Uint8Array(32).fill(1),
+        });
+
+        await expect(SLIP10Node.fromExtendedKey(extendedKey)).rejects.toThrow(
+          'Invalid parent fingerprint: The fingerprint of a child node must not be 0. Received: "0".',
+        );
+      });
+
+      it('throws if the depth is zero and the index is not zero', async () => {
+        const extendedKey = encodeExtendedKey({
+          version: PRIVATE_KEY_VERSION,
           depth: 0,
           parentFingerprint: 0,
           index: 1,
-          curve: 'secp256k1',
-        }),
-      ).rejects.toThrow(
-        'Invalid index: The index of the root node must be 0. Received: "1".',
-      );
+          chainCode: new Uint8Array(32).fill(1),
+          privateKey: new Uint8Array(32).fill(1),
+        });
+
+        await expect(SLIP10Node.fromExtendedKey(extendedKey)).rejects.toThrow(
+          'Invalid index: The index of the root node must be 0. Received: "1".',
+        );
+      });
     });
   });
 
@@ -790,6 +892,76 @@ describe('SLIP10Node', () => {
 
       expect(node.masterFingerprint).toBe(3293725253);
       expect(node.masterFingerprint).toBe(masterNode.fingerprint);
+    });
+  });
+
+  describe('extendedKey', () => {
+    it.each(fixtures.bip32)(
+      'returns the extended private key for an secp256k1 node',
+      async ({ hexSeed, keys }) => {
+        const { privateKey, chainCode } = await createBip39KeyFromSeed(
+          hexStringToBytes(hexSeed),
+          secp256k1,
+        );
+
+        for (const { path, extPrivKey } of keys) {
+          const node = await SLIP10Node.fromExtendedKey({
+            privateKey,
+            chainCode,
+            curve: 'secp256k1',
+            depth: 0,
+            parentFingerprint: 0,
+            index: 0,
+          });
+
+          if (path.ours.tuple.length === 0) {
+            continue;
+          }
+
+          const childNode = await node.derive(path.ours.tuple);
+          expect(childNode.extendedKey).toBe(extPrivKey);
+        }
+      },
+    );
+
+    it.each(fixtures.bip32)(
+      'returns the extended public key for an secp256k1 node',
+      async ({ hexSeed, keys }) => {
+        const { privateKey, chainCode } = await createBip39KeyFromSeed(
+          hexStringToBytes(hexSeed),
+          secp256k1,
+        );
+
+        for (const { path, extPubKey } of keys) {
+          const node = await SLIP10Node.fromExtendedKey({
+            privateKey,
+            chainCode,
+            curve: 'secp256k1',
+            depth: 0,
+            parentFingerprint: 0,
+            index: 0,
+          });
+
+          if (path.ours.tuple.length === 0) {
+            continue;
+          }
+
+          const childNode = await node.derive(path.ours.tuple);
+          const neuteredNode = childNode.neuter();
+          expect(neuteredNode.extendedKey).toBe(extPubKey);
+        }
+      },
+    );
+
+    it('throws when trying to get an extended key for an ed25519 node', async () => {
+      const node = await SLIP10Node.fromDerivationPath({
+        derivationPath: [defaultBip39NodeToken, `slip10:44'`, `slip10:60'`],
+        curve: 'ed25519',
+      });
+
+      expect(() => node.extendedKey).toThrow(
+        'Unable to get extended key for this node: Only secp256k1 is supported.',
+      );
     });
   });
 
