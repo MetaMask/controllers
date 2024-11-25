@@ -1,3 +1,4 @@
+import type { CryptographicFunctions } from '../cryptography';
 import type { Curve } from '../curves';
 import type { SLIP10Node } from '../SLIP10Node';
 import * as bip32 from './bip32';
@@ -21,7 +22,10 @@ export type DeriveChildKeyArgs = {
 };
 
 export type Deriver = {
-  deriveChildKey: (args: DeriveChildKeyArgs) => Promise<SLIP10Node>;
+  deriveChildKey: (
+    args: DeriveChildKeyArgs,
+    cryptographicFunctions?: CryptographicFunctions,
+  ) => Promise<SLIP10Node>;
 };
 
 export const derivers = {
@@ -31,4 +35,4 @@ export const derivers = {
   cip3,
 };
 
-export { createBip39KeyFromSeed } from './bip39';
+export { createBip39KeyFromSeed, mnemonicToSeed } from './bip39';

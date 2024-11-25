@@ -2,6 +2,7 @@ import { assert, bytesToHex, concatBytes, hexToBytes } from '@metamask/utils';
 
 import type { DeriveChildKeyArgs } from '.';
 import { BIP_32_HARDENED_OFFSET } from '../constants';
+import type { CryptographicFunctions } from '../cryptography';
 import { type Curve, mod } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { numberToUint32 } from '../utils';
@@ -145,21 +146,24 @@ const Z_TAGS = {
 };
 
 /**
- * Derives a private child key.
+ * Derive a private child key.
  *
- * Following "Section V. BIP32-ED25519: SPECIFICATION, C.1,2" in https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf.
+ * Following "Section V. BIP32-ED25519: SPECIFICATION, C.1,2" in
+ * https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf.
  *
- * @param param1 - The parameters for deriving a child key.
- * @param param1.parentNode - The parent node containing private key, chain code, and public key.
- * @param param1.childIndex - The index of the child key.
- * @param param1.isHardened - Indicates if the child key is hardened.
+ * @param options - The parameters for deriving a child key.
+ * @param options.parentNode - The parent node containing private key, chain
+ * code, and public key.
+ * @param options.childIndex - The index of the child key.
+ * @param options.isHardened - Indicates if the child key is hardened.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
  * @returns The derived child key.
  */
-export const derivePrivateKey = async ({
-  parentNode,
-  childIndex,
-  isHardened,
-}: DeriveWithPrivateArgs) => {
+export const derivePrivateKey = async (
+  { parentNode, childIndex, isHardened }: DeriveWithPrivateArgs,
+  cryptographicFunctions?: CryptographicFunctions,
+) => {
   // extension = i >= 2^31 ? (0x00||kp||i) : (0x02||Ap||i)
   const extension = isHardened
     ? getKeyExtension(
@@ -170,10 +174,13 @@ export const derivePrivateKey = async ({
     : getKeyExtension(Z_TAGS.normal, parentNode.publicKeyBytes, childIndex);
 
   // entropy = Fcp(extension)
-  const entropy = generateEntropy({
-    chainCode: parentNode.chainCodeBytes,
-    extension,
-  });
+  const entropy = await generateEntropy(
+    {
+      chainCode: parentNode.chainCodeBytes,
+      extension,
+    },
+    cryptographicFunctions,
+  );
 
   const zl = entropy.subarray(0, 32);
   const zr = entropy.subarray(32);
@@ -202,21 +209,28 @@ const CHAIN_CODE_TAGS = {
 };
 
 /**
- * Derives a child chainCode.
+ * Derive a child chainCode.
  *
- * Following "Section V. BIP32-ED25519: SPECIFICATION, C.3" in https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf.
+ * Following "Section V. BIP32-ED25519: SPECIFICATION, C.3" in
+ * https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf.
  *
- * @param param1 - The parameters for deriving a child chainCode.
- * @param param1.parentNode - The parent node containing optionally a private key, chain code, and public key.
- * @param param1.childIndex - The index of the child key.
- * @param param1.isHardened - Indicates if the child key is hardened.
+ * @param options - The parameters for deriving a child chainCode.
+ * @param options.parentNode - The parent node containing optionally a private
+ * key, chain code, and public key.
+ * @param options.childIndex - The index of the child key.
+ * @param options.isHardened - Indicates if the child key is hardened.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
  * @returns The derived child chainCode.
  */
-export const deriveChainCode = async ({
-  parentNode,
-  childIndex,
-  isHardened,
-}: DeriveWithPrivateArgs | DeriveWithoutPrivateArgs) => {
+export const deriveChainCode = async (
+  {
+    parentNode,
+    childIndex,
+    isHardened,
+  }: DeriveWithPrivateArgs | DeriveWithoutPrivateArgs,
+  cryptographicFunctions?: CryptographicFunctions,
+) => {
   // extension = i >= 2^31 ? (0x01||kp||i) : (0x03||Ap||i)
   const extension = isHardened
     ? getKeyExtension(
@@ -231,10 +245,13 @@ export const deriveChainCode = async ({
       );
 
   // entropy = Fcp(extension)
-  const entropy = generateEntropy({
-    chainCode: parentNode.chainCodeBytes,
-    extension,
-  });
+  const entropy = await generateEntropy(
+    {
+      chainCode: parentNode.chainCodeBytes,
+      extension,
+    },
+    cryptographicFunctions,
+  );
 
   return entropy.subarray(32);
 };
@@ -248,21 +265,23 @@ type DerivePublicKeyArgs = DeriveWithoutPrivateArgs & {
 };
 
 /**
- * Derives a public key.
+ * Derive a public key.
  *
- * Following "Section V. BIP32-ED25519: SPECIFICATION, D" in https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf.
+ * Following "Section V. BIP32-ED25519: SPECIFICATION, D" in
+ * https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf.
  *
- * @param param1 - The parameters for deriving a child public key.
- * @param param1.parentNode - The parent node containing chain code, and public key.
- * @param param1.childIndex - The index of the child key.
- * @param param1.curve - Derivation curve.
+ * @param options - The parameters for deriving a child public key.
+ * @param options.parentNode - The parent node containing chain code, and public key.
+ * @param options.childIndex - The index of the child key.
+ * @param options.curve - Derivation curve.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
  * @returns The derived child public key.
  */
-export const derivePublicKey = async ({
-  parentNode,
-  childIndex,
-  curve,
-}: DerivePublicKeyArgs) => {
+export const derivePublicKey = async (
+  { parentNode, childIndex, curve }: DerivePublicKeyArgs,
+  cryptographicFunctions?: CryptographicFunctions,
+) => {
   // extension = (0x02||Ap||i)
   const extension = getKeyExtension(
     PUBLIC_KEY_TAGS.normal,
@@ -271,10 +290,13 @@ export const derivePublicKey = async ({
   );
 
   // entropy = Fcp(extension)
-  const entropy = generateEntropy({
-    chainCode: parentNode.chainCodeBytes,
-    extension,
-  });
+  const entropy = await generateEntropy(
+    {
+      chainCode: parentNode.chainCodeBytes,
+      extension,
+    },
+    cryptographicFunctions,
+  );
 
   const zl = entropy.slice(0, 32);
 
@@ -296,10 +318,13 @@ type Cip3DeriveChildKeyArgs = DeriveChildKeyArgs & {
  * Derive a SLIP-10 child key with a given path from a parent key.
  *
  * @param options - The options for deriving a child key.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
  * @returns SLIP10Node.
  */
 export async function deriveChildKey(
   options: Cip3DeriveChildKeyArgs,
+  cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
   const { curve, node, path } = options;
   validateNode(node);
@@ -330,27 +355,36 @@ export async function deriveChildKey(
       publicKeyBytes,
     };
 
-    const privateKey = await derivePrivateKey({
-      parentNode,
-      childIndex,
-      isHardened,
-    });
+    const privateKey = await derivePrivateKey(
+      {
+        parentNode,
+        childIndex,
+        isHardened,
+      },
+      cryptographicFunctions,
+    );
 
-    const chainCode = await deriveChainCode({
-      parentNode,
-      childIndex,
-      isHardened,
-    });
+    const chainCode = await deriveChainCode(
+      {
+        parentNode,
+        childIndex,
+        isHardened,
+      },
+      cryptographicFunctions,
+    );
 
-    return SLIP10Node.fromExtendedKey({
-      privateKey: bytesToHex(privateKey),
-      chainCode: bytesToHex(chainCode),
-      masterFingerprint,
-      depth: depth + 1,
-      parentFingerprint,
-      index: actualChildIndex,
-      curve: curve.name,
-    });
+    return SLIP10Node.fromExtendedKey(
+      {
+        privateKey: bytesToHex(privateKey),
+        chainCode: bytesToHex(chainCode),
+        masterFingerprint,
+        depth: depth + 1,
+        parentFingerprint,
+        index: actualChildIndex,
+        curve: curve.name,
+      },
+      cryptographicFunctions,
+    );
   }
 
   assert(
@@ -363,26 +397,35 @@ export async function deriveChildKey(
     publicKeyBytes,
   };
 
-  const publicKey = await derivePublicKey({
-    parentNode,
-    childIndex,
-    isHardened: false,
-    curve,
-  });
+  const publicKey = await derivePublicKey(
+    {
+      parentNode,
+      childIndex,
+      isHardened: false,
+      curve,
+    },
+    cryptographicFunctions,
+  );
 
-  const chainCode = await deriveChainCode({
-    parentNode,
-    childIndex,
-    isHardened: false,
-  });
+  const chainCode = await deriveChainCode(
+    {
+      parentNode,
+      childIndex,
+      isHardened: false,
+    },
+    cryptographicFunctions,
+  );
 
-  return SLIP10Node.fromExtendedKey({
-    publicKey: bytesToHex(publicKey),
-    chainCode: bytesToHex(chainCode),
-    masterFingerprint,
-    depth: depth + 1,
-    parentFingerprint,
-    index: actualChildIndex,
-    curve: curve.name,
-  });
+  return SLIP10Node.fromExtendedKey(
+    {
+      publicKey: bytesToHex(publicKey),
+      chainCode: bytesToHex(chainCode),
+      masterFingerprint,
+      depth: depth + 1,
+      parentFingerprint,
+      index: actualChildIndex,
+      curve: curve.name,
+    },
+    cryptographicFunctions,
+  );
 }

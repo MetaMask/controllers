@@ -1,8 +1,9 @@
 import { assert } from '@metamask/utils';
-import { keccak_256 as keccak256 } from '@noble/hashes/sha3';
 
 import type { DeriveChildKeyArgs } from '.';
 import { BYTES_KEY_LENGTH } from '../constants';
+import type { CryptographicFunctions } from '../cryptography';
+import { keccak256 } from '../cryptography';
 import { secp256k1 } from '../curves';
 import type { SLIP10Node } from '../SLIP10Node';
 import { isValidBytesKey, validateBIP32Index } from '../utils';
@@ -63,17 +64,20 @@ export function publicKeyToEthAddress(key: Uint8Array) {
  * @param options.path - The derivation path part to derive.
  * @param options.node - The node to derive from.
  * @param options.curve - The curve to use for derivation.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
  * @returns The derived child key as a {@link SLIP10Node}.
  */
 export async function deriveChildKey(
   options: DeriveChildKeyArgs,
+  cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
   assert(
     options.curve.name === 'secp256k1',
     'Invalid curve: Only secp256k1 is supported by BIP-32.',
   );
 
-  return sharedDeriveChildKey(options, handleError);
+  return sharedDeriveChildKey(options, handleError, cryptographicFunctions);
 }
 
 /**
@@ -82,12 +86,15 @@ export async function deriveChildKey(
  *
  * @param _ - The error that was thrown.
  * @param options - The options for deriving a child key.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
  * @returns The options for deriving a child key with the child index
  * incremented by one.
  */
 async function handleError(
   _: unknown,
   options: DeriveNodeArgs,
+  cryptographicFunctions?: CryptographicFunctions,
 ): Promise<DeriveNodeArgs> {
   const { childIndex, privateKey, publicKey, isHardened, curve, chainCode } =
     options;
@@ -102,10 +109,13 @@ async function handleError(
       curve,
     });
 
-    const newEntropy = generateEntropy({
-      chainCode,
-      extension: secretExtension,
-    });
+    const newEntropy = await generateEntropy(
+      {
+        chainCode,
+        extension: secretExtension,
+      },
+      cryptographicFunctions,
+    );
 
     return {
       ...options,
@@ -119,7 +129,7 @@ async function handleError(
     childIndex: childIndex + 1,
   });
 
-  const newEntropy = generateEntropy({
+  const newEntropy = await generateEntropy({
     chainCode,
     extension: publicExtension,
   });

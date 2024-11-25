@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 import { hexToBytes } from '@metamask/utils';
+import { webcrypto } from 'crypto';
 
 import type { SLIP10PathTuple } from '../src';
 import { secp256k1 } from '../src';
@@ -9,7 +10,12 @@ import {
   createBip39KeyFromSeed,
   entropyToCip3MasterNode,
 } from '../src/derivers/bip39';
+import * as utils from '../src/utils';
 import derivationVectors from './vectors/derivation.json';
+
+// Node.js <20 doesn't have `globalThis.crypto`, so we need to define it.
+// TODO: Remove this once we drop support for Node.js <20.
+Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
 
 type Vector = (typeof derivationVectors.bip32.hardened)[0];
 
@@ -114,80 +120,169 @@ function generateTests(
 }
 
 describe('vectors', () => {
-  describe('bip32', () => {
-    describe('hardened', () => {
-      for (const vector of derivationVectors.bip32.hardened) {
-        generateTests(vector);
-      }
+  describe('using web crypto API', () => {
+    beforeEach(() => {
+      jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(true);
     });
 
-    describe('unhardened', () => {
-      for (const vector of derivationVectors.bip32.unhardened) {
-        generateTests(vector, {
-          publicDerivation: true,
-        });
-      }
-    });
-
-    describe('mixed', () => {
-      for (const vector of derivationVectors.bip32.mixed) {
-        generateTests(vector);
-      }
-    });
-  });
-
-  describe('slip10', () => {
-    describe('hardened', () => {
-      describe('secp256k1', () => {
-        for (const vector of derivationVectors.slip10.hardened.secp256k1) {
+    describe('bip32', () => {
+      describe('hardened', () => {
+        for (const vector of derivationVectors.bip32.hardened) {
           generateTests(vector);
         }
       });
 
-      describe('ed25519', () => {
-        for (const vector of derivationVectors.slip10.hardened.ed25519) {
+      describe('unhardened', () => {
+        for (const vector of derivationVectors.bip32.unhardened) {
           generateTests(vector, {
-            curve: ed25519,
+            publicDerivation: true,
           });
+        }
+      });
+
+      describe('mixed', () => {
+        for (const vector of derivationVectors.bip32.mixed) {
+          generateTests(vector);
         }
       });
     });
 
-    describe('unhardened', () => {
-      for (const vector of derivationVectors.slip10.unhardened) {
-        generateTests(vector, {
-          publicDerivation: true,
+    describe('slip10', () => {
+      describe('hardened', () => {
+        describe('secp256k1', () => {
+          for (const vector of derivationVectors.slip10.hardened.secp256k1) {
+            generateTests(vector);
+          }
         });
-      }
+
+        describe('ed25519', () => {
+          for (const vector of derivationVectors.slip10.hardened.ed25519) {
+            generateTests(vector, {
+              curve: ed25519,
+            });
+          }
+        });
+      });
+
+      describe('unhardened', () => {
+        for (const vector of derivationVectors.slip10.unhardened) {
+          generateTests(vector, {
+            publicDerivation: true,
+          });
+        }
+      });
+
+      describe('mixed', () => {
+        for (const vector of derivationVectors.slip10.mixed) {
+          generateTests(vector);
+        }
+      });
     });
 
-    describe('mixed', () => {
-      for (const vector of derivationVectors.slip10.mixed) {
-        generateTests(vector);
-      }
+    describe('cip3', () => {
+      describe('hardened', () => {
+        for (const vector of derivationVectors.cip3.hardened) {
+          generateTests(vector, { curve: ed25519Bip32 });
+        }
+      });
+
+      describe('unhardened', () => {
+        for (const vector of derivationVectors.cip3.unhardened) {
+          generateTests(vector, {
+            publicDerivation: true,
+            curve: ed25519Bip32,
+          });
+        }
+      });
+
+      describe('mixed', () => {
+        for (const vector of derivationVectors.cip3.mixed) {
+          generateTests(vector, { curve: ed25519Bip32 });
+        }
+      });
     });
   });
 
-  describe('cip3', () => {
-    describe('hardened', () => {
-      for (const vector of derivationVectors.cip3.hardened) {
-        generateTests(vector, { curve: ed25519Bip32 });
-      }
+  describe('using built-in cryptography functions', () => {
+    beforeEach(() => {
+      jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(false);
     });
 
-    describe('unhardened', () => {
-      for (const vector of derivationVectors.cip3.unhardened) {
-        generateTests(vector, {
-          publicDerivation: true,
-          curve: ed25519Bip32,
+    describe('bip32', () => {
+      describe('hardened', () => {
+        for (const vector of derivationVectors.bip32.hardened) {
+          generateTests(vector);
+        }
+      });
+
+      describe('unhardened', () => {
+        for (const vector of derivationVectors.bip32.unhardened) {
+          generateTests(vector, {
+            publicDerivation: true,
+          });
+        }
+      });
+
+      describe('mixed', () => {
+        for (const vector of derivationVectors.bip32.mixed) {
+          generateTests(vector);
+        }
+      });
+    });
+
+    describe('slip10', () => {
+      describe('hardened', () => {
+        describe('secp256k1', () => {
+          for (const vector of derivationVectors.slip10.hardened.secp256k1) {
+            generateTests(vector);
+          }
         });
-      }
+
+        describe('ed25519', () => {
+          for (const vector of derivationVectors.slip10.hardened.ed25519) {
+            generateTests(vector, {
+              curve: ed25519,
+            });
+          }
+        });
+      });
+
+      describe('unhardened', () => {
+        for (const vector of derivationVectors.slip10.unhardened) {
+          generateTests(vector, {
+            publicDerivation: true,
+          });
+        }
+      });
+
+      describe('mixed', () => {
+        for (const vector of derivationVectors.slip10.mixed) {
+          generateTests(vector);
+        }
+      });
     });
 
-    describe('mixed', () => {
-      for (const vector of derivationVectors.cip3.mixed) {
-        generateTests(vector, { curve: ed25519Bip32 });
-      }
+    describe('cip3', () => {
+      describe('hardened', () => {
+        for (const vector of derivationVectors.cip3.hardened) {
+          generateTests(vector, { curve: ed25519Bip32 });
+        }
+      });
+
+      describe('unhardened', () => {
+        for (const vector of derivationVectors.cip3.unhardened) {
+          generateTests(vector, {
+            publicDerivation: true,
+            curve: ed25519Bip32,
+          });
+        }
+      });
+
+      describe('mixed', () => {
+        for (const vector of derivationVectors.cip3.mixed) {
+          generateTests(vector, { curve: ed25519Bip32 });
+        }
+      });
     });
   });
 });

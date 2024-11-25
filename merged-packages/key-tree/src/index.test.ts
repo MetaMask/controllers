@@ -9,6 +9,7 @@ import {
   mnemonicPhraseToBytes,
   ed25519Bip32,
   getBIP44CoinTypeToAddressPathTuple,
+  mnemonicToSeed,
 } from '.';
 
 // This is purely for coverage shenanigans
@@ -25,5 +26,6 @@ describe('index', () => {
     expect(createBip39KeyFromSeed).toBeDefined();
     expect(mnemonicPhraseToBytes).toBeDefined();
     expect(getBIP44CoinTypeToAddressPathTuple).toBeDefined();
+    expect(mnemonicToSeed).toBeDefined();
   });
 });

@@ -13,6 +13,7 @@ import {
   MAX_BIP_44_DEPTH,
   MIN_BIP_44_DEPTH,
 } from './constants';
+import type { CryptographicFunctions } from './cryptography';
 import type { SupportedCurve } from './curves';
 import { decodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
 import { SLIP10Node, validateBIP32Depth } from './SLIP10Node';
@@ -104,9 +105,14 @@ export class BIP44Node implements BIP44NodeInterface {
    * for documentation.
    *
    * @param json - The JSON representation of a SLIP-10 node.
+   * @param cryptographicFunctions - The cryptographic functions to use. If
+   * provided, these will be used instead of the built-in implementations.
    */
-  static async fromJSON(json: JsonBIP44Node): Promise<BIP44Node> {
-    return BIP44Node.fromExtendedKey(json);
+  static async fromJSON(
+    json: JsonBIP44Node,
+    cryptographicFunctions?: CryptographicFunctions,
+  ): Promise<BIP44Node> {
+    return BIP44Node.fromExtendedKey(json, cryptographicFunctions);
   }
 
   /**
@@ -124,9 +130,12 @@ export class BIP44Node implements BIP44NodeInterface {
    * @param options.publicKey - The public key for the node. If a private key is
    * specified, this parameter is ignored.
    * @param options.chainCode - The chain code for the node.
+   * @param cryptographicFunctions - The cryptographic functions to use. If
+   * provided, these will be used instead of the built-in implementations.
    */
   static async fromExtendedKey(
     options: BIP44ExtendedKeyOptions | string,
+    cryptographicFunctions?: CryptographicFunctions,
   ): Promise<BIP44Node> {
     if (typeof options === 'string') {
       const extendedKey = decodeExtendedKey(options);
@@ -136,24 +145,30 @@ export class BIP44Node implements BIP44NodeInterface {
       if (extendedKey.version === PRIVATE_KEY_VERSION) {
         const { privateKey } = extendedKey;
 
-        return BIP44Node.fromExtendedKey({
-          depth,
-          parentFingerprint,
-          index,
-          privateKey,
-          chainCode,
-        });
+        return BIP44Node.fromExtendedKey(
+          {
+            depth,
+            parentFingerprint,
+            index,
+            privateKey,
+            chainCode,
+          },
+          cryptographicFunctions,
+        );
       }
 
       const { publicKey } = extendedKey;
 
-      return BIP44Node.fromExtendedKey({
-        depth,
-        parentFingerprint,
-        index,
-        publicKey,
-        chainCode,
-      });
+      return BIP44Node.fromExtendedKey(
+        {
+          depth,
+          parentFingerprint,
+          index,
+          publicKey,
+          chainCode,
+        },
+        cryptographicFunctions,
+      );
     }
 
     const {
@@ -167,15 +182,18 @@ export class BIP44Node implements BIP44NodeInterface {
 
     validateBIP44Depth(depth);
 
-    const node = await SLIP10Node.fromExtendedKey({
-      privateKey,
-      publicKey,
-      chainCode,
-      depth,
-      parentFingerprint,
-      index,
-      curve: 'secp256k1',
-    });
+    const node = await SLIP10Node.fromExtendedKey(
+      {
+        privateKey,
+        publicKey,
+        chainCode,
+        depth,
+        parentFingerprint,
+        index,
+        curve: 'secp256k1',
+      },
+      cryptographicFunctions,
+    );
 
     return new BIP44Node(node);
   }
@@ -200,17 +218,23 @@ export class BIP44Node implements BIP44NodeInterface {
    * @param options - An object containing the derivation path.
    * @param options.derivationPath - The rooted HD tree path that will be used
    * to derive the key of this node.
+   * @param cryptographicFunctions - The cryptographic functions to use. If
+   * provided, these will be used instead of the built-in implementations.
    */
-  static async fromDerivationPath({
-    derivationPath,
-  }: BIP44DerivationPathOptions): Promise<BIP44Node> {
+  static async fromDerivationPath(
+    { derivationPath }: BIP44DerivationPathOptions,
+    cryptographicFunctions?: CryptographicFunctions,
+  ): Promise<BIP44Node> {
     validateBIP44Depth(derivationPath.length - 1);
     validateBIP44DerivationPath(derivationPath, MIN_BIP_44_DEPTH);
 
-    const node = await SLIP10Node.fromDerivationPath({
-      derivationPath,
-      curve: 'secp256k1',
-    });
+    const node = await SLIP10Node.fromDerivationPath(
+      {
+        derivationPath,
+        curve: 'secp256k1',
+      },
+      cryptographicFunctions,
+    );
 
     return new BIP44Node(node);
   }

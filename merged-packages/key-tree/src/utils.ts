@@ -1,7 +1,5 @@
 import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english';
 import { assert, createDataView, hexToBytes } from '@metamask/utils';
-import { ripemd160 } from '@noble/hashes/ripemd160';
-import { sha256 } from '@noble/hashes/sha256';
 import { base58check as scureBase58check } from '@scure/base';
 
 import type {
@@ -19,6 +17,7 @@ import {
   MAX_UNHARDENED_BIP_32_INDEX,
   UNPREFIXED_BIP_32_PATH_REGEX,
 } from './constants';
+import { ripemd160, sha256 } from './cryptography';
 import type { SupportedCurve } from './curves';
 import { curves } from './curves';
 
@@ -452,4 +451,14 @@ export function numberToUint32(value: number, littleEndian = false) {
   view.setUint32(0, value, littleEndian);
 
   return bytes;
+}
+
+/**
+ * A utility function to check if the Web Crypto API is supported in the current
+ * environment.
+ *
+ * @returns Whether the Web Crypto API is supported.
+ */
+export function isWebCryptoSupported() {
+  return Boolean(globalThis.crypto?.subtle);
 }

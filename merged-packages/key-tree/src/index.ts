@@ -34,4 +34,4 @@ export {
   isValidBIP32PathSegment,
   mnemonicPhraseToBytes,
 } from './utils';
-export { createBip39KeyFromSeed } from './derivers';
+export { createBip39KeyFromSeed, mnemonicToSeed } from './derivers';

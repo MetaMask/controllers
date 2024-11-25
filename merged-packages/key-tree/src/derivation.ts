@@ -10,6 +10,7 @@ import {
   SLIP_10_PATH_REGEX,
   CIP_3_PATH_REGEX,
 } from './constants';
+import type { CryptographicFunctions } from './cryptography';
 import type { SupportedCurve } from './curves';
 import { getCurveByName } from './curves';
 import type { Deriver } from './derivers';
@@ -63,10 +64,13 @@ type DeriveKeyFromPathArgs =
  * BIP-39 seed phrases must be lowercase, space-delimited, and 12-24 words long.
  * @param args.node - The node to derive from.
  * @param args.depth - The depth of the segment.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
  * @returns The derived key.
  */
 export async function deriveKeyFromPath(
   args: DeriveKeyFromPathArgs,
+  cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
   const { path, depth = path.length } = args;
 
@@ -112,21 +116,27 @@ export async function deriveKeyFromPath(
       assert(hasDeriver(pathType), `Unknown derivation type: "${pathType}".`);
 
       const deriver = derivers[pathType] as Deriver;
-      return await deriver.deriveChildKey({
-        path: pathPart,
-        node: derivedNode,
-        curve: getCurveByName(curve),
-      });
+      return await deriver.deriveChildKey(
+        {
+          path: pathPart,
+          node: derivedNode,
+          curve: getCurveByName(curve),
+        },
+        cryptographicFunctions,
+      );
     }
 
     // Only the first path segment can be a Uint8Array.
     assert(index === 0, getMalformedError());
 
-    return await derivers.bip39.deriveChildKey({
-      path: pathNode,
-      node: derivedNode,
-      curve: getCurveByName(curve),
-    });
+    return await derivers.bip39.deriveChildKey(
+      {
+        path: pathNode,
+        node: derivedNode,
+        curve: getCurveByName(curve),
+      },
+      cryptographicFunctions,
+    );
   }, Promise.resolve(node as SLIP10Node));
 }
 

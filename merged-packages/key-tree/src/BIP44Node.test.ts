@@ -2,6 +2,8 @@ import { bytesToHex } from '@metamask/utils';
 
 import { BIP44Node, BIP44PurposeNodeToken, secp256k1 } from '.';
 import fixtures from '../test/fixtures';
+import type { CryptographicFunctions } from './cryptography';
+import { hmacSha512, pbkdf2Sha512 } from './cryptography';
 import { compressPublicKey } from './curves/secp256k1';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import {
@@ -13,6 +15,23 @@ import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
+
+/**
+ * Get mock cryptographic functions for testing. The functions are wrappers
+ * around the real implementations, but they also track how many times they
+ * were called.
+ *
+ * @returns The mock cryptographic functions.
+ */
+function getMockFunctions(): CryptographicFunctions {
+  const mockHmacSha512 = jest.fn().mockImplementation(hmacSha512);
+  const mockPbkdf2Sha512 = jest.fn().mockImplementation(pbkdf2Sha512);
+
+  return {
+    hmacSha512: mockHmacSha512,
+    pbkdf2Sha512: mockPbkdf2Sha512,
+  };
+}
 
 describe('BIP44Node', () => {
   describe('fromExtendedKey', () => {
@@ -43,6 +62,42 @@ describe('BIP44Node', () => {
       });
     });
 
+    it('initializes a new node from a private key with custom cryptographic functions', async () => {
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+        curve: secp256k1,
+      });
+
+      const functions = getMockFunctions();
+
+      // Ethereum coin type node
+      const node = await BIP44Node.fromExtendedKey(
+        {
+          privateKey,
+          chainCode,
+          depth: 2,
+          parentFingerprint: 1,
+          index: 0,
+        },
+        functions,
+      );
+
+      await node.derive([`bip32:0'`]);
+
+      expect(node.depth).toBe(2);
+      expect(node.toJSON()).toStrictEqual({
+        depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
+      });
+
+      expect(functions.hmacSha512).toHaveBeenCalled();
+    });
+
     it('initializes a new node from JSON', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
         path: fixtures.local.mnemonic,
@@ -59,6 +114,30 @@ describe('BIP44Node', () => {
       });
 
       expect(await BIP44Node.fromJSON(node.toJSON())).toStrictEqual(node);
+    });
+
+    it('initializes a new node from JSON with custom cryptographic functions', async () => {
+      const { privateKey, chainCode } = await deriveChildKey({
+        path: fixtures.local.mnemonic,
+        curve: secp256k1,
+      });
+
+      // Ethereum coin type node
+      const baseNode = await BIP44Node.fromExtendedKey({
+        privateKey,
+        chainCode,
+        depth: 2,
+        parentFingerprint: 1,
+        index: 0,
+      });
+
+      const functions = getMockFunctions();
+      const node = await BIP44Node.fromJSON(baseNode.toJSON(), functions);
+
+      await node.derive([`bip32:0'`]);
+
+      expect(node).toStrictEqual(baseNode);
+      expect(functions.hmacSha512).toHaveBeenCalled();
     });
 
     it.each(fixtures.bip32)(
@@ -153,6 +232,35 @@ describe('BIP44Node', () => {
       });
 
       expect(node.toJSON()).toStrictEqual(stringNode.toJSON());
+    });
+
+    it('initializes a new node from a derivation path with custom cryptographic functions', async () => {
+      const functions = getMockFunctions();
+
+      // Ethereum coin type node
+      const node = await BIP44Node.fromDerivationPath(
+        {
+          derivationPath: [
+            defaultBip39NodeToken,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+          ],
+        },
+        functions,
+      );
+
+      expect(node.depth).toBe(2);
+      expect(node.toJSON()).toStrictEqual({
+        depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
+      });
+      expect(functions.hmacSha512).toHaveBeenCalled();
+      expect(functions.pbkdf2Sha512).toHaveBeenCalled();
     });
 
     it('throws an error if attempting to modify the fields of a node', async () => {
@@ -308,6 +416,40 @@ describe('BIP44Node', () => {
       expect(childNode.privateKey).toBeUndefined();
       expect(childNode.depth).toBe(targetNode.depth);
       expect(childNode.publicKey).toBe(targetNode.publicKey);
+    });
+
+    it('keeps the same cryptographic functions in the child node', async () => {
+      const coinTypeNode = `bip32:40'`;
+      const targetNode = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          coinTypeNode,
+        ],
+      });
+
+      const functions = getMockFunctions();
+      const node = await BIP44Node.fromDerivationPath(
+        {
+          derivationPath: [defaultBip39NodeToken, BIP44PurposeNodeToken],
+        },
+        functions,
+      );
+
+      expect(functions.hmacSha512).toHaveBeenCalledTimes(2);
+      expect(functions.pbkdf2Sha512).toHaveBeenCalledTimes(1);
+
+      const childNode = await node.derive([coinTypeNode]);
+      await childNode.derive([`bip32:0'`]);
+
+      expect(childNode).toMatchObject({
+        depth: targetNode.depth,
+        privateKey: targetNode.privateKey,
+        publicKey: targetNode.publicKey,
+      });
+
+      expect(functions.hmacSha512).toHaveBeenCalledTimes(4);
+      expect(functions.pbkdf2Sha512).toHaveBeenCalledTimes(1);
     });
 
     it('throws if the parent node is already a leaf node', async () => {
@@ -566,6 +708,31 @@ describe('BIP44Node', () => {
       expect(neuterNode.publicKey).toBe(node.publicKey);
       expect(neuterNode.privateKey).toBeUndefined();
       expect(neuterNode.privateKeyBytes).toBeUndefined();
+    });
+
+    it('keeps the same cryptographic functions in the child node', async () => {
+      const functions = getMockFunctions();
+      const node = await BIP44Node.fromDerivationPath(
+        {
+          derivationPath: [
+            defaultBip39NodeToken,
+            BIP44PurposeNodeToken,
+            `bip32:0'`,
+            `bip32:0'`,
+          ],
+        },
+        functions,
+      );
+
+      const neuterNode = node.neuter();
+
+      expect(functions.hmacSha512).toHaveBeenCalledTimes(4);
+      expect(functions.pbkdf2Sha512).toHaveBeenCalledTimes(1);
+
+      await neuterNode.derive([`bip32:0`]);
+
+      expect(functions.hmacSha512).toHaveBeenCalledTimes(5);
+      expect(functions.pbkdf2Sha512).toHaveBeenCalledTimes(1);
     });
   });
 

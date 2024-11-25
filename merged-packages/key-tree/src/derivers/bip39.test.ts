@@ -4,15 +4,87 @@ import {
   concatBytes,
   hexToBytes,
 } from '@metamask/utils';
-import * as hmacModule from '@noble/hashes/hmac';
 
 import fixtures from '../../test/fixtures';
+import * as cryptography from '../cryptography';
 import { secp256k1, ed25519Bip32, type Curve } from '../curves';
+import { mnemonicPhraseToBytes } from '../utils';
 import {
   entropyToCip3MasterNode,
   createBip39KeyFromSeed,
   deriveChildKey,
+  mnemonicToSeed,
 } from './bip39';
+
+const TEST_MNEMONIC_PHRASE =
+  'pill frown erosion humor invest inquiry rich garment seek such mention punch';
+
+describe('mnemonicToSeed', () => {
+  describe('without passphrase', () => {
+    // https://github.com/MetaMask/scure-bip39/blob/612c6952ca8aee034e32dd0dc307c1d96e325ae2/test/bip39.test.ts#L127-L132
+    const seed = new Uint8Array([
+      213, 198, 189, 89, 252, 121, 48, 207, 56, 105, 8, 152, 129, 116, 186, 218,
+      26, 71, 225, 55, 201, 122, 153, 178, 5, 235, 40, 132, 179, 248, 166, 147,
+      18, 128, 248, 25, 184, 206, 113, 170, 71, 235, 73, 144, 0, 134, 22, 244,
+      18, 229, 222, 139, 246, 28, 123, 131, 16, 215, 191, 216, 252, 159, 213,
+      235,
+    ]);
+
+    it('generates the right seed for a string mnemonic phrase', async () => {
+      const generatedSeed = await mnemonicToSeed(TEST_MNEMONIC_PHRASE);
+      expect(generatedSeed).toStrictEqual(seed);
+    });
+
+    it('generates the right seed for a Uint8Array mnemonic phrase', async () => {
+      const mnemonic = mnemonicPhraseToBytes(TEST_MNEMONIC_PHRASE);
+      const generatedSeed = await mnemonicToSeed(mnemonic);
+      expect(generatedSeed).toStrictEqual(seed);
+    });
+
+    it('throws if the length of the mnemonic phrase is invalid', async () => {
+      await expect(mnemonicToSeed('test')).rejects.toThrow(
+        'Invalid mnemonic phrase: The mnemonic phrase must consist of 12, 15, 18, 21, or 24 words.',
+      );
+    });
+
+    it('throws if the mnemonic phrase contains invalid words', async () => {
+      await expect(
+        mnemonicToSeed(
+          'test test test test test test test test test invalid mnemonic phrase',
+        ),
+      ).rejects.toThrow(
+        'Invalid mnemonic phrase: The mnemonic phrase contains an unknown word.',
+      );
+    });
+  });
+
+  describe('with passphrase', () => {
+    const passphrase = 'passphrase';
+
+    // https://github.com/MetaMask/scure-bip39/blob/612c6952ca8aee034e32dd0dc307c1d96e325ae2/test/bip39.test.ts#L162-L167
+    const seed = new Uint8Array([
+      180, 211, 212, 196, 151, 216, 92, 25, 11, 35, 14, 186, 80, 80, 141, 156,
+      245, 11, 25, 118, 50, 75, 80, 36, 116, 113, 11, 112, 36, 86, 70, 188, 92,
+      156, 172, 167, 83, 159, 47, 149, 92, 107, 130, 66, 39, 251, 34, 169, 115,
+      143, 121, 110, 166, 28, 221, 93, 252, 165, 155, 127, 19, 138, 107, 135,
+    ]);
+
+    it('generates the right seed for a string mnemonic phrase', async () => {
+      const generatedSeed = await mnemonicToSeed(
+        TEST_MNEMONIC_PHRASE,
+        passphrase,
+      );
+
+      expect(generatedSeed).toStrictEqual(seed);
+    });
+
+    it('generates the right seed for a Uint8Array mnemonic phrase', async () => {
+      const mnemonic = mnemonicPhraseToBytes(TEST_MNEMONIC_PHRASE);
+      const generatedSeed = await mnemonicToSeed(mnemonic, passphrase);
+      expect(generatedSeed).toStrictEqual(seed);
+    });
+  });
+});
 
 describe('createBip39KeyFromSeed', () => {
   const RANDOM_SEED = hexToBytes(
@@ -37,7 +109,9 @@ describe('createBip39KeyFromSeed', () => {
 
   it('throws if the private key is zero', async () => {
     // Mock the hmac function to return a zero private key.
-    jest.spyOn(hmacModule, 'hmac').mockImplementation(() => new Uint8Array(64));
+    jest
+      .spyOn(cryptography, 'hmacSha512')
+      .mockResolvedValueOnce(new Uint8Array(64));
 
     await expect(
       createBip39KeyFromSeed(RANDOM_SEED, secp256k1),
@@ -57,10 +131,8 @@ describe('createBip39KeyFromSeed', () => {
 
       // Mock the hmac function to return a private key larger than the curve order.
       jest
-        .spyOn(hmacModule, 'hmac')
-        .mockImplementation(() =>
-          concatBytes([privateKey, new Uint8Array(32)]),
-        );
+        .spyOn(cryptography, 'hmacSha512')
+        .mockResolvedValueOnce(concatBytes([privateKey, new Uint8Array(32)]));
 
       await expect(
         createBip39KeyFromSeed(RANDOM_SEED, secp256k1),
