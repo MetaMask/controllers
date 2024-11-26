@@ -40,7 +40,7 @@ export async function deriveChildKey(
   { path, node, curve }: DeriveChildKeyArgs,
   handleError: ErrorHandler,
   cryptographicFunctions?: CryptographicFunctions,
-) {
+): Promise<SLIP10Node> {
   validateNode(node);
 
   const { childIndex, isHardened } = getValidatedPath(path, node, curve);
@@ -225,7 +225,7 @@ export async function deriveSecretExtension({
   childIndex,
   isHardened,
   curve,
-}: DeriveSecretExtensionArgs) {
+}: DeriveSecretExtensionArgs): Promise<Uint8Array> {
   if (isHardened) {
     // Hardened child
     return concatBytes([
@@ -256,7 +256,7 @@ type DerivePublicExtensionArgs = {
 export function derivePublicExtension({
   parentPublicKey,
   childIndex,
-}: DerivePublicExtensionArgs) {
+}: DerivePublicExtensionArgs): Uint8Array {
   return concatBytes([parentPublicKey, numberToUint32(childIndex)]);
 }
 
@@ -507,7 +507,7 @@ type GenerateEntropyArgs = {
 export async function generateEntropy(
   { chainCode, extension }: GenerateEntropyArgs,
   cryptographicFunctions?: CryptographicFunctions,
-) {
+): Promise<Uint8Array> {
   return await hmacSha512(chainCode, extension, cryptographicFunctions);
 }
 
@@ -559,7 +559,7 @@ export function getValidatedPath(
   path: string | Uint8Array,
   node: SLIP10Node,
   curve: Curve,
-) {
+): { childIndex: number; isHardened: boolean } {
   validatePath(path, node, curve);
 
   const indexPart = path.split(`'`)[0];

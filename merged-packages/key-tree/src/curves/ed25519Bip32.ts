@@ -42,7 +42,7 @@ function getByte(privateKey: Uint8Array, index: number): number {
  * @param privateKey - The private key to check.
  * @returns Whether the private key is valid.
  */
-export const isValidPrivateKey = (privateKey: Uint8Array) => {
+export const isValidPrivateKey = (privateKey: Uint8Array): boolean => {
   /* eslint-disable no-bitwise */
   // Lowest 3 bits of the first byte must be zero
   if ((getByte(privateKey, 0) & 0b00000111) !== 0) {

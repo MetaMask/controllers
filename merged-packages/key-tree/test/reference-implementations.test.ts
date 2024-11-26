@@ -1,5 +1,7 @@
+// eslint-disable-next-line n/no-unsupported-features/node-builtins
 import { webcrypto } from 'crypto';
 
+import fixtures from './fixtures';
 import type { SLIP10Node, HDPathTuple } from '../src';
 import { BIP44Node, BIP44PurposeNodeToken } from '../src';
 import { ed25519, secp256k1 } from '../src/curves';
@@ -10,7 +12,6 @@ import {
   hexStringToBytes,
 } from '../src/utils';
 import * as utils from '../src/utils';
-import fixtures from './fixtures';
 
 // Node.js <20 doesn't have `globalThis.crypto`, so we need to define it.
 // TODO: Remove this once we drop support for Node.js <20.

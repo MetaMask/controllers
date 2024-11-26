@@ -1,7 +1,6 @@
 import { bytesToHex } from '@metamask/utils';
 
 import { BIP44Node, BIP44PurposeNodeToken, secp256k1 } from '.';
-import fixtures from '../test/fixtures';
 import type { CryptographicFunctions } from './cryptography';
 import { hmacSha512, pbkdf2Sha512 } from './cryptography';
 import { compressPublicKey } from './curves/secp256k1';
@@ -12,6 +11,7 @@ import {
   PUBLIC_KEY_VERSION,
 } from './extended-keys';
 import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
+import fixtures from '../test/fixtures';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);

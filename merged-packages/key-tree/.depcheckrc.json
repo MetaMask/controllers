@@ -3,9 +3,16 @@
     "@lavamoat/allow-scripts",
     "@lavamoat/preinstall-always-fail",
     "@metamask/auto-changelog",
+    "@metamask/eslint-config",
+    "@metamask/eslint-config-*",
     "@types/*",
+    "@yarnpkg/types",
+    "eslint-config-*",
+    "eslint-import-resolver-typescript",
+    "eslint-plugin-*",
     "prettier-plugin-packagejson",
     "ts-node",
-    "typedoc"
+    "typedoc",
+    "typescript-eslint"
   ]
 }

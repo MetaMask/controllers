@@ -107,6 +107,7 @@ export class BIP44Node implements BIP44NodeInterface {
    * @param json - The JSON representation of a SLIP-10 node.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A BIP44 node.
    */
   static async fromJSON(
     json: JsonBIP44Node,
@@ -132,6 +133,7 @@ export class BIP44Node implements BIP44NodeInterface {
    * @param options.chainCode - The chain code for the node.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A BIP44 node.
    */
   static async fromExtendedKey(
     options: BIP44ExtendedKeyOptions | string,
@@ -220,6 +222,7 @@ export class BIP44Node implements BIP44NodeInterface {
    * to derive the key of this node.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A BIP44 node.
    */
   static async fromDerivationPath(
     { derivationPath }: BIP44DerivationPathOptions,
@@ -239,7 +242,7 @@ export class BIP44Node implements BIP44NodeInterface {
     return new BIP44Node(node);
   }
 
-  #node: SLIP10Node;
+  readonly #node: SLIP10Node;
 
   public get depth(): BIP44Depth {
     return this.#node.depth as BIP44Depth;
@@ -407,7 +410,7 @@ export function validateBIP44Depth(
 function validateBIP44DerivationPath(
   path: SLIP10Path,
   startingDepth: BIP44Depth,
-) {
+): void {
   path.forEach((nodeToken, index) => {
     const currentDepth = startingDepth + index;
 

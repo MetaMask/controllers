@@ -127,6 +127,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @param json - The JSON representation of a SLIP-10 node.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A SLIP10 node.
    */
   static async fromJSON(
     json: JsonSLIP10Node,
@@ -146,6 +147,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @param extendedKey - The BIP-32 extended key string.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A SLIP10 node.
    */
   static async fromExtendedKey(
     extendedKey: string,
@@ -175,6 +177,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @param options.curve - The curve used by the node.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A SLIP10 node.
    */
   static async fromExtendedKey(
     // These signatures could technically be combined, but it's easier to
@@ -209,6 +212,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @param options.curve - The curve used by the node.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A SLIP10 node.
    */
   static async fromExtendedKey(
     options: SLIP10ExtendedKeyOptions | string,
@@ -355,7 +359,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
   static async fromDerivationPath(
     { derivationPath, curve }: SLIP10DerivationPathOptions,
     cryptographicFunctions?: CryptographicFunctions,
-  ) {
+  ): Promise<SLIP10Node> {
     validateCurve(curve);
 
     if (!derivationPath) {
@@ -378,7 +382,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     );
   }
 
-  static #constructorGuard = Symbol('SLIP10Node.constructor');
+  static readonly #constructorGuard = Symbol('SLIP10Node.constructor');
 
   public readonly curve: SupportedCurve;
 
@@ -396,7 +400,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   public readonly publicKeyBytes: Uint8Array;
 
-  #cryptographicFunctions: CryptographicFunctions;
+  readonly #cryptographicFunctions: CryptographicFunctions;
 
   // eslint-disable-next-line no-restricted-syntax
   private constructor(
@@ -431,7 +435,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     Object.freeze(this);
   }
 
-  public get chainCode() {
+  public get chainCode(): string {
     return bytesToHex(this.chainCodeBytes);
   }
 
@@ -633,7 +637,7 @@ export function validateMasterParentFingerprint(
   masterFingerprint: number | undefined,
   parentFingerprint: number,
   depth: number,
-) {
+): void {
   // The master fingerprint is optional.
   if (!masterFingerprint) {
     return;
@@ -655,7 +659,7 @@ export function validateMasterParentFingerprint(
  * @param depth - The depth of the node to validate.
  * @throws If the index is not zero for the root node.
  */
-export function validateRootIndex(index: number, depth: number) {
+export function validateRootIndex(index: number, depth: number): void {
   if (depth === 0 && index !== 0) {
     throw new Error(
       `Invalid index: The index of the root node must be 0. Received: "${String(

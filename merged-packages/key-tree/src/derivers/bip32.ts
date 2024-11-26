@@ -1,12 +1,6 @@
 import { assert } from '@metamask/utils';
 
 import type { DeriveChildKeyArgs } from '.';
-import { BYTES_KEY_LENGTH } from '../constants';
-import type { CryptographicFunctions } from '../cryptography';
-import { keccak256 } from '../cryptography';
-import { secp256k1 } from '../curves';
-import type { SLIP10Node } from '../SLIP10Node';
-import { isValidBytesKey, validateBIP32Index } from '../utils';
 import type { DeriveNodeArgs } from './shared';
 import {
   deriveChildKey as sharedDeriveChildKey,
@@ -14,6 +8,12 @@ import {
   generateEntropy,
   derivePublicExtension,
 } from './shared';
+import { BYTES_KEY_LENGTH } from '../constants';
+import type { CryptographicFunctions } from '../cryptography';
+import { keccak256 } from '../cryptography';
+import { secp256k1 } from '../curves';
+import type { SLIP10Node } from '../SLIP10Node';
+import { isValidBytesKey, validateBIP32Index } from '../utils';
 
 /**
  * Converts a BIP-32 private key to an Ethereum address.
@@ -26,7 +26,7 @@ import {
  * address.
  * @returns The Ethereum address corresponding to the given key.
  */
-export function privateKeyToEthAddress(key: Uint8Array) {
+export function privateKeyToEthAddress(key: Uint8Array): Uint8Array {
   assert(
     key instanceof Uint8Array && isValidBytesKey(key, BYTES_KEY_LENGTH),
     'Invalid key: The key must be a 32-byte, non-zero Uint8Array.',
@@ -47,7 +47,7 @@ export function privateKeyToEthAddress(key: Uint8Array) {
  * address.
  * @returns The Ethereum address corresponding to the given key.
  */
-export function publicKeyToEthAddress(key: Uint8Array) {
+export function publicKeyToEthAddress(key: Uint8Array): Uint8Array {
   assert(
     key instanceof Uint8Array &&
       isValidBytesKey(key, secp256k1.publicKeyLength),

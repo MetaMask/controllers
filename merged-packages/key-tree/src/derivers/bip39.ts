@@ -22,7 +22,7 @@ const MNEMONIC_PHRASE_LENGTHS = [12, 15, 18, 21, 24];
  * @param mnemonicPhrase - The mnemonic phrase to validate.
  * @throws If the mnemonic phrase is invalid.
  */
-function validateMnemonicPhrase(mnemonicPhrase: string) {
+function validateMnemonicPhrase(mnemonicPhrase: string): void {
   const words = mnemonicPhrase.split(' ');
 
   assert(
@@ -48,7 +48,7 @@ function validateMnemonicPhrase(mnemonicPhrase: string) {
 function encodeMnemonicPhrase(
   mnemonic: string | Uint8Array,
   wordlist: string[],
-) {
+): Uint8Array {
   if (typeof mnemonic === 'string') {
     validateMnemonicPhrase(mnemonic);
     return stringToBytes(mnemonic.normalize('NFKD'));
@@ -71,12 +71,13 @@ function encodeMnemonicPhrase(
  * @param passphrase - The passphrase to use.
  * @param cryptographicFunctions - The cryptographic functions to use. If
  * provided, these will be used instead of the built-in implementations.
+ * @returns The seed.
  */
 export async function mnemonicToSeed(
   mnemonic: string | Uint8Array,
   passphrase = '',
   cryptographicFunctions?: CryptographicFunctions,
-) {
+): Promise<Uint8Array> {
   const salt = `mnemonic${passphrase}`.normalize('NFKD');
   return await pbkdf2Sha512(
     encodeMnemonicPhrase(mnemonic, englishWordlist),

@@ -10,8 +10,9 @@ export const secret = stringToBytes('ed25519 seed');
 
 // All private keys are valid for ed25519:
 // https://github.com/satoshilabs/slips/blob/133ea52a8e43d338b98be208907e144277e44c0e/slip-0010.md#master-key-generation
-export const isValidPrivateKey = (_privateKey: Uint8Array | string | bigint) =>
-  true;
+export const isValidPrivateKey = (
+  _privateKey: Uint8Array | string | bigint,
+): boolean => true;
 
 export const deriveUnhardenedKeys = false;
 

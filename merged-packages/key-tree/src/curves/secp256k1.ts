@@ -15,7 +15,7 @@ export const deriveUnhardenedKeys = true;
 
 export const publicKeyLength = 65;
 
-export const isValidPrivateKey = (privateKey: Uint8Array) => {
+export const isValidPrivateKey = (privateKey: Uint8Array): boolean => {
   return secp256k1.utils.isValidPrivateKey(privateKey);
 };
 

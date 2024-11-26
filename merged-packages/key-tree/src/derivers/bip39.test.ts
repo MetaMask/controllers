@@ -5,16 +5,16 @@ import {
   hexToBytes,
 } from '@metamask/utils';
 
-import fixtures from '../../test/fixtures';
-import * as cryptography from '../cryptography';
-import { secp256k1, ed25519Bip32, type Curve } from '../curves';
-import { mnemonicPhraseToBytes } from '../utils';
 import {
   entropyToCip3MasterNode,
   createBip39KeyFromSeed,
   deriveChildKey,
   mnemonicToSeed,
 } from './bip39';
+import fixtures from '../../test/fixtures';
+import * as cryptography from '../cryptography';
+import { secp256k1, ed25519Bip32, type Curve } from '../curves';
+import { mnemonicPhraseToBytes } from '../utils';
 
 const TEST_MNEMONIC_PHRASE =
   'pill frown erosion humor invest inquiry rich garment seek such mention punch';

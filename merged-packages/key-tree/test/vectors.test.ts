@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
 import { hexToBytes } from '@metamask/utils';
+// eslint-disable-next-line n/no-unsupported-features/node-builtins
 import { webcrypto } from 'crypto';
 
-import type { SLIP10PathTuple } from '../src';
+import derivationVectors from './vectors/derivation.json';
+import type { SLIP10Node, SLIP10PathTuple } from '../src';
 import { secp256k1 } from '../src';
 import type { Curve } from '../src/curves';
 import { ed25519Bip32, ed25519 } from '../src/curves';
@@ -11,7 +12,6 @@ import {
   entropyToCip3MasterNode,
 } from '../src/derivers/bip39';
 import * as utils from '../src/utils';
-import derivationVectors from './vectors/derivation.json';
 
 // Node.js <20 doesn't have `globalThis.crypto`, so we need to define it.
 // TODO: Remove this once we drop support for Node.js <20.
@@ -19,7 +19,10 @@ Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
 
 type Vector = (typeof derivationVectors.bip32.hardened)[0];
 
-const masterNodeFromSeed = async (seed: Uint8Array, curve: Curve) => {
+const masterNodeFromSeed = async (
+  seed: Uint8Array,
+  curve: Curve,
+): Promise<SLIP10Node> => {
   return curve.masterNodeGenerationSpec === 'slip10'
     ? createBip39KeyFromSeed(seed, curve)
     : // in the context of tests, we assume seed to be just random bytes which we use here as entropy
@@ -62,7 +65,7 @@ function generateTests(
     keys,
   }: Vector,
   { publicDerivation = false, curve = secp256k1 }: Options = {},
-) {
+): void {
   describe(`seed: ${hexSeed}`, () => {
     it('derives the correct master keys', async () => {
       const node = await masterNodeFromSeed(hexToBytes(hexSeed), curve);

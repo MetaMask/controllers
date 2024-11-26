@@ -1,12 +1,12 @@
 import { assert, bytesToHex, concatBytes, hexToBytes } from '@metamask/utils';
 
 import type { DeriveChildKeyArgs } from '.';
+import { generateEntropy, getValidatedPath, validateNode } from './shared';
 import { BIP_32_HARDENED_OFFSET } from '../constants';
 import type { CryptographicFunctions } from '../cryptography';
 import { type Curve, mod } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { numberToUint32 } from '../utils';
-import { generateEntropy, getValidatedPath, validateNode } from './shared';
 
 /**
  * CIP-3 https://github.com/cardano-foundation/CIPs/blob/09d7d8ee1bd64f7e6b20b5a6cae088039dce00cb/CIP-0003/CIP-0003.md.
@@ -34,7 +34,8 @@ import { generateEntropy, getValidatedPath, validateNode } from './shared';
  * @param bytes - The input Uint8Array.
  * @returns A new Uint8Array with the bytes in reversed order.
  */
-export const toReversed = (bytes: Uint8Array) => bytes.slice().reverse();
+export const toReversed = (bytes: Uint8Array): Uint8Array =>
+  bytes.slice().reverse();
 
 /**
  * Converts an array of bytes to a BigInt.
@@ -42,7 +43,7 @@ export const toReversed = (bytes: Uint8Array) => bytes.slice().reverse();
  * @param bytes - The array of bytes to convert.
  * @returns The BigInt representation of the bytes.
  */
-export const bytesToBigInt = (bytes: Uint8Array) => {
+export const bytesToBigInt = (bytes: Uint8Array): bigint => {
   const reversed = toReversed(bytes);
   const bytesInHex = bytesToHex(reversed);
   return BigInt(bytesInHex);
@@ -54,7 +55,7 @@ export const bytesToBigInt = (bytes: Uint8Array) => {
  * @param bigInt - The BigInt to convert.
  * @returns The byte array representation of the BigInt.
  */
-export const bigIntToBytes = (bigInt: bigint) => {
+export const bigIntToBytes = (bigInt: bigint): Uint8Array => {
   const hexadecimal = bigInt.toString(16);
   return toReversed(hexToBytes(hexadecimal));
 };
@@ -65,7 +66,7 @@ export const bigIntToBytes = (bigInt: bigint) => {
  * @param bytes - The bytes array to pad.
  * @returns The padded bytes array.
  */
-export const padEnd32Bytes = (bytes: Uint8Array) => {
+export const padEnd32Bytes = (bytes: Uint8Array): Uint8Array => {
   return concatBytes([
     bytes,
     new Uint8Array(Math.max(32 - bytes.length, 0)).fill(0),
@@ -119,7 +120,7 @@ export const getKeyExtension = (
   tag: number,
   key: Uint8Array,
   childIndex: number,
-) => {
+): Uint8Array => {
   return concatBytes([
     new Uint8Array([tag]),
     key,
@@ -163,7 +164,7 @@ const Z_TAGS = {
 export const derivePrivateKey = async (
   { parentNode, childIndex, isHardened }: DeriveWithPrivateArgs,
   cryptographicFunctions?: CryptographicFunctions,
-) => {
+): Promise<Uint8Array> => {
   // extension = i >= 2^31 ? (0x00||kp||i) : (0x02||Ap||i)
   const extension = isHardened
     ? getKeyExtension(
@@ -230,7 +231,7 @@ export const deriveChainCode = async (
     isHardened,
   }: DeriveWithPrivateArgs | DeriveWithoutPrivateArgs,
   cryptographicFunctions?: CryptographicFunctions,
-) => {
+): Promise<Uint8Array> => {
   // extension = i >= 2^31 ? (0x01||kp||i) : (0x03||Ap||i)
   const extension = isHardened
     ? getKeyExtension(
@@ -281,7 +282,7 @@ type DerivePublicKeyArgs = DeriveWithoutPrivateArgs & {
 export const derivePublicKey = async (
   { parentNode, childIndex, curve }: DerivePublicKeyArgs,
   cryptographicFunctions?: CryptographicFunctions,
-) => {
+): Promise<Uint8Array> => {
   // extension = (0x02||Ap||i)
   const extension = getKeyExtension(
     PUBLIC_KEY_TAGS.normal,

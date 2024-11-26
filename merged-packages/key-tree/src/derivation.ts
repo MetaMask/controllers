@@ -105,39 +105,42 @@ export async function deriveKeyFromPath(
   // path can be a Uint8Array.
   return await (path as readonly [Uint8Array | string, ...string[]]).reduce<
     Promise<SLIP10Node>
-  >(async (promise, pathNode, index) => {
-    const derivedNode = await promise;
+  >(
+    async (promise, pathNode, index) => {
+      const derivedNode = await promise;
 
-    if (typeof pathNode === 'string') {
-      const [pathType, pathPart] = pathNode.split(':');
+      if (typeof pathNode === 'string') {
+        const [pathType, pathPart] = pathNode.split(':');
 
-      assert(pathType);
-      assert(pathPart);
-      assert(hasDeriver(pathType), `Unknown derivation type: "${pathType}".`);
+        assert(pathType);
+        assert(pathPart);
+        assert(hasDeriver(pathType), `Unknown derivation type: "${pathType}".`);
 
-      const deriver = derivers[pathType] as Deriver;
-      return await deriver.deriveChildKey(
+        const deriver = derivers[pathType] as Deriver;
+        return await deriver.deriveChildKey(
+          {
+            path: pathPart,
+            node: derivedNode,
+            curve: getCurveByName(curve),
+          },
+          cryptographicFunctions,
+        );
+      }
+
+      // Only the first path segment can be a Uint8Array.
+      assert(index === 0, getMalformedError());
+
+      return await derivers.bip39.deriveChildKey(
         {
-          path: pathPart,
+          path: pathNode,
           node: derivedNode,
           curve: getCurveByName(curve),
         },
         cryptographicFunctions,
       );
-    }
-
-    // Only the first path segment can be a Uint8Array.
-    assert(index === 0, getMalformedError());
-
-    return await derivers.bip39.deriveChildKey(
-      {
-        path: pathNode,
-        node: derivedNode,
-        curve: getCurveByName(curve),
-      },
-      cryptographicFunctions,
-    );
-  }, Promise.resolve(node as SLIP10Node));
+    },
+    Promise.resolve(node as SLIP10Node),
+  );
 }
 
 /**
@@ -164,7 +167,7 @@ export function validatePathSegment(
   path: SLIP10Path,
   hasKey: boolean,
   depth?: number,
-) {
+): void {
   if ((path as any).length === 0) {
     throw new Error(`Invalid HD path segment: The segment must not be empty.`);
   }
@@ -234,6 +237,6 @@ export function validatePathSegment(
  *
  * @returns The error.
  */
-function getMalformedError() {
+function getMalformedError(): Error {
   return new Error('Invalid HD path segment: The path segment is malformed.');
 }

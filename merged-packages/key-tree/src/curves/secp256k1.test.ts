@@ -1,7 +1,7 @@
 import { bytesToHex, hexToBytes } from '@metamask/utils';
 
-import fixtures from '../../test/fixtures';
 import { curve, getPublicKey, isValidPrivateKey, publicAdd } from './secp256k1';
+import fixtures from '../../test/fixtures';
 
 describe('secp256k1', () => {
   describe('curve', () => {

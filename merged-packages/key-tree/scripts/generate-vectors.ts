@@ -1,5 +1,5 @@
 import { bytesToHex } from '@metamask/utils';
-// eslint-disable-next-line import/no-nodejs-modules
+// eslint-disable-next-line import-x/no-nodejs-modules
 import { randomInt, randomBytes } from 'crypto';
 
 import type { BIP32Node, SLIP10Node } from '../src';
@@ -18,7 +18,7 @@ import { deriveChildKey } from '../src/derivers/bip39';
  *
  * @returns A random boolean value.
  */
-function getRandomBoolean() {
+function getRandomBoolean(): boolean {
   return randomInt(2) === 0;
 }
 
@@ -29,7 +29,7 @@ function getRandomBoolean() {
  * boolean value.
  * @returns A random BIP-32 index.
  */
-function getRandomIndex(hardened: boolean = getRandomBoolean()) {
+function getRandomIndex(hardened: boolean = getRandomBoolean()): number {
   if (hardened) {
     return randomInt(BIP_32_HARDENED_OFFSET, MAX_BIP_32_INDEX);
   }
@@ -44,7 +44,8 @@ function getRandomIndex(hardened: boolean = getRandomBoolean()) {
  * 16 and 64 bytes.
  * @returns A random seed.
  */
-function getRandomSeed(length = randomInt(16, 64)) {
+// eslint-disable-next-line no-restricted-globals
+function getRandomSeed(length = randomInt(16, 64)): Buffer {
   return randomBytes(length);
 }
 
@@ -62,7 +63,7 @@ function getRandomPath(
   spec: 'bip32' | 'slip10' | 'cip3',
   length = randomInt(1, 20),
   hardened?: boolean,
-) {
+): BIP32Node[] {
   return new Array(length).fill(0).map(() => {
     const index = getRandomIndex(hardened);
     const formattedIndex =
@@ -87,7 +88,7 @@ async function getRandomKeyVector(
   node: SLIP10Node,
   spec: 'bip32' | 'slip10' | 'cip3',
   hardened?: boolean,
-) {
+): Promise<TestKeyVector> {
   const path = getRandomPath(spec, undefined, hardened);
   const child = await node.derive(path);
 
@@ -105,6 +106,24 @@ async function getRandomKeyVector(
     depth: child.depth,
   };
 }
+type TestKeyVector = {
+  path: {
+    tuple: BIP32Node[];
+    string: string;
+  };
+  privateKey?: string | undefined;
+  publicKey: string;
+  chainCode: string;
+  parentFingerprint: number;
+  masterFingerprint?: number | undefined;
+  index: number;
+  depth: number;
+};
+
+type TestVector = Omit<TestKeyVector, 'path'> & {
+  hexSeed: string;
+  keys: TestKeyVector[];
+};
 
 /**
  * Generate a random vector.
@@ -115,13 +134,14 @@ async function getRandomKeyVector(
  * @param hardened - Whether the keys should be hardened. Defaults to a random
  * boolean value.
  * @param curve - The curve to use. Defaults to secp256k1.
+ * @returns A random test vector.
  */
 async function getRandomVector(
   spec: 'bip32' | 'slip10' | 'cip3',
   amount = 10,
   hardened?: boolean,
   curve: Curve = secp256k1,
-) {
+): Promise<TestVector> {
   const seed = getRandomSeed();
   const node = await deriveChildKey({ path: seed, curve });
 
@@ -158,7 +178,7 @@ async function getRandomVectors(
   amount = 10,
   hardened?: boolean,
   curve: Curve = secp256k1,
-) {
+): Promise<TestVector[]> {
   return Promise.all(
     new Array(amount)
       .fill(0)
@@ -166,12 +186,27 @@ async function getRandomVectors(
   );
 }
 
+type TestVectorOutput = {
+  hardened: TestVector[];
+  unhardened: TestVector[];
+  mixed: TestVector[];
+};
+
 /**
  * Get the output for the vectors.
  *
  * @returns The output for the vectors.
  */
-async function getOutput() {
+async function getOutput(): Promise<{
+  bip32: TestVectorOutput;
+  slip10: Omit<TestVectorOutput, 'hardened'> & {
+    hardened: {
+      secp256k1: TestVector[];
+      ed25519: TestVector[];
+    };
+  };
+  cip3: TestVectorOutput;
+}> {
   return {
     bip32: {
       hardened: await getRandomVectors('bip32', 50, true),
@@ -195,6 +230,7 @@ async function getOutput() {
 }
 
 getOutput()
+  // eslint-disable-next-line promise/always-return
   .then((output) => {
     console.log(JSON.stringify(output, undefined, 2));
   })

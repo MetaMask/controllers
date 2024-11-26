@@ -159,7 +159,7 @@ export function getBIP32NodeToken(index: BIP44PathIndex): BIP32Node {
  *
  * @param addressIndex - The index to validate.
  */
-export function validateBIP32Index(addressIndex: number) {
+export function validateBIP32Index(addressIndex: number): void {
   if (!isValidBIP32Index(addressIndex)) {
     throw new Error(`Invalid BIP-32 index: Must be a non-negative integer.`);
   }
@@ -444,7 +444,10 @@ export function validateCurve(
  * @param littleEndian - Whether to use little endian byte order.
  * @returns The `Uint8Array` corresponding to the `bigint` value.
  */
-export function numberToUint32(value: number, littleEndian = false) {
+export function numberToUint32(
+  value: number,
+  littleEndian = false,
+): Uint8Array {
   const bytes = new Uint8Array(4);
   const view = createDataView(bytes);
 
@@ -459,6 +462,6 @@ export function numberToUint32(value: number, littleEndian = false) {
  *
  * @returns Whether the Web Crypto API is supported.
  */
-export function isWebCryptoSupported() {
+export function isWebCryptoSupported(): boolean {
   return Boolean(globalThis.crypto?.subtle);
 }

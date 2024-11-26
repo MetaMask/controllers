@@ -78,12 +78,13 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
    * integer.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A BIP44CoinType node.
    */
   static async fromJSON(
     json: JsonBIP44Node,
     coin_type: number,
     cryptographicFunctions?: CryptographicFunctions,
-  ) {
+  ): Promise<BIP44CoinTypeNode> {
     validateCoinType(coin_type);
     validateCoinTypeNodeDepth(json.depth);
 
@@ -119,11 +120,12 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
    * @param derivationPath - The derivation path for the key of this node.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
+   * @returns A BIP44CoinType node.
    */
   static async fromDerivationPath(
     derivationPath: CoinTypeHDPathTuple,
     cryptographicFunctions?: CryptographicFunctions,
-  ) {
+  ): Promise<BIP44CoinTypeNode> {
     validateCoinTypeNodeDepth(derivationPath.length - 1);
 
     const node = await BIP44Node.fromDerivationPath(
@@ -161,8 +163,12 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
    * @param node - The {@link BIP44Node} for the key of this node.
    * @param coin_type - The coin_type index of this node. Must be a non-negative
    * integer.
+   * @returns A BIP44CoinType node.
    */
-  static async fromNode(node: BIP44Node, coin_type: number) {
+  static async fromNode(
+    node: BIP44Node,
+    coin_type: number,
+  ): Promise<BIP44CoinTypeNode> {
     if (!(node instanceof BIP44Node)) {
       throw new Error('Invalid node: Expected an instance of BIP44Node.');
     }
@@ -299,7 +305,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
  *
  * @param depth - The depth to validate.
  */
-function validateCoinTypeNodeDepth(depth: number) {
+function validateCoinTypeNodeDepth(depth: number): void {
   if (depth !== BIP_44_COIN_TYPE_DEPTH) {
     throw new Error(
       `Invalid depth: Coin type nodes must be of depth ${BIP_44_COIN_TYPE_DEPTH}. Received: "${depth}"`,
@@ -424,7 +430,7 @@ export async function getBIP44AddressKeyDeriver(
   node: BIP44CoinTypeNode | JsonBIP44CoinTypeNode | string,
   accountAndChangeIndices?: Omit<CoinTypeToAddressIndices, 'address_index'>,
   cryptographicFunctions?: CryptographicFunctions,
-) {
+): Promise<BIP44AddressKeyDeriver> {
   const { account = 0, change = 0 } = accountAndChangeIndices ?? {};
 
   const actualNode = await getNode(node, cryptographicFunctions);
@@ -474,6 +480,7 @@ export async function getBIP44AddressKeyDeriver(
  * @param cryptographicFunctions - The cryptographic functions to use. If
  * provided, these will be used instead of the built-in implementations. This is
  * only used if the node is an extended key string or JSON object.
+ * @returns A BIP44CoinType node.
  */
 async function getNode(
   node: BIP44CoinTypeNode | JsonBIP44CoinTypeNode | string,

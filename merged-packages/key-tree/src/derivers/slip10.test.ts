@@ -1,11 +1,11 @@
 import { hexToBytes } from '@metamask/utils';
 
+import { bip39MnemonicToMultipath, createBip39KeyFromSeed } from './bip39';
+import { deriveChildKey } from './slip10';
 import fixtures from '../../test/fixtures';
 import { BIP_32_HARDENED_OFFSET } from '../constants';
 import { ed25519, secp256k1 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
-import { bip39MnemonicToMultipath, createBip39KeyFromSeed } from './bip39';
-import { deriveChildKey } from './slip10';
 
 describe('deriveChildKey', () => {
   it('handles deriving invalid private keys', async () => {

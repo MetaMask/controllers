@@ -1,6 +1,5 @@
 import { bytesToHex, hexToBytes } from '@metamask/utils';
 
-import fixtures from '../test/fixtures';
 import { BIP44PurposeNodeToken } from './constants';
 import type { CryptographicFunctions } from './cryptography';
 import { pbkdf2Sha512, hmacSha512 } from './cryptography';
@@ -10,6 +9,7 @@ import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
 import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
 import { SLIP10Node } from './SLIP10Node';
 import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
+import fixtures from '../test/fixtures';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);

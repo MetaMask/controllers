@@ -1,7 +1,6 @@
 import { bytesToHex, hexToBytes } from '@metamask/utils';
 
 import { ed25519Bip32 } from '.';
-import fixtures from '../../test/fixtures';
 import {
   bytesToNumberLE,
   compressPublicKey,
@@ -9,6 +8,7 @@ import {
   isValidPrivateKey,
   multiplyWithBase,
 } from './ed25519Bip32';
+import fixtures from '../../test/fixtures';
 
 describe('getPublicKey', () => {
   fixtures.cip3.forEach((fixture) => {
