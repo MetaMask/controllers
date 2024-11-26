@@ -2,6 +2,7 @@ import { assert } from '@metamask/utils';
 
 import type {
   BIP44Depth,
+  Network,
   PartialHDPathTuple,
   RootedSLIP10PathTuple,
   SLIP10Path,
@@ -15,7 +16,7 @@ import {
 } from './constants';
 import type { CryptographicFunctions } from './cryptography';
 import type { SupportedCurve } from './curves';
-import { decodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
+import { decodeExtendedKey } from './extended-keys';
 import { SLIP10Node, validateBIP32Depth } from './SLIP10Node';
 import { isHardened } from './utils';
 
@@ -23,6 +24,7 @@ export type BIP44ExtendedKeyOptions = {
   readonly depth: number;
   readonly parentFingerprint: number;
   readonly index: number;
+  readonly network?: Network | undefined;
   readonly chainCode: Uint8Array | string;
   readonly privateKey?: Uint8Array | string | undefined;
   readonly publicKey?: Uint8Array | string | undefined;
@@ -30,6 +32,7 @@ export type BIP44ExtendedKeyOptions = {
 
 export type BIP44DerivationPathOptions = {
   readonly derivationPath: RootedSLIP10PathTuple;
+  readonly network?: Network | undefined;
 };
 
 /**
@@ -66,6 +69,12 @@ export type JsonBIP44Node = {
    * The index of the node, or 0 if this is a master node.
    */
   readonly index: number;
+
+  /**
+   * The network for the node. This is only used for extended keys, and defaults
+   * to `mainnet`.
+   */
+  readonly network?: Network | undefined;
 
   /**
    * The hexadecimal string representation of the private key for this node.
@@ -127,6 +136,8 @@ export class BIP44Node implements BIP44NodeInterface {
    * @param options - An object containing the extended key, or an extended
    * public (xpub) or private (xprv) key.
    * @param options.depth - The depth of the node.
+   * @param options.network - The network for the node. This is only used for
+   * extended keys, and defaults to `mainnet`.
    * @param options.privateKey - The private key for the node.
    * @param options.publicKey - The public key for the node. If a private key is
    * specified, this parameter is ignored.
@@ -142,9 +153,10 @@ export class BIP44Node implements BIP44NodeInterface {
     if (typeof options === 'string') {
       const extendedKey = decodeExtendedKey(options);
 
-      const { chainCode, depth, parentFingerprint, index } = extendedKey;
+      const { type, chainCode, depth, parentFingerprint, index, network } =
+        extendedKey;
 
-      if (extendedKey.version === PRIVATE_KEY_VERSION) {
+      if (type === 'private') {
         const { privateKey } = extendedKey;
 
         return BIP44Node.fromExtendedKey(
@@ -152,6 +164,7 @@ export class BIP44Node implements BIP44NodeInterface {
             depth,
             parentFingerprint,
             index,
+            network,
             privateKey,
             chainCode,
           },
@@ -166,6 +179,7 @@ export class BIP44Node implements BIP44NodeInterface {
           depth,
           parentFingerprint,
           index,
+          network,
           publicKey,
           chainCode,
         },
@@ -180,6 +194,7 @@ export class BIP44Node implements BIP44NodeInterface {
       depth,
       parentFingerprint,
       index,
+      network,
     } = options;
 
     validateBIP44Depth(depth);
@@ -192,6 +207,7 @@ export class BIP44Node implements BIP44NodeInterface {
         depth,
         parentFingerprint,
         index,
+        network,
         curve: 'secp256k1',
       },
       cryptographicFunctions,
@@ -220,12 +236,14 @@ export class BIP44Node implements BIP44NodeInterface {
    * @param options - An object containing the derivation path.
    * @param options.derivationPath - The rooted HD tree path that will be used
    * to derive the key of this node.
+   * @param options.network - The network for the node. This is only used for
+   * extended keys, and defaults to `mainnet`.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
    * @returns A BIP44 node.
    */
   static async fromDerivationPath(
-    { derivationPath }: BIP44DerivationPathOptions,
+    { derivationPath, network }: BIP44DerivationPathOptions,
     cryptographicFunctions?: CryptographicFunctions,
   ): Promise<BIP44Node> {
     validateBIP44Depth(derivationPath.length - 1);
@@ -234,6 +252,7 @@ export class BIP44Node implements BIP44NodeInterface {
     const node = await SLIP10Node.fromDerivationPath(
       {
         derivationPath,
+        network,
         curve: 'secp256k1',
       },
       cryptographicFunctions,
@@ -298,6 +317,10 @@ export class BIP44Node implements BIP44NodeInterface {
 
   public get index(): number {
     return this.#node.index;
+  }
+
+  public get network(): Network {
+    return this.#node.network;
   }
 
   public get extendedKey(): string {
@@ -367,6 +390,7 @@ export class BIP44Node implements BIP44NodeInterface {
       masterFingerprint: this.masterFingerprint,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
+      network: this.network,
       privateKey: this.privateKey,
       publicKey: this.publicKey,
       chainCode: this.chainCode,

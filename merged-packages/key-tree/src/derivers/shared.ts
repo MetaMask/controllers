@@ -6,6 +6,7 @@ import {
 } from '@metamask/utils';
 
 import type { DeriveChildKeyArgs, DerivedKeys } from '.';
+import type { Network } from '../constants';
 import { BIP_32_HARDENED_OFFSET, UNPREFIXED_PATH_REGEX } from '../constants';
 import type { CryptographicFunctions } from '../cryptography';
 import { hmacSha512 } from '../cryptography';
@@ -30,6 +31,8 @@ type ErrorHandler = (
  * @param options.path - The derivation path part to derive.
  * @param options.node - The node to derive from.
  * @param options.curve - The curve to use for derivation.
+ * @param options.network - The network for the node. This is only used for
+ * extended keys, and defaults to `mainnet`.
  * @param handleError - A function that can handle errors that occur during
  * derivation.
  * @param cryptographicFunctions - The cryptographic functions to use. If
@@ -37,7 +40,7 @@ type ErrorHandler = (
  * @returns The derived node.
  */
 export async function deriveChildKey(
-  { path, node, curve }: DeriveChildKeyArgs,
+  { path, node, curve, network }: DeriveChildKeyArgs,
   handleError: ErrorHandler,
   cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
@@ -53,6 +56,7 @@ export async function deriveChildKey(
     parentFingerprint: node.fingerprint,
     masterFingerprint: node.masterFingerprint,
     curve,
+    network,
   };
 
   if (node.privateKeyBytes) {
@@ -115,6 +119,7 @@ type BaseDeriveNodeArgs = {
   parentFingerprint: number;
   masterFingerprint?: number | undefined;
   curve: Curve;
+  network?: Network | undefined;
 };
 
 type DerivePrivateKeyArgs = BaseDeriveNodeArgs & {
@@ -170,6 +175,7 @@ async function deriveNode(
     parentFingerprint,
     masterFingerprint,
     curve,
+    network,
   } = options;
 
   try {
@@ -184,6 +190,7 @@ async function deriveNode(
           childIndex,
           isHardened,
           curve,
+          network,
         },
         cryptographicFunctions,
       );
@@ -198,6 +205,7 @@ async function deriveNode(
         parentFingerprint,
         childIndex,
         curve,
+        network,
       },
       cryptographicFunctions,
     );
@@ -305,6 +313,7 @@ type DerivePrivateChildKeyArgs = {
   childIndex: number;
   isHardened: boolean;
   curve: Curve;
+  network?: Network | undefined;
 };
 
 /**
@@ -319,6 +328,8 @@ type DerivePrivateChildKeyArgs = {
  * @param args.childIndex - The child index to derive.
  * @param args.isHardened - Whether the child index is hardened.
  * @param args.curve - The curve to use for derivation.
+ * @param args.network - The network for the node. This is only used for
+ * extended keys, and defaults to `mainnet`.
  * @param cryptographicFunctions - The cryptographic functions to use. If
  * provided, these will be used instead of the built-in implementations.
  * @returns The derived {@link SLIP10Node}.
@@ -333,6 +344,7 @@ async function derivePrivateChildKey(
     childIndex,
     isHardened,
     curve,
+    network,
   }: DerivePrivateChildKeyArgs,
   cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
@@ -355,6 +367,7 @@ async function derivePrivateChildKey(
       parentFingerprint,
       index: actualChildIndex,
       curve: curve.name,
+      network,
     },
     cryptographicFunctions,
   );
@@ -400,6 +413,7 @@ type DerivePublicChildKeyArgs = {
   parentFingerprint: number;
   childIndex: number;
   curve: Curve;
+  network?: Network | undefined;
 };
 
 /**
@@ -413,6 +427,8 @@ type DerivePublicChildKeyArgs = {
  * @param args.parentFingerprint - The fingerprint of the parent node.
  * @param args.childIndex - The child index to derive.
  * @param args.curve - The curve to use for derivation.
+ * @param args.network - The network for the node. This is only used for
+ * extended keys, and defaults to `mainnet`.
  * @param cryptographicFunctions - The cryptographic functions to use. If
  * provided, these will be used instead of the built-in implementations.
  * @returns The derived {@link SLIP10Node}.
@@ -426,6 +442,7 @@ export async function derivePublicChildKey(
     parentFingerprint,
     childIndex,
     curve,
+    network,
   }: DerivePublicChildKeyArgs,
   cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
@@ -445,6 +462,7 @@ export async function derivePublicChildKey(
       parentFingerprint,
       index: childIndex,
       curve: curve.name,
+      network,
     },
     cryptographicFunctions,
   );

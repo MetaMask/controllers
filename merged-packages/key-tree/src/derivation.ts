@@ -2,7 +2,7 @@ import { assert } from '@metamask/utils';
 
 import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
 import { BIP44Node } from './BIP44Node';
-import type { SLIP10Path } from './constants';
+import type { Network, SLIP10Path } from './constants';
 import {
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
@@ -39,6 +39,7 @@ type DeriveKeyFromPathNodeArgs = BaseDeriveKeyFromPathArgs & {
 };
 
 type DeriveKeyFromPathCurveArgs = BaseDeriveKeyFromPathArgs & {
+  network?: Network | undefined;
   curve: SupportedCurve;
 };
 
@@ -75,6 +76,7 @@ export async function deriveKeyFromPath(
   const { path, depth = path.length } = args;
 
   const node = 'node' in args ? args.node : undefined;
+  const network = 'network' in args ? args.network : node?.network;
   const curve = 'curve' in args ? args.curve : node?.curve;
 
   if (
@@ -122,6 +124,7 @@ export async function deriveKeyFromPath(
             path: pathPart,
             node: derivedNode,
             curve: getCurveByName(curve),
+            network,
           },
           cryptographicFunctions,
         );
@@ -135,6 +138,7 @@ export async function deriveKeyFromPath(
           path: pathNode,
           node: derivedNode,
           curve: getCurveByName(curve),
+          network,
         },
         cryptographicFunctions,
       );

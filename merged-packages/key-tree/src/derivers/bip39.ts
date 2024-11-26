@@ -3,7 +3,7 @@ import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlist
 import { assert, stringToBytes } from '@metamask/utils';
 
 import type { DeriveChildKeyArgs } from '.';
-import type { BIP39StringNode } from '../constants';
+import type { BIP39StringNode, Network } from '../constants';
 import { BYTES_KEY_LENGTH } from '../constants';
 import type { CryptographicFunctions } from '../cryptography';
 import { hmacSha512, pbkdf2Sha512 } from '../cryptography';
@@ -104,12 +104,14 @@ export function bip39MnemonicToMultipath(mnemonic: string): BIP39StringNode {
  * @param options - The options for creating the node.
  * @param options.path - The multi path.
  * @param options.curve - The curve to use for derivation.
+ * @param options.network - The network for the node. This is only used for
+ * extended keys, and defaults to `mainnet`.
  * @param cryptographicFunctions - The cryptographic functions to use. If
  * provided, these will be used instead of the built-in implementations.
  * @returns The node.
  */
 export async function deriveChildKey(
-  { path, curve }: DeriveChildKeyArgs,
+  { path, curve, network }: DeriveChildKeyArgs,
   cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
   switch (curve.masterNodeGenerationSpec) {
@@ -117,12 +119,14 @@ export async function deriveChildKey(
       return createBip39KeyFromSeed(
         await mnemonicToSeed(path, '', cryptographicFunctions),
         curve,
+        network,
         cryptographicFunctions,
       );
     case 'cip3':
       return entropyToCip3MasterNode(
         mnemonicToEntropy(path, englishWordlist),
         curve,
+        network,
         cryptographicFunctions,
       );
     default:
@@ -135,6 +139,8 @@ export async function deriveChildKey(
  *
  * @param seed - The cryptographic seed bytes.
  * @param curve - The curve to use.
+ * @param network - The network for the node. This is only used for extended
+ * keys, and defaults to `mainnet`.
  * @param cryptographicFunctions - The cryptographic functions to use. If
  * provided, these will be used instead of the built-in implementations.
  * @returns An object containing the corresponding BIP-39 master key and chain
@@ -143,6 +149,7 @@ export async function deriveChildKey(
 export async function createBip39KeyFromSeed(
   seed: Uint8Array,
   curve: Extract<Curve, { masterNodeGenerationSpec: 'slip10' }>,
+  network?: Network | undefined,
   cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
   assert(
@@ -169,6 +176,7 @@ export async function createBip39KeyFromSeed(
       privateKey,
       chainCode,
       masterFingerprint,
+      network,
       depth: 0,
       parentFingerprint: 0,
       index: 0,
@@ -186,6 +194,8 @@ export async function createBip39KeyFromSeed(
  *
  * @param entropy - The entropy value.
  * @param curve - The curve to use.
+ * @param network - The network for the node. This is only used for extended
+ * keys, and defaults to `mainnet`.
  * @param cryptographicFunctions - The cryptographic functions to use. If
  * provided, these will be used instead of the built-in implementations.
  * @returns The root key pair consisting of 64-byte private key and 32-byte chain code.
@@ -193,6 +203,7 @@ export async function createBip39KeyFromSeed(
 export async function entropyToCip3MasterNode(
   entropy: Uint8Array,
   curve: Extract<Curve, { masterNodeGenerationSpec: 'cip3' }>,
+  network?: Network | undefined,
   cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
   assert(
@@ -231,6 +242,7 @@ export async function entropyToCip3MasterNode(
       privateKey,
       chainCode,
       masterFingerprint,
+      network,
       depth: 0,
       parentFingerprint: 0,
       index: 0,

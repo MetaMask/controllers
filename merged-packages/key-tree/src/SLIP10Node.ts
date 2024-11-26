@@ -2,19 +2,18 @@ import { assert, bytesToHex } from '@metamask/utils';
 
 import type { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
 import type { BIP44Node } from './BIP44Node';
-import type { RootedSLIP10PathTuple, SLIP10PathTuple } from './constants';
+import type {
+  Network,
+  RootedSLIP10PathTuple,
+  SLIP10PathTuple,
+} from './constants';
 import { BYTES_KEY_LENGTH } from './constants';
 import type { CryptographicFunctions } from './cryptography';
 import type { SupportedCurve } from './curves';
 import { getCurveByName } from './curves';
 import { deriveKeyFromPath } from './derivation';
 import { publicKeyToEthAddress } from './derivers/bip32';
-import {
-  decodeExtendedKey,
-  encodeExtendedKey,
-  PRIVATE_KEY_VERSION,
-  PUBLIC_KEY_VERSION,
-} from './extended-keys';
+import { decodeExtendedKey, encodeExtendedKey } from './extended-keys';
 import {
   getBytes,
   getBytesUnsafe,
@@ -22,6 +21,7 @@ import {
   isValidInteger,
   validateBIP32Index,
   validateCurve,
+  validateNetwork,
 } from './utils';
 
 /**
@@ -50,6 +50,12 @@ export type JsonSLIP10Node = {
    * The index of the node, or 0 if this is a master node.
    */
   readonly index: number;
+
+  /**
+   * The network for the node. This is only used for extended keys, and defaults
+   * to `mainnet`.
+   */
+  readonly network?: Network | undefined;
 
   /**
    * The (optional) private key of this node.
@@ -97,6 +103,7 @@ export type SLIP10NodeConstructorOptions = {
   readonly masterFingerprint?: number | undefined;
   readonly parentFingerprint: number;
   readonly index: number;
+  readonly network?: Network | undefined;
   readonly chainCode: Uint8Array;
   readonly privateKey?: Uint8Array | undefined;
   readonly publicKey: Uint8Array;
@@ -108,6 +115,7 @@ export type SLIP10ExtendedKeyOptions = {
   readonly masterFingerprint?: number | undefined;
   readonly parentFingerprint: number;
   readonly index: number;
+  readonly network?: Network | undefined;
   readonly chainCode: string | Uint8Array;
   readonly privateKey?: string | Uint8Array | undefined;
   readonly publicKey?: string | Uint8Array | undefined;
@@ -116,6 +124,7 @@ export type SLIP10ExtendedKeyOptions = {
 
 export type SLIP10DerivationPathOptions = {
   readonly derivationPath: RootedSLIP10PathTuple;
+  readonly network?: Network | undefined;
   readonly curve: SupportedCurve;
 };
 
@@ -223,7 +232,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
       const { chainCode, depth, parentFingerprint, index } = extendedKey;
 
-      if (extendedKey.version === PRIVATE_KEY_VERSION) {
+      if (extendedKey.type === 'private') {
         const { privateKey } = extendedKey;
 
         return SLIP10Node.fromExtendedKey(
@@ -261,6 +270,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       masterFingerprint,
       parentFingerprint,
       index,
+      network,
       privateKey,
       publicKey,
       chainCode,
@@ -273,6 +283,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     validateBIP32Depth(depth);
     validateBIP32Index(index);
     validateRootIndex(index, depth);
+    validateNetwork(network);
     validateParentFingerprint(parentFingerprint, depth);
     validateMasterParentFingerprint(
       masterFingerprint,
@@ -298,6 +309,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
           masterFingerprint,
           parentFingerprint,
           index,
+          network,
           chainCode: chainCodeBytes,
           privateKey: privateKeyBytes,
           publicKey: await curveObject.getPublicKey(privateKeyBytes),
@@ -317,6 +329,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
           masterFingerprint,
           parentFingerprint,
           index,
+          network,
           chainCode: chainCodeBytes,
           publicKey: publicKeyBytes,
           curve,
@@ -352,12 +365,14 @@ export class SLIP10Node implements SLIP10NodeInterface {
    * @param options.derivationPath - The rooted HD tree path that will be used
    * to derive the key of this node.
    * @param options.curve - The curve used by the node.
+   * @param options.network - The network for the node. This is only used for
+   * extended keys, and defaults to `mainnet`.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
    * @returns A new SLIP-10 node.
    */
   static async fromDerivationPath(
-    { derivationPath, curve }: SLIP10DerivationPathOptions,
+    { derivationPath, network, curve }: SLIP10DerivationPathOptions,
     cryptographicFunctions?: CryptographicFunctions,
   ): Promise<SLIP10Node> {
     validateCurve(curve);
@@ -376,6 +391,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       {
         path: derivationPath,
         depth: derivationPath.length - 1,
+        network,
         curve,
       },
       cryptographicFunctions,
@@ -394,6 +410,8 @@ export class SLIP10Node implements SLIP10NodeInterface {
 
   public readonly index: number;
 
+  public readonly network: Network;
+
   public readonly chainCodeBytes: Uint8Array;
 
   public readonly privateKeyBytes?: Uint8Array | undefined;
@@ -409,6 +427,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       masterFingerprint,
       parentFingerprint,
       index,
+      network = 'mainnet',
       chainCode,
       privateKey,
       publicKey,
@@ -426,6 +445,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
     this.masterFingerprint = masterFingerprint;
     this.parentFingerprint = parentFingerprint;
     this.index = index;
+    this.network = network;
     this.chainCodeBytes = chainCode;
     this.privateKeyBytes = privateKey;
     this.publicKeyBytes = publicKey;
@@ -495,20 +515,21 @@ export class SLIP10Node implements SLIP10NodeInterface {
       depth: this.depth,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
+      network: this.network,
       chainCode: this.chainCodeBytes,
     };
 
     if (this.privateKeyBytes) {
       return encodeExtendedKey({
         ...data,
-        version: PRIVATE_KEY_VERSION,
+        type: 'private',
         privateKey: this.privateKeyBytes,
       });
     }
 
     return encodeExtendedKey({
       ...data,
-      version: PUBLIC_KEY_VERSION,
+      type: 'public',
       publicKey: this.publicKeyBytes,
     });
   }
@@ -528,6 +549,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
         chainCode: this.chainCodeBytes,
         publicKey: this.publicKeyBytes,
         curve: this.curve,
+        network: this.network,
       },
       this.#cryptographicFunctions,
       SLIP10Node.#constructorGuard,
@@ -561,6 +583,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
       masterFingerprint: this.masterFingerprint,
       parentFingerprint: this.parentFingerprint,
       index: this.index,
+      network: this.network,
       curve: this.curve,
       privateKey: this.privateKey,
       publicKey: this.publicKey,

@@ -5,11 +5,7 @@ import type { CryptographicFunctions } from './cryptography';
 import { hmacSha512, pbkdf2Sha512 } from './cryptography';
 import { compressPublicKey } from './curves/secp256k1';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
-import {
-  encodeExtendedKey,
-  PRIVATE_KEY_VERSION,
-  PUBLIC_KEY_VERSION,
-} from './extended-keys';
+import { encodeExtendedKey } from './extended-keys';
 import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
 import fixtures from '../test/fixtures';
 
@@ -56,6 +52,7 @@ describe('BIP44Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -90,6 +87,7 @@ describe('BIP44Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -208,6 +206,7 @@ describe('BIP44Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -255,6 +254,7 @@ describe('BIP44Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -645,7 +645,7 @@ describe('BIP44Node', () => {
   });
 
   describe('extendedKey', () => {
-    it('returns the extended private key for nodes with a private key', async () => {
+    it('returns the extended private key for nodes with a private key (mainnet)', async () => {
       const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
@@ -656,18 +656,43 @@ describe('BIP44Node', () => {
       });
 
       const extendedKey = encodeExtendedKey({
-        version: PRIVATE_KEY_VERSION,
+        type: 'private',
         privateKey: node.privateKeyBytes as Uint8Array,
         chainCode: node.chainCodeBytes,
         depth: node.depth,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: 'mainnet',
       });
 
       expect(node.extendedKey).toStrictEqual(extendedKey);
     });
 
-    it('returns the extended public key for nodes with a public key', async () => {
+    it('returns the extended private key for nodes with a private key (testnet)', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+        network: 'testnet',
+      });
+
+      const extendedKey = encodeExtendedKey({
+        type: 'private',
+        privateKey: node.privateKeyBytes as Uint8Array,
+        chainCode: node.chainCodeBytes,
+        depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+        network: 'testnet',
+      });
+
+      expect(node.extendedKey).toStrictEqual(extendedKey);
+    });
+
+    it('returns the extended public key for nodes with a public key (mainnet)', async () => {
       const node = await BIP44Node.fromDerivationPath({
         derivationPath: [
           defaultBip39NodeToken,
@@ -680,12 +705,39 @@ describe('BIP44Node', () => {
       const neuteredNode = node.neuter();
 
       const extendedKey = encodeExtendedKey({
-        version: PUBLIC_KEY_VERSION,
+        type: 'public',
         publicKey: neuteredNode.publicKeyBytes,
         chainCode: neuteredNode.chainCodeBytes,
         depth: neuteredNode.depth,
         parentFingerprint: neuteredNode.parentFingerprint,
         index: neuteredNode.index,
+        network: 'mainnet',
+      });
+
+      expect(neuteredNode.extendedKey).toStrictEqual(extendedKey);
+    });
+
+    it('returns the extended public key for nodes with a public key (testnet)', async () => {
+      const node = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:0'`,
+          `bip32:0'`,
+        ],
+        network: 'testnet',
+      });
+
+      const neuteredNode = node.neuter();
+
+      const extendedKey = encodeExtendedKey({
+        type: 'public',
+        publicKey: neuteredNode.publicKeyBytes,
+        chainCode: neuteredNode.chainCodeBytes,
+        depth: neuteredNode.depth,
+        parentFingerprint: neuteredNode.parentFingerprint,
+        index: neuteredNode.index,
+        network: 'testnet',
       });
 
       expect(neuteredNode.extendedKey).toStrictEqual(extendedKey);
@@ -754,6 +806,7 @@ describe('BIP44Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,
@@ -764,6 +817,7 @@ describe('BIP44Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
         chainCode: node.chainCode,

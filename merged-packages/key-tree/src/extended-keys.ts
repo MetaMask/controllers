@@ -1,40 +1,96 @@
-import { createDataView } from '@metamask/utils';
+import { assertExhaustive, createDataView } from '@metamask/utils';
 
 import { validateBIP44Depth } from './BIP44Node';
+import type { Network } from './constants';
 import { compressPublicKey, decompressPublicKey } from './curves/secp256k1';
 import { decodeBase58check, encodeBase58check, isValidBytesKey } from './utils';
 
 // https://github.com/bitcoin/bips/blob/274fa400d630ba757bec0c03b35ebe2345197108/bip-0032.mediawiki#Serialization_format
-export const PUBLIC_KEY_VERSION = 0x0488b21e;
-export const PRIVATE_KEY_VERSION = 0x0488ade4;
+const PUBLIC_KEY_VERSION = 0x0488b21e;
+const PRIVATE_KEY_VERSION = 0x0488ade4;
 
-export type ExtendedKeyVersion =
-  | typeof PUBLIC_KEY_VERSION
-  | typeof PRIVATE_KEY_VERSION;
+const TESTNET_PUBLIC_KEY_VERSION = 0x043587cf;
+const TESTNET_PRIVATE_KEY_VERSION = 0x04358394;
 
 /**
  * An extended public or private key. Contains either a public or private key,
  * depending on the version.
  */
 type ExtendedKeyLike = {
-  version: ExtendedKeyVersion;
   depth: number;
   parentFingerprint: number;
   index: number;
+  network: Network;
   chainCode: Uint8Array;
 };
 
 type ExtendedPublicKey = ExtendedKeyLike & {
-  version: typeof PUBLIC_KEY_VERSION;
+  type: 'public';
   publicKey: Uint8Array;
 };
 
 type ExtendedPrivateKey = ExtendedKeyLike & {
-  version: typeof PRIVATE_KEY_VERSION;
+  type: 'private';
   privateKey: Uint8Array;
 };
 
 export type ExtendedKey = ExtendedPublicKey | ExtendedPrivateKey;
+
+type VersionOptions =
+  | {
+      type: 'public';
+      network: Network;
+    }
+  | {
+      type: 'private';
+      network: Network;
+    };
+
+/**
+ * Get the version options for a given version.
+ *
+ * @param version - The version to get the options for.
+ * @returns The version options.
+ */
+function getVersionOptions(version: number): VersionOptions {
+  switch (version) {
+    case PUBLIC_KEY_VERSION:
+      return { type: 'public', network: 'mainnet' };
+    case TESTNET_PUBLIC_KEY_VERSION:
+      return { type: 'public', network: 'testnet' };
+    case PRIVATE_KEY_VERSION:
+      return { type: 'private', network: 'mainnet' };
+    case TESTNET_PRIVATE_KEY_VERSION:
+      return { type: 'private', network: 'testnet' };
+    default:
+      throw new Error(
+        `Invalid extended key: Expected a public (xpub) or private key (xprv) version.`,
+      );
+  }
+}
+
+/**
+ * Get the version for a given network and type.
+ *
+ * @param network - The network to get the version for.
+ * @param type - The type to get the version for.
+ * @returns The version.
+ */
+function getVersionFromNetwork(
+  network: Network,
+  type: 'public' | 'private',
+): number {
+  switch (network) {
+    case 'mainnet':
+      return type === 'public' ? PUBLIC_KEY_VERSION : PRIVATE_KEY_VERSION;
+    case 'testnet':
+      return type === 'public'
+        ? TESTNET_PUBLIC_KEY_VERSION
+        : TESTNET_PRIVATE_KEY_VERSION;
+    default:
+      return assertExhaustive(network);
+  }
+}
 
 /**
  * Decode an extended public or private key. In the case of an extended public
@@ -57,6 +113,8 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
   const view = createDataView(bytes);
 
   const version = view.getUint32(0, false);
+  const { network, type } = getVersionOptions(version);
+
   const depth = view.getUint8(4);
   validateBIP44Depth(depth);
 
@@ -79,7 +137,7 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
 
   const keyView = createDataView(key);
 
-  if (version === PUBLIC_KEY_VERSION) {
+  if (type === 'public') {
     if (keyView.getUint8(0) !== 0x02 && keyView.getUint8(0) !== 0x03) {
       throw new Error(
         `Invalid extended key: Public key must start with 0x02 or 0x03.`,
@@ -87,35 +145,29 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
     }
 
     return {
-      version,
+      type,
       depth,
       parentFingerprint,
       index,
+      network,
       chainCode,
       publicKey: decompressPublicKey(key),
     };
   }
 
-  if (version === PRIVATE_KEY_VERSION) {
-    if (keyView.getUint8(0) !== 0x00) {
-      throw new Error(
-        `Invalid extended key: Private key must start with 0x00.`,
-      );
-    }
-
-    return {
-      version,
-      depth,
-      parentFingerprint,
-      index,
-      chainCode,
-      privateKey: key.slice(1),
-    };
+  if (keyView.getUint8(0) !== 0x00) {
+    throw new Error(`Invalid extended key: Private key must start with 0x00.`);
   }
 
-  throw new Error(
-    `Invalid extended key: Expected a public (xpub) or private key (xprv) version.`,
-  );
+  return {
+    type,
+    depth,
+    parentFingerprint,
+    index,
+    network,
+    chainCode,
+    privateKey: key.slice(1),
+  };
 };
 
 /**
@@ -125,11 +177,13 @@ export const decodeExtendedKey = (extendedKey: string): ExtendedKey => {
  * @returns The encoded extended key.
  */
 export const encodeExtendedKey = (extendedKey: ExtendedKey): string => {
-  const { version, depth, parentFingerprint, index, chainCode } = extendedKey;
+  const { type, depth, parentFingerprint, index, network, chainCode } =
+    extendedKey;
 
   const bytes = new Uint8Array(78);
 
   const view = createDataView(bytes);
+  const version = getVersionFromNetwork(network, type);
 
   view.setUint32(0, version, false);
   view.setUint8(4, depth);
@@ -138,14 +192,14 @@ export const encodeExtendedKey = (extendedKey: ExtendedKey): string => {
 
   bytes.set(chainCode, 13);
 
-  if (extendedKey.version === PUBLIC_KEY_VERSION) {
+  if (type === 'public') {
     const { publicKey } = extendedKey;
     const compressedPublicKey = compressPublicKey(publicKey);
 
     bytes.set(compressedPublicKey, 45);
   }
 
-  if (extendedKey.version === PRIVATE_KEY_VERSION) {
+  if (type === 'private') {
     const { privateKey } = extendedKey;
     bytes.set(privateKey, 46);
   }

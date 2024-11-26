@@ -185,3 +185,8 @@ export type SLIP10PathTuple =
 export type SLIP10Path = RootedSLIP10PathTuple | SLIP10PathTuple;
 
 export type FullHDPathTuple = RootedHDPathTuple5;
+
+/**
+ * The network for which the HD path is intended.
+ */
+export type Network = 'mainnet' | 'testnet';

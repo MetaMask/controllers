@@ -458,6 +458,7 @@ export default {
           masterFingerprint: 1247889873,
           parentFingerprint: 0,
           index: 0,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0xc065afd2832cd8b087c4d9ab7011f481ee1e0721e78ea5dd609f3ab3f156d245d176bd8fd4ec60b4731c3918a2a72a0226c0cd119ec35b47e4d55884667f552a',
@@ -473,6 +474,7 @@ export default {
           masterFingerprint: 1247889873,
           parentFingerprint: 1247889873,
           index: 2147485500,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0x98f25c3313e03b7843072514c5f024782072406b37569403423d2361f356d2459ecc73a09adb2aa37e9f8530fd1e6745eee1ea248a85417a700e774182c7fa3d',
@@ -486,6 +488,7 @@ export default {
           masterFingerprint: 1247889873,
           parentFingerprint: 186342781,
           index: 2147485463,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0x504e9dc3ed6d22231a0e43cd250fcda7757b42aa9affae5f20dea1fef956d2450cc3d2abd5b6a6626d73d789a6ad77cd0e5d92e093dc5a1484c71e4f996f495e',
@@ -499,6 +502,7 @@ export default {
           masterFingerprint: 1247889873,
           parentFingerprint: 1372272135,
           index: 2147483648,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0xf80081fa05eece83236e612463aafad20d6b92eee67479a1977959540057d2452173fe9a0fccf61cf2cc7c52638f2ded6c08002a71424ca5b93681ee7a385828',
@@ -512,6 +516,7 @@ export default {
           masterFingerprint: 1247889873,
           parentFingerprint: 3705424019,
           index: 0,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0x00b5105515ee89a7718c0bdbe05c9613a17a5907f5943dacfde9802f0157d2458bddfc042979fb8b30cb13437edc7ec7c1836676e063780d5db0b8ae84babe4e',
@@ -525,6 +530,7 @@ export default {
           masterFingerprint: 1247889873,
           parentFingerprint: 3669962052,
           index: 0,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0x00df3ecf0e02979dd9ee569d09412c1f370f476054aaa1ef3cf5a08c0557d245a6ad0fe81ab55e36178f5866dc8f83cf57239fdeee35c737ef887964aae20500',
@@ -566,6 +572,7 @@ export default {
           masterFingerprint: 2293781934,
           parentFingerprint: 2293781934,
           index: 2147485500,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0x305c7df2d77b116892dd47019a0913ad0769216e16b73d0fca6088dd748c774843861f9f2a07aff8e51c7807d92bc6ee432154a992227c0df2821d96c3a2763d',
@@ -579,6 +586,7 @@ export default {
           masterFingerprint: 2293781934,
           parentFingerprint: 2022252320,
           index: 2147485463,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0xd08b653d6f960079db25f38e8428f7f2891bd1c92b63ad7e0015265c768c77485bf55f8ccbb0a7188ebafcbd30219300ce3b86f54b11e236961efc814688810e',
@@ -592,6 +600,7 @@ export default {
           masterFingerprint: 2293781934,
           parentFingerprint: 3388798503,
           index: 2147483648,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0xe81381a5e59e98dc7eaffecc83d918ad8331938eedf3429d7d29dbfa768c774899268aba2b299d9513de3a33c134fedd19d209701456fe86757c9f64230c010f',
@@ -605,6 +614,7 @@ export default {
           masterFingerprint: 2293781934,
           parentFingerprint: 2105312604,
           index: 0,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0x5049005d5a97d5ea60753fb511460079a56b9981bc2e75f05e40dd46788c7748d664152bff95f76efdd0052643eb096eea6f18b6793365563bcaa12b3aa04fed',
@@ -618,6 +628,7 @@ export default {
           masterFingerprint: 2293781934,
           parentFingerprint: 2627281642,
           index: 0,
+          network: 'mainnet',
           curve: 'ed25519Bip32',
           privateKey:
             '0xf0e6e40de5b8ae0d9c48f8ce7f829231aff420d792ff995dc56040f97b8c7748377ede2ad5468ce8103d2f3af977bb081c3c6aba76b36b72e56a7ba38559224d',

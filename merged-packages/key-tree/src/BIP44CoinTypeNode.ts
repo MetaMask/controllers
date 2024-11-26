@@ -8,6 +8,7 @@ import type {
   BIP44PurposeNodeToken,
   CoinTypeHDPathString,
   HardenedBIP32Node,
+  Network,
 } from './constants';
 import { BIP_32_HARDENED_OFFSET } from './constants';
 import type { CryptographicFunctions } from './cryptography';
@@ -92,6 +93,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
       {
         depth: json.depth,
         index: json.index,
+        network: json.network,
         parentFingerprint: json.parentFingerprint,
         chainCode: hexStringToBytes(json.chainCode),
         privateKey: nullableHexStringToBytes(json.privateKey),
@@ -118,12 +120,15 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
    * `0 / 1 / 2 / 3 / 4 / 5`
    *
    * @param derivationPath - The derivation path for the key of this node.
+   * @param network - The network for the node. This is only used for extended
+   * keys, and defaults to `mainnet`.
    * @param cryptographicFunctions - The cryptographic functions to use. If
    * provided, these will be used instead of the built-in implementations.
    * @returns A BIP44CoinType node.
    */
   static async fromDerivationPath(
     derivationPath: CoinTypeHDPathTuple,
+    network?: Network | undefined,
     cryptographicFunctions?: CryptographicFunctions,
   ): Promise<BIP44CoinTypeNode> {
     validateCoinTypeNodeDepth(derivationPath.length - 1);
@@ -131,6 +136,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
     const node = await BIP44Node.fromDerivationPath(
       {
         derivationPath,
+        network,
       },
       cryptographicFunctions,
     );
@@ -250,6 +256,10 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
 
   public get index(): number {
     return this.#node.index;
+  }
+
+  public get network(): Network {
+    return this.#node.network;
   }
 
   public get curve(): SupportedCurve {

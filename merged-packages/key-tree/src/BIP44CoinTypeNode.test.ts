@@ -10,7 +10,7 @@ import {
 } from '.';
 import type { CryptographicFunctions } from './cryptography';
 import { hmacSha512, pbkdf2Sha512 } from './cryptography';
-import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
+import { encodeExtendedKey } from './extended-keys';
 import { mnemonicPhraseToBytes } from './utils';
 import fixtures from '../test/fixtures';
 
@@ -64,6 +64,7 @@ describe('BIP44CoinTypeNode', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         path: pathString,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -226,6 +227,7 @@ describe('BIP44CoinTypeNode', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         path: pathString,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -263,6 +265,7 @@ describe('BIP44CoinTypeNode', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         path: pathString,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -290,6 +293,7 @@ describe('BIP44CoinTypeNode', () => {
       const functions = getMockFunctions();
       const node = await BIP44CoinTypeNode.fromDerivationPath(
         [defaultBip39NodeToken, BIP44PurposeNodeToken, `bip32:60'`],
+        'mainnet',
         functions,
       );
 
@@ -443,6 +447,7 @@ describe('BIP44CoinTypeNode', () => {
       const functions = getMockFunctions();
       const coinTypeNode = await BIP44CoinTypeNode.fromDerivationPath(
         [defaultBip39NodeToken, BIP44PurposeNodeToken, `bip32:60'`],
+        'mainnet',
         functions,
       );
 
@@ -533,7 +538,7 @@ describe('BIP44CoinTypeNode', () => {
   });
 
   describe('extendedKey', () => {
-    it('returns the extended private key for nodes with a private key', async () => {
+    it('returns the extended private key for nodes with a private key (mainnet)', async () => {
       const coinType = 60;
       const node = await BIP44CoinTypeNode.fromDerivationPath([
         defaultBip39NodeToken,
@@ -542,12 +547,33 @@ describe('BIP44CoinTypeNode', () => {
       ]);
 
       const extendedKey = encodeExtendedKey({
-        version: PRIVATE_KEY_VERSION,
+        type: 'private',
         privateKey: node.privateKeyBytes as Uint8Array,
         chainCode: node.chainCodeBytes,
         depth: node.depth,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: 'mainnet',
+      });
+
+      expect(node.extendedKey).toStrictEqual(extendedKey);
+    });
+
+    it('returns the extended private key for nodes with a private key (testnet)', async () => {
+      const coinType = 60;
+      const node = await BIP44CoinTypeNode.fromDerivationPath(
+        [defaultBip39NodeToken, BIP44PurposeNodeToken, `bip32:${coinType}'`],
+        'testnet',
+      );
+
+      const extendedKey = encodeExtendedKey({
+        type: 'private',
+        privateKey: node.privateKeyBytes as Uint8Array,
+        chainCode: node.chainCodeBytes,
+        depth: node.depth,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+        network: 'testnet',
       });
 
       expect(node.extendedKey).toStrictEqual(extendedKey);
@@ -575,6 +601,7 @@ describe('BIP44CoinTypeNode', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         path: pathString,
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -587,6 +614,7 @@ describe('BIP44CoinTypeNode', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         path: pathString,
         privateKey: node.privateKey,
         publicKey: node.publicKey,

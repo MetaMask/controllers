@@ -1,30 +1,45 @@
 import { hexToBytes } from '@metamask/utils';
 
 import type { ExtendedKey } from './extended-keys';
-import {
-  decodeExtendedKey,
-  encodeExtendedKey,
-  PRIVATE_KEY_VERSION,
-  PUBLIC_KEY_VERSION,
-} from './extended-keys';
+import { decodeExtendedKey, encodeExtendedKey } from './extended-keys';
 import { hexStringToBytes } from './utils';
 
 describe('decodeExtendedKey', () => {
-  it('decodes an extended public key', () => {
+  it('decodes an extended public key (mainnet)', () => {
     const extendedKey =
       'xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8';
 
     expect(decodeExtendedKey(extendedKey)).toStrictEqual({
+      type: 'public',
       depth: 0,
       parentFingerprint: 0,
       index: 0,
+      network: 'mainnet',
       chainCode: hexToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
       publicKey: hexToBytes(
         '0439a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c23cbe7ded0e7ce6a594896b8f62888fdbc5c8821305e2ea42bf01e37300116281',
       ),
-      version: PUBLIC_KEY_VERSION,
+    });
+  });
+
+  it('decodes an extended public key (testnet)', () => {
+    const extendedKey =
+      'tpubD6NzVbkrYhZ4XgiXtGrdW5XDAPFCL9h7we1vwNCpn8tGbBcgfVYjXyhWo4E1xkh56hjod1RhGjxbaTLV3X4FyWuejifB9jusQ46QzG87VKp';
+
+    expect(decodeExtendedKey(extendedKey)).toStrictEqual({
+      type: 'public',
+      depth: 0,
+      parentFingerprint: 0,
+      index: 0,
+      network: 'testnet',
+      chainCode: hexToBytes(
+        '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
+      ),
+      publicKey: hexToBytes(
+        '0439a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c23cbe7ded0e7ce6a594896b8f62888fdbc5c8821305e2ea42bf01e37300116281',
+      ),
     });
   });
 
@@ -33,16 +48,36 @@ describe('decodeExtendedKey', () => {
       'xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi';
 
     expect(decodeExtendedKey(extendedKey)).toStrictEqual({
+      type: 'private',
       depth: 0,
       parentFingerprint: 0,
       index: 0,
+      network: 'mainnet',
       chainCode: hexStringToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
       privateKey: hexStringToBytes(
         'e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35',
       ),
-      version: PRIVATE_KEY_VERSION,
+    });
+  });
+
+  it('decodes an extended private key (testnet)', () => {
+    const extendedKey =
+      'tprv8ZgxMBicQKsPeDgjzdC36fs6bMjGApWDNLR9erAXMs5skhMv36j9MV5ecvfavji5khqjWaWSFhN3YcCUUdiKH6isR4Pwy3U5y5egddBr16m';
+
+    expect(decodeExtendedKey(extendedKey)).toStrictEqual({
+      type: 'private',
+      depth: 0,
+      parentFingerprint: 0,
+      index: 0,
+      network: 'testnet',
+      chainCode: hexStringToBytes(
+        '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
+      ),
+      privateKey: hexStringToBytes(
+        'e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35',
+      ),
     });
   });
 
@@ -110,18 +145,19 @@ describe('decodeExtendedKey', () => {
 });
 
 describe('encodeExtendedKey', () => {
-  it('encodes an extended public key', () => {
+  it('encodes an extended public key (mainnet)', () => {
     const extendedKey: ExtendedKey = {
+      type: 'public',
       depth: 0,
       parentFingerprint: 0,
       index: 0,
+      network: 'mainnet',
       chainCode: hexStringToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
       publicKey: hexStringToBytes(
         '0439a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c23cbe7ded0e7ce6a594896b8f62888fdbc5c8821305e2ea42bf01e37300116281',
       ),
-      version: PUBLIC_KEY_VERSION,
     };
 
     expect(encodeExtendedKey(extendedKey)).toBe(
@@ -129,22 +165,84 @@ describe('encodeExtendedKey', () => {
     );
   });
 
-  it('encodes an extended private key', () => {
+  it('encodes an extended public key (testnet)', () => {
     const extendedKey: ExtendedKey = {
+      type: 'public',
       depth: 0,
       parentFingerprint: 0,
       index: 0,
+      network: 'testnet',
+      chainCode: hexStringToBytes(
+        '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
+      ),
+      publicKey: hexStringToBytes(
+        '0439a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c23cbe7ded0e7ce6a594896b8f62888fdbc5c8821305e2ea42bf01e37300116281',
+      ),
+    };
+
+    expect(encodeExtendedKey(extendedKey)).toBe(
+      'tpubD6NzVbkrYhZ4XgiXtGrdW5XDAPFCL9h7we1vwNCpn8tGbBcgfVYjXyhWo4E1xkh56hjod1RhGjxbaTLV3X4FyWuejifB9jusQ46QzG87VKp',
+    );
+  });
+
+  it('encodes an extended private key (mainnet)', () => {
+    const extendedKey: ExtendedKey = {
+      type: 'private',
+      depth: 0,
+      parentFingerprint: 0,
+      index: 0,
+      network: 'mainnet',
       chainCode: hexStringToBytes(
         '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
       ),
       privateKey: hexStringToBytes(
         'e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35',
       ),
-      version: PRIVATE_KEY_VERSION,
     };
 
     expect(encodeExtendedKey(extendedKey)).toBe(
       'xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi',
+    );
+  });
+
+  it('encodes an extended private key (testnet)', () => {
+    const extendedKey: ExtendedKey = {
+      type: 'private',
+      depth: 0,
+      parentFingerprint: 0,
+      index: 0,
+      network: 'testnet',
+      chainCode: hexStringToBytes(
+        '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
+      ),
+      privateKey: hexStringToBytes(
+        'e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35',
+      ),
+    };
+
+    expect(encodeExtendedKey(extendedKey)).toBe(
+      'tprv8ZgxMBicQKsPeDgjzdC36fs6bMjGApWDNLR9erAXMs5skhMv36j9MV5ecvfavji5khqjWaWSFhN3YcCUUdiKH6isR4Pwy3U5y5egddBr16m',
+    );
+  });
+
+  it('throws if the network is invalid', () => {
+    const extendedKey: ExtendedKey = {
+      type: 'public',
+      depth: 0,
+      parentFingerprint: 0,
+      index: 0,
+      // @ts-expect-error - Invalid network.
+      network: 'invalid',
+      chainCode: hexStringToBytes(
+        '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508',
+      ),
+      publicKey: hexStringToBytes(
+        '0439a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c23cbe7ded0e7ce6a594896b8f62888fdbc5c8821305e2ea42bf01e37300116281',
+      ),
+    };
+
+    expect(() => encodeExtendedKey(extendedKey)).toThrow(
+      'Invalid branch reached. Should be detected during compilation.',
     );
   });
 });

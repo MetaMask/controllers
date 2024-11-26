@@ -6,7 +6,7 @@ import { pbkdf2Sha512, hmacSha512 } from './cryptography';
 import { ed25519, secp256k1 } from './curves';
 import { compressPublicKey } from './curves/secp256k1';
 import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
-import { encodeExtendedKey, PRIVATE_KEY_VERSION } from './extended-keys';
+import { encodeExtendedKey } from './extended-keys';
 import { SLIP10Node } from './SLIP10Node';
 import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
 import fixtures from '../test/fixtures';
@@ -510,10 +510,11 @@ describe('SLIP10Node', () => {
 
       it('throws if the private key is zero', async () => {
         const extendedKey = encodeExtendedKey({
-          version: PRIVATE_KEY_VERSION,
+          type: 'private',
           depth: 0,
           parentFingerprint: 0,
           index: 0,
+          network: 'mainnet',
           chainCode: new Uint8Array(32).fill(1),
           privateKey: new Uint8Array(32).fill(0),
         });
@@ -525,10 +526,11 @@ describe('SLIP10Node', () => {
 
       it('throws if the depth is zero and the parent fingerprint is not zero', async () => {
         const extendedKey = encodeExtendedKey({
-          version: PRIVATE_KEY_VERSION,
+          type: 'private',
           depth: 0,
           parentFingerprint: 1,
           index: 0,
+          network: 'mainnet',
           chainCode: new Uint8Array(32).fill(1),
           privateKey: new Uint8Array(32).fill(1),
         });
@@ -540,10 +542,11 @@ describe('SLIP10Node', () => {
 
       it('throws if the depth is not zero and the parent fingerprint is zero', async () => {
         const extendedKey = encodeExtendedKey({
-          version: PRIVATE_KEY_VERSION,
+          type: 'private',
           depth: 1,
           parentFingerprint: 0,
           index: 0,
+          network: 'mainnet',
           chainCode: new Uint8Array(32).fill(1),
           privateKey: new Uint8Array(32).fill(1),
         });
@@ -555,10 +558,11 @@ describe('SLIP10Node', () => {
 
       it('throws if the depth is zero and the index is not zero', async () => {
         const extendedKey = encodeExtendedKey({
-          version: PRIVATE_KEY_VERSION,
+          type: 'private',
           depth: 0,
           parentFingerprint: 0,
           index: 1,
+          network: 'mainnet',
           chainCode: new Uint8Array(32).fill(1),
           privateKey: new Uint8Array(32).fill(1),
         });
@@ -588,6 +592,7 @@ describe('SLIP10Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         curve: 'secp256k1',
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -653,6 +658,7 @@ describe('SLIP10Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         curve: 'secp256k1',
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -1086,6 +1092,50 @@ describe('SLIP10Node', () => {
       },
     );
 
+    it('returns the extended testnet private key for an secp256k1 node', async () => {
+      const node = await SLIP10Node.fromExtendedKey({
+        privateKey: new Uint8Array(32).fill(1),
+        chainCode: new Uint8Array(32).fill(1),
+        curve: 'secp256k1',
+        depth: 0,
+        parentFingerprint: 0,
+        index: 0,
+        network: 'testnet',
+      });
+
+      expect(node.extendedKey).toBe(
+        'tprv8ZgxMBicQKsPctApesa5pSgtbDeXGwawgfkzsWBPXjjgEXF92BQTYA9RXGe2FsQL5zm3ACoXUjzyrEtDev8rFURWNsuntNWBd8G1qtZpCpE',
+      );
+
+      const childNode = await node.derive(['bip32:0']);
+      expect(childNode.extendedKey).toBe(
+        'tprv8cTy44gVjuSkhrHSZReGT641bV6n3h1EopVst2NqPYVwfdFVcCuUGm6GvWB8213fybfNUMQoEtBeyX8au2qLjVu3LNH7JjQ9P97hptzZG3J',
+      );
+    });
+
+    it('returns the extended testnet public key for an secp256k1 node', async () => {
+      const baseNode = await SLIP10Node.fromExtendedKey({
+        privateKey: new Uint8Array(32).fill(1),
+        chainCode: new Uint8Array(32).fill(1),
+        curve: 'secp256k1',
+        depth: 0,
+        parentFingerprint: 0,
+        index: 0,
+        network: 'testnet',
+      });
+
+      const node = baseNode.neuter();
+
+      expect(node.extendedKey).toBe(
+        'tpubD6NzVbkrYhZ4WMCcYXEgDrM1AFATSGmrFyMnA2Dgx1Y551VueaE3iemHhRjLgGo3u6oYvwRT8jBRgoG7ZX7PdcG9MXnqjSHJgzHZk9NYnre',
+      );
+
+      const childNode = await node.derive(['bip32:0']);
+      expect(childNode.extendedKey).toBe(
+        'tpubD9A1CUijtH8RbKKET5JrrVi8AWciD2C9P86fAYR8opJLW7WGEbj4TFi96gCEFwSvwKFAxToWo3tk3hxWFpS5dBj9zc6fG5jZbso5MJnVtK8',
+      );
+    });
+
     it('throws when trying to get an extended key for an ed25519 node', async () => {
       const node = await SLIP10Node.fromDerivationPath({
         derivationPath: [defaultBip39NodeToken, `slip10:44'`, `slip10:60'`],
@@ -1163,6 +1213,7 @@ describe('SLIP10Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         curve: 'secp256k1',
         privateKey: node.privateKey,
         publicKey: node.publicKey,
@@ -1174,6 +1225,7 @@ describe('SLIP10Node', () => {
         masterFingerprint: node.masterFingerprint,
         parentFingerprint: node.parentFingerprint,
         index: node.index,
+        network: node.network,
         curve: 'secp256k1',
         privateKey: node.privateKey,
         publicKey: node.publicKey,

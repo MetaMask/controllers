@@ -8,6 +8,7 @@ import type {
   CoinTypeHDPathString,
   CoinTypeToAddressTuple,
   HardenedBIP32Node,
+  Network,
   UnhardenedBIP32Node,
   UnprefixedNode,
 } from './constants';
@@ -464,4 +465,30 @@ export function numberToUint32(
  */
 export function isWebCryptoSupported(): boolean {
   return Boolean(globalThis.crypto?.subtle);
+}
+
+/**
+ * Validate the network. If the network is specified, it must be either
+ * "mainnet" or "testnet". This function throws an error if the network is
+ * invalid.
+ *
+ * @param network - The network to validate.
+ * @throws An error if the network is invalid.
+ */
+export function validateNetwork(
+  network: unknown,
+): asserts network is Network | undefined {
+  if (network === undefined) {
+    return;
+  }
+
+  if (typeof network !== 'string') {
+    throw new Error('Invalid network: Must be a string if specified.');
+  }
+
+  if (!['mainnet', 'testnet'].includes(network)) {
+    throw new Error(
+      `Invalid network: Must be either "mainnet" or "testnet" if specified.`,
+    );
+  }
 }

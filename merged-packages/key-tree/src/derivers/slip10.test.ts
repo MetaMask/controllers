@@ -25,17 +25,18 @@ describe('deriveChildKey', () => {
 
     expect(childNode.index).toBe(BIP_32_HARDENED_OFFSET);
     expect(childNode).toMatchInlineSnapshot(`
-        Object {
-          "chainCode": "0x69c58a9e53bb674d1bbeb871975f01adce5e058cdcba89f8930225341a75b439",
-          "curve": "secp256k1",
-          "depth": 1,
-          "index": 2147483648,
-          "masterFingerprint": 3293725253,
-          "parentFingerprint": 3293725253,
-          "privateKey": "0xb9dbe9cda5d858df377ab6c6a9b3efef99269142e390d24aaceb49c547b9fcad",
-          "publicKey": "0x0422a2beb2a0c800ef19200db9161a3a7ee5645ccf67c05e18e7055a73cb1e1451f2c85f9aaac274bd16ea9a77f102feef3aba3f37ed6ac6e0961fb569011e42cf",
-        }
-      `);
+      Object {
+        "chainCode": "0x69c58a9e53bb674d1bbeb871975f01adce5e058cdcba89f8930225341a75b439",
+        "curve": "secp256k1",
+        "depth": 1,
+        "index": 2147483648,
+        "masterFingerprint": 3293725253,
+        "network": "mainnet",
+        "parentFingerprint": 3293725253,
+        "privateKey": "0xb9dbe9cda5d858df377ab6c6a9b3efef99269142e390d24aaceb49c547b9fcad",
+        "publicKey": "0x0422a2beb2a0c800ef19200db9161a3a7ee5645ccf67c05e18e7055a73cb1e1451f2c85f9aaac274bd16ea9a77f102feef3aba3f37ed6ac6e0961fb569011e42cf",
+      }
+    `);
   });
 
   it.each(fixtures.errorHandling.slip10.keys)(
@@ -95,16 +96,17 @@ describe('deriveChildKey', () => {
 
     expect(childNode.index).toBe(0);
     expect(childNode).toMatchInlineSnapshot(`
-        Object {
-          "chainCode": "0x03eebbe4707329e7da4aef868adb65f21bdc8712a86567b17a15ee4c3f01a57a",
-          "curve": "secp256k1",
-          "depth": 1,
-          "index": 0,
-          "masterFingerprint": 3293725253,
-          "parentFingerprint": 3293725253,
-          "privateKey": undefined,
-          "publicKey": "0x04bc28203026c9fda2030f00ca592bdbe25392a106afae5205fa07dc4d77ecc61d21fa7a4bf21920abb52f56ae87f2d7b10d5db8d51229dea9c98c6b7982d514f9",
-        }
-      `);
+      Object {
+        "chainCode": "0x03eebbe4707329e7da4aef868adb65f21bdc8712a86567b17a15ee4c3f01a57a",
+        "curve": "secp256k1",
+        "depth": 1,
+        "index": 0,
+        "masterFingerprint": 3293725253,
+        "network": "mainnet",
+        "parentFingerprint": 3293725253,
+        "privateKey": undefined,
+        "publicKey": "0x04bc28203026c9fda2030f00ca592bdbe25392a106afae5205fa07dc4d77ecc61d21fa7a4bf21920abb52f56ae87f2d7b10d5db8d51229dea9c98c6b7982d514f9",
+      }
+    `);
   });
 });

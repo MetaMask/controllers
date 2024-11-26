@@ -99,6 +99,10 @@ module.exports = {
   // A preset that is used as a base for Jest's configuration
   preset: 'ts-jest',
 
+  // Jest doesn't support Prettier 3 yet, so we disable it
+  // TODO: Remove this when bumping to Jest 30
+  prettierPath: null,
+
   // Run tests from one or more projects
   // projects: undefined,
 

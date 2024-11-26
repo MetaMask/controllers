@@ -23,6 +23,7 @@ import {
   mnemonicPhraseToBytes,
   getBytesUnsafe,
   isValidBIP32PathSegment,
+  validateNetwork,
 } from './utils';
 import fixtures from '../test/fixtures';
 
@@ -430,4 +431,24 @@ describe('mnemonicPhraseToBytes', () => {
       );
     },
   );
+});
+
+describe('validateNetwork', () => {
+  it('does not throw if the network is valid', () => {
+    expect(() => validateNetwork('mainnet')).not.toThrow();
+    expect(() => validateNetwork('testnet')).not.toThrow();
+    expect(() => validateNetwork(undefined)).not.toThrow();
+  });
+
+  it('throws if the network is not a string', () => {
+    expect(() => validateNetwork(1)).toThrow(
+      'Invalid network: Must be a string if specified.',
+    );
+  });
+
+  it('throws if the network is not a valid string', () => {
+    expect(() => validateNetwork('foo')).toThrow(
+      'Invalid network: Must be either "mainnet" or "testnet" if specified.',
+    );
+  });
 });

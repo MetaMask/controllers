@@ -2,6 +2,7 @@ import * as bip32 from './bip32';
 import * as bip39 from './bip39';
 import * as cip3 from './cip3';
 import * as slip10 from './slip10';
+import type { Network } from '../constants';
 import type { CryptographicFunctions } from '../cryptography';
 import type { Curve } from '../curves';
 import type { SLIP10Node } from '../SLIP10Node';
@@ -19,6 +20,7 @@ export type DeriveChildKeyArgs = {
   path: Uint8Array | string;
   curve: Curve;
   node?: SLIP10Node;
+  network?: Network | undefined;
 };
 
 export type Deriver = {
