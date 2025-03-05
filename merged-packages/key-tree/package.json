@@ -49,7 +49,7 @@
   "dependencies": {
     "@metamask/scure-bip39": "^2.1.1",
     "@metamask/utils": "^11.0.1",
-    "@noble/curves": "^1.2.0",
+    "@noble/curves": "^1.8.1",
     "@noble/hashes": "^1.3.2",
     "@scure/base": "^1.0.0"
   },
