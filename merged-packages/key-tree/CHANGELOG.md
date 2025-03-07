@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.1.0]
+
+### Added
+
+- Add `fromSeed` function to `SLIP10Node`, `BIP44Node`, `BIP44CoinTypeNode` ([#212](https://github.com/MetaMask/key-tree/pull/212))
+  - This is only supported for `secp256k1` and `ed25519` at the moment.
+
+### Changed
+
+- Optimise performance of getting public keys ([#213](https://github.com/MetaMask/key-tree/pull/213))
+  - Public keys are now re-used when possible, or lazily computed otherwise.
+- Tweak precompute window size for `ed25519` ([#209](https://github.com/MetaMask/key-tree/pull/209))
+  - This can improve performance on some devices.
+
 ## [10.0.2]
 
 ### Changed
@@ -251,7 +265,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
-[Unreleased]: https://github.com/MetaMask/key-tree/compare/v10.0.2...HEAD
+[Unreleased]: https://github.com/MetaMask/key-tree/compare/v10.1.0...HEAD
+[10.1.0]: https://github.com/MetaMask/key-tree/compare/v10.0.2...v10.1.0
 [10.0.2]: https://github.com/MetaMask/key-tree/compare/v10.0.1...v10.0.2
 [10.0.1]: https://github.com/MetaMask/key-tree/compare/v10.0.0...v10.0.1
 [10.0.0]: https://github.com/MetaMask/key-tree/compare/v9.1.2...v10.0.0
