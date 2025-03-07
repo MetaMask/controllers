@@ -99,10 +99,10 @@ export const multiplyWithBase = (key: Uint8Array): Uint8Array => {
  * @param _compressed - Optional parameter to indicate if the public key should be compressed.
  * @returns The public key.
  */
-export const getPublicKey = async (
+export const getPublicKey = (
   privateKey: Uint8Array,
   _compressed?: boolean,
-): Promise<Uint8Array> => {
+): Uint8Array => {
   return multiplyWithBase(privateKey.slice(0, 32));
 };
 

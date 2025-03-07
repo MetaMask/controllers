@@ -27,10 +27,7 @@ export type Curve = {
   curve: {
     n: bigint;
   };
-  getPublicKey: (
-    privateKey: Uint8Array,
-    compressed?: boolean,
-  ) => Uint8Array | Promise<Uint8Array>;
+  getPublicKey: (privateKey: Uint8Array, compressed?: boolean) => Uint8Array;
   isValidPrivateKey: (privateKey: Uint8Array) => boolean;
   publicAdd: (publicKey: Uint8Array, tweak: Uint8Array) => Uint8Array;
   compressPublicKey: (publicKey: Uint8Array) => Uint8Array;

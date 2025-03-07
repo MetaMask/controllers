@@ -11,6 +11,8 @@ import {
   getBIP44CoinTypeToAddressPathTuple,
   mnemonicToSeed,
 } from '.';
+import * as index from '.';
+import * as guard from './guard';
 
 // This is purely for coverage shenanigans
 describe('index', () => {
@@ -27,5 +29,9 @@ describe('index', () => {
     expect(mnemonicPhraseToBytes).toBeDefined();
     expect(getBIP44CoinTypeToAddressPathTuple).toBeDefined();
     expect(mnemonicToSeed).toBeDefined();
+  });
+
+  it.each(Object.keys(guard))('does not export %s', (property) => {
+    expect(index).not.toHaveProperty(property);
   });
 });

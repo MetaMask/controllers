@@ -13,8 +13,8 @@ import fixtures from '../../test/fixtures';
 describe('getPublicKey', () => {
   fixtures.cip3.forEach((fixture) => {
     Object.values(fixture.nodes).forEach((node) => {
-      it('returns correct public key from private key', async () => {
-        const publicKey = await ed25519Bip32.getPublicKey(
+      it('returns correct public key from private key', () => {
+        const publicKey = ed25519Bip32.getPublicKey(
           hexToBytes(node.privateKey),
         );
 

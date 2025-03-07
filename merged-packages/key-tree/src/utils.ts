@@ -348,7 +348,7 @@ export function getBytesUnsafe(value: unknown, length: number): Uint8Array {
  * @param length - The length to validate the `Uint8Array` against.
  * @throws An error if the `Uint8Array` is empty or has the wrong length.
  */
-function validateBytes(
+export function validateBytes(
   bytes: Uint8Array,
   length: number,
 ): asserts bytes is Uint8Array {
