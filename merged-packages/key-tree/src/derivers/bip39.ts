@@ -1,13 +1,20 @@
 import { mnemonicToEntropy } from '@metamask/scure-bip39';
 import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english';
-import { assert, stringToBytes } from '@metamask/utils';
+import { assert, assertExhaustive, stringToBytes } from '@metamask/utils';
 
 import type { DeriveChildKeyArgs } from '.';
-import type { BIP39StringNode, Network } from '../constants';
+import type {
+  BIP39Node,
+  BIP39StringNode,
+  Network,
+  RootedSLIP10PathTuple,
+  RootedSLIP10SeedPathTuple,
+} from '../constants';
 import { BYTES_KEY_LENGTH } from '../constants';
 import type { CryptographicFunctions } from '../cryptography';
 import { hmacSha512, pbkdf2Sha512 } from '../cryptography';
-import type { Curve } from '../curves';
+import type { Curve, SupportedCurve } from '../curves';
+import { getCurveByName } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';
 import { getFingerprint } from '../utils';
 
@@ -99,10 +106,76 @@ export function bip39MnemonicToMultipath(mnemonic: string): BIP39StringNode {
 }
 
 /**
- * Create a {@link SLIP10Node} from a BIP-39 mnemonic phrase.
+ * Convert a multi path to a BIP-39 mnemonic phrase.
+ *
+ * @param value - The multi path to convert.
+ * @returns The BIP-39 mnemonic phrase.
+ */
+export function multipathToBip39Mnemonic(
+  value: BIP39Node,
+): string | Uint8Array {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+
+  assert(
+    value.startsWith('bip39:'),
+    'Invalid HD path segment: The BIP-39 path must start with "bip39:".',
+  );
+
+  return value.slice(6);
+}
+
+export type GetDerivationPathWithSeedOptions = {
+  path: RootedSLIP10PathTuple;
+  curve: SupportedCurve;
+};
+
+/**
+ * Get a {@link RootedSLIP10SeedPathTuple} from a {@link RootedSLIP10PathTuple}.
+ *
+ * @param options - The options for getting the derivation path.
+ * @param options.path - The derivation path to convert.
+ * @param options.curve - The curve to use for derivation.
+ * @param cryptographicFunctions - The cryptographic functions to use. If
+ * provided, these will be used instead of the built-in implementations.
+ * @returns The derivation path with the seed, or entropy in the case of CIP-3.
+ */
+export async function getDerivationPathWithSeed(
+  { path, curve: curveName }: GetDerivationPathWithSeedOptions,
+  cryptographicFunctions?: CryptographicFunctions,
+): Promise<RootedSLIP10SeedPathTuple> {
+  const [mnemonicPhrase, ...rest] = path;
+  const plainMnemonicPhrase = multipathToBip39Mnemonic(mnemonicPhrase);
+
+  const curve = getCurveByName(curveName);
+  switch (curve.masterNodeGenerationSpec) {
+    case 'slip10': {
+      const seed = await mnemonicToSeed(
+        plainMnemonicPhrase,
+        '',
+        cryptographicFunctions,
+      );
+      return [seed, ...rest];
+    }
+
+    case 'cip3': {
+      const seed = mnemonicToEntropy(plainMnemonicPhrase, englishWordlist);
+      return [seed, ...rest];
+    }
+
+    /* istanbul ignore next */
+    default:
+      return assertExhaustive(curve);
+  }
+}
+
+/**
+ * Create a {@link SLIP10Node} from a BIP-39 seed.
  *
  * @param options - The options for creating the node.
- * @param options.path - The multi path.
+ * @param options.path - The multi path. This is expected to be the BIP-39 seed,
+ * or the entropy in the case of CIP-3, not the mnemonic phrase itself.
  * @param options.curve - The curve to use for derivation.
  * @param options.network - The network for the node. This is only used for
  * extended keys, and defaults to `mainnet`.
@@ -114,17 +187,22 @@ export async function deriveChildKey(
   { path, curve, network }: DeriveChildKeyArgs,
   cryptographicFunctions?: CryptographicFunctions,
 ): Promise<SLIP10Node> {
+  assert(
+    path instanceof Uint8Array,
+    'Invalid path: The path must be a Uint8Array.',
+  );
+
   switch (curve.masterNodeGenerationSpec) {
     case 'slip10':
       return createBip39KeyFromSeed(
-        await mnemonicToSeed(path, '', cryptographicFunctions),
+        path,
         curve,
         network,
         cryptographicFunctions,
       );
     case 'cip3':
       return entropyToCip3MasterNode(
-        mnemonicToEntropy(path, englishWordlist),
+        path,
         curve,
         network,
         cryptographicFunctions,

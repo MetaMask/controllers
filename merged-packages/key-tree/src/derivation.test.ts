@@ -1,10 +1,13 @@
+import { mnemonicToEntropy } from '@metamask/scure-bip39';
+import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english';
 import { bytesToHex } from '@metamask/utils';
 
-import type { HDPathTuple, SLIP10Path } from './constants';
+import type { RootedHDPathTuple, SLIP10Path } from './constants';
 import { secp256k1 } from './curves';
 import { deriveKeyFromPath, validatePathSegment } from './derivation';
-import { derivers } from './derivers';
+import { derivers, mnemonicToSeed } from './derivers';
 import { privateKeyToEthAddress } from './derivers/bip32';
+import { getDerivationPathWithSeed } from './derivers/bip39';
 import type { SLIP10Node } from './SLIP10Node';
 import { getUnhardenedBIP32NodeToken, mnemonicPhraseToBytes } from './utils';
 import fixtures from '../test/fixtures';
@@ -26,16 +29,17 @@ describe('derivation', () => {
   describe('deriveKeyFromPath', () => {
     it('derives the correct account key for cip3', async () => {
       const fixture = fixtures.cip3[0];
-
       const { accountNode } = fixture.nodes;
+
       // generate parent key
-      const bip39Part = bip39MnemonicToMultipath(fixture.mnemonic);
+      const seed = mnemonicToEntropy(fixture.mnemonic, wordlist);
       const accountPath = fixture.derivationPath.slice(0, 3);
 
       const cardanoBip32Path = accountPath.map(
         (pathElement) => `cip3:${pathElement}`,
       );
-      const multipath = [bip39Part, ...cardanoBip32Path] as SLIP10Path;
+
+      const multipath = [seed, ...cardanoBip32Path] as SLIP10Path;
       const node = await deriveKeyFromPath({
         path: multipath,
         curve: 'ed25519Bip32',
@@ -54,7 +58,7 @@ describe('derivation', () => {
           ] as const;
 
           const bip39Part = bip39MnemonicToMultipath(mnemonic);
-          const multipath = [bip39Part, ...bip32Part] as HDPathTuple;
+          const multipath = [bip39Part, ...bip32Part] as RootedHDPathTuple;
 
           expect(multipath).toStrictEqual([
             `bip39:${mnemonic}`,
@@ -66,7 +70,10 @@ describe('derivation', () => {
           ]);
 
           return deriveKeyFromPath({
-            path: multipath,
+            path: await getDerivationPathWithSeed({
+              path: multipath,
+              curve: 'secp256k1',
+            }),
             curve: 'secp256k1',
           });
         }),
@@ -90,10 +97,13 @@ describe('derivation', () => {
           const multipath = [
             mnemonicPhraseToBytes(mnemonic),
             ...bip32Part,
-          ] as HDPathTuple;
+          ] as RootedHDPathTuple;
 
           return deriveKeyFromPath({
-            path: multipath,
+            path: await getDerivationPathWithSeed({
+              path: multipath,
+              curve: 'secp256k1',
+            }),
             curve: 'secp256k1',
           });
         }),
@@ -109,9 +119,16 @@ describe('derivation', () => {
     it('derives the correct keys using a previously derived parent key', async () => {
       // generate parent key
       const bip39Part = bip39MnemonicToMultipath(mnemonic);
-      const multipath = [bip39Part, ...ethereumBip32PathParts] as HDPathTuple;
+      const multipath = [
+        bip39Part,
+        ...ethereumBip32PathParts,
+      ] as RootedHDPathTuple;
+
       const node = await deriveKeyFromPath({
-        path: multipath,
+        path: await getDerivationPathWithSeed({
+          path: multipath,
+          curve: 'secp256k1',
+        }),
         curve: 'secp256k1',
       });
 
@@ -136,7 +153,10 @@ describe('derivation', () => {
       const bip39Part = bip39MnemonicToMultipath(mnemonic);
       const multipath = [bip39Part, ...ethereumBip32PathParts] as const;
       const node = await deriveKeyFromPath({
-        path: multipath,
+        path: await getDerivationPathWithSeed({
+          path: multipath,
+          curve: 'secp256k1',
+        }),
         curve: 'secp256k1',
       });
 
@@ -256,7 +276,11 @@ describe('derivation', () => {
       let node: SLIP10Node;
 
       /* eslint-disable require-atomic-updates */
-      node = await bip39Derive({ path: mnemonic, curve: secp256k1 });
+      node = await bip39Derive({
+        path: await mnemonicToSeed(mnemonic),
+        curve: secp256k1,
+      });
+
       node = await bip32Derive({
         path: `44'`,
         node,
@@ -299,7 +323,11 @@ describe('derivation', () => {
     });
 
     it('throws for invalid inputs', async () => {
-      const node = await bip39Derive({ path: mnemonic, curve: secp256k1 });
+      const node = await bip39Derive({
+        path: await mnemonicToSeed(mnemonic),
+        curve: secp256k1,
+      });
+
       const inputs = [
         String(-1),
         String(1.1),
@@ -335,7 +363,11 @@ describe('derivation', () => {
     });
 
     it('throws when trying to derive from a public key node', async () => {
-      const node = await bip39Derive({ path: mnemonic, curve: secp256k1 });
+      const node = await bip39Derive({
+        path: await mnemonicToSeed(mnemonic),
+        curve: secp256k1,
+      });
+
       const publicNode = node.neuter();
 
       await expect(

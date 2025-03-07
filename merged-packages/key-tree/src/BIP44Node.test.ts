@@ -33,7 +33,7 @@ describe('BIP44Node', () => {
   describe('fromExtendedKey', () => {
     it('initializes a new node from a private key', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
+        path: fixtures.local.seed,
         curve: secp256k1,
       });
 
@@ -61,7 +61,7 @@ describe('BIP44Node', () => {
 
     it('initializes a new node from a private key with custom cryptographic functions', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
+        path: fixtures.local.seed,
         curve: secp256k1,
       });
 
@@ -98,7 +98,7 @@ describe('BIP44Node', () => {
 
     it('initializes a new node from JSON', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
+        path: fixtures.local.seed,
         curve: secp256k1,
       });
 
@@ -116,7 +116,7 @@ describe('BIP44Node', () => {
 
     it('initializes a new node from JSON with custom cryptographic functions', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
+        path: fixtures.local.seed,
         curve: secp256k1,
       });
 
@@ -162,7 +162,7 @@ describe('BIP44Node', () => {
 
     it('throws if the depth is invalid', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
+        path: fixtures.local.seed,
         curve: secp256k1,
       });
 
@@ -353,6 +353,159 @@ describe('BIP44Node', () => {
         BIP44Node.fromDerivationPath({
           derivationPath: [
             defaultBip39NodeToken,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+            `bip32:0'`,
+            `bip32:0`,
+            `bip32:-1`,
+          ],
+        }),
+      ).rejects.toThrow(
+        'Invalid derivation path: The "address_index" node (depth 5) must be a BIP-32 node.',
+      );
+    });
+  });
+
+  describe('fromSeed', () => {
+    it('initializes a new node from a seed', async () => {
+      const node = await BIP44Node.fromSeed({
+        derivationPath: [
+          fixtures.local.seed,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+      });
+
+      const mnemonicNode = await BIP44Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+      });
+
+      expect(node.toJSON()).toStrictEqual(mnemonicNode.toJSON());
+    });
+
+    it('initializes a new node from a seed with custom cryptographic functions', async () => {
+      const functions = getMockFunctions();
+
+      const node = await BIP44Node.fromSeed(
+        {
+          derivationPath: [
+            fixtures.local.seed,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+          ],
+        },
+        functions,
+      );
+
+      expect(node.depth).toBe(2);
+      expect(node.toJSON()).toStrictEqual({
+        depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+        network: node.network,
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
+      });
+
+      expect(functions.hmacSha512).toHaveBeenCalled();
+      expect(functions.pbkdf2Sha512).not.toHaveBeenCalled();
+    });
+
+    it('throws an error if attempting to modify the fields of a node', async () => {
+      const node: any = await BIP44Node.fromSeed({
+        derivationPath: [
+          fixtures.local.seed,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+      });
+
+      ['depth', 'privateKey', 'publicKey', 'address'].forEach((property) => {
+        expect(() => (node[property] = new Uint8Array(64).fill(1))).toThrow(
+          expect.objectContaining({
+            name: 'TypeError',
+            message: expect.stringMatching(
+              /^Cannot set property .+ of .+ which has only a getter/iu,
+            ),
+          }),
+        );
+      });
+    });
+
+    it('throws if the derivation path is of depth 0 and not a single BIP-39 node', async () => {
+      await expect(
+        BIP44Node.fromSeed({ derivationPath: [`bip32:0'`] as any }),
+      ).rejects.toThrow(
+        'Invalid derivation path: The "m" / seed node (depth 0) must be a BIP-39 node.',
+      );
+    });
+
+    it('throws if the depth 1 node of the derivation path is not the BIP-44 purpose node', async () => {
+      await expect(
+        BIP44Node.fromSeed({
+          derivationPath: [fixtures.local.seed, `bip32:43'`] as any,
+        }),
+      ).rejects.toThrow(
+        `Invalid derivation path: The "purpose" node (depth 1) must be the string "${BIP44PurposeNodeToken}".`,
+      );
+    });
+
+    it('throws if the depth 2 node of the derivation path is not a hardened BIP-32 node', async () => {
+      await expect(
+        BIP44Node.fromSeed({
+          derivationPath: [
+            fixtures.local.seed,
+            BIP44PurposeNodeToken,
+            `bip32:60`,
+          ] as any,
+        }),
+      ).rejects.toThrow(
+        'Invalid derivation path: The "coin_type" node (depth 2) must be a hardened BIP-32 node.',
+      );
+    });
+
+    it('throws if the depth 3 node of the derivation path is not a hardened BIP-32 node', async () => {
+      await expect(
+        BIP44Node.fromSeed({
+          derivationPath: [
+            fixtures.local.seed,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+            `bip32:0`,
+          ] as any,
+        }),
+      ).rejects.toThrow(
+        'Invalid derivation path: The "account" node (depth 3) must be a hardened BIP-32 node.',
+      );
+    });
+
+    it('throws if the depth 4 node of the derivation path is not a BIP-32 node', async () => {
+      await expect(
+        BIP44Node.fromSeed({
+          derivationPath: [
+            fixtures.local.seed,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+            `bip32:0'`,
+            `bip32:-1`,
+          ],
+        }),
+      ).rejects.toThrow(
+        'Invalid derivation path: The "change" node (depth 4) must be a BIP-32 node.',
+      );
+    });
+
+    it('throws if the depth 5 node of the derivation path is not a BIP-32 node', async () => {
+      await expect(
+        BIP44Node.fromSeed({
+          derivationPath: [
+            fixtures.local.seed,
             BIP44PurposeNodeToken,
             `bip32:60'`,
             `bip32:0'`,

@@ -178,6 +178,11 @@ export type RootedSLIP10PathTuple = readonly [
   ...(BIP32Node[] | SLIP10PathNode[] | CIP3PathNode[]),
 ];
 
+export type RootedSLIP10SeedPathTuple = readonly [
+  Uint8Array,
+  ...(BIP32Node[] | SLIP10PathNode[] | CIP3PathNode[]),
+];
+
 export type SLIP10PathTuple =
   | readonly BIP32Node[]
   | readonly SLIP10PathNode[]

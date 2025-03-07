@@ -35,7 +35,7 @@ describe('SLIP10Node', () => {
   describe('constructor', () => {
     it('throws an error when the constructor guard is not provided', async () => {
       const { privateKey, chainCode } = await deriveChildKey({
-        path: fixtures.local.mnemonic,
+        path: fixtures.local.seed,
         curve: secp256k1,
       });
 
@@ -52,7 +52,7 @@ describe('SLIP10Node', () => {
             curve: 'secp256k1',
           }),
       ).toThrow(
-        'SLIP10Node can only be constructed using `SLIP10Node.fromJSON`, `SLIP10Node.fromExtendedKey`, or `SLIP10Node.fromDerivationPath`.',
+        'SLIP10Node can only be constructed using `SLIP10Node.fromJSON`, `SLIP10Node.fromExtendedKey`, `SLIP10Node.fromDerivationPath`, or `SLIP10Node.fromSeed`.',
       );
     });
   });
@@ -61,7 +61,7 @@ describe('SLIP10Node', () => {
     describe('using an object', () => {
       it('initializes a new node from a private key', async () => {
         const { privateKeyBytes, chainCodeBytes } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -81,7 +81,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from a hexadecimal private key and chain code', async () => {
         const { privateKey, chainCode } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -101,7 +101,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new ed25519 node from a private key', async () => {
         const { privateKey, chainCode } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: ed25519,
         });
 
@@ -136,7 +136,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from a public key', async () => {
         const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -156,7 +156,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new ed25519 node from a public key', async () => {
         const { publicKeyBytes, chainCodeBytes } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: ed25519,
         });
 
@@ -176,7 +176,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from a hexadecimal public key and chain code', async () => {
         const { publicKey, chainCode } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -196,7 +196,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from JSON', async () => {
         const node = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -205,7 +205,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from JSON with a public key', async () => {
         const { privateKey, chainCode } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -227,7 +227,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from a private key with custom cryptographic functions', async () => {
         const { privateKeyBytes, chainCodeBytes } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -254,7 +254,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from JSON with custom cryptographic functions', async () => {
         const baseNode = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -454,7 +454,7 @@ describe('SLIP10Node', () => {
     describe('using a BIP-32 serialised extended key', () => {
       it('initializes a new node from a private key', async () => {
         const { extendedKey, privateKey, chainCode } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -469,7 +469,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from a public key', async () => {
         const baseNode = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -485,7 +485,7 @@ describe('SLIP10Node', () => {
 
       it('initializes a new node from a private key with custom cryptographic functions', async () => {
         const { extendedKey, privateKey, chainCode } = await deriveChildKey({
-          path: fixtures.local.mnemonic,
+          path: fixtures.local.seed,
           curve: secp256k1,
         });
 
@@ -695,7 +695,7 @@ describe('SLIP10Node', () => {
           curve: 'secp256k1',
         }),
       ).rejects.toThrow(
-        'Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of 0. Received: "bip32:0\'".',
+        'Invalid HD path segment: The BIP-39 path must start with "bip39:".',
       );
     });
 
@@ -739,6 +739,171 @@ describe('SLIP10Node', () => {
     it('throws an error for unsupported curves', async () => {
       await expect(
         SLIP10Node.fromDerivationPath({
+          // @ts-expect-error Invalid curve name for type
+          curve: 'foo bar',
+          specification: 'bip32',
+        }),
+      ).rejects.toThrow(
+        'Invalid curve: Only the following curves are supported: secp256k1, ed25519, ed25519Bip32.',
+      );
+    });
+  });
+
+  describe('fromSeed', () => {
+    it('initializes a new node from a seed', async () => {
+      const node = await SLIP10Node.fromSeed({
+        derivationPath: [
+          fixtures.local.seed,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'secp256k1',
+      });
+
+      const mnemonicNode = await SLIP10Node.fromDerivationPath({
+        derivationPath: [
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'secp256k1',
+      });
+
+      expect(node.toJSON()).toStrictEqual(mnemonicNode.toJSON());
+    });
+
+    it('initializes a new node from a seed with a Uint8Array using ed25519', async () => {
+      const node = await SLIP10Node.fromSeed({
+        derivationPath: [fixtures.local.seed, `slip10:44'`, `slip10:60'`],
+        curve: 'ed25519',
+      });
+
+      const mnemonicNode = await SLIP10Node.fromDerivationPath({
+        derivationPath: [defaultBip39NodeToken, `slip10:44'`, `slip10:60'`],
+        curve: 'ed25519',
+      });
+
+      expect(node.toJSON()).toStrictEqual(mnemonicNode.toJSON());
+    });
+
+    it('initializes a new node from a seed with custom cryptographic functions', async () => {
+      const functions = getMockFunctions();
+
+      const node = await SLIP10Node.fromSeed(
+        {
+          derivationPath: [
+            fixtures.local.seed,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+          ],
+          curve: 'secp256k1',
+        },
+        functions,
+      );
+
+      expect(node.depth).toBe(2);
+      expect(node.toJSON()).toStrictEqual({
+        depth: node.depth,
+        masterFingerprint: node.masterFingerprint,
+        parentFingerprint: node.parentFingerprint,
+        index: node.index,
+        network: node.network,
+        curve: 'secp256k1',
+        privateKey: node.privateKey,
+        publicKey: node.publicKey,
+        chainCode: node.chainCode,
+      });
+
+      expect(functions.hmacSha512).toHaveBeenCalled();
+      expect(functions.pbkdf2Sha512).not.toHaveBeenCalled();
+    });
+
+    it('throws if the curve is `ed25519Bip32`', async () => {
+      await expect(
+        SLIP10Node.fromSeed({
+          derivationPath: [
+            fixtures.local.seed,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+          ],
+          curve: 'ed25519Bip32',
+        }),
+      ).rejects.toThrow(
+        'Invalid curve: The curve "ed25519Bip32" is not supported by the `fromSeed` function.',
+      );
+    });
+
+    it('throws if the derivation path is empty', async () => {
+      await expect(
+        SLIP10Node.fromSeed({
+          derivationPath: [] as any,
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow(
+        'Invalid derivation path: May not specify an empty derivation path.',
+      );
+    });
+
+    it('throws if no derivation path is specified', async () => {
+      await expect(
+        // @ts-expect-error No derivation path specified
+        SLIP10Node.fromSeed({
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow('Invalid options: Must provide a derivation path.');
+    });
+
+    it('throws if the derivation path is of depth 0 and not a single BIP-39 node', async () => {
+      await expect(
+        SLIP10Node.fromSeed({
+          derivationPath: [`bip32:0'`] as any,
+          curve: 'secp256k1',
+        }),
+      ).rejects.toThrow(
+        'Invalid HD path segment: The segment must consist of a single BIP-39 node for depths of 0. Received: "bip32:0\'".',
+      );
+    });
+
+    it('throws an error if attempting to modify the fields of a node', async () => {
+      const node: any = await SLIP10Node.fromSeed({
+        derivationPath: [
+          fixtures.local.seed,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+        curve: 'secp256k1',
+      });
+
+      // getter
+      expect(() => (node.privateKey = 'foo')).toThrow(
+        /^Cannot set property privateKey of .+ which has only a getter/iu,
+      );
+
+      // frozen / readonly
+      ['depth', 'privateKeyBytes', 'publicKeyBytes', 'chainCodeBytes'].forEach(
+        (property) => {
+          expect(() => (node[property] = new Uint8Array(64).fill(1))).toThrow(
+            expect.objectContaining({
+              name: 'TypeError',
+              message: expect.stringMatching(
+                `Cannot assign to read only property '${property}' of object`,
+              ),
+            }),
+          );
+        },
+      );
+    });
+
+    it('throws an error if no curve is specified', async () => {
+      await expect(
+        // @ts-expect-error No curve specified, but required in type
+        SLIP10Node.fromSeed({}),
+      ).rejects.toThrow('Invalid curve: Must specify a curve.');
+    });
+
+    it('throws an error for unsupported curves', async () => {
+      await expect(
+        SLIP10Node.fromSeed({
           // @ts-expect-error Invalid curve name for type
           curve: 'foo bar',
           specification: 'bip32',

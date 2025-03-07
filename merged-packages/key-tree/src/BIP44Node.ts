@@ -5,6 +5,7 @@ import type {
   Network,
   PartialHDPathTuple,
   RootedSLIP10PathTuple,
+  RootedSLIP10SeedPathTuple,
   SLIP10Path,
 } from './constants';
 import {
@@ -32,6 +33,11 @@ export type BIP44ExtendedKeyOptions = {
 
 export type BIP44DerivationPathOptions = {
   readonly derivationPath: RootedSLIP10PathTuple;
+  readonly network?: Network | undefined;
+};
+
+export type BIP44SeedOptions = {
+  readonly derivationPath: RootedSLIP10SeedPathTuple;
   readonly network?: Network | undefined;
 };
 
@@ -250,6 +256,42 @@ export class BIP44Node implements BIP44NodeInterface {
     validateBIP44DerivationPath(derivationPath, MIN_BIP_44_DEPTH);
 
     const node = await SLIP10Node.fromDerivationPath(
+      {
+        derivationPath,
+        network,
+        curve: 'secp256k1',
+      },
+      cryptographicFunctions,
+    );
+
+    return new BIP44Node(node);
+  }
+
+  /**
+   * Create a new BIP-44 node from a BIP-39 seed. The derivation path must be
+   * rooted, i.e. it must begin with a BIP-39 node, given as a `Uint8Array` of
+   * the seed bytes.
+   *
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * @param options - The options for the new node.
+   * @param options.derivationPath - The rooted HD tree path that will be used
+   * to derive the key of this node.
+   * @param options.network - The network for the node. This is only used for
+   * extended keys, and defaults to `mainnet`.
+   * @param cryptographicFunctions - The cryptographic functions to use. If
+   * provided, these will be used instead of the built-in implementations.
+   * @returns A new BIP-44 node.
+   */
+  static async fromSeed(
+    { derivationPath, network }: BIP44SeedOptions,
+    cryptographicFunctions?: CryptographicFunctions,
+  ): Promise<BIP44Node> {
+    validateBIP44Depth(derivationPath.length - 1);
+    validateBIP44DerivationPath(derivationPath, MIN_BIP_44_DEPTH);
+
+    const node = await SLIP10Node.fromSeed(
       {
         derivationPath,
         network,

@@ -1,5 +1,3 @@
-import { assert } from '@metamask/utils';
-
 import type { BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
 import { BIP44Node } from './BIP44Node';
 import type {
@@ -16,6 +14,7 @@ import type { SupportedCurve } from './curves';
 import { deriveChildNode } from './SLIP10Node';
 import type { CoinTypeToAddressIndices } from './utils';
 import {
+  getBIP44CoinType,
   getBIP32NodeToken,
   getBIP44ChangePathString,
   getBIP44CoinTypePathString,
@@ -32,6 +31,12 @@ export type CoinTypeHDPathTuple = [
   HardenedBIP32Node,
 ];
 
+export type CoinTypeSeedPathTuple = [
+  Uint8Array,
+  typeof BIP44PurposeNodeToken,
+  HardenedBIP32Node,
+];
+
 export const BIP_44_COIN_TYPE_DEPTH = 2;
 
 export type JsonBIP44CoinTypeNode = JsonBIP44Node & {
@@ -42,6 +47,11 @@ export type JsonBIP44CoinTypeNode = JsonBIP44Node & {
 export type BIP44CoinTypeNodeInterface = BIP44NodeInterface & {
   readonly coin_type: number;
   readonly path: CoinTypeHDPathString;
+};
+
+export type BIP44CoinTypeSeedOptions = {
+  readonly derivationPath: CoinTypeSeedPathTuple;
+  readonly network?: Network | undefined;
 };
 
 /**
@@ -106,7 +116,7 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
   }
 
   /**
-   * Constructs a BIP-44 `coin_type` node. `coin_type` is the index
+   * Construct a BIP-44 `coin_type` node. `coin_type` is the index
    * specifying the protocol for which deeper keys are intended. For the
    * authoritative list of coin types, please see
    * [SLIP-44](https://github.com/satoshilabs/slips/blob/master/slip-0044.md).
@@ -141,14 +151,42 @@ export class BIP44CoinTypeNode implements BIP44CoinTypeNodeInterface {
       cryptographicFunctions,
     );
 
-    // Split the bip32 string token and extract the coin_type index.
-    const pathPart = derivationPath[BIP_44_COIN_TYPE_DEPTH].split(
-      ':',
-    )[1]?.replace(`'`, '');
+    const coinType = getBIP44CoinType(derivationPath);
+    return new BIP44CoinTypeNode(node, coinType);
+  }
 
-    assert(pathPart, 'Invalid derivation path.');
-    const coinType = Number.parseInt(pathPart, 10);
+  /**
+   * Create a new BIP-44 coin type node from a BIP-39 seed. The derivation path
+   * must be rooted, i.e. it must begin with a BIP-39 node, given as a
+   * `Uint8Array` of the seed bytes.
+   *
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * @param options - The options for the new node.
+   * @param options.derivationPath - The rooted HD tree path that will be used
+   * to derive the key of this node.
+   * @param options.network - The network for the node. This is only used for
+   * extended keys, and defaults to `mainnet`.
+   * @param cryptographicFunctions - The cryptographic functions to use. If
+   * provided, these will be used instead of the built-in implementations.
+   * @returns A new BIP-44 node.
+   */
+  static async fromSeed(
+    { derivationPath, network }: BIP44CoinTypeSeedOptions,
+    cryptographicFunctions?: CryptographicFunctions,
+  ): Promise<BIP44CoinTypeNode> {
+    validateCoinTypeNodeDepth(derivationPath.length - 1);
 
+    const node = await BIP44Node.fromSeed(
+      {
+        derivationPath,
+        network,
+      },
+      cryptographicFunctions,
+    );
+
+    const coinType = getBIP44CoinType(derivationPath);
     return new BIP44CoinTypeNode(node, coinType);
   }
 

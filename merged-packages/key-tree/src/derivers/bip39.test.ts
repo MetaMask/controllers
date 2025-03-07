@@ -1,3 +1,5 @@
+import { mnemonicToEntropy } from '@metamask/scure-bip39';
+import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english';
 import {
   assert,
   bigIntToBytes,
@@ -10,6 +12,8 @@ import {
   createBip39KeyFromSeed,
   deriveChildKey,
   mnemonicToSeed,
+  getDerivationPathWithSeed,
+  bip39MnemonicToMultipath,
 } from './bip39';
 import fixtures from '../../test/fixtures';
 import * as cryptography from '../cryptography';
@@ -86,6 +90,59 @@ describe('mnemonicToSeed', () => {
   });
 });
 
+describe('getDerivationPathWithSeed', () => {
+  it('returns a derivation path with a seed for the `secp256k1` curve', async () => {
+    const derivationPath = await getDerivationPathWithSeed({
+      path: [
+        bip39MnemonicToMultipath(fixtures.local.mnemonic),
+        'bip32:0',
+        'bip32:1',
+      ],
+      curve: 'secp256k1',
+    });
+
+    expect(derivationPath).toStrictEqual([
+      fixtures.local.seed,
+      'bip32:0',
+      'bip32:1',
+    ]);
+  });
+
+  it('returns a derivation path with a seed for the `ed25519` curve', async () => {
+    const derivationPath = await getDerivationPathWithSeed({
+      path: [
+        bip39MnemonicToMultipath(fixtures.local.mnemonic),
+        'bip32:0',
+        'bip32:1',
+      ],
+      curve: 'ed25519',
+    });
+
+    expect(derivationPath).toStrictEqual([
+      fixtures.local.seed,
+      'bip32:0',
+      'bip32:1',
+    ]);
+  });
+
+  it('returns a derivation path with entropy for the `ed25519Bip32` curve', async () => {
+    const derivationPath = await getDerivationPathWithSeed({
+      path: [
+        bip39MnemonicToMultipath(fixtures.cip3[0].mnemonic),
+        'bip32:0',
+        'bip32:1',
+      ],
+      curve: 'ed25519Bip32',
+    });
+
+    expect(derivationPath).toStrictEqual([
+      hexToBytes(fixtures.cip3[0].entropyHex),
+      'bip32:0',
+      'bip32:1',
+    ]);
+  });
+});
+
 describe('createBip39KeyFromSeed', () => {
   const RANDOM_SEED = hexToBytes(
     '0xea82e6ee9d319c083007d0b011a37b0e480ae02417a988ac90355abd53cd04fc',
@@ -142,10 +199,10 @@ describe('createBip39KeyFromSeed', () => {
     },
   );
 
-  it('throws with unsupported masterNodeGenerationSpec error', async () => {
+  it('throws with unsupported master node generation error', async () => {
     await expect(
       deriveChildKey({
-        path: '',
+        path: new Uint8Array(),
         curve: {
           masterNodeGenerationSpec: 'notValidMasterNodeGenerationSpec',
         } as unknown as Curve,
@@ -191,9 +248,10 @@ describe('Cip3', () => {
       'derives the correct child key for ed25519Bip32 curve from mnemonic',
       async (fixture) => {
         const result = await deriveChildKey({
-          path: fixture.mnemonic,
+          path: mnemonicToEntropy(fixture.mnemonic, wordlist),
           curve: ed25519Bip32,
         });
+
         const { bip39Node } = fixture.nodes;
         expect(result.privateKey).toBe(bip39Node.privateKey);
         expect(result.chainCode).toBe(bip39Node.chainCode);

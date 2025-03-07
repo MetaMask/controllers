@@ -13,6 +13,7 @@ import type { SupportedCurve } from './curves';
 import { getCurveByName } from './curves';
 import { deriveKeyFromPath } from './derivation';
 import { publicKeyToEthAddress } from './derivers/bip32';
+import { getDerivationPathWithSeed } from './derivers/bip39';
 import { decodeExtendedKey, encodeExtendedKey } from './extended-keys';
 import {
   getBytes,
@@ -387,6 +388,67 @@ export class SLIP10Node implements SLIP10NodeInterface {
       );
     }
 
+    // `deriveKeyFromPath` expects a seed derivation path, so we need to
+    // convert the rooted path to a seed path.
+    const seedDerivationPath = await getDerivationPathWithSeed(
+      {
+        path: derivationPath,
+        curve,
+      },
+      cryptographicFunctions,
+    );
+
+    return await deriveKeyFromPath(
+      {
+        path: seedDerivationPath,
+        depth: derivationPath.length - 1,
+        network,
+        curve,
+      },
+      cryptographicFunctions,
+    );
+  }
+
+  /**
+   * Create a new SLIP-10 node from a BIP-39 seed. The derivation path
+   * must be rooted, i.e. it must begin with a BIP-39 node, given as a
+   * `Uint8Array` of the seed bytes.
+   *
+   * All parameters are stringently validated, and an error is thrown if
+   * validation fails.
+   *
+   * @param options - The options for the new node.
+   * @param options.derivationPath - The rooted HD tree path that will be used
+   * to derive the key of this node.
+   * @param options.curve - The curve used by the node.
+   * @param options.network - The network for the node. This is only used for
+   * extended keys, and defaults to `mainnet`.
+   * @param cryptographicFunctions - The cryptographic functions to use. If
+   * provided, these will be used instead of the built-in implementations.
+   * @returns A new SLIP-10 node.
+   */
+  static async fromSeed(
+    { derivationPath, network, curve }: SLIP10DerivationPathOptions,
+    cryptographicFunctions?: CryptographicFunctions,
+  ): Promise<SLIP10Node> {
+    validateCurve(curve);
+
+    if (curve === 'ed25519Bip32') {
+      throw new Error(
+        'Invalid curve: The curve "ed25519Bip32" is not supported by the `fromSeed` function.',
+      );
+    }
+
+    if (!derivationPath) {
+      throw new Error('Invalid options: Must provide a derivation path.');
+    }
+
+    if (derivationPath.length === 0) {
+      throw new Error(
+        'Invalid derivation path: May not specify an empty derivation path.',
+      );
+    }
+
     return await deriveKeyFromPath(
       {
         path: derivationPath,
@@ -438,7 +500,7 @@ export class SLIP10Node implements SLIP10NodeInterface {
   ) {
     assert(
       constructorGuard === SLIP10Node.#constructorGuard,
-      'SLIP10Node can only be constructed using `SLIP10Node.fromJSON`, `SLIP10Node.fromExtendedKey`, or `SLIP10Node.fromDerivationPath`.',
+      'SLIP10Node can only be constructed using `SLIP10Node.fromJSON`, `SLIP10Node.fromExtendedKey`, `SLIP10Node.fromDerivationPath`, or `SLIP10Node.fromSeed`.',
     );
 
     this.depth = depth;

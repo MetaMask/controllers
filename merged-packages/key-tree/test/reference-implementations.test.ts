@@ -6,7 +6,10 @@ import type { SLIP10Node, HDPathTuple } from '../src';
 import { BIP44Node, BIP44PurposeNodeToken } from '../src';
 import { ed25519, secp256k1 } from '../src/curves';
 import { deriveKeyFromPath } from '../src/derivation';
-import { createBip39KeyFromSeed } from '../src/derivers/bip39';
+import {
+  createBip39KeyFromSeed,
+  getDerivationPathWithSeed,
+} from '../src/derivers/bip39';
 import {
   getBIP44CoinTypeToAddressPathTuple,
   hexStringToBytes,
@@ -53,7 +56,10 @@ describe('reference implementation tests', () => {
         it('derives the expected keys', async () => {
           // Ethereum coin type key
           const node = await deriveKeyFromPath({
-            path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+            path: await getDerivationPathWithSeed({
+              path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+              curve: 'secp256k1',
+            }),
             curve: 'secp256k1',
           });
 
@@ -133,7 +139,10 @@ describe('reference implementation tests', () => {
         it('derives the same keys as the reference implementation', async () => {
           // Ethereum coin type key
           const node = await deriveKeyFromPath({
-            path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+            path: await getDerivationPathWithSeed({
+              path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+              curve: 'secp256k1',
+            }),
             curve: 'secp256k1',
           });
 
@@ -367,7 +376,10 @@ describe('reference implementation tests', () => {
         it('derives the expected keys', async () => {
           // Ethereum coin type key
           const node = await deriveKeyFromPath({
-            path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+            path: await getDerivationPathWithSeed({
+              path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+              curve: 'secp256k1',
+            }),
             curve: 'secp256k1',
           });
 
@@ -447,7 +459,10 @@ describe('reference implementation tests', () => {
         it('derives the same keys as the reference implementation', async () => {
           // Ethereum coin type key
           const node = await deriveKeyFromPath({
-            path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+            path: await getDerivationPathWithSeed({
+              path: [mnemonicBip39Node, BIP44PurposeNodeToken, `bip32:60'`],
+              curve: 'secp256k1',
+            }),
             curve: 'secp256k1',
           });
 

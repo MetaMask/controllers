@@ -3,6 +3,11 @@ import { assert, createDataView, hexToBytes } from '@metamask/utils';
 import { base58check as scureBase58check } from '@scure/base';
 
 import type {
+  CoinTypeHDPathTuple,
+  CoinTypeSeedPathTuple,
+} from './BIP44CoinTypeNode';
+import { BIP_44_COIN_TYPE_DEPTH } from './BIP44CoinTypeNode';
+import type {
   BIP32Node,
   ChangeHDPathString,
   CoinTypeHDPathString,
@@ -491,4 +496,32 @@ export function validateNetwork(
       `Invalid network: Must be either "mainnet" or "testnet" if specified.`,
     );
   }
+}
+
+/**
+ * Get the BIP-44 coin type from a {@link CoinTypeHDPathTuple} or
+ * {@link CoinTypeSeedPathTuple}.
+ *
+ * This function does not validate the derivation path, and assumes that the
+ * derivation path is valid.
+ *
+ * @param derivationPath - The derivation path to get the BIP-44 coin type from.
+ * @returns The BIP-44 coin type.
+ */
+export function getBIP44CoinType(
+  derivationPath: CoinTypeHDPathTuple | CoinTypeSeedPathTuple,
+): number {
+  const pathPart = derivationPath[BIP_44_COIN_TYPE_DEPTH].split(
+    ':',
+  )[1]?.replace(`'`, '');
+
+  assert(pathPart, 'Invalid derivation path: Coin type is not specified.');
+
+  const value = Number.parseInt(pathPart, 10);
+  assert(
+    isValidInteger(value),
+    'Invalid derivation path: Coin type is not a valid integer.',
+  );
+
+  return value;
 }

@@ -333,6 +333,74 @@ describe('BIP44CoinTypeNode', () => {
     });
   });
 
+  describe('fromSeed', () => {
+    it('initializes a BIP44CoinTypeNode from a seed', async () => {
+      const node = await BIP44CoinTypeNode.fromSeed({
+        derivationPath: [
+          fixtures.local.seed,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+        ],
+      });
+
+      const mnemonicNode = await BIP44CoinTypeNode.fromDerivationPath([
+        defaultBip39NodeToken,
+        BIP44PurposeNodeToken,
+        `bip32:60'`,
+      ]);
+
+      expect(node.toJSON()).toStrictEqual(mnemonicNode.toJSON());
+    });
+
+    it('initializes a BIP44CoinTypeNode from a seed with custom cryptographic functions', async () => {
+      const functions = getMockFunctions();
+      const node = await BIP44CoinTypeNode.fromSeed(
+        {
+          derivationPath: [
+            fixtures.local.seed,
+            BIP44PurposeNodeToken,
+            `bip32:60'`,
+          ],
+        },
+        functions,
+      );
+
+      const coinType = 60;
+      const pathString = `m / bip32:44' / bip32:${coinType}'`;
+
+      expect(node.coin_type).toStrictEqual(coinType);
+      expect(node.depth).toBe(2);
+      expect(node.privateKeyBytes).toHaveLength(32);
+      expect(node.publicKeyBytes).toHaveLength(65);
+      expect(node.path).toStrictEqual(pathString);
+
+      expect(functions.hmacSha512).toHaveBeenCalledTimes(3);
+      expect(functions.pbkdf2Sha512).not.toHaveBeenCalled();
+    });
+
+    it('throws if derivation path has invalid depth', async () => {
+      await expect(
+        BIP44CoinTypeNode.fromSeed({
+          // @ts-expect-error: Invalid derivation path.
+          derivationPath: [fixtures.local.seed, BIP44PurposeNodeToken],
+        }),
+      ).rejects.toThrow(
+        `Invalid depth: Coin type nodes must be of depth ${BIP_44_COIN_TYPE_DEPTH}. Received: "1"`,
+      );
+
+      await expect(
+        BIP44CoinTypeNode.fromDerivationPath([
+          defaultBip39NodeToken,
+          BIP44PurposeNodeToken,
+          `bip32:60'`,
+          `bip32:0'`,
+        ] as any),
+      ).rejects.toThrow(
+        `Invalid depth: Coin type nodes must be of depth ${BIP_44_COIN_TYPE_DEPTH}. Received: "3"`,
+      );
+    });
+  });
+
   describe('deriveBIP44AddressKey', () => {
     const coinTypePath = [
       defaultBip39NodeToken,
