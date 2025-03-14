@@ -11,20 +11,12 @@ jobs:
       matrix:
         node-version: [18.x, 20.x, 22.x]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Corepack via Node
-        uses: actions/setup-node@v4
+      - name: Checkout and setup environment
+        uses: MetaMask/action-checkout-and-setup@v1
         with:
-          node-version-file: '.nvmrc'
-      - name: Install Yarn
-        run: corepack enable
-      - name: Install Node.js ${{ matrix.node-version }} and restore Yarn cache
-        uses: actions/setup-node@v4
-        with:
+          is-high-risk-environment: false
           node-version: ${{ matrix.node-version }}
-          cache: 'yarn'
-      - name: Install dependencies via Yarn
-        run: yarn --immutable
+          cache-node-modules: ${{ matrix.node-version == '22.x' }}
 
   build:
     name: Build
@@ -34,20 +26,11 @@ jobs:
       matrix:
         node-version: [22.x]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Corepack via Node
-        uses: actions/setup-node@v4
+      - name: Checkout and setup environment
+        uses: MetaMask/action-checkout-and-setup@v1
         with:
-          node-version-file: '.nvmrc'
-      - name: Install Yarn
-        run: corepack enable
-      - name: Install Node.js ${{ matrix.node-version }} and restore Yarn cache
-        uses: actions/setup-node@v4
-        with:
+          is-high-risk-environment: false
           node-version: ${{ matrix.node-version }}
-          cache: 'yarn'
-      - name: Install dependencies via Yarn
-        run: yarn --immutable --immutable-cache
       - run: yarn build
       - name: Require clean working directory
         shell: bash
@@ -65,20 +48,11 @@ jobs:
       matrix:
         node-version: [22.x]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Corepack via Node
-        uses: actions/setup-node@v4
+      - name: Checkout and setup environment
+        uses: MetaMask/action-checkout-and-setup@v1
         with:
-          node-version-file: '.nvmrc'
-      - name: Install Yarn
-        run: corepack enable
-      - name: Install Node.js ${{ matrix.node-version }} and restore Yarn cache
-        uses: actions/setup-node@v4
-        with:
+          is-high-risk-environment: false
           node-version: ${{ matrix.node-version }}
-          cache: 'yarn'
-      - name: Install dependencies via Yarn
-        run: yarn --immutable --immutable-cache
       - run: yarn lint
       - name: Validate RC changelog
         if: ${{ startsWith(github.head_ref, 'release/') }}
@@ -102,20 +76,11 @@ jobs:
       matrix:
         node-version: [18.x, 20.x, 22.x]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Corepack via Node
-        uses: actions/setup-node@v4
+      - name: Checkout and setup environment
+        uses: MetaMask/action-checkout-and-setup@v1
         with:
-          node-version-file: '.nvmrc'
-      - name: Install Yarn
-        run: corepack enable
-      - name: Install Node.js ${{ matrix.node-version }} and restore Yarn cache
-        uses: actions/setup-node@v4
-        with:
+          is-high-risk-environment: false
           node-version: ${{ matrix.node-version }}
-          cache: 'yarn'
-      - name: Install dependencies via Yarn
-        run: yarn --immutable --immutable-cache
       - run: yarn test
       - name: Require clean working directory
         shell: bash
@@ -133,18 +98,11 @@ jobs:
       matrix:
         node-version: [18.x, 20.x, 22.x]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Corepack via Node
-        uses: actions/setup-node@v4
+      - name: Checkout and setup environment
+        uses: MetaMask/action-checkout-and-setup@v1
         with:
-          node-version-file: '.nvmrc'
-      - name: Install Yarn
-        run: corepack enable
-      - name: Install Node.js ${{ matrix.node-version }} and restore Yarn cache
-        uses: actions/setup-node@v4
-        with:
+          is-high-risk-environment: false
           node-version: ${{ matrix.node-version }}
-          cache: 'yarn'
       - name: Install dependencies via Yarn
         run: rm yarn.lock && YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn
       - run: yarn test
