@@ -63,7 +63,9 @@ export async function deriveChildKey(
   if (node.privateKeyBytes) {
     const secretExtension = await deriveSecretExtension({
       privateKey: node.privateKeyBytes,
-      publicKey: node.compressedPublicKeyBytes,
+      get publicKey() {
+        return node.compressedPublicKeyBytes;
+      },
       childIndex,
       isHardened,
       curve,
@@ -80,7 +82,9 @@ export async function deriveChildKey(
     return await deriveNode(
       {
         privateKey: node.privateKeyBytes,
-        publicKey: node.publicKeyBytes,
+        get publicKey() {
+          return node.publicKeyBytes;
+        },
         entropy,
         ...args,
       },
@@ -289,25 +293,24 @@ type GenerateKeyArgs = {
  * @param options.curve - The curve to use for derivation.
  * @returns The derived key.
  */
-function generateKey({
-  privateKey,
-  entropy,
-  curve,
-}: GenerateKeyArgs): DerivedKeys & { privateKey: Uint8Array } {
+function generateKey({ privateKey, entropy, curve }: GenerateKeyArgs): Omit<
+  DerivedKeys,
+  'publicKey'
+> & {
+  privateKey: Uint8Array;
+} {
   const keyMaterial = entropy.slice(0, 32);
   const childChainCode = entropy.slice(32);
 
   // If curve is ed25519: The returned child key ki is parse256(IL).
   // https://github.com/satoshilabs/slips/blob/133ea52a8e43d338b98be208907e144277e44c0e/slip-0010.md#private-parent-key--private-child-key
   if (curve.name === 'ed25519') {
-    const publicKey = curve.getPublicKey(keyMaterial);
-    return { privateKey: keyMaterial, publicKey, chainCode: childChainCode };
+    return { privateKey: keyMaterial, chainCode: childChainCode };
   }
 
   const childPrivateKey = privateAdd(privateKey, keyMaterial, curve);
-  const publicKey = curve.getPublicKey(childPrivateKey);
 
-  return { privateKey: childPrivateKey, publicKey, chainCode: childChainCode };
+  return { privateKey: childPrivateKey, chainCode: childChainCode };
 }
 
 type DerivePrivateChildKeyArgs = {
@@ -357,20 +360,16 @@ async function derivePrivateChildKey(
   const actualChildIndex =
     childIndex + (isHardened ? BIP_32_HARDENED_OFFSET : 0);
 
-  const {
-    privateKey: childPrivateKey,
-    publicKey: childPublicKey,
-    chainCode: childChainCode,
-  } = generateKey({
-    privateKey,
-    entropy,
-    curve,
-  });
+  const { privateKey: childPrivateKey, chainCode: childChainCode } =
+    generateKey({
+      privateKey,
+      entropy,
+      curve,
+    });
 
   return await SLIP10Node.fromExtendedKey(
     {
       privateKey: childPrivateKey,
-      publicKey: childPublicKey,
       chainCode: childChainCode,
       depth: depth + 1,
       masterFingerprint,

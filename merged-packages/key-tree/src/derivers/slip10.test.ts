@@ -64,7 +64,7 @@ describe('deriveChildKey', () => {
 
     // This should never be the case.
     const error = new Error('Unable to derive child key.');
-    jest.spyOn(ed25519, 'getPublicKey').mockImplementationOnce(() => {
+    jest.spyOn(SLIP10Node, 'fromExtendedKey').mockImplementationOnce(() => {
       throw error;
     });
 
