@@ -19,10 +19,27 @@ export const isValidPrivateKey = (privateKey: Uint8Array): boolean => {
   return secp256k1.utils.isValidPrivateKey(privateKey);
 };
 
-export const getPublicKey = (
+const getGetPublicKey = (): ((
   privateKey: Uint8Array,
-  compressed = false,
-): Uint8Array => secp256k1.getPublicKey(privateKey, compressed);
+  compressed?: boolean,
+) => Uint8Array) => {
+  let hasSetWindowSize = false;
+
+  const getPublicKey = (
+    privateKey: Uint8Array,
+    compressed = false,
+  ): Uint8Array => {
+    if (!hasSetWindowSize) {
+      secp256k1.ProjectivePoint.BASE._setWindowSize(4);
+      hasSetWindowSize = true;
+    }
+    return secp256k1.getPublicKey(privateKey, compressed);
+  };
+
+  return getPublicKey;
+};
+
+export const getPublicKey = getGetPublicKey();
 
 export const publicAdd = (
   publicKey: Uint8Array,
