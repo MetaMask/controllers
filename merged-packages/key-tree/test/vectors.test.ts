@@ -2,9 +2,9 @@ import { hexToBytes } from '@metamask/utils';
 // eslint-disable-next-line n/no-unsupported-features/node-builtins
 import { webcrypto } from 'crypto';
 
-import derivationVectors from './vectors/derivation.json';
 import type { SLIP10Node, SLIP10PathTuple } from '../src';
 import { secp256k1 } from '../src';
+import derivationVectors from './vectors/derivation.json';
 import type { Curve } from '../src/curves';
 import { ed25519Bip32, ed25519 } from '../src/curves';
 import {

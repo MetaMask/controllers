@@ -46,6 +46,9 @@
     "test": "jest && jest-it-up && attw --pack",
     "test:watch": "jest --watch"
   },
+  "resolutions": {
+    "fflate": "0.8.2"
+  },
   "dependencies": {
     "@metamask/scure-bip39": "^2.1.1",
     "@metamask/utils": "^11.0.1",
@@ -70,7 +73,6 @@
     "eslint": "^9.11.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-import-resolver-typescript": "^3.6.3",
-    "eslint-plugin-import": "~2.26.0",
     "eslint-plugin-import-x": "^4.3.0",
     "eslint-plugin-jest": "^28.8.3",
     "eslint-plugin-jsdoc": "^50.2.4",
@@ -87,7 +89,7 @@
     "typescript": "~5.4.5",
     "typescript-eslint": "^8.6.0"
   },
-  "packageManager": "yarn@4.1.1",
+  "packageManager": "yarn@4.16.0",
   "engines": {
     "node": "^18.20 || ^20.17 || >=22"
   },
@@ -97,7 +99,8 @@
   },
   "lavamoat": {
     "allowScripts": {
-      "@lavamoat/preinstall-always-fail": false
+      "@lavamoat/preinstall-always-fail": false,
+      "eslint-plugin-import-x>unrs-resolver": false
     }
   }
 }
