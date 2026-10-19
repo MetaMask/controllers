@@ -1,0 +1,3 @@
+Testing types with tsc and vue-tsc is an experimental feature.
+Breaking changes might not follow SemVer, please pin Vitest's version when using it.
+blob report written to /Users/morten/Development/MetaMask/core/.vitest/blob/blob-7-8.json

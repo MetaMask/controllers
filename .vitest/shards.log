@@ -1,0 +1,9 @@
+shard 1 exit 0
+shard 2 exit 0
+shard 3 exit 0
+shard 4 exit 0
+shard 5 exit 0
+shard 6 exit 0
+shard 7 exit 0
+shard 8 exit 0
+merge exit 0

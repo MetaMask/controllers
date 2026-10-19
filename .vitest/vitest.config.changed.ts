@@ -1,0 +1,1 @@
+import { createRootConfig } from '../scripts/lib/create-vitest-config.js'; export default await createRootConfig(["packages/base-controller","packages/package-template","packages/wallet-framework-docs"]);
