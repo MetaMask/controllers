@@ -1057,14 +1057,14 @@ describe('TransactionPayController', () => {
       function publishTransactions(transactions: TransactionMeta[]): void {
         mocks.publish(
           'TransactionController:stateChange',
-          { transactions } as never,
+          { transactions },
           [],
         );
       }
 
       beforeEach(() => {
         lifecycleListener = jest.fn();
-        mocks.messenger.subscribe(
+        messenger.subscribe(
           'TransactionPayController:solanaPayLifecycle',
           lifecycleListener,
         );
@@ -1185,11 +1185,7 @@ describe('TransactionPayController', () => {
           updateTransactionMock.getMockImplementation();
         updateTransactionMock.mockImplementation((options, fn) => {
           updateImplementation?.(options, fn);
-          mocks.publish(
-            'TransactionController:stateChange',
-            { transactions: [transaction] } as never,
-            [],
-          );
+          publishTransactions([transaction]);
         });
         getRelayStatusMock.mockResolvedValue(getRelayStatusResponse('success'));
         createController();
@@ -1213,11 +1209,7 @@ describe('TransactionPayController', () => {
           updateTransactionMock.getMockImplementation();
         updateTransactionMock.mockImplementation((options, fn) => {
           updateImplementation?.(options, fn);
-          mocks.publish(
-            'TransactionController:stateChange',
-            { transactions: [transaction] } as never,
-            [],
-          );
+          publishTransactions([transaction]);
         });
         getRelayStatusMock.mockResolvedValue(getRelayStatusResponse('success'));
         createController();
