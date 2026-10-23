@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `upgradeSuccessorAccount` method to upgrade an address as the successor of an existing Money Account, which links it to the Money Account on CHOMP, also exposed through the messenger ([#10697](https://github.com/MetaMask/core/pull/10697))
+
 ### Changed
 
+- **BREAKING:** `MoneyAccountUpgradeControllerMessenger` must now allow the `ChompApiService:getDerivedIdentityByAddress` action ([#10697](https://github.com/MetaMask/core/pull/10697))
 - Bump `@metamask/money-account-utils` from `^2.1.0` to `^2.2.0` ([#11203](https://github.com/MetaMask/core/pull/11203))
 
 ## [6.0.0]
