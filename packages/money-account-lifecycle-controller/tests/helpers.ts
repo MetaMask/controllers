@@ -2,6 +2,7 @@ import type {
   DerivedIdentitiesResponse,
   DerivedIdentity,
   DerivedIdentityMigration,
+  IntentEntry,
 } from '@metamask/chomp-api-service';
 import { KeyringTypes } from '@metamask/keyring-controller';
 import type { KeyringControllerState } from '@metamask/keyring-controller';
@@ -51,6 +52,8 @@ export const MFA_IDENTITY: DerivedIdentity = {
   migration: null,
 };
 
+export const MFA_ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000Dd';
+
 export const MIGRATING_IDENTITY: DerivedIdentity & {
   migration: DerivedIdentityMigration;
 } = {
@@ -87,6 +90,8 @@ type Gates = {
 
 type Mocks = {
   getDerivedIdentities: Mock<() => Promise<DerivedIdentitiesResponse>>;
+  getIntentsByAddress: Mock<(address: Hex) => Promise<IntentEntry[]>>;
+  createMfaAccount: Mock<() => Promise<Hex>>;
   getMoneyAccount: Mock<
     (selector?: GetMoneyAccountSelector) => MoneyAccount | undefined
   >;
@@ -164,7 +169,9 @@ function getMessenger(
   rootMessenger.delegate({
     actions: [
       'ChompApiService:getDerivedIdentities',
+      'ChompApiService:getIntentsByAddress',
       'KeyringController:getState',
+      'MfaMigrationController:createMfaAccount',
       'MoneyAccountController:getMoneyAccount',
       'MoneyAccountController:setDefaultMoneyAccount',
       'MoneyAccountUpgradeController:getRegistrationStatus',
@@ -214,6 +221,12 @@ export async function withController<ReturnValue>(
     getDerivedIdentities: vi
       .fn<() => Promise<DerivedIdentitiesResponse>>()
       .mockResolvedValue({ identities: [SFA_IDENTITY] }),
+    getIntentsByAddress: vi
+      .fn<(address: Hex) => Promise<IntentEntry[]>>()
+      .mockResolvedValue([]),
+    createMfaAccount: vi
+      .fn<() => Promise<Hex>>()
+      .mockResolvedValue(MFA_ACCOUNT_ADDRESS),
     getMoneyAccount: vi
       .fn<(selector?: GetMoneyAccountSelector) => MoneyAccount | undefined>()
       .mockImplementation((selector) => {
@@ -260,6 +273,14 @@ export async function withController<ReturnValue>(
   rootMessenger.registerActionHandler(
     'ChompApiService:getDerivedIdentities',
     mocks.getDerivedIdentities,
+  );
+  rootMessenger.registerActionHandler(
+    'ChompApiService:getIntentsByAddress',
+    mocks.getIntentsByAddress,
+  );
+  rootMessenger.registerActionHandler(
+    'MfaMigrationController:createMfaAccount',
+    mocks.createMfaAccount,
   );
   rootMessenger.registerActionHandler('KeyringController:getState', () =>
     buildKeyringControllerState(gates),
