@@ -1,4 +1,4 @@
-import type { IntentEntry } from '@metamask/chomp-api-service';
+import type { DerivedIdentity, IntentEntry } from '@metamask/chomp-api-service';
 import { createDeferredPromise } from '@metamask/utils';
 import type { Hex } from '@metamask/utils';
 import { describe, it, expect } from 'vitest';
@@ -64,7 +64,7 @@ describe('MoneyAccountLifecycleController', () => {
       );
     });
 
-    it.each([
+    it.each<{ description: string; identities: DerivedIdentity[] }>([
       { description: 'the money account', identities: [MIGRATING_IDENTITY] },
       {
         description: 'another identity',
@@ -78,13 +78,11 @@ describe('MoneyAccountLifecycleController', () => {
           },
         ],
       },
-    ] as const)(
+    ])(
       'does not start a second migration while $description is migrating',
       async ({ identities }) => {
         await withController(async ({ controller, mocks }) => {
-          mocks.getDerivedIdentities.mockResolvedValue({
-            identities: [...identities],
-          });
+          mocks.getDerivedIdentities.mockResolvedValue({ identities });
 
           await expect(controller.startMigration()).rejects.toThrow(
             'A Money Account identity is already migrating',
@@ -138,7 +136,7 @@ describe('MoneyAccountLifecycleController', () => {
       });
     });
 
-    it.each([
+    it.each<{ description: string; identity: DerivedIdentity }>([
       {
         description: 'the current address of an identity',
         identity: {
@@ -155,7 +153,7 @@ describe('MoneyAccountLifecycleController', () => {
           previousAddresses: [MFA_ACCOUNT_ADDRESS.toLowerCase() as Hex],
         },
       },
-    ] as const)(
+    ])(
       'does not migrate to an MFA address that is $description',
       async ({ identity }) => {
         await withController(async ({ controller, mocks }) => {
@@ -173,7 +171,18 @@ describe('MoneyAccountLifecycleController', () => {
     it('does not migrate to an MFA address that already has intents', async () => {
       await withController(async ({ controller, mocks }) => {
         mocks.getIntentsByAddress.mockResolvedValue([
-          { account: MFA_ACCOUNT_ADDRESS } as IntentEntry,
+          {
+            account: MFA_ACCOUNT_ADDRESS,
+            delegationHash: `0x${'ab'.repeat(32)}`,
+            chainId: '0x1',
+            status: 'active',
+            metadata: {
+              allowance: '0x1',
+              tokenAddress: '0x0000000000000000000000000000000000000001',
+              tokenSymbol: 'mUSD',
+              type: 'cash-deposit',
+            },
+          } satisfies IntentEntry,
         ]);
 
         await expect(controller.startMigration()).rejects.toThrow(
