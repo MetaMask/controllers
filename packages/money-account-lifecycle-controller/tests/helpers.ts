@@ -13,6 +13,7 @@ import type {
   MockAnyNamespace,
 } from '@metamask/messenger';
 import type {
+  CreateMoneyAccountParams,
   GetMoneyAccountSelector,
   MoneyAccount,
 } from '@metamask/money-account-controller';
@@ -54,6 +55,11 @@ export const MFA_IDENTITY: DerivedIdentity = {
 
 export const MFA_ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000Dd';
 
+export const MFA_MONEY_ACCOUNT = {
+  id: MPC_ACCOUNT_ID,
+  address: MFA_ACCOUNT_ADDRESS,
+} as MoneyAccount;
+
 export const MIGRATING_IDENTITY: DerivedIdentity & {
   migration: DerivedIdentityMigration;
 } = {
@@ -91,7 +97,9 @@ type Gates = {
 type Mocks = {
   getDerivedIdentities: Mock<() => Promise<DerivedIdentitiesResponse>>;
   getIntentsByAddress: Mock<(address: Hex) => Promise<IntentEntry[]>>;
-  createMfaAccount: Mock<() => Promise<Hex>>;
+  createMoneyAccount: Mock<
+    (params: CreateMoneyAccountParams) => Promise<MoneyAccount>
+  >;
   getMoneyAccount: Mock<
     (selector?: GetMoneyAccountSelector) => MoneyAccount | undefined
   >;
@@ -171,7 +179,7 @@ function getMessenger(
       'ChompApiService:getDerivedIdentities',
       'ChompApiService:getIntentsByAddress',
       'KeyringController:getState',
-      'MfaMigrationController:createMfaAccount',
+      'MoneyAccountController:createMoneyAccount',
       'MoneyAccountController:getMoneyAccount',
       'MoneyAccountController:setDefaultMoneyAccount',
       'MoneyAccountUpgradeController:getRegistrationStatus',
@@ -224,9 +232,9 @@ export async function withController<ReturnValue>(
     getIntentsByAddress: vi
       .fn<(address: Hex) => Promise<IntentEntry[]>>()
       .mockResolvedValue([]),
-    createMfaAccount: vi
-      .fn<() => Promise<Hex>>()
-      .mockResolvedValue(MFA_ACCOUNT_ADDRESS),
+    createMoneyAccount: vi
+      .fn<(params: CreateMoneyAccountParams) => Promise<MoneyAccount>>()
+      .mockResolvedValue(MFA_MONEY_ACCOUNT),
     getMoneyAccount: vi
       .fn<(selector?: GetMoneyAccountSelector) => MoneyAccount | undefined>()
       .mockImplementation((selector) => {
@@ -279,8 +287,8 @@ export async function withController<ReturnValue>(
     mocks.getIntentsByAddress,
   );
   rootMessenger.registerActionHandler(
-    'MfaMigrationController:createMfaAccount',
-    mocks.createMfaAccount,
+    'MoneyAccountController:createMoneyAccount',
+    mocks.createMoneyAccount,
   );
   rootMessenger.registerActionHandler('KeyringController:getState', () =>
     buildKeyringControllerState(gates),

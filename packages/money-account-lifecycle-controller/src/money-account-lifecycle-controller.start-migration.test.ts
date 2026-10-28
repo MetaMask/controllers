@@ -1,4 +1,5 @@
 import type { DerivedIdentity, IntentEntry } from '@metamask/chomp-api-service';
+import type { MoneyAccount } from '@metamask/money-account-controller';
 import { createDeferredPromise } from '@metamask/utils';
 import type { Hex } from '@metamask/utils';
 import { describe, it, expect } from 'vitest';
@@ -9,6 +10,7 @@ import {
   SFA_IDENTITY,
   MFA_IDENTITY,
   MFA_ACCOUNT_ADDRESS,
+  MFA_MONEY_ACCOUNT,
   MIGRATING_IDENTITY,
   getLifecycle,
   withController,
@@ -16,7 +18,7 @@ import {
 
 describe('MoneyAccountLifecycleController', () => {
   describe('startMigration', () => {
-    it('creates an MFA account and stops at the unimplemented migration once the pre-checks pass', async () => {
+    it('creates the MPC Money Account and stops at the unimplemented migration once the pre-checks pass', async () => {
       await withController(async ({ rootMessenger, mocks }) => {
         await expect(
           rootMessenger.call('MoneyAccountLifecycleController:startMigration'),
@@ -25,7 +27,8 @@ describe('MoneyAccountLifecycleController', () => {
         );
 
         expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(1);
-        expect(mocks.createMfaAccount).toHaveBeenCalledTimes(1);
+        expect(mocks.createMoneyAccount).toHaveBeenCalledTimes(1);
+        expect(mocks.createMoneyAccount).toHaveBeenCalledWith({ type: 'mpc' });
         expect(mocks.getIntentsByAddress).toHaveBeenCalledWith(
           MFA_ACCOUNT_ADDRESS,
         );
@@ -87,7 +90,7 @@ describe('MoneyAccountLifecycleController', () => {
           await expect(controller.startMigration()).rejects.toThrow(
             'A Money Account identity is already migrating',
           );
-          expect(mocks.createMfaAccount).not.toHaveBeenCalled();
+          expect(mocks.createMoneyAccount).not.toHaveBeenCalled();
         });
       },
     );
@@ -106,7 +109,7 @@ describe('MoneyAccountLifecycleController', () => {
           await expect(controller.startMigration()).rejects.toThrow(
             `Money Account ${MONEY_ACCOUNT_ADDRESS} cannot be migrated while it is '${type}'`,
           );
-          expect(mocks.createMfaAccount).not.toHaveBeenCalled();
+          expect(mocks.createMoneyAccount).not.toHaveBeenCalled();
         });
       },
     );
@@ -193,20 +196,20 @@ describe('MoneyAccountLifecycleController', () => {
 
     it('does not start a migration while another is in flight, and allows one once it settles', async () => {
       await withController(async ({ controller, mocks }) => {
-        const { promise, resolve } = createDeferredPromise<Hex>();
-        mocks.createMfaAccount.mockReturnValueOnce(promise);
+        const { promise, resolve } = createDeferredPromise<MoneyAccount>();
+        mocks.createMoneyAccount.mockReturnValueOnce(promise);
 
         const first = controller.startMigration();
         await expect(controller.startMigration()).rejects.toThrow(
           'A Money Account migration is already in progress',
         );
-        resolve(MFA_ACCOUNT_ADDRESS);
+        resolve(MFA_MONEY_ACCOUNT);
         await expect(first).rejects.toThrow('is not implemented yet');
 
         await expect(controller.startMigration()).rejects.toThrow(
           'is not implemented yet',
         );
-        expect(mocks.createMfaAccount).toHaveBeenCalledTimes(2);
+        expect(mocks.createMoneyAccount).toHaveBeenCalledTimes(2);
       });
     });
   });
