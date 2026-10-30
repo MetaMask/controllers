@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expose `updateBatchTransactions` method through the TransactionController messenger ([#11250](https://github.com/MetaMask/core/pull/11250))
+
 ## [73.0.0]
 
 ### Changed
