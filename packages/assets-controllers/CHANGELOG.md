@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expose `startPolling` and `stopPollingByToken` through CurrencyRateController messenger
+- Expose `isNftOwner`, `addNftVerifyOwnership`, `addNft`, `removeNft`, `removeAndIgnoreNft`, `checkAndUpdateSingleNftOwnershipStatus`, and `checkAndUpdateAllNftsOwnershipStatus` through NftController messenger
+- Expose `detectNfts` through NftDetectionController messenger
+- Expose `startPolling` and `stopPollingByToken` through TokenDetectionController messenger
+- Expose `startPolling` and `stopPollingByToken` through DeFiPositionsController messenger
+
 ## [113.0.1]
 
 ### Changed

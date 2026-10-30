@@ -20,10 +20,16 @@ import type { DefiPositionResponse } from './fetch-positions.js';
 import { buildPositionFetcher } from './fetch-positions.js';
 import { groupDeFiPositions } from './group-defi-positions.js';
 import type { GroupedDeFiPositions } from './group-defi-positions.js';
+import type { DeFiPositionsControllerMethodActions } from './DeFiPositionsController-method-action-types.js';
 
 const TEN_MINUTES_IN_MS = 600_000;
 
 const controllerName = 'DeFiPositionsController';
+
+const MESSENGER_EXPOSED_METHODS = [
+  'startPolling',
+  'stopPollingByPollingToken',
+] as const;
 
 export type GroupedDeFiPositionsPerChain = {
   [chain: Hex]: GroupedDeFiPositions;
@@ -86,7 +92,8 @@ export const getDefaultDefiPositionsControllerState =
   };
 
 export type DeFiPositionsControllerActions =
-  DeFiPositionsControllerGetStateAction;
+  | DeFiPositionsControllerGetStateAction
+  | DeFiPositionsControllerMethodActions;
 
 export type DeFiPositionsControllerGetStateAction = ControllerGetStateAction<
   typeof controllerName,
@@ -204,6 +211,11 @@ export class DeFiPositionsController extends StaticIntervalPollingController()<
     );
 
     this.#trackEvent = trackEvent;
+
+    this.messenger.registerMethodActionHandlers(
+      this,
+      MESSENGER_EXPOSED_METHODS,
+    );
   }
 
   async _executePoll(): Promise<void> {
