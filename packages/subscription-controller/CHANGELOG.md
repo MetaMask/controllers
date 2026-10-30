@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expose `startPolling` and `stopPollingByPollingToken` methods through the SubscriptionController messenger
+
 ## [15.1.2]
 
 ### Changed
