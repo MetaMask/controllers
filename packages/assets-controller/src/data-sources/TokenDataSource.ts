@@ -511,11 +511,12 @@ export class TokenDataSource {
             assetData.occurrences,
           ]),
         );
+        const judgeableAssetIds = [...candidateByLowerId.values()].filter(
+          (id) => occurrencesByLowerId.has(id.toLowerCase()),
+        );
         const spamAssetIds = new Set(
           await findLowOccurrenceSpamAssetIds({
-            assetIds: [...candidateByLowerId.values()].filter((id) =>
-              occurrencesByLowerId.has(id.toLowerCase()),
-            ),
+            assetIds: judgeableAssetIds,
             getOccurrences: (id) => occurrencesByLowerId.get(id.toLowerCase()),
             getOccurrenceFloor: (id) =>
               getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors),
