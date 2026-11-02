@@ -381,8 +381,21 @@ describe('MoneyAccountLifecycleController', () => {
       });
     });
 
+    it('throws without fetching or upgrading when there is no money account', async () => {
+      await withController(
+        { moneyAccountAddress: undefined },
+        async ({ controller, mocks }) => {
+          await expect(controller.upgradeMoneyAccount()).rejects.toThrow(
+            'No Money Account to upgrade',
+          );
+
+          expect(mocks.getDerivedIdentities).not.toHaveBeenCalled();
+          expect(mocks.upgradeAccount).not.toHaveBeenCalled();
+        },
+      );
+    });
+
     it.each([
-      { reason: 'there is no money account', moneyAccountAddress: undefined },
       { reason: 'the feature is disabled', isEnabled: false },
       { reason: 'the wallet is locked', isUnlocked: false },
       { reason: 'there is no HD keyring', hasHdKeyring: false },

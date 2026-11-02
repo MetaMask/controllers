@@ -374,6 +374,86 @@ describe('MoneyAccountLifecycleController', () => {
     });
   });
 
+  describe('refresh', () => {
+    it('refetches identities and records the lifecycle another device moved it to', async () => {
+      await withController(async ({ controller, mocks, init }) => {
+        await init();
+        mocks.getDerivedIdentities.mockResolvedValue({
+          identities: [MFA_IDENTITY],
+        });
+
+        await controller.refresh();
+
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
+        expect(getLifecycle(controller)).toStrictEqual({
+          type: 'mfa',
+          identity: MFA_IDENTITY,
+        });
+      });
+    });
+
+    it('refreshes the registration status', async () => {
+      await withController(async ({ controller, mocks, init }) => {
+        await init();
+        mocks.getRegistrationStatus.mockResolvedValue({ isRegistered: false });
+
+        await controller.refresh();
+        await flushPromises();
+
+        expect(controller.state.addressRegistrations).toStrictEqual({
+          [MONEY_ACCOUNT_KEY]: { isRegistered: false },
+        });
+      });
+    });
+
+    it('supersedes a fetch in flight so its stale response is discarded', async () => {
+      await withController(async ({ controller, mocks }) => {
+        const { promise, resolve } =
+          createDeferredPromise<DerivedIdentitiesResponse>();
+        mocks.getDerivedIdentities
+          .mockReturnValueOnce(promise)
+          .mockResolvedValueOnce({ identities: [MFA_IDENTITY] });
+        controller.init();
+
+        const refresh = controller.refresh();
+        resolve({ identities: [SFA_IDENTITY] });
+        await refresh;
+        await flushPromises();
+
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
+        expect(getLifecycle(controller)).toStrictEqual({
+          type: 'mfa',
+          identity: MFA_IDENTITY,
+        });
+      });
+    });
+
+    it('rejects with the error when fetching identities fails', async () => {
+      await withController(async ({ controller, mocks, init }) => {
+        await init();
+        const error = new Error('CHOMP unavailable');
+        mocks.getDerivedIdentities.mockRejectedValue(error);
+
+        await expect(controller.refresh()).rejects.toBe(error);
+      });
+    });
+
+    it.each([
+      { reason: 'the feature is disabled', isEnabled: false },
+      { reason: 'the wallet is locked', isUnlocked: false },
+      { reason: 'there is no HD keyring', hasHdKeyring: false },
+    ])(
+      'resolves without fetching when $reason',
+      async ({ reason: _reason, ...gates }) => {
+        await withController(gates, async ({ controller, mocks }) => {
+          await controller.refresh();
+
+          expect(mocks.getDerivedIdentities).not.toHaveBeenCalled();
+        });
+      },
+    );
+  });
+
   describe('metadata', () => {
     it('includes expected state in debug snapshots', async () => {
       await withController(({ controller }) => {
@@ -429,7 +509,11 @@ describe('MoneyAccountLifecycleController', () => {
             controller.metadata,
             'usedInUi',
           ),
-        ).toMatchInlineSnapshot(`{}`);
+        ).toMatchInlineSnapshot(`
+          {
+            "moneyAccounts": {},
+          }
+        `);
       });
     });
   });
@@ -445,6 +529,20 @@ describe('MoneyAccountLifecycleController', () => {
         rootMessenger.call('MoneyAccountLifecycleController:init');
 
         expect(initSpy).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  describe('MoneyAccountLifecycleController:refresh', () => {
+    it('calls refresh on the controller', async () => {
+      const refreshSpy = vi
+        .spyOn(MoneyAccountLifecycleController.prototype, 'refresh')
+        .mockResolvedValue(undefined);
+
+      await withController(async ({ rootMessenger }) => {
+        await rootMessenger.call('MoneyAccountLifecycleController:refresh');
+
+        expect(refreshSpy).toHaveBeenCalledTimes(1);
       });
     });
   });

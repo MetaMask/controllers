@@ -46,22 +46,32 @@ export type MoneyAccountLifecycleControllerGetMoneyAccountIdentityAction = {
 };
 
 /**
- * Makes one attempt to upgrade the primary Money Account through
- * `MoneyAccountUpgradeController`, then refreshes its recorded registration
- * status. Clients own when this runs and how failed attempts are retried.
+ * Refetches derived identities from CHOMP and re-records the Money Account
+ * lifecycle and registration statuses. CHOMP cannot push updates, so clients
+ * call this to pick up changes made elsewhere, such as another device
+ * migrating the Money Account to MFA (for example, when a screen gains focus).
  *
- * Uses the recorded lifecycle. When none has been recorded, waits for the
- * latest identity fetch, starting one if none is in flight, and resolves
- * without upgrading if the feature is disabled or the wallet stops being
- * ready meanwhile. Only a Money Account that is not in an identity or is a
- * valid SFA is upgraded; a migrating Money Account is frozen by CHOMP, and a
- * valid MFA has already moved on. Concurrent calls share the attempt in
- * flight.
+ * @returns A promise that resolves once the latest fetch has been recorded,
+ * or straight away when the feature is disabled or the wallet is not ready.
+ * @throws The error from fetching identities, unchanged.
+ */
+export type MoneyAccountLifecycleControllerRefreshAction = {
+  type: `MoneyAccountLifecycleController:refresh`;
+  handler: MoneyAccountLifecycleController['refresh'];
+};
+
+/**
+ * Triggers the Money Account upgrade process for the primary Money Account,
+ * including its EIP-7702 upgrade, through `MoneyAccountUpgradeController`.
+ * Only a Money Account that is not in an identity or is a valid SFA is
+ * upgraded. Makes a single attempt; clients decide when to call it and how to
+ * retry. Concurrent calls share the attempt in flight.
  *
  * @returns A promise that resolves once the attempt completes, or straight
- * away when the feature is unavailable, there is no Money Account, or its
- * lifecycle cannot be upgraded.
- * @throws The error from fetching identities or from the upgrade, unchanged.
+ * away when the feature is disabled, the wallet is not ready, or the Money
+ * Account cannot be upgraded.
+ * @throws When there is no Money Account, or the error from fetching
+ * identities or from the upgrade, unchanged.
  */
 export type MoneyAccountLifecycleControllerUpgradeMoneyAccountAction = {
   type: `MoneyAccountLifecycleController:upgradeMoneyAccount`;
@@ -74,4 +84,5 @@ export type MoneyAccountLifecycleControllerUpgradeMoneyAccountAction = {
 export type MoneyAccountLifecycleControllerMethodActions =
   | MoneyAccountLifecycleControllerInitAction
   | MoneyAccountLifecycleControllerGetMoneyAccountIdentityAction
+  | MoneyAccountLifecycleControllerRefreshAction
   | MoneyAccountLifecycleControllerUpgradeMoneyAccountAction;
