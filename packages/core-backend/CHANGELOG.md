@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `TokenApiClient.fetchV2Assets` and `getV2AssetsQueryOptions` for Token API `GET /v2/assets`, supporting `includeLaunchpadData` and `includeTokenSecurityData`, along with `V2AssetResponse` and `V2AssetsQueryOptions` types ([#PR](https://github.com/MetaMask/core/pull/PR))
+
 ## [13.0.0]
 
 ### Added

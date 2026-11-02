@@ -19,6 +19,7 @@ import type {
   FungibleAssetMetadata,
   DataResponse,
 } from '../types.js';
+import { findLaunchpadAssetIds } from '../utils/findLaunchpadAssetIds.js';
 import { getAssetIdsForMetadataFetch } from '../utils/getAssetIdsForMetadataFetch.js';
 import { fetchWithTimeout } from '../utils/index.js';
 import { reduceInBatchesSerially } from './evm-rpc-services/index.js';
@@ -278,6 +279,27 @@ export class TokenDataSource {
   }
 
   /**
+   * Returns the non-malicious launchpad tokens among `assetIds`, which are
+   * exempt from occurrence-floor filtering. Fails closed to an empty set so a
+   * failed lookup never lets extra tokens through.
+   *
+   * @param assetIds - CAIP-19 asset IDs that failed the occurrence floor.
+   * @returns Lower-cased asset IDs of launchpad tokens to keep.
+   */
+  async #getLaunchpadAssetIds(assetIds: string[]): Promise<Set<string>> {
+    try {
+      return await findLaunchpadAssetIds({
+        assetIds,
+        apiClient: this.#apiClient,
+        timeoutMs: this.#fetchTimeoutMs,
+      });
+    } catch (error) {
+      log('Failed to fetch launchpad data', { error });
+      return new Set();
+    }
+  }
+
+  /**
    * Filters asset IDs to only include those from supported networks.
    *
    * @param assetIds - Array of CAIP-19 asset IDs
@@ -496,6 +518,16 @@ export class TokenDataSource {
           }
         }
 
+        // Launchpad tokens have few occurrences by nature; keep them.
+        const launchpadIds = await this.#getLaunchpadAssetIds([
+          ...spamAssetIds,
+        ]);
+        for (const id of [...spamAssetIds]) {
+          if (launchpadIds.has(id.toLowerCase())) {
+            spamAssetIds.delete(id);
+          }
+        }
+
         if (spamAssetIds.size > 0) {
           cleanResponseSpam(spamAssetIds, response);
           log('Filtered low-occurrence websocket assets', {
@@ -631,15 +663,23 @@ export class TokenDataSource {
         // can import whatever they want and we must keep their metadata even
         // if the API has fewer aggregator hits than the floor.
         // Balance-only heals also bypass — see `balanceHealAssetIds` below.
-        const allowedEvmIds = new Set(
-          evmErc20Ids.filter(
-            (id) =>
+        const belowFloorEvmIds = evmErc20Ids.filter(
+          (id) =>
+            !(
               customAssetIds.has(id.toLowerCase()) ||
               balanceHealAssetIds.has(id.toLowerCase()) ||
               (occurrencesByAssetId.get(id) ?? 0) >=
                 getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors) ||
-              id.includes(`/erc20:${MUSD_ADDRESS_LOWERCASE}`),
-          ),
+              id.includes(`/erc20:${MUSD_ADDRESS_LOWERCASE}`)
+            ),
+        );
+        // Launchpad tokens (not malicious) bypass the occurrence floor too.
+        const launchpadIds = await this.#getLaunchpadAssetIds(belowFloorEvmIds);
+        const belowFloorEvmIdSet = new Set(
+          belowFloorEvmIds.filter((id) => !launchpadIds.has(id.toLowerCase())),
+        );
+        const allowedEvmIds = new Set(
+          evmErc20Ids.filter((id) => !belowFloorEvmIdSet.has(id)),
         );
 
         // Non-EVM: Blockaid bulk scan.

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#PR](https://github.com/MetaMask/core/pull/PR))
+  - Applies to metadata enrichment, websocket balance updates, and the unlock spam cleanup.
+
 ## [20.1.0]
 
 ### Added

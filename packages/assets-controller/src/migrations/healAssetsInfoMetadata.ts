@@ -20,6 +20,7 @@ import type {
   AssetsControllerState,
 } from '../types.js';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { findLaunchpadAssetIds } from '../utils/findLaunchpadAssetIds.js';
 
 /**
  * TEMPORARY MODULE — remove in a future release.
@@ -781,11 +782,22 @@ async function findBelowFloorAssetIds(
       assets.map((asset) => [asset.assetId.toLowerCase(), asset.occurrences]),
     );
 
-    return assetIds.filter((assetId) => {
+    const belowFloorAssetIds = assetIds.filter((assetId) => {
       const chainReference = assetId.split(':')[1]?.split('/')[0] ?? '';
       const floor = floors[chainReference] ?? DEFAULT_OCCURRENCE_FLOOR;
       return (occurrencesByLowerId.get(assetId.toLowerCase()) ?? 0) < floor;
     });
+
+    // Launchpad tokens (not malicious) are exempt from the occurrence floor.
+    const launchpadAssetIds = await findLaunchpadAssetIds({
+      assetIds: belowFloorAssetIds,
+      apiClient,
+      timeoutMs: FETCH_TIMEOUT_MS,
+      fetchOptions: { staleTime: 0, gcTime: 0 },
+    });
+    return belowFloorAssetIds.filter(
+      (assetId) => !launchpadAssetIds.has(assetId.toLowerCase()),
+    );
   } catch (error) {
     cleanupLog('Failed to fetch assets', error);
     throw error;
