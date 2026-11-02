@@ -42,7 +42,6 @@ export default defineConfig({
     },
 
     coverage: {
-      // Coverage is opt in through the `test:coverage` script, which CI runs.
       enabled: false,
 
       // We use `istanbul` because on 2026-10-25 `v8` was only about 5% faster
