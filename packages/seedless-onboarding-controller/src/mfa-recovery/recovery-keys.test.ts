@@ -17,7 +17,6 @@ import {
   serializeRecoveryKeys,
   serializeRecoveryKeysItem,
   serializeWrappedKeys,
-  TOPRF_RECOVERY_VERIFIER,
   WRAPPED_KEYS_PREFIX,
 } from './recovery-keys.js';
 import type { RecoveryKeys, WrappedKeySet } from './recovery-keys.js';
@@ -65,10 +64,6 @@ function rawItem(prefix: string, body: string): Uint8Array {
 
 describe('recovery-keys', () => {
   describe('constants', () => {
-    it('uses the toprf-recovery verifier for the recovery TOPRF instance', () => {
-      expect(TOPRF_RECOVERY_VERIFIER).toBe('toprf-recovery');
-    });
-
     it('exposes the expected prefixes and recovery-keys item type', () => {
       expect(RECOVERY_KEYS_PREFIX).toBe('MFA_RECOVERY_KEYS_V1');
       expect(WRAPPED_KEYS_PREFIX).toBe('MFA_WRAPPED_KEYS_V1');

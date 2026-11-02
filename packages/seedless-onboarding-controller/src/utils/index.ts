@@ -15,7 +15,6 @@ export {
 export {
   RECOVERY_KEYS_PREFIX,
   RECOVERY_KEYS_SECRET_TYPE,
-  TOPRF_RECOVERY_VERIFIER,
   WRAPPED_KEYS_PREFIX,
   derivePubKey,
   isRecoveryKeysItem,

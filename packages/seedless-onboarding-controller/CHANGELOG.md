@@ -11,12 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
 - Add `authenticateForRecovery`, `getRecoveryStatus` and `storeRecoveryKeys` methods and the matching `SeedlessOnboardingController:authenticateForRecovery`, `SeedlessOnboardingController:getRecoveryStatus` and `SeedlessOnboardingController:storeRecoveryKeys` messenger actions ([#0000](https://github.com/MetaMask/core/pull/0000))
-  - `authenticateForRecovery` authenticates on the `toprf-recovery` verifier, using the aal2 token as the id token and its `sub` (profile ID) as the user ID.
+  - `authenticateForRecovery` takes the recovery `authConnectionId` (sub-verifier) and `groupedAuthConnectionId` (aggregate verifier) as caller-supplied params, uses the aal2 token as the id token and its `sub` (profile ID) as the user ID.
   - `changePassword` re-writes the MFA recovery wrapped-keys item with the new TOPRF1 keys when recovery is enabled (best-effort).
-- Add non-persisted `recoverySession` state, holding the `toprf-recovery` node auth tokens, their expiry, the profile ID and whether the nodes hold a recovery share, cleared on lock and `clearState` ([#0000](https://github.com/MetaMask/core/pull/0000))
+- Add non-persisted `recoverySession` state, holding the recovery node auth tokens, their expiry, the profile ID, the recovery verifier IDs and whether the nodes hold a recovery share, cleared on lock and `clearState` ([#0000](https://github.com/MetaMask/core/pull/0000))
   - Also export the `RecoverySession` type.
 - Add `RecoveryStatus` and `RecoveryStatusResult` types, where `RecoveryStatusResult` has `status`, `verified` and an optional `hasRecoveryShare` ([#0000](https://github.com/MetaMask/core/pull/0000))
-- Add MFA recovery constants `TOPRF_RECOVERY_VERIFIER` (`'toprf-recovery'`), `RECOVERY_KEYS_PREFIX` and `WRAPPED_KEYS_PREFIX`, and `RecoveryKeys`/`WrappedKeySet` types ([#0000](https://github.com/MetaMask/core/pull/0000))
+- Add MFA recovery constants `RECOVERY_KEYS_PREFIX` and `WRAPPED_KEYS_PREFIX`, and `RecoveryKeys`/`WrappedKeySet` types ([#0000](https://github.com/MetaMask/core/pull/0000))
   - The recovery-keys item is stored next to the secret data items as secret metadata with the `mfaRecoveryKeys` type and no data type, so it is re-encrypted on password change.
   - Clients that treat every secret that is not a private key as a mnemonic cannot restore an account holding this item; only enable MFA recovery for client versions that use this release.
 - Add `Aal2Required`, `RecoveryKeyShareConflict` and `InvalidRecoveryKeysItem` error messages ([#0000](https://github.com/MetaMask/core/pull/0000))

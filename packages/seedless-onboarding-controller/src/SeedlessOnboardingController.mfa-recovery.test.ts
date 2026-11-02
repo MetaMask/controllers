@@ -31,7 +31,6 @@ import {
   RECOVERY_KEYS_SECRET_TYPE,
   serializeRecoveryKeysItem,
   serializeWrappedKeys,
-  TOPRF_RECOVERY_VERIFIER,
 } from './mfa-recovery/recovery-keys.js';
 import { SecretMetadata } from './SecretMetadata.js';
 
@@ -46,9 +45,12 @@ describe('SeedlessOnboardingController', () => {
       { authToken: 'aal2Token2', nodeIndex: 2, nodePubKey: 'nodePubKey2' },
       { authToken: 'aal2Token3', nodeIndex: 3, nodePubKey: 'nodePubKey3' },
     ];
+    const AAL2_AUTH_CONNECTION_ID = 'mm-recovery-dev-aal2-common';
+    const AAL2_GROUPED_AUTH_CONNECTION_ID = 'mm-recovery-aal2-dev';
     const AAL2_REQUEST = {
       nodeAuthTokens: AAL2_NODE_AUTH_TOKENS,
-      authConnectionId: TOPRF_RECOVERY_VERIFIER,
+      authConnectionId: AAL2_AUTH_CONNECTION_ID,
+      groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
       userId: AAL2_USER_ID,
     };
 
@@ -118,7 +120,7 @@ describe('SeedlessOnboardingController', () => {
      * @param toprfClient - The ToprfSecureBackup instance.
      * @param keys - The keys to answer with.
      * @param keys.password - The TOPRF1 (social login verifier) auth public key.
-     * @param keys.recovery - The TOPRF2 (`toprf-recovery`) auth public key, or
+     * @param keys.recovery - The TOPRF2 (recovery verifier) auth public key, or
      * an error to reject with.
      * @returns The spy.
      */
@@ -132,7 +134,7 @@ describe('SeedlessOnboardingController', () => {
       return vi
         .spyOn(toprfClient, 'fetchAuthPubKey')
         .mockImplementation(async ({ authConnectionId: verifier }) => {
-          if (verifier === TOPRF_RECOVERY_VERIFIER) {
+          if (verifier === AAL2_AUTH_CONNECTION_ID) {
             if (keys.recovery === undefined) {
               throw new Error('unexpected TOPRF2 fetchAuthPubKey');
             }
@@ -155,7 +157,7 @@ describe('SeedlessOnboardingController', () => {
       return spy.mock.calls.filter(
         ([params]) =>
           (params as { authConnectionId: string }).authConnectionId ===
-          TOPRF_RECOVERY_VERIFIER,
+          AAL2_AUTH_CONNECTION_ID,
       );
     }
 
@@ -240,7 +242,7 @@ describe('SeedlessOnboardingController', () => {
      * @param args.baseMessenger - The root messenger.
      * @param options - The options.
      * @param options.hasRecoveryShare - Whether the nodes hold a
-     * `toprf-recovery` share.
+     * recovery verifier share.
      */
     async function authenticateAal2(
       {
@@ -260,6 +262,8 @@ describe('SeedlessOnboardingController', () => {
             exp: futureExp(),
             sub: AAL2_USER_ID,
           }),
+          authConnectionId: AAL2_AUTH_CONNECTION_ID,
+          groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
         },
       );
     }
@@ -294,7 +298,7 @@ describe('SeedlessOnboardingController', () => {
     }
 
     describe('authenticateForRecovery', () => {
-      it('authenticates on the toprf-recovery verifier with the token sub and stores the aal2 set', async () => {
+      it('authenticates on the recovery verifier with the token sub and stores the aal2 set', async () => {
         const exp = futureExp();
         const aal2Token = createMockJWTToken({ exp, sub: AAL2_USER_ID });
         await withController(
@@ -319,12 +323,17 @@ describe('SeedlessOnboardingController', () => {
 
             await baseMessenger.call(
               'SeedlessOnboardingController:authenticateForRecovery',
-              { aal2Token },
+              {
+                aal2Token,
+                authConnectionId: AAL2_AUTH_CONNECTION_ID,
+                groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
+              },
             );
 
             expect(mockRefreshJWTToken).not.toHaveBeenCalled();
             expect(authenticateSpy).toHaveBeenCalledWith({
-              authConnectionId: TOPRF_RECOVERY_VERIFIER,
+              authConnectionId: AAL2_AUTH_CONNECTION_ID,
+              groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
               userId: AAL2_USER_ID,
               idTokens: [aal2Token],
             });
@@ -332,6 +341,8 @@ describe('SeedlessOnboardingController', () => {
               nodeAuthTokens: AAL2_NODE_AUTH_TOKENS,
               expiresAt: exp,
               userId: AAL2_USER_ID,
+              authConnectionId: AAL2_AUTH_CONNECTION_ID,
+              groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
               hasRecoveryShare: true,
             });
             expect(controller.state.nodeAuthTokens).toStrictEqual(
@@ -376,7 +387,11 @@ describe('SeedlessOnboardingController', () => {
               await expect(
                 baseMessenger.call(
                   'SeedlessOnboardingController:authenticateForRecovery',
-                  { aal2Token },
+                  {
+                    aal2Token,
+                    authConnectionId: AAL2_AUTH_CONNECTION_ID,
+                    groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
+                  },
                 ),
               ).rejects.toThrow(
                 SeedlessOnboardingControllerErrorMessage.Aal2Required,
@@ -410,6 +425,8 @@ describe('SeedlessOnboardingController', () => {
                     exp: futureExp(),
                     sub: AAL2_USER_ID,
                   }),
+                  authConnectionId: AAL2_AUTH_CONNECTION_ID,
+                  groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
                 },
               ),
             ).rejects.toThrow(
@@ -429,6 +446,8 @@ describe('SeedlessOnboardingController', () => {
                 nodeAuthTokens: AAL2_NODE_AUTH_TOKENS,
                 expiresAt: futureExp(),
                 userId: AAL2_USER_ID,
+                authConnectionId: AAL2_AUTH_CONNECTION_ID,
+                groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
                 hasRecoveryShare: true,
               },
             },
@@ -1176,6 +1195,8 @@ describe('SeedlessOnboardingController', () => {
               nodeAuthTokens: AAL2_NODE_AUTH_TOKENS,
               expiresAt: Math.floor(Date.now() / 1000) - 10,
               userId: AAL2_USER_ID,
+              authConnectionId: AAL2_AUTH_CONNECTION_ID,
+              groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
               hasRecoveryShare: true,
             },
           },
@@ -1187,6 +1208,8 @@ describe('SeedlessOnboardingController', () => {
               nodeAuthTokens: AAL2_NODE_AUTH_TOKENS,
               expiresAt: futureExp(),
               userId: '',
+              authConnectionId: AAL2_AUTH_CONNECTION_ID,
+              groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
               hasRecoveryShare: true,
             },
           },
@@ -1198,6 +1221,8 @@ describe('SeedlessOnboardingController', () => {
               nodeAuthTokens: [],
               expiresAt: futureExp(),
               userId: AAL2_USER_ID,
+              authConnectionId: AAL2_AUTH_CONNECTION_ID,
+              groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
               hasRecoveryShare: true,
             },
           },
@@ -1448,6 +1473,51 @@ describe('SeedlessOnboardingController', () => {
             hasRecoveryShare: true,
           });
         });
+      });
+
+      it('writes the new TOPRF1 keys to the wrapped-keys item without an aal2 set', async () => {
+        await withUnlockedController(
+          async ({ controller, toprfClient, baseMessenger }) => {
+            expect(controller.state.recoverySession).toBeUndefined();
+            const recoveryKeys = createRandomRecoveryKeys();
+            const newKeySet = mockPasswordChange(toprfClient);
+            const fetchAuthPubKeySpy = mockRecoveryFetchAuthPubKey(
+              toprfClient,
+              {
+                password: getVaultKeySet().authKeyPair.pk,
+              },
+            );
+            mockNamespaces(toprfClient, [
+              {
+                decKey: newKeySet.encKey,
+                items: recoveryKeysItem(recoveryKeys),
+              },
+            ]);
+            const addSpy = vi
+              .spyOn(toprfClient, 'addSecretDataItem')
+              .mockResolvedValue();
+
+            await baseMessenger.call(
+              'SeedlessOnboardingController:changePassword',
+              NEW_PASSWORD,
+              MOCK_PASSWORD,
+            );
+
+            expect(recoveryCalls(fetchAuthPubKeySpy)).toHaveLength(0);
+            expect(addSpy).toHaveBeenCalledTimes(1);
+            const [{ encKey, authKeyPair, secretData }] = addSpy.mock
+              .calls[0] as [
+              {
+                encKey: Uint8Array;
+                authKeyPair: KeyPair;
+                secretData: Uint8Array;
+              },
+            ];
+            expect(encKey).toStrictEqual(recoveryKeys.recoveryEncKey);
+            expect(authKeyPair).toStrictEqual(recoveryKeys.recoveryAuthKeyPair);
+            expect(parseWrappedKeys(secretData)).toStrictEqual([newKeySet]);
+          },
+        );
       });
 
       it('does not write a wrapped-keys item when MFA recovery is not enabled', async () => {

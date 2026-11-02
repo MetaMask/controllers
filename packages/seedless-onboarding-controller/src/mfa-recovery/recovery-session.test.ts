@@ -40,6 +40,8 @@ function createSession(
     nodeAuthTokens: NODE_AUTH_TOKENS,
     expiresAt: NOW_SECONDS + 600,
     userId: 'user-id',
+    authConnectionId: 'mm-recovery-dev-aal2-common',
+    groupedAuthConnectionId: 'mm-recovery-aal2-dev',
     hasRecoveryShare: true,
     ...overrides,
   };
@@ -123,6 +125,18 @@ describe('recovery-session', () => {
 
     it('returns undefined when userId is missing', () => {
       const session = createSession({ userId: '' });
+
+      expect(getValidRecoverySession(session, NOW_SECONDS)).toBeUndefined();
+    });
+
+    it('returns undefined when authConnectionId is missing', () => {
+      const session = createSession({ authConnectionId: '' });
+
+      expect(getValidRecoverySession(session, NOW_SECONDS)).toBeUndefined();
+    });
+
+    it('returns undefined when groupedAuthConnectionId is missing', () => {
+      const session = createSession({ groupedAuthConnectionId: '' });
 
       expect(getValidRecoverySession(session, NOW_SECONDS)).toBeUndefined();
     });

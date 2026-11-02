@@ -14,7 +14,6 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 
 import { SeedlessOnboardingControllerErrorMessage } from '../constants.js';
 
-export const TOPRF_RECOVERY_VERIFIER = 'toprf-recovery';
 export const RECOVERY_KEYS_PREFIX = 'MFA_RECOVERY_KEYS_V1';
 export const WRAPPED_KEYS_PREFIX = 'MFA_WRAPPED_KEYS_V1';
 

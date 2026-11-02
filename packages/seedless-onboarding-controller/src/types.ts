@@ -106,17 +106,21 @@ export type InvalidPrimarySecretDataTypeErrorData = (
 )[];
 
 /**
- * The aal2 token set used for `toprf-recovery` (TOPRF2) calls. It is never
+ * The aal2 token set used for recovery verifier (TOPRF2) calls. It is never
  * refreshed and is held in memory only.
  */
 export type RecoverySession = {
-  /** Node auth tokens from the `toprf-recovery` authenticate. */
+  /** Node auth tokens from the recovery verifier authenticate. */
   nodeAuthTokens: NodeAuthTokens;
   /** The aal2 token's `exp` in unix seconds. The session expires at this time. */
   expiresAt: number;
-  /** The aal2 token's `sub` (profile ID), used as the `userId` of every `toprf-recovery` call. */
+  /** The aal2 token's `sub` (profile ID), used as the `userId` of every recovery verifier call. */
   userId: string;
-  /** Whether the nodes held a `toprf-recovery` share when the tokens were issued. */
+  /** The sub-verifier (`authConnectionId`) the aal2 set was authenticated against. */
+  authConnectionId: string;
+  /** The aggregate verifier (`groupedAuthConnectionId`) the aal2 set was authenticated against. */
+  groupedAuthConnectionId: string;
+  /** Whether the nodes held a recovery verifier share when the tokens were issued. */
   hasRecoveryShare: boolean;
 };
 
@@ -197,7 +201,7 @@ export type SeedlessOnboardingControllerState =
 
       /**
        * The aal2 token set issued by `authenticateForRecovery`. Only the
-       * `toprf-recovery` (TOPRF2) calls use it.
+       * recovery verifier (TOPRF2) calls use it.
        */
       recoverySession?: RecoverySession;
 
@@ -230,13 +234,13 @@ export type RecoveryStatus =
 export type RecoveryStatusResult = {
   status: RecoveryStatus;
   /**
-   * Whether the recovery-keys item was checked against the `toprf-recovery`
+   * Whether the recovery-keys item was checked against the recovery verifier
    * share. `false` when there was no aal2 set, in which case an `Enabled` or
    * `WrapStale` item may be planted.
    */
   verified: boolean;
   /**
-   * Whether the nodes hold a `toprf-recovery` share. Only set when `verified`.
+   * Whether the nodes hold a recovery verifier share. Only set when `verified`.
    */
   hasRecoveryShare?: boolean;
 };

@@ -97,7 +97,6 @@ import {
   derivePubKey,
   isWrapCurrent,
   pubKeysEqual,
-  TOPRF_RECOVERY_VERIFIER,
 } from './utils/index.js';
 import type {
   RecoveryKeys,
@@ -2270,20 +2269,27 @@ export class SeedlessOnboardingController<
   }
 
   /**
-   * Authenticate on the `toprf-recovery` verifier with the aal2 token and
-   * store the issued node auth tokens, the token's `exp` and `sub` (profile
-   * ID), and whether a share already exists, as `recoverySession`. The aal1 `nodeAuthTokens`,
-   * `accessToken` and `metadataAccessToken` are left as they are.
+   * Authenticate on the recovery verifier with the aal2 token and store the
+   * issued node auth tokens, the token's `exp` and `sub` (profile ID), the
+   * verifier IDs, and whether a share already exists, as `recoverySession`.
+   * The aal1 `nodeAuthTokens`, `accessToken` and `metadataAccessToken` are
+   * left as they are.
    *
    * @param params - The function parameters.
    * @param params.aal2Token - The aal2 token minted by the authentication API.
    * Its `exp` caps the lifetime of the aal2 node auth tokens.
+   * @param params.authConnectionId - The recovery sub-verifier ID.
+   * @param params.groupedAuthConnectionId - The recovery aggregate verifier ID.
    * @returns A promise that resolves once the aal2 set is stored.
    */
   async authenticateForRecovery({
     aal2Token,
+    authConnectionId,
+    groupedAuthConnectionId,
   }: {
     aal2Token: string;
+    authConnectionId: string;
+    groupedAuthConnectionId: string;
   }): Promise<void> {
     return await this.#withControllerLock(async () => {
       const { exp, sub } = decodeAal2Token(
@@ -2294,7 +2300,8 @@ export class SeedlessOnboardingController<
       try {
         const { nodeAuthTokens, isNewUser } =
           await this.toprfClient.authenticate({
-            authConnectionId: TOPRF_RECOVERY_VERIFIER,
+            authConnectionId,
+            groupedAuthConnectionId,
             userId: sub,
             idTokens: [aal2Token],
           });
@@ -2303,6 +2310,8 @@ export class SeedlessOnboardingController<
             nodeAuthTokens,
             expiresAt: exp,
             userId: sub,
+            authConnectionId,
+            groupedAuthConnectionId,
             hasRecoveryShare: !isNewUser,
           };
         });
@@ -2320,7 +2329,7 @@ export class SeedlessOnboardingController<
    * Compute the MFA recovery status from the remote stores. Makes no writes.
    *
    * Needs the unlocked vault and aal1. The recovery-keys item is checked
-   * against the `toprf-recovery` share only with an aal2 set; without one the
+   * against the recovery verifier share only with an aal2 set; without one the
    * result is `verified: false`.
    *
    * @returns The recovery status.
@@ -2372,7 +2381,7 @@ export class SeedlessOnboardingController<
   /**
    * Register the TOPRF2 (recovery secret) keys for the account (flow 1).
    *
-   * Reuses the `toprf-recovery` share if the nodes already hold one, writes
+   * Reuses the recovery verifier share if the nodes already hold one, writes
    * the vault's TOPRF1 keys into the wrapped-keys item (TOPRF2 namespace),
    * then writes the recovery-keys item into the TOPRF1 namespace under the
    * metadata lock. Call {@link authenticateForRecovery} first.
@@ -2468,7 +2477,7 @@ export class SeedlessOnboardingController<
   }
 
   /**
-   * Check that the recovery-keys item is genuine: the `toprf-recovery` share
+   * Check that the recovery-keys item is genuine: the recovery verifier share
    * exists and its auth public key matches the item's private key.
    *
    * @param recoveryKeys - The TOPRF2 keys from the recovery-keys item.
@@ -2514,7 +2523,7 @@ export class SeedlessOnboardingController<
   }
 
   /**
-   * Run a `toprf-recovery` TOPRF call with the aal2 set. A missing, expired
+   * Run a recovery verifier TOPRF call with the aal2 set. A missing, expired
    * or rejected set is cleared and surfaces as `Aal2Required`.
    *
    * @param operation - The TOPRF call, given the request params.
@@ -2523,11 +2532,17 @@ export class SeedlessOnboardingController<
   async #withRecoverySession<Result>(
     operation: (request: RecoveryRequest) => Promise<Result>,
   ): Promise<Result> {
-    const { nodeAuthTokens, userId } = this.#requireRecoverySession();
+    const {
+      nodeAuthTokens,
+      userId,
+      authConnectionId,
+      groupedAuthConnectionId,
+    } = this.#requireRecoverySession();
     try {
       return await operation({
         nodeAuthTokens,
-        authConnectionId: TOPRF_RECOVERY_VERIFIER,
+        authConnectionId,
+        groupedAuthConnectionId,
         userId,
       });
     } catch (error) {

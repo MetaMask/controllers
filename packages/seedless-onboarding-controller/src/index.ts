@@ -63,7 +63,6 @@ export {
 } from './constants.js';
 export {
   RECOVERY_KEYS_PREFIX,
-  TOPRF_RECOVERY_VERIFIER,
   WRAPPED_KEYS_PREFIX,
 } from './mfa-recovery/recovery-keys.js';
 export type {

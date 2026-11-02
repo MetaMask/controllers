@@ -47,7 +47,8 @@ const REQUEST: RecoveryRequest = {
   nodeAuthTokens: [
     { authToken: 'aal2', nodeIndex: 1, nodePubKey: 'nodePubKey' },
   ],
-  authConnectionId: 'toprf-recovery',
+  authConnectionId: 'mm-recovery-dev-aal2-common',
+  groupedAuthConnectionId: 'mm-recovery-aal2-dev',
   userId: 'user-id',
 };
 

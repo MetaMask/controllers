@@ -27,7 +27,7 @@ const log = createModuleLogger(projectLogger, controllerName);
 /**
  * Reads and writes the recovery-related secret data items: the recovery-keys
  * item (TOPRF1 namespace, next to the user's secrets), the wrapped-keys item
- * (TOPRF2 namespace), and the `toprf-recovery` auth public key.
+ * (TOPRF2 namespace), and the recovery verifier auth public key.
  *
  * The metadata store assigns its own item IDs, so items are told apart by
  * their content rather than by item ID.
@@ -144,9 +144,9 @@ export class RecoveryItemStore {
   }
 
   /**
-   * Fetch the `toprf-recovery` auth public key with the aal2 set.
+   * Fetch the recovery verifier auth public key with the aal2 set.
    *
-   * @param request - The `toprf-recovery` request params.
+   * @param request - The recovery verifier request params.
    * @returns The auth public key.
    * @throws The auth token error as-is, or `FailedToFetchAuthPubKey`.
    */

@@ -105,6 +105,7 @@ export type SeedlessOnboardingControllerFetchAllSecretDataAction = {
  * Update the password of the seedless onboarding flow.
  *
  * Changing password will also update the encryption key, metadata store and the vault with new encrypted values.
+ * If MFA recovery is enabled, the recovery wrapped-keys item is re-written with the new keys (best-effort).
  *
  * @param newPassword - The new password to update.
  * @param oldPassword - The old password to verify.
@@ -302,14 +303,17 @@ export type SeedlessOnboardingControllerRefreshAuthTokensAction = {
 };
 
 /**
- * Authenticate on the `toprf-recovery` verifier with the aal2 token and
- * store the issued node auth tokens, the token's `exp` and `sub` (profile
- * ID), and whether a share already exists, as `recoverySession`. The aal1 `nodeAuthTokens`,
- * `accessToken` and `metadataAccessToken` are left as they are.
+ * Authenticate on the recovery verifier with the aal2 token and store the
+ * issued node auth tokens, the token's `exp` and `sub` (profile ID), the
+ * verifier IDs, and whether a share already exists, as `recoverySession`.
+ * The aal1 `nodeAuthTokens`, `accessToken` and `metadataAccessToken` are
+ * left as they are.
  *
  * @param params - The function parameters.
  * @param params.aal2Token - The aal2 token minted by the authentication API.
  * Its `exp` caps the lifetime of the aal2 node auth tokens.
+ * @param params.authConnectionId - The recovery sub-verifier ID.
+ * @param params.groupedAuthConnectionId - The recovery aggregate verifier ID.
  * @returns A promise that resolves once the aal2 set is stored.
  */
 export type SeedlessOnboardingControllerAuthenticateForRecoveryAction = {
@@ -321,7 +325,7 @@ export type SeedlessOnboardingControllerAuthenticateForRecoveryAction = {
  * Compute the MFA recovery status from the remote stores. Makes no writes.
  *
  * Needs the unlocked vault and aal1. The recovery-keys item is checked
- * against the `toprf-recovery` share only with an aal2 set; without one the
+ * against the recovery verifier share only with an aal2 set; without one the
  * result is `verified: false`.
  *
  * @returns The recovery status.
@@ -334,7 +338,7 @@ export type SeedlessOnboardingControllerGetRecoveryStatusAction = {
 /**
  * Register the TOPRF2 (recovery secret) keys for the account (flow 1).
  *
- * Reuses the `toprf-recovery` share if the nodes already hold one, writes
+ * Reuses the recovery verifier share if the nodes already hold one, writes
  * the vault's TOPRF1 keys into the wrapped-keys item (TOPRF2 namespace),
  * then writes the recovery-keys item into the TOPRF1 namespace under the
  * metadata lock. Call {@link authenticateForRecovery} first.

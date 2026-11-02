@@ -6,11 +6,12 @@ import type { RecoverySession } from '../types.js';
 import { decodeJWTToken } from '../utils/index.js';
 
 /**
- * The params every `toprf-recovery` TOPRF call takes from the recovery session.
+ * The params every recovery verifier TOPRF call takes from the recovery session.
  */
 export type RecoveryRequest = {
   nodeAuthTokens: NodeAuthTokens;
   authConnectionId: string;
+  groupedAuthConnectionId: string;
   userId: string;
 };
 
@@ -59,6 +60,8 @@ export function getValidRecoverySession(
   if (
     !session?.nodeAuthTokens.length ||
     !session.userId ||
+    !session.authConnectionId ||
+    !session.groupedAuthConnectionId ||
     session.expiresAt <= nowSeconds
   ) {
     return undefined;
