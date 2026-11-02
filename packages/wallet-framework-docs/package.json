@@ -23,7 +23,7 @@
   "scripts": {
     "build": "docusaurus build site",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/wallet-framework-docs",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/wallet-framework-docs",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "dev": "docusaurus start site",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",

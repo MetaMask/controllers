@@ -39,7 +39,7 @@
     "build:only-clean": "rimraf './dist' './tsconfig.build.tsbuildinfo'",
     "build:watch": "yarn build && chokidar 'src/**/*.ts' -c 'tsc --project tsconfig.build.json' --initial",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/kyc-controller",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/kyc-controller",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",
     "messenger-action-types:check": "node --import ../../scripts/resolver/register.ts ../../packages/messenger-cli/src/cli.ts --formatter oxfmt --esm --check",

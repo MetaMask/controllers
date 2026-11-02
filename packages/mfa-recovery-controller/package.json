@@ -38,7 +38,7 @@
     "build:docs": "typedoc",
     "build:only-clean": "rimraf './dist' './tsconfig.build.tsbuildinfo'",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/mfa-recovery-controller",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/mfa-recovery-controller",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "cubesigner:invoke-escrow": "tsx scripts/invoke-escrow.ts",
     "cubesigner:register": "tsx scripts/register-with-controller.ts",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
