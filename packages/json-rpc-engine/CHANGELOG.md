@@ -223,8 +223,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Migrate `@metamask/json-rpc-engine` into the core monorepo ([#1895](https://github.com/MetaMask/core/pull/1895))
-
 - This package was migrated from `MetaMask/json-rpc-engine` to the
   `MetaMask/core` monorepo ([#1895](https://github.com/MetaMask/core/pull/1895))
   - See [`MetaMask/json-rpc-engine`](https://github.com/MetaMask/json-rpc-engine/blob/main/CHANGELOG.md)
