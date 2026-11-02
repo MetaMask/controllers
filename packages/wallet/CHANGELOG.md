@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Requires `instanceOptions.assetsController.queryApiClient`.
   - `Wallet.init()` calls `AssetsController.init()`, which reads `NetworkEnablementController:getState` after every controller has been constructed. Later enablement changes arrive on `NetworkEnablementController:stateChange`.
   - Delegates `AccountTreeController` and `SnapController` actions and events. `Wallet` does not construct those controllers. Until a client registers them, account-group reads fall back to `AccountsController:getSelectedAccount`, asset tracking does not wait for the account tree, and snap discovery leaves snap chains empty.
+  - Delegates `AccountsController:selectedAccountChange`. When `AccountTreeController` is not registered, that event refreshes tracked assets. When it is registered, `AssetsController` ignores the event and still refreshes only on `AccountTreeController:selectedAccountGroupChange`.
   - Also delegates the other external `AssetsControllerMessenger` actions and events (accounts, client, keyring, network, network enablement, permission, phishing, remote feature flags, preferences, and transactions). `Wallet` constructs the ones it already initializes by default.
   - Hosts that already register `AssetsController` on the wallet root messenger must remove that registration before upgrading, or messenger registration will collide.
 

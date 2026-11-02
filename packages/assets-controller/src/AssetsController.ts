@@ -5,7 +5,10 @@ import type {
   AccountTreeControllerSelectedAccountGroupChangeEvent,
   AccountTreeControllerUninitializedEvent,
 } from '@metamask/account-tree-controller';
-import type { AccountsControllerGetSelectedAccountAction } from '@metamask/accounts-controller';
+import type {
+  AccountsControllerGetSelectedAccountAction,
+  AccountsControllerSelectedAccountChangeEvent,
+} from '@metamask/accounts-controller';
 import { BaseController } from '@metamask/base-controller';
 import type {
   ControllerGetStateAction,
@@ -336,10 +339,15 @@ type AllowedActions =
   | RemoteFeatureFlagControllerGetStateAction;
 
 type AllowedEvents =
-  // AssetsController — account tree lifecycle and group switches
+  // AssetsController — account tree lifecycle and group switches.
+  // `AccountsController:selectedAccountChange` is the fallback when
+  // `AccountTreeController` is not registered. It is ignored while that
+  // controller is registered, because the tree republishes the switch as
+  // `selectedAccountGroupChange`.
   | AccountTreeControllerSelectedAccountGroupChangeEvent
   | AccountTreeControllerInitializedEvent
   | AccountTreeControllerUninitializedEvent
+  | AccountsControllerSelectedAccountChangeEvent
   | ClientControllerStateChangeEvent
   | KeyringControllerLockEvent
   | KeyringControllerUnlockEvent
@@ -863,6 +871,28 @@ export class AssetsController extends BaseController<
   }
 
   /**
+   * Whether `AccountTreeController` has registered its actions.
+   *
+   * Selected-account switches are published by `AccountsController` in both
+   * setups. When the tree controller is registered it turns those switches
+   * into `selectedAccountGroupChange`, so handling both events would refresh
+   * tracked assets twice.
+   *
+   * @returns True when `AccountTreeController:isInitialized` is registered.
+   */
+  #isAccountTreeControllerRegistered(): boolean {
+    try {
+      this.messenger.call('AccountTreeController:isInitialized');
+      return true;
+    } catch (error) {
+      if (!isUnregisteredActionError(error)) {
+        throw error;
+      }
+      return false;
+    }
+  }
+
+  /**
    * Whether the client (UI) is open, read from ClientController state.
    *
    * @returns True when the UI is open.
@@ -1235,6 +1265,13 @@ export class AssetsController extends BaseController<
         );
       },
     );
+
+    // Fallback for hosts that do not register AccountTreeController.
+    // Ignored while that controller is registered so a switch is not
+    // refreshed here and again on `selectedAccountGroupChange`.
+    this.messenger.subscribe('AccountsController:selectedAccountChange', () => {
+      this.#handleSelectedAccountChanged().catch(console.error);
+    });
 
     this.messenger.subscribe('AccountTreeController:initialized', () => {
       this.#updateActive();
@@ -4035,6 +4072,43 @@ export class AssetsController extends BaseController<
       previousGroupId,
     });
 
+    await this.#refreshTrackedAccounts(accounts);
+  }
+
+  /**
+   * Refresh tracked assets after `AccountsController:selectedAccountChange`
+   * when `AccountTreeController` is not registered.
+   *
+   * Ignored while the account tree controller is registered, because that
+   * controller republishes the switch as `selectedAccountGroupChange`.
+   * Also ignored until tracking has started, matching group switches, so the
+   * first start stays owned by unlock and account-tree initialization.
+   */
+  async #handleSelectedAccountChanged(): Promise<void> {
+    if (this.#isAccountTreeControllerRegistered()) {
+      return;
+    }
+    if (this.#activeSubscriptions.size === 0) {
+      return;
+    }
+
+    const accounts = this.#getSelectedAccounts();
+
+    log('Selected account changed', {
+      accountCount: accounts.length,
+      accountIds: accounts.map((account) => account.id),
+    });
+
+    await this.#refreshTrackedAccounts(accounts);
+  }
+
+  /**
+   * Force-fetch and resubscribe for the accounts that should be tracked now.
+   *
+   * @param accounts - Accounts to refresh. An empty list skips the fetch and
+   * still resubscribes, matching a switch onto an empty selection.
+   */
+  async #refreshTrackedAccounts(accounts: InternalAccount[]): Promise<void> {
     const releaseLock = await this.#accountRefreshMutex.acquire();
     try {
       this.#ensureNativeBalancesDefaultZero();

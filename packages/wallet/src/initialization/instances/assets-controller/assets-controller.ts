@@ -11,8 +11,10 @@ export type { AssetsControllerInstanceOptions } from './types.js';
  *
  * `AccountTreeController` and `SnapController` are not Wallet defaults.
  * Construction does not call them. Account-group reads fall back to
- * `AccountsController` until `AccountTreeController` is registered, and snap
- * discovery leaves snap chains empty until `SnapController` is registered.
+ * `AccountsController` until `AccountTreeController` is registered, and
+ * `AccountsController:selectedAccountChange` refreshes tracked assets only
+ * in that fallback. Snap discovery leaves snap chains empty until
+ * `SnapController` is registered.
  * `AssetsController.init()` reads `NetworkEnablementController` during
  * `Wallet.init()`, after every default controller exists.
  */
@@ -63,6 +65,7 @@ export const assetsController: InitializationConfiguration<
         'AccountActivityService:balanceUpdated',
         'AccountActivityService:statusChanged',
         'AccountsController:accountBalancesUpdated',
+        'AccountsController:selectedAccountChange',
         'AccountTreeController:initialized',
         'AccountTreeController:selectedAccountGroupChange',
         'AccountTreeController:uninitialized',

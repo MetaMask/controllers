@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** Subscribe to `AccountsController:selectedAccountChange` so a selected-account switch refreshes tracked assets when `AccountTreeController` is not registered ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - Hosts that restrict which events flow through the `AssetsController` messenger must also delegate `AccountsController:selectedAccountChange`.
+  - When `AccountTreeController` is registered, that event is ignored. Group switches still refresh only through `AccountTreeController:selectedAccountGroupChange`, so the two events are not both handled.
 - **BREAKING:** Constructors no longer call messenger actions. Call `AssetsController.init()` after the other controllers exist. `Wallet.init()` does this. Until `init()` runs, enabled chains and data-source active chains stay empty unless a later state change arrives ([#10885](https://github.com/MetaMask/core/pull/10885))
   - `AssetsController` no longer calls `NetworkEnablementController:getState` in its constructor.
   - `RpcDataSource` no longer calls `NetworkController:getState` in its constructor. Call `refreshActiveChainsFromNetworkState()`, or `AssetsController.init()`.

@@ -66,14 +66,15 @@ get selectedAccounts(): InternalAccount[]
 
 #### 1.3 Subscribe to External Events
 
-| Event                                              | Handler                          | Purpose                                |
-| -------------------------------------------------- | -------------------------------- | -------------------------------------- |
-| `AccountTreeController:selectedAccountGroupChange` | `handleAccountGroupChanged()`    | Refresh when the user switches groups  |
-| `AccountTreeController:initialized`                | `updateActive()`                 | Start tracking once the tree is built  |
-| `AccountTreeController:uninitialized`              | `updateActive()`                 | Stop tracking when the tree is cleared |
-| `NetworkEnablementController:stateChange`          | `handleEnabledNetworksChanged()` | Track enabled chains                   |
-| `KeyringController:unlock`                         | `start()`                        | Start subscriptions                    |
-| `KeyringController:lock`                           | `stop()`                         | Stop subscriptions                     |
+| Event                                              | Handler                          | Purpose                                                                                                                      |
+| -------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `AccountTreeController:selectedAccountGroupChange` | `handleAccountGroupChanged()`    | Refresh when the user switches groups                                                                                        |
+| `AccountsController:selectedAccountChange`         | `handleSelectedAccountChanged()` | Refresh when the selected account changes and `AccountTreeController` is absent. Ignored while that controller is registered |
+| `AccountTreeController:initialized`                | `updateActive()`                 | Start tracking once the tree is built                                                                                        |
+| `AccountTreeController:uninitialized`              | `updateActive()`                 | Stop tracking when the tree is cleared                                                                                       |
+| `NetworkEnablementController:stateChange`          | `handleEnabledNetworksChanged()` | Track enabled chains                                                                                                         |
+| `KeyringController:unlock`                         | `start()`                        | Start subscriptions                                                                                                          |
+| `KeyringController:lock`                           | `stop()`                         | Stop subscriptions                                                                                                           |
 
 #### 1.4 Register Action Handlers
 

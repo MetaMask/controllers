@@ -184,6 +184,7 @@ describe('assetsController', () => {
     'AccountActivityService:balanceUpdated',
     'AccountActivityService:statusChanged',
     'AccountsController:accountBalancesUpdated',
+    'AccountsController:selectedAccountChange',
     'AccountTreeController:initialized',
     'AccountTreeController:selectedAccountGroupChange',
     'AccountTreeController:uninitialized',

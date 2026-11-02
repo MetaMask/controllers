@@ -6125,6 +6125,193 @@ describe('AssetsController', () => {
         getAssetsSpy.mockRestore();
       });
     });
+
+    it('ignores AccountsController:selectedAccountChange while AccountTreeController is registered', async () => {
+      await withController(async ({ controller, messenger }) => {
+        const getAssetsSpy = vi
+          .spyOn(controller, 'getAssets')
+          .mockResolvedValue({});
+
+        await activateTracking(messenger);
+        getAssetsSpy.mockClear();
+
+        messenger.publish(
+          'AccountsController:selectedAccountChange',
+          createMockInternalAccount({ id: 'mock-account-id-2' }),
+        );
+        await flushPromises();
+
+        expect(getAssetsSpy).not.toHaveBeenCalled();
+
+        messenger.publish(
+          'AccountTreeController:selectedAccountGroupChange',
+          'entropy:mock-keyring-id-1/1',
+          'entropy:mock-keyring-id-1/0',
+        );
+        await flushPromises();
+
+        expect(getAssetsSpy).toHaveBeenCalledTimes(1);
+        getAssetsSpy.mockRestore();
+      });
+    });
+
+    it('does not refresh again when selectedAccountChange follows a group switch', async () => {
+      await withController(async ({ controller, messenger }) => {
+        const getAssetsSpy = vi
+          .spyOn(controller, 'getAssets')
+          .mockResolvedValue({});
+
+        await activateTracking(messenger);
+        getAssetsSpy.mockClear();
+
+        messenger.publish(
+          'AccountTreeController:selectedAccountGroupChange',
+          'entropy:mock-keyring-id-1/1',
+          'entropy:mock-keyring-id-1/0',
+        );
+        messenger.publish(
+          'AccountsController:selectedAccountChange',
+          createMockInternalAccount({ id: 'mock-account-id-2' }),
+        );
+        await flushPromises();
+
+        expect(getAssetsSpy).toHaveBeenCalledTimes(1);
+        getAssetsSpy.mockRestore();
+      });
+    });
+
+    it('does not treat AccountTreeController:isInitialized failures as a missing controller', async () => {
+      await withController(async ({ controller, messenger }) => {
+        const getAssetsSpy = vi
+          .spyOn(controller, 'getAssets')
+          .mockResolvedValue({});
+
+        await activateTracking(messenger);
+        getAssetsSpy.mockClear();
+
+        messenger.unregisterActionHandler(
+          'AccountTreeController:isInitialized',
+        );
+        messenger.registerActionHandler(
+          'AccountTreeController:isInitialized',
+          () => {
+            throw new Error('account tree init failed');
+          },
+        );
+
+        const consoleError = vi
+          .spyOn(console, 'error')
+          .mockImplementation(() => undefined);
+        try {
+          messenger.publish(
+            'AccountsController:selectedAccountChange',
+            createMockInternalAccount({ id: 'mock-account-id-2' }),
+          );
+          await flushPromises();
+
+          expect(getAssetsSpy).not.toHaveBeenCalled();
+          expect(consoleError).toHaveBeenCalledWith(
+            expect.objectContaining({
+              message: 'account tree init failed',
+            }),
+          );
+        } finally {
+          consoleError.mockRestore();
+        }
+        getAssetsSpy.mockRestore();
+      });
+    });
+  });
+
+  describe('selected account changes without AccountTreeController', () => {
+    /**
+     * Drops AccountTreeController actions and serves the selected account from
+     * AccountsController, matching a host that has not installed the tree.
+     *
+     * @param messenger - Root messenger from `withController`.
+     * @param selectedAccount - Account returned by `getSelectedAccount`.
+     * @returns A setter for the account served on later reads.
+     */
+    function useAccountsControllerSelection(
+      messenger: RootMessenger,
+      selectedAccount: InternalAccount,
+    ): (account: InternalAccount) => void {
+      messenger.unregisterActionHandler(
+        'AccountTreeController:getAccountsFromSelectedAccountGroup',
+      );
+      messenger.unregisterActionHandler('AccountTreeController:isInitialized');
+
+      let current = selectedAccount;
+      messenger.unregisterActionHandler(
+        'AccountsController:getSelectedAccount',
+      );
+      (
+        messenger as {
+          registerActionHandler: (
+            action: string,
+            handler: () => InternalAccount,
+          ) => void;
+        }
+      ).registerActionHandler(
+        'AccountsController:getSelectedAccount',
+        () => current,
+      );
+
+      return (account: InternalAccount) => {
+        current = account;
+      };
+    }
+
+    it('refreshes tracked assets when the selected account changes', async () => {
+      await withController(async ({ controller, messenger }) => {
+        const setSelectedAccount = useAccountsControllerSelection(
+          messenger,
+          createMockInternalAccount({ id: 'account-a' }),
+        );
+        const getAssetsSpy = vi
+          .spyOn(controller, 'getAssets')
+          .mockResolvedValue({});
+
+        await activateTracking(messenger);
+        getAssetsSpy.mockClear();
+
+        const nextAccount = createMockInternalAccount({ id: 'account-b' });
+        setSelectedAccount(nextAccount);
+        messenger.publish(
+          'AccountsController:selectedAccountChange',
+          nextAccount,
+        );
+        await flushPromises();
+
+        expect(getAssetsSpy).toHaveBeenCalledTimes(1);
+        expect(getAssetsSpy).toHaveBeenCalledWith(
+          [expect.objectContaining({ id: 'account-b' })],
+          expect.objectContaining({ forceUpdate: true }),
+        );
+        getAssetsSpy.mockRestore();
+      });
+    });
+
+    it('does not refresh a selected-account change before tracking starts', async () => {
+      await withController(async ({ controller, messenger }) => {
+        useAccountsControllerSelection(
+          messenger,
+          createMockInternalAccount({ id: 'account-a' }),
+        );
+        const getAssetsSpy = vi
+          .spyOn(controller, 'getAssets')
+          .mockResolvedValue({});
+
+        messenger.publish(
+          'AccountsController:selectedAccountChange',
+          createMockInternalAccount({ id: 'account-b' }),
+        );
+        await flushPromises();
+
+        expect(getAssetsSpy).not.toHaveBeenCalled();
+        getAssetsSpy.mockRestore();
+      });
+    });
   });
 
   describe('assets loading status', () => {

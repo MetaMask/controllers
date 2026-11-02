@@ -127,6 +127,7 @@ export function createMockAssetsControllerMessenger(
       'NetworkEnablementController:stateChange',
       // SnapDataSource
       'AccountsController:accountBalancesUpdated',
+      'AccountsController:selectedAccountChange',
       'PermissionController:stateChange',
       'SnapController:snapInstalled',
       // AccountActivityService (real-time balances + chain status)
