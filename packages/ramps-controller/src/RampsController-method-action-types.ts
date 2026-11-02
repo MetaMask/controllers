@@ -518,6 +518,18 @@ export type RampsControllerRefreshAutorampAction = {
 };
 
 /**
+ * Fetches the MoonPay customer's rail abilities from the neo-bank proxy and
+ * stores them in `vbaCustomerAbilities`. A failed fetch throws and leaves the
+ * stored value unchanged.
+ *
+ * @returns The fetched abilities.
+ */
+export type RampsControllerRefreshCustomerAbilitiesAction = {
+  type: `RampsController:refreshCustomerAbilities`;
+  handler: RampsController['refreshCustomerAbilities'];
+};
+
+/**
  * Refreshes all known local autoramps from MoonPay.
  * Intended for app resume / unlock catch-up when webhooks were missed.
  *
@@ -526,6 +538,27 @@ export type RampsControllerRefreshAutorampAction = {
 export type RampsControllerRefreshAutorampsAction = {
   type: `RampsController:refreshAutoramps`;
   handler: RampsController['refreshAutoramps'];
+};
+
+/**
+ * Fetches the newest page of transactions for one autoramp and calls
+ * `trackAutorampTransactionStatusChanged` for each new id or status change.
+ *
+ * The updated record is written before the callback runs. A failed fetch
+ * leaves the record untouched. Concurrent calls for the same autoramp share
+ * one request. The first successful fetch seeds the record and calls
+ * nothing. When this autoramp was on the cursor at the start of the fetch
+ * and was removed before the response is applied (`removeAutoramp`, a cursor
+ * replace that drops the id, or a foreign VBA session discard), the record
+ * is not restored and the callback is not called. A callback that throws
+ * is ignored, so one failing change does not drop the rest of the batch.
+ *
+ * @param autorampId - MoonPay autoramp id.
+ * @returns Transaction summaries from the newest page.
+ */
+export type RampsControllerRefreshAutorampTransactionsAction = {
+  type: `RampsController:refreshAutorampTransactions`;
+  handler: RampsController['refreshAutorampTransactions'];
 };
 
 /**
@@ -967,7 +1000,9 @@ export type RampsControllerMethodActions =
   | RampsControllerMarkAutorampAsNotifiedAction
   | RampsControllerApplyAutorampStatusFromPushAction
   | RampsControllerRefreshAutorampAction
+  | RampsControllerRefreshCustomerAbilitiesAction
   | RampsControllerRefreshAutorampsAction
+  | RampsControllerRefreshAutorampTransactionsAction
   | RampsControllerStartOrderPollingAction
   | RampsControllerStopOrderPollingAction
   | RampsControllerGetBuyWidgetDataAction

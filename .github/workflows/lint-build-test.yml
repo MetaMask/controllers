@@ -238,6 +238,7 @@ jobs:
     if: >-
       needs.prepare.outputs.package-names != '[]' && (
         github.ref_name == 'main' ||
+        startsWith(github.head_ref, 'release/') ||
         startsWith(github.base_ref, 'release/') ||
         startsWith(github.event.merge_group.base_ref, 'refs/heads/release/')
       )
@@ -267,7 +268,13 @@ jobs:
   test-24:
     name: Test (24.x)
     runs-on: ubuntu-latest
-    if: needs.prepare.outputs.package-names != '[]'
+    if: >-
+      needs.prepare.outputs.package-names != '[]' && (
+        github.ref_name == 'main' ||
+        startsWith(github.head_ref, 'release/') ||
+        startsWith(github.base_ref, 'release/') ||
+        startsWith(github.event.merge_group.base_ref, 'refs/heads/release/')
+      )
     needs: prepare
     strategy:
       fail-fast: false

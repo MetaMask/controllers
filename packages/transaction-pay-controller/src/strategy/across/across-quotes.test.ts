@@ -116,6 +116,7 @@ const SAFE_INTERFACE = new Interface([
 ]);
 
 const TRANSFER_RECIPIENT = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+const HYPERLIQUID_BRIDGE_ADDRESS = '0x2df1c51e09aecf9cacb7bc98cb1742757f163df7';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const FACTORY_ADDRESS = '0xfac7fac7fac7fac7fac7fac7fac7fac7fac7fac7' as Hex;
 const SAFE_ADDRESS = '0x5afe5afe5afe5afe5afe5afe5afe5afe5afe5afe' as Hex;
@@ -1198,7 +1199,7 @@ describe('Across Quotes', () => {
       );
     });
 
-    it('uses relaxed per-transaction gas estimates for prefunded post-quote predict withdraws', async () => {
+    it('uses relaxed separate gas estimates for prefunded post-quote predict withdraws', async () => {
       const refundTo = '0x5afe000000000000000000000000000000000001' as Hex;
 
       estimateGasBatchMock.mockRejectedValueOnce(
@@ -1535,11 +1536,10 @@ describe('Across Quotes', () => {
         ],
         transaction: {
           ...TRANSACTION_META_MOCK,
-          type: TransactionType.perpsDeposit,
           txParams: {
             from: FROM_MOCK,
             to: ARBITRUM_USDC_ADDRESS,
-            data: buildTransferData(TRANSFER_RECIPIENT, 1),
+            data: buildTransferData(HYPERLIQUID_BRIDGE_ADDRESS, 1),
           },
         },
       });
@@ -2562,7 +2562,7 @@ describe('Across Quotes', () => {
       ).toBeUndefined();
     });
 
-    it('returns per-transaction gas limits when account does not support 7702', async () => {
+    it('returns separate gas limits when account does not support 7702', async () => {
       estimateGasBatchMock.mockResolvedValue({
         totalGasLimit: 42000,
         gasLimits: [21000, 21000],

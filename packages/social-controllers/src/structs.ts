@@ -66,6 +66,8 @@ export const PositionStruct = structType({
   perpPositionType: optional(nullable(enums(['long', 'short']))),
   perpLeverage: optional(nullable(number())),
   positionAmountWithLeverage: optional(nullable(number())),
+  // Open set: a flag this package does not know yet must still validate.
+  flags: optional(nullable(array(string()))),
 });
 
 export const CommentReactionProfileStruct = structType({
@@ -85,11 +87,18 @@ export const CommentEngagementStruct = structType({
   replyCount: optional(number()),
 });
 
-const AuthorCommentStruct = structType({
+export const AuthorCommentStruct = structType({
   uid: string(),
   text: string(),
   timestamp: number(),
+  sourceLanguage: optional(nullable(string())),
+  translations: optional(record(string(), string())),
   engagement: CommentEngagementStruct,
+});
+
+export const CommentTranslationStruct = structType({
+  sourceLanguage: nullable(string()),
+  translations: record(string(), string()),
 });
 
 const SwapCommentAuthorStruct = structType({
@@ -339,4 +348,10 @@ const BlockedContentStruct = structType({
 export const BlockedContentResponseStruct = structType({
   items: array(BlockedContentStruct),
   cursor: nullable(string()),
+});
+
+export const ModerationStatusResponseStruct = structType({
+  banned: boolean(),
+  bannedAt: nullable(number()),
+  reason: nullable(string()),
 });
