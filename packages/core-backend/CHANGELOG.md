@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add optional `subscriptionNamespace` to `OHLCVService` so callers can select the WebSocket channel namespace (default: `ohlcv.v1`)
+
+### Changed
+
+- **BREAKING:** `OHLCVService` WebSocket channels now use the `ohlcv.v1` namespace instead of `market-data.v1`
+  - Channel strings change from `market-data.v1.<assetId>.<interval>.<currency>` to `ohlcv.v1.<assetId>.<interval>.<currency>`, and system notifications move to `system-notifications.v1.ohlcv.v1`.
+  - Pass `subscriptionNamespace: 'market-data.v1'` when constructing `OHLCVService` to keep the previous stream until `ohlcv.v1` is available in production.
+
 ## [13.0.0]
 
 ### Added
