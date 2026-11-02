@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Use SLIP-44 coin type 16661 for the 0G native asset price lookup
+- Use SLIP-44 coin type 16661 for the 0G native asset price lookup ([#11221](https://github.com/MetaMask/core/pull/11221))
 
 ## [113.0.1]
 
