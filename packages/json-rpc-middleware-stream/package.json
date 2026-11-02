@@ -54,7 +54,7 @@
     "readable-stream": "^3.6.2"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@types/readable-stream": "^2.3.0",
     "@typescript/native": "npm:typescript@^7.0.2",
     "extension-port-stream": "^3.0.0",

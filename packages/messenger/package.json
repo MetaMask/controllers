@@ -48,7 +48,7 @@
     "test:watch": "vitest --watch"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@typescript/native": "npm:typescript@^7.0.2",
     "immer": "^11.1.18",
     "rimraf": "^6.1.3",

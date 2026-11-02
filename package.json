@@ -73,7 +73,7 @@
     "@actions/github": "^9.1.1",
     "@lavamoat/allow-scripts": "^5.1.0",
     "@lavamoat/preinstall-always-fail": "^3.0.0",
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@metamask/create-release-branch": "^4.2.2",
     "@metamask/error-utils": "^0.1.0",
     "@metamask/network-controller": "^37.1.1",
@@ -116,7 +116,6 @@
     "yargs": "^17.7.3"
   },
   "resolutions": {
-    "@metamask/auto-changelog@^6.2.1": "npm:@metamask-previews/auto-changelog@7.0.1-preview-04c950b",
     "@typescript/old": "patch:typescript@npm%3A6.0.3#~/.yarn/patches/typescript-npm-6.0.3-585eecd158.patch",
     "@yarnpkg/core": "4.9.1"
   },

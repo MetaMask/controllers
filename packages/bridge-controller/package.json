@@ -77,7 +77,7 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@metamask/eth-json-rpc-provider": "^7.0.0",
     "@metamask/superstruct": "^3.4.1",
     "@typescript/native": "npm:typescript@^7.0.2",

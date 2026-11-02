@@ -55,7 +55,7 @@
     "yargs-parser": "^22.0.0"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@types/unzipper": "^0.10.10",
     "@types/yargs": "^17.0.35",
     "@types/yargs-parser": "^21.0.3",

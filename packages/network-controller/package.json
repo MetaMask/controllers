@@ -76,7 +76,7 @@
   },
   "devDependencies": {
     "@json-rpc-specification/meta-schema": "^1.0.6",
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@types/deep-freeze-strict": "^1.1.0",
     "@types/lodash-es": "^4.17.12",
     "@types/node-fetch": "^2.6.12",

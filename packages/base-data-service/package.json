@@ -62,7 +62,7 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@types/lodash-es": "^4.17.12",
     "@typescript/native": "npm:typescript@^7.0.2",
     "nock": "^15.0.5",
