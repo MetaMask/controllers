@@ -50,6 +50,7 @@ export type MoneyAccountLifecycleControllerGetMoneyAccountIdentityAction = {
  * lifecycle and registration statuses. CHOMP cannot push updates, so clients
  * call this to pick up changes made elsewhere, such as another device
  * migrating the Money Account to MFA (for example, when a screen gains focus).
+ * Joins a fetch already in flight instead of starting another.
  *
  * @returns A promise that resolves once the latest fetch has been recorded,
  * or straight away when the feature is disabled or the wallet is not ready.
@@ -64,14 +65,16 @@ export type MoneyAccountLifecycleControllerRefreshAction = {
  * Triggers the Money Account upgrade process for the primary Money Account,
  * including its EIP-7702 upgrade, through `MoneyAccountUpgradeController`.
  * Only a Money Account that is not in an identity or is a valid SFA is
- * upgraded. Makes a single attempt; clients decide when to call it and how to
- * retry. Concurrent calls share the attempt in flight.
+ * upgraded, judged from the latest identity fetch. Makes a single attempt;
+ * clients decide when to call it and how to retry. Concurrent calls share the
+ * attempt in flight. After upgrading, refetches identities so the recorded
+ * lifecycle reflects the upgrade.
  *
  * @returns A promise that resolves once the attempt completes, or straight
  * away when the feature is disabled, the wallet is not ready, or the Money
  * Account cannot be upgraded.
  * @throws When there is no Money Account, or the error from fetching
- * identities or from the upgrade, unchanged.
+ * identities before upgrading or from the upgrade, unchanged.
  */
 export type MoneyAccountLifecycleControllerUpgradeMoneyAccountAction = {
   type: `MoneyAccountLifecycleController:upgradeMoneyAccount`;
