@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING:** `PerpsControllerMessenger` now requires the `GeolocationController:stateChange` event, and `PerpsController` re-checks eligibility when the geolocation country or region changes, so a VPN toggled mid-session updates geo-blocking without a restart ([#11242](https://github.com/MetaMask/core/pull/11242))
+  - Clients must delegate `GeolocationController:stateChange` to the Perps messenger. Until they do, eligibility is only checked as before (on construction and on feature flag changes).
+
 ## [22.1.0]
 
 ### Added
