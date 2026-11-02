@@ -244,12 +244,15 @@ describe('AuthenticatedUserStorageService', () => {
     });
 
     it('sends the correct request body', async () => {
-      handleMockCreateDelegation(undefined, async (_, requestBody) => {
-        expect(requestBody).toStrictEqual(MOCK_DELEGATION_SUBMISSION);
-      });
+      const mock = handleMockCreateDelegation(
+        undefined,
+        MOCK_DELEGATION_SUBMISSION,
+      );
       const { service } = createService();
 
       await service.createDelegation(MOCK_DELEGATION_SUBMISSION);
+
+      expect(mock.isDone()).toBe(true);
     });
   });
 
@@ -337,15 +340,15 @@ describe('AuthenticatedUserStorageService', () => {
     });
 
     it('sends the correct request body', async () => {
-      handleMockPutNotificationPreferences(
+      const mock = handleMockPutNotificationPreferences(
         undefined,
-        async (_, requestBody) => {
-          expect(requestBody).toStrictEqual(MOCK_NOTIFICATION_PREFERENCES);
-        },
+        MOCK_NOTIFICATION_PREFERENCES,
       );
       const { service } = createService();
 
       await service.putNotificationPreferences(MOCK_NOTIFICATION_PREFERENCES);
+
+      expect(mock.isDone()).toBe(true);
     });
 
     it('throws when the API returns a non-200 status', async () => {
@@ -453,12 +456,15 @@ describe('AuthenticatedUserStorageService', () => {
     });
 
     it('sends the correct request body', async () => {
-      handleMockPutMarketingConsent(undefined, async (_, requestBody) => {
-        expect(requestBody).toStrictEqual(MOCK_MARKETING_CONSENT);
-      });
+      const mock = handleMockPutMarketingConsent(
+        undefined,
+        MOCK_MARKETING_CONSENT,
+      );
       const { service } = createService();
 
       await service.putMarketingConsent(MOCK_MARKETING_CONSENT);
+
+      expect(mock.isDone()).toBe(true);
     });
 
     it('throws when the API returns a non-200 status', async () => {
@@ -571,15 +577,17 @@ describe('AuthenticatedUserStorageService', () => {
     });
 
     it('sends the audience write body, not the granted-audience map', async () => {
-      handleMockPutIdentitySharingConsent(undefined, async (_, requestBody) => {
-        expect(requestBody).toStrictEqual(MOCK_IDENTITY_SHARING_CONSENT_WRITE);
-        expect(requestBody).not.toStrictEqual(MOCK_IDENTITY_SHARING_CONSENT);
-      });
+      const mock = handleMockPutIdentitySharingConsent(
+        undefined,
+        MOCK_IDENTITY_SHARING_CONSENT_WRITE,
+      );
       const { service } = createService();
 
       await service.putIdentitySharingConsent(
         MOCK_IDENTITY_SHARING_CONSENT_WRITE,
       );
+
+      expect(mock.isDone()).toBe(true);
     });
 
     it('throws when the API returns a non-200 status', async () => {
@@ -723,12 +731,15 @@ describe('AuthenticatedUserStorageService', () => {
     });
 
     it('sends the correct request body', async () => {
-      handleMockSetAssetsWatchlist(undefined, async (_, requestBody) => {
-        expect(requestBody).toStrictEqual(MOCK_ASSETS_WATCHLIST_BLOB);
-      });
+      const mock = handleMockSetAssetsWatchlist(
+        undefined,
+        MOCK_ASSETS_WATCHLIST_BLOB,
+      );
       const { service } = createService();
 
       await service.setAssetsWatchlist(MOCK_ASSETS_WATCHLIST_BLOB);
+
+      expect(mock.isDone()).toBe(true);
     });
 
     it('sends Content-Type and Authorization headers but no X-Client-Type when clientType is omitted', async () => {
@@ -884,16 +895,11 @@ describe('AuthenticatedUserStorageService', () => {
 
   describe('AuthenticatedUserStorageService:clearUserAssets', () => {
     it('wipes the blob via the messenger', async () => {
-      const mock = handleMockSetUserAssets(
-        undefined,
-        async (_, requestBody) => {
-          expect(requestBody).toStrictEqual({
-            version: 1,
-            importedAssets: [],
-            hiddenAssets: [],
-          });
-        },
-      );
+      const mock = handleMockSetUserAssets(undefined, {
+        version: 1,
+        importedAssets: [],
+        hiddenAssets: [],
+      });
       const { rootMessenger } = createService();
 
       await rootMessenger.call(
@@ -988,12 +994,12 @@ describe('AuthenticatedUserStorageService', () => {
     });
 
     it('sends the correct request body', async () => {
-      handleMockSetUserAssets(undefined, async (_, requestBody) => {
-        expect(requestBody).toStrictEqual(MOCK_USER_ASSETS_BLOB);
-      });
+      const mock = handleMockSetUserAssets(undefined, MOCK_USER_ASSETS_BLOB);
       const { service } = createService();
 
       await service.setUserAssets(MOCK_USER_ASSETS_BLOB);
+
+      expect(mock.isDone()).toBe(true);
     });
 
     it('sends Content-Type and Authorization headers but no X-Client-Type when clientType is omitted', async () => {
@@ -1121,12 +1127,10 @@ describe('AuthenticatedUserStorageService', () => {
     });
 
     it('de-duplicates entries before sending the request', async () => {
-      handleMockSetUserAssets(undefined, async (_, requestBody) => {
-        expect(requestBody).toStrictEqual({
-          version: 1,
-          importedAssets: [MOCK_USDC_ETH_ASSET_ID, MOCK_USDC_BASE_ASSET_ID],
-          hiddenAssets: [MOCK_USDC_OP_ASSET_ID],
-        });
+      const mock = handleMockSetUserAssets(undefined, {
+        version: 1,
+        importedAssets: [MOCK_USDC_ETH_ASSET_ID, MOCK_USDC_BASE_ASSET_ID],
+        hiddenAssets: [MOCK_USDC_OP_ASSET_ID],
       });
       const { service } = createService();
 
@@ -1139,15 +1143,15 @@ describe('AuthenticatedUserStorageService', () => {
         ],
         hiddenAssets: [MOCK_USDC_OP_ASSET_ID, MOCK_USDC_OP_ASSET_ID],
       });
+
+      expect(mock.isDone()).toBe(true);
     });
 
     it('resolves conflicts fail-open (import wins) before sending the request', async () => {
-      handleMockSetUserAssets(undefined, async (_, requestBody) => {
-        expect(requestBody).toStrictEqual({
-          version: 1,
-          importedAssets: [MOCK_USDC_BASE_ASSET_ID],
-          hiddenAssets: [],
-        });
+      const mock = handleMockSetUserAssets(undefined, {
+        version: 1,
+        importedAssets: [MOCK_USDC_BASE_ASSET_ID],
+        hiddenAssets: [],
       });
       const { service } = createService();
 
@@ -1157,6 +1161,8 @@ describe('AuthenticatedUserStorageService', () => {
         importedAssets: [MOCK_USDC_BASE_ASSET_ID],
         hiddenAssets: [MOCK_USDC_BASE_ASSET_ID],
       });
+
+      expect(mock.isDone()).toBe(true);
     });
   });
 
@@ -1184,14 +1190,13 @@ describe('AuthenticatedUserStorageService', () => {
       '$method creates a fresh blob when none exists (404)',
       async ({ method, ids, expectedBlob }) => {
         handleMockGetUserAssets({ status: 404 });
-        handleMockSetUserAssets(undefined, async (_, requestBody) => {
-          expect(requestBody).toStrictEqual(expectedBlob);
-        });
+        const mock = handleMockSetUserAssets(undefined, expectedBlob);
         const { service } = createService();
 
         const result = await service[method]([...ids]);
 
         expect(result).toStrictEqual(expectedBlob);
+        expect(mock.isDone()).toBe(true);
       },
     );
 
@@ -1230,14 +1235,13 @@ describe('AuthenticatedUserStorageService', () => {
       '$method merges into the existing list, de-duplicating entries',
       async ({ method, addedList, ids, expectedList, expectedRequest }) => {
         handleMockGetUserAssets();
-        handleMockSetUserAssets(undefined, async (_, requestBody) => {
-          expect(requestBody).toStrictEqual(expectedRequest);
-        });
+        const mock = handleMockSetUserAssets(undefined, expectedRequest);
         const { service } = createService();
 
         const result = await service[method]([...ids]);
 
         expect(result[addedList]).toStrictEqual(expectedList);
+        expect(mock.isDone()).toBe(true);
       },
     );
 
@@ -1268,9 +1272,7 @@ describe('AuthenticatedUserStorageService', () => {
       '$method removes the tokens from the opposite list (mutual exclusivity)',
       async ({ method, ids, expectedRequest }) => {
         handleMockGetUserAssets();
-        handleMockSetUserAssets(undefined, async (_, requestBody) => {
-          expect(requestBody).toStrictEqual(expectedRequest);
-        });
+        const mock = handleMockSetUserAssets(undefined, expectedRequest);
         const { service } = createService();
 
         const result = await service[method]([...ids]);
@@ -1279,6 +1281,7 @@ describe('AuthenticatedUserStorageService', () => {
           expectedRequest.importedAssets,
         );
         expect(result.hiddenAssets).toStrictEqual(expectedRequest.hiddenAssets);
+        expect(mock.isDone()).toBe(true);
       },
     );
 

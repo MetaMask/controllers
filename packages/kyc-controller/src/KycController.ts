@@ -17,6 +17,12 @@ import type {
 import { stringToBytes, wrapError } from '@metamask/utils';
 import { x25519 } from '@noble/curves/ed25519';
 
+import type {
+  KycAnalyticsStatus,
+  KycAnalyticsTrackers,
+  KycAnalyticsVerificationOutcomePayload,
+} from './analytics.js';
+import { getKycAnalyticsStatus } from './analytics.js';
 import { toBase64Url } from './encoding.js';
 import type { KycControllerMethodActions } from './KycController-method-action-types.js';
 import type { KycServiceMethodActions } from './KycService-method-action-types.js';
@@ -37,9 +43,12 @@ import { consentRecordsFromAcceptedList } from './sessionDisclaimers.js';
 import {
   needsCapabilityAuthorizationRefresh,
   FINAL_STATUSES_TO_STOP_POLLING,
+  KYC_CURRENT_STEPS,
+  KYC_STATUSES,
 } from './types.js';
 import type {
   KycConsentRecord,
+  KycDataShare,
   KycDisclaimer,
   KycDisclaimersCatalog,
   KycProviderDisclaimersAccepted,
@@ -259,10 +268,12 @@ export type FetchSessionDisclaimersParams =
 // === MESSENGER ===
 
 const MESSENGER_EXPOSED_METHODS = [
+  'ensureLocalUserSecret',
   'startSession',
   'reset',
   'clearState',
   'getSessionStatusForVendor',
+  'getDataShares',
   'getProviderFlowStatus',
   'refreshSessionStatus',
   'readSessionStatus',
@@ -319,6 +330,11 @@ export type KycControllerOptions = {
    * the controller stays platform-agnostic.
    */
   sumsubLauncher: KycSumSubLauncher;
+  /**
+   * Optional client callbacks that record KYC analytics. Omitted clients
+   * record nothing. See {@link KycAnalyticsTrackers}.
+   */
+  trackKycAnalytics?: KycAnalyticsTrackers;
 };
 
 // === CONTROLLER DEFINITION ===
@@ -339,6 +355,8 @@ export class KycController extends BaseController<
 
   readonly #localUserSecretStore: UkycLocalUserSecretStore;
 
+  readonly #trackKycAnalytics?: KycAnalyticsTrackers;
+
   /** Handle for the scheduled next session-status poll, or `null`. */
   #sessionStatusPollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -355,8 +373,14 @@ export class KycController extends BaseController<
    * @param options.messenger - The messenger suited for this controller.
    * @param options.state - Partial initial state; merged over defaults.
    * @param options.sumsubLauncher - The platform SumSub launcher adapter.
+   * @param options.trackKycAnalytics - Optional callbacks that record KYC analytics.
    */
-  constructor({ messenger, state, sumsubLauncher }: KycControllerOptions) {
+  constructor({
+    messenger,
+    state,
+    sumsubLauncher,
+    trackKycAnalytics,
+  }: KycControllerOptions) {
     super({
       messenger,
       metadata: kycControllerMetadata,
@@ -365,6 +389,7 @@ export class KycController extends BaseController<
     });
 
     this.#sumsubLauncher = sumsubLauncher;
+    this.#trackKycAnalytics = trackKycAnalytics;
     this.#localUserSecretStore = new UkycLocalUserSecretStore(this.messenger);
 
     this.messenger.registerMethodActionHandlers(
@@ -411,6 +436,29 @@ export class KycController extends BaseController<
   }
 
   /**
+   * Creates the UKYC `local_user_secret` and stores it in Encrypted User
+   * Storage when one does not already exist.
+   *
+   * Call this after the user has expressed intent to onboard and before
+   * {@link startSession}. Persisting the secret here moves generation and the
+   * storage write off the `startSession` path. `startSession` still reads the
+   * secret, and still creates it when this has not been called.
+   *
+   * Await this call, or attach a rejection handler. A failure does not block
+   * onboarding: {@link startSession} creates the secret if it is still missing.
+   *
+   * The operation is idempotent and uses the same primary entropy source as
+   * session creation. The plaintext secret is not returned and is not sent to
+   * idOS. Only the encrypted User Storage copy is synced.
+   *
+   * @throws When Encrypted User Storage cannot be read or written, or when a
+   * stored secret has an unexpected length.
+   */
+  async ensureLocalUserSecret(): Promise<void> {
+    await getOrCreateLocalUserSecret(this.#localUserSecretStore);
+  }
+
+  /**
    * Starts a KYC session for the given vendor. Reuses a latest vendor session
    * when one exists; otherwise creates a UKYC session.
    *
@@ -418,6 +466,11 @@ export class KycController extends BaseController<
    * identity token. When that request returns HTTP 422, a stored email is
    * kept for an existing session. Creating a vendor customer and UKYC session
    * requires the token, which both requests send as `partnerIdentityToken`.
+   *
+   * Session creation derives client material from the UKYC
+   * `local_user_secret`. Call {@link ensureLocalUserSecret} after the user
+   * has expressed intent to onboard so that secret is generated and stored
+   * before this method runs.
    *
    * @param params - The session parameters.
    * @param params.vendor - Identity vendor for the session.
@@ -510,9 +563,7 @@ export class KycController extends BaseController<
       { sessionId: this.state.sessionStatus.id },
     );
 
-    this.update((state) => {
-      state.sessionStatus = sessionStatus;
-    });
+    this.#updateSessionStatusAndTrackAnalytics(sessionStatus);
     // TODO: Should we resume polling here?
     return this.#refreshAuthorizationsIfNeeded();
   }
@@ -555,6 +606,40 @@ export class KycController extends BaseController<
     vendor: KycVendor,
   ): Promise<KycSessionStatus | null> {
     return this.messenger.call('KycService:getSessionStatusForVendor', vendor);
+  }
+
+  /**
+   * Fetches the vendors this customer's verified identity data has been shared
+   * with, newest first.
+   *
+   * The external user id comes from the session status on state. When no
+   * session has been stored yet, the latest session for the vendor on state is
+   * fetched first (without writing it to state). An unresolvable session — no
+   * vendor on state, or no latest session for it — yields an empty list rather
+   * than an error, so consumers can render an empty "shared with" list.
+   *
+   * @returns The data shares, newest first; empty when no session can be
+   * resolved.
+   */
+  async getDataShares(): Promise<KycDataShare[]> {
+    let externalUserId = this.state.sessionStatus?.externalUserId;
+
+    if (!externalUserId) {
+      const { vendor } = this.state;
+      if (!vendor) {
+        return [];
+      }
+      const sessionStatus = await this.messenger.call(
+        'KycService:getSessionStatusForVendor',
+        vendor,
+      );
+      if (!sessionStatus) {
+        return [];
+      }
+      externalUserId = sessionStatus.externalUserId;
+    }
+
+    return this.messenger.call('KycService:getDataShares', { externalUserId });
   }
 
   /**
@@ -613,9 +698,7 @@ export class KycController extends BaseController<
       'KycService:getSessionStatus',
       { sessionId },
     );
-    this.update((state) => {
-      state.sessionStatus = sessionStatus;
-    });
+    this.#updateSessionStatusAndTrackAnalytics(sessionStatus);
     return sessionStatus;
   }
 
@@ -685,9 +768,7 @@ export class KycController extends BaseController<
         JSON.stringify(this.state.sessionStatus) !==
         JSON.stringify(sessionStatus)
       ) {
-        this.update((state) => {
-          state.sessionStatus = sessionStatus;
-        });
+        this.#updateSessionStatusAndTrackAnalytics(sessionStatus);
       }
 
       if (FINAL_STATUSES_TO_STOP_POLLING.has(sessionStatus.finalStatus)) {
@@ -698,6 +779,113 @@ export class KycController extends BaseController<
     } catch {
       return this.#sessionStatusPollToken !== token;
     }
+  }
+
+  // === ANALYTICS ===
+  //
+  // The private methods from here to `#stopSessionStatusPolling` only compute
+  // analytics payloads and call `trackKycAnalytics`. Business methods call the
+  // `...AndTrackAnalytics` wrappers in place of a plain `this.update`, so the
+  // state write itself is unchanged and the analytics step is named at each
+  // call site.
+
+  /**
+   * Computes the analytics KYC status from the current state.
+   *
+   * @returns The analytics KYC status.
+   */
+  #getKycAnalyticsStatus(): KycAnalyticsStatus {
+    return getKycAnalyticsStatus(this.state.sessionStatus);
+  }
+
+  /**
+   * Reports one SumSub launch outcome through `trackKycAnalytics`.
+   *
+   * A callback exception is ignored. The KYC outcome is already stored, and
+   * analytics must not replace it or skip the polling that follows a submit.
+   *
+   * @param status - The launch outcome.
+   */
+  #trackAnalyticsVerificationOutcome(
+    status: KycAnalyticsVerificationOutcomePayload['status'],
+  ): void {
+    try {
+      this.#trackKycAnalytics?.verificationOutcome({
+        status,
+        kycStatus: this.#getKycAnalyticsStatus(),
+        providerFlowStatus: this.state.providerFlowStatus,
+        vendor: this.state.vendor,
+      });
+    } catch {
+      // The host's tracker failed. The launch outcome stays as written.
+    }
+  }
+
+  /**
+   * Reports an analytics KYC status change when it differs from the status
+   * before the causing write.
+   *
+   * A callback exception is ignored, so a tracker failure cannot keep a
+   * finished session polling.
+   *
+   * @param previousAnalyticsStatus - Analytics KYC status before the causing write.
+   */
+  #trackAnalyticsStatusIfChanged(
+    previousAnalyticsStatus: KycAnalyticsStatus,
+  ): void {
+    const kycStatus = this.#getKycAnalyticsStatus();
+    if (kycStatus === previousAnalyticsStatus) {
+      return;
+    }
+    try {
+      this.#trackKycAnalytics?.statusChanged({
+        previousKycStatus: previousAnalyticsStatus,
+        kycStatus,
+        providerFlowStatus: this.state.providerFlowStatus,
+        vendor: this.state.vendor,
+      });
+    } catch {
+      // The host's tracker failed. The stored session stays as written.
+    }
+  }
+
+  /**
+   * Replaces the stored session status, then reports an analytics KYC status
+   * change when one occurred. State is written before the callback runs.
+   *
+   * Writes that load a session into an empty slot must not use this helper, so
+   * an already-decided session found on a fresh install is not reported.
+   *
+   * @param sessionStatus - The session status to store.
+   */
+  #updateSessionStatusAndTrackAnalytics(sessionStatus: KycSessionStatus): void {
+    const previousAnalyticsStatus = this.#getKycAnalyticsStatus();
+    this.update((state) => {
+      state.sessionStatus = sessionStatus;
+    });
+    this.#trackAnalyticsStatusIfChanged(previousAnalyticsStatus);
+  }
+
+  /**
+   * Applies the state write for one SumSub launch attempt, then reports the
+   * launch outcome and, if the write changed the analytics KYC status (a
+   * submitted launch moves it to `pending`), the status change. Every attempt
+   * is reported, including a repeat of the previous outcome. Pass no `update`
+   * for failures that must not write state.
+   *
+   * @param status - The launch outcome.
+   * @param update - Optional state write applied before the callbacks run.
+   */
+  #recordLaunchOutcomeAndTrackAnalytics(
+    status: 'submitted' | 'abandoned' | 'failed',
+    update?: (state: KycControllerState) => void,
+  ): void {
+    const previousAnalyticsStatus = this.#getKycAnalyticsStatus();
+    if (update) {
+      this.update(update);
+    }
+    this.#trackAnalyticsVerificationOutcome(status);
+    this.#trackAnalyticsStatusIfChanged(previousAnalyticsStatus);
   }
 
   /**
@@ -817,9 +1005,7 @@ export class KycController extends BaseController<
       },
     );
 
-    this.update((state) => {
-      state.sessionStatus = sessionStatus;
-    });
+    this.#updateSessionStatusAndTrackAnalytics(sessionStatus);
 
     return sessionStatus;
   }
@@ -1139,7 +1325,7 @@ export class KycController extends BaseController<
   }): Promise<KycProviderFlowStatus> {
     const sessionId = this.state.sessionStatus?.id;
     if (!this.#sumsubLauncher.isAvailable() || !sessionId) {
-      this.update((state) => {
+      this.#recordLaunchOutcomeAndTrackAnalytics('failed', (state) => {
         state.providerFlowStatus = 'failed';
       });
       return 'failed';
@@ -1187,11 +1373,12 @@ export class KycController extends BaseController<
 
       const currentSessionStatus = this.state.sessionStatus;
       if (currentSessionStatus?.id !== sessionId) {
+        this.#recordLaunchOutcomeAndTrackAnalytics('failed');
         return 'failed';
       }
 
       if (sdkFailed) {
-        this.update((state) => {
+        this.#recordLaunchOutcomeAndTrackAnalytics('failed', (state) => {
           state.providerFlowStatus = 'failed';
         });
         return 'failed';
@@ -1200,10 +1387,13 @@ export class KycController extends BaseController<
       if (reachedCompletion) {
         // Once the SDK completes, the authoritative verification decision comes
         // from the UKYC backend, not the SDK result.
-        this.update((state) => {
+        this.#recordLaunchOutcomeAndTrackAnalytics('submitted', (state) => {
           state.sessionStatus = {
             ...currentSessionStatus,
-            finalStatus: 'pending',
+            finalStatus: KYC_STATUSES.pending,
+            // The applicant has submitted documents, so the session is in
+            // vendor processing rather than still on the `kyc` step.
+            currentStep: KYC_CURRENT_STEPS.processing,
           };
           state.providerFlowStatus = 'submitted';
         });
@@ -1211,15 +1401,17 @@ export class KycController extends BaseController<
         return 'submitted';
       }
 
-      this.update((state) => {
+      this.#recordLaunchOutcomeAndTrackAnalytics('abandoned', (state) => {
         state.providerFlowStatus = 'abandoned';
       });
       return 'abandoned';
     } catch {
       if (this.state.sessionStatus?.id === sessionId) {
-        this.update((state) => {
+        this.#recordLaunchOutcomeAndTrackAnalytics('failed', (state) => {
           state.providerFlowStatus = 'failed';
         });
+      } else {
+        this.#recordLaunchOutcomeAndTrackAnalytics('failed');
       }
       return 'failed';
     }

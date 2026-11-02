@@ -81,6 +81,8 @@ const fullHydratedPosition = {
             uid: 'comment-1',
             commentText: 'Hello',
             timestamp: 100,
+            sourceLanguage: 'ko',
+            translations: { en: 'Hello' },
             metrics: {
               reactions: [
                 null,
@@ -149,10 +151,33 @@ const compactFeedItem = {
   },
 };
 
+const socketAuthorComment = {
+  uid: 'comment-1',
+  text: 'Hello',
+  timestamp: 100,
+  sourceLanguage: 'ko',
+  translations: { en: 'Hello' },
+  engagement: {
+    reactions: [
+      {
+        emotion: '👍',
+        count: 2,
+        profiles: [{ id: 'profile-2', name: 'Reacting trader' }],
+      },
+    ],
+    userReaction: '👍',
+    replyCount: 2,
+  },
+};
+
 describe('parseRealtimeFeedItem', () => {
   it('normalizes a full hydrated position into a feed item', () => {
-    const item = normalizeRealtimeFeedItem(fullHydratedPosition);
-    const parsed = parseRealtimeFeedItem(fullHydratedPosition);
+    const value = {
+      ...fullHydratedPosition,
+      authorComment: socketAuthorComment,
+    };
+    const item = normalizeRealtimeFeedItem(value);
+    const parsed = parseRealtimeFeedItem(value);
 
     expect(item).toMatchObject({
       positionId: 'position-1',
@@ -172,6 +197,8 @@ describe('parseRealtimeFeedItem', () => {
       authorComment: {
         uid: 'comment-1',
         text: 'Hello',
+        sourceLanguage: 'ko',
+        translations: { en: 'Hello' },
         engagement: {
           replyCount: 2,
         },
@@ -188,11 +215,47 @@ describe('parseRealtimeFeedItem', () => {
     expect(parsed).toMatchObject({ positionId: 'position-1' });
   });
 
+  it('keeps a null source language on the socket author comment', () => {
+    const value = {
+      ...fullHydratedPosition,
+      authorComment: {
+        uid: 'comment-2',
+        text: 'Hello',
+        timestamp: 100,
+        sourceLanguage: null,
+        translations: { en: 'Hello' },
+        engagement: { reactions: [], userReaction: null },
+      },
+    };
+
+    expect(normalizeRealtimeFeedItem(value)?.authorComment).toMatchObject({
+      uid: 'comment-2',
+      sourceLanguage: null,
+      translations: { en: 'Hello' },
+    });
+  });
+
+  it('drops the realtime item when a translation is not a string', () => {
+    const value = {
+      ...fullHydratedPosition,
+      authorComment: {
+        uid: 'comment-2',
+        text: 'Hello',
+        timestamp: 100,
+        sourceLanguage: null,
+        translations: { en: 'Hello', pt: 1 },
+        engagement: { reactions: [], userReaction: null },
+      },
+    };
+
+    expect(parseRealtimeFeedItem(value)).toBeUndefined();
+  });
+
   it('rejects compact event payloads', () => {
     expect(parseRealtimeFeedItem(compactFeedItem)).toBeUndefined();
   });
 
-  it('handles optional perp metadata and malformed comments', () => {
+  it('handles optional perp metadata without deriving an author comment', () => {
     const value = {
       ...fullHydratedPosition,
       metadata: {
@@ -226,19 +289,14 @@ describe('parseRealtimeFeedItem', () => {
       },
     };
 
-    expect(normalizeRealtimeFeedItem(value)).toMatchObject({
-      authorComment: {
-        uid: 'comment-invalid-metrics',
-        engagement: {
-          reactions: [],
-          userReaction: null,
-          replyCount: 0,
-        },
-      },
+    const item = normalizeRealtimeFeedItem(value);
+
+    expect(item).toMatchObject({
       perpPositionType: 'short',
       perpLeverage: 5,
       positionAmountWithLeverage: 10,
     });
+    expect(item).not.toHaveProperty('authorComment');
   });
 
   it('rejects incomplete event data', () => {
@@ -296,7 +354,6 @@ describe('parseRealtimeFeedItem', () => {
     };
 
     expect(normalizeRealtimeFeedItem(value)).toMatchObject({
-      authorComment: null,
       actor: {
         imageUrl: null,
         winRate30d: null,
@@ -354,15 +411,67 @@ describe('parseRealtimeFeedItem', () => {
     });
   });
 
-  it('returns no author comment for an empty trade history', () => {
+  it('passes the socket author comment through unchanged', () => {
     const value = {
+      ...fullHydratedPosition,
+      authorComment: socketAuthorComment,
+    };
+
+    const item = normalizeRealtimeFeedItem(value);
+
+    expect(item?.authorComment).toBe(socketAuthorComment);
+  });
+
+  it('keeps a null socket author comment as null', () => {
+    const value = { ...fullHydratedPosition, authorComment: null };
+
+    const item = normalizeRealtimeFeedItem(value);
+
+    expect(item).toHaveProperty('authorComment', null);
+  });
+
+  it('leaves author comment absent instead of deriving one from trade comments', () => {
+    const item = normalizeRealtimeFeedItem(fullHydratedPosition);
+
+    expect(item).not.toHaveProperty('authorComment');
+  });
+
+  it('rejects a realtime item whose author comment is malformed', () => {
+    const value = { ...fullHydratedPosition, authorComment: { uid: 1 } };
+
+    expect(parseRealtimeFeedItem(value)).toBeUndefined();
+  });
+
+  it('copies position flags from the hydrated card and ignores metadata', () => {
+    const fromMetadataOnly = normalizeRealtimeFeedItem({
       ...fullHydratedPosition,
       metadata: {
         ...fullHydratedPosition.metadata,
-        trades: [],
+        flags: ['insider'],
       },
-    };
+    });
+    const fromCard = normalizeRealtimeFeedItem({
+      ...fullHydratedPosition,
+      metadata: {
+        ...fullHydratedPosition.metadata,
+        flags: ['insider'],
+      },
+      flags: ['developer', 'future-flag'],
+    });
+    const absent = normalizeRealtimeFeedItem(fullHydratedPosition);
 
-    expect(normalizeRealtimeFeedItem(value)?.authorComment).toBeNull();
+    expect(fromMetadataOnly?.flags).toBeUndefined();
+    expect(fromCard?.flags).toStrictEqual(['developer', 'future-flag']);
+    expect(absent?.flags).toBeUndefined();
+  });
+
+  it('keeps flags on an already normalized feed item', () => {
+    const normalized = normalizeRealtimeFeedItem(fullHydratedPosition);
+    const flagged = { ...normalized, flags: ['insider'] };
+
+    expect(parseRealtimeFeedItem(flagged)?.flags).toStrictEqual(['insider']);
+    expect(
+      parseRealtimeFeedItem({ ...normalized, flags: 'insider' }),
+    ).toBeUndefined();
   });
 });
