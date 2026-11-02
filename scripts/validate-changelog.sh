@@ -60,12 +60,19 @@ resolve_base_version() {
 # `--rc` (which requires a matching version heading) never applies. An empty
 # base version means the package is newly added (it did not exist at the base),
 # so there is nothing to compare against and `--rc` is skipped.
+#
+# Operates on the package in the current working directory.
 should_validate_as_release_candidate() {
   local branch_name="$1"
-  local current_version="$2"
-  local base_version="$3"
 
   [[ "${branch_name}" =~ ^release/ ]] || return 1
+
+  local current_version
+  current_version="$(jq --raw-output '.version' package.json)"
+
+  local base_version
+  base_version="$(resolve_base_version)" || return 1
+
   [[ -n "${base_version}" ]] || return 1
   [[ "${current_version}" != "0.0.0" ]] || return 1
   [[ "${current_version}" != "${base_version}" ]] || return 1
@@ -73,17 +80,7 @@ should_validate_as_release_candidate() {
 }
 
 resolve_rc_flag() {
-  local branch_name="$1"
-
-  local current_version
-  current_version="$(jq --raw-output '.version' package.json)"
-
-  local base_version=""
-  if [[ "${branch_name}" =~ ^release/ ]]; then
-    base_version="$(resolve_base_version)"
-  fi
-
-  if should_validate_as_release_candidate "${branch_name}" "${current_version}" "${base_version}"; then
+  if should_validate_as_release_candidate "$1"; then
     echo "--rc"
   fi
 }
@@ -107,26 +104,40 @@ validate_all() {
   local branch_name
   branch_name="$(resolve_branch_name)"
 
+  local root_directory
+  root_directory="$(pwd)"
+
+  # Packages without a changelog are skipped, like `--all` does.
+  local locations=()
+  local location
+  while IFS= read -r location; do
+    if [[ -f "${root_directory}/${location}/CHANGELOG.md" ]]; then
+      locations+=("${location}")
+    fi
+  done < <(yarn workspaces list --no-private --json | jq --raw-output '.location')
+
   # `--all` applies `--rc` to every package or none, so it can only be used when
   # no package is a release candidate.
-  if [[ ! "${branch_name}" =~ ^release/ ]]; then
+  local has_release_candidate=false
+  for location in "${locations[@]}"; do
+    if (cd "${root_directory}/${location}" && should_validate_as_release_candidate "${branch_name}"); then
+      has_release_candidate=true
+      break
+    fi
+  done
+
+  if [[ "${has_release_candidate}" == false ]]; then
     yarn auto-changelog validate --all --formatter oxfmt "$@"
     return 0
   fi
 
-  local root_directory
-  root_directory="$(pwd)"
-
-  local location
-  while IFS= read -r location; do
-    # Packages without a changelog are skipped, like `--all` does.
-    [[ -f "${root_directory}/${location}/CHANGELOG.md" ]] || continue
-
+  # Otherwise, validate each package once, deciding `--rc` per package.
+  for location in "${locations[@]}"; do
     (
       cd "${root_directory}/${location}"
       validate_package "$@"
     )
-  done < <(yarn workspaces list --no-private --json | jq --raw-output '.location')
+  done
 }
 
 main() {
