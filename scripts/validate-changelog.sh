@@ -89,8 +89,8 @@ resolve_rc_flag() {
 }
 
 validate_package() {
-  local package_name="$1"
-  shift # remove package name from arguments
+  local package_name
+  package_name="$(jq --raw-output '.name' package.json)"
 
   local branch_name
   branch_name="$(resolve_branch_name)"
@@ -107,39 +107,30 @@ validate_all() {
   local branch_name
   branch_name="$(resolve_branch_name)"
 
-  yarn auto-changelog validate --all --formatter oxfmt "$@"
-
-  [[ "${branch_name}" =~ ^release/ ]] || return 0
+  # `--all` applies `--rc` to every package or none, so it can only be used when
+  # no package is a release candidate.
+  if [[ ! "${branch_name}" =~ ^release/ ]]; then
+    yarn auto-changelog validate --all --formatter oxfmt "$@"
+    return 0
+  fi
 
   local root_directory
   root_directory="$(pwd)"
 
-  local workspace location package_name rc_flag
-  while IFS= read -r workspace; do
-    location="$(jq --raw-output '.location' <<<"${workspace}")"
-    package_name="$(jq --raw-output '.name' <<<"${workspace}")"
-
+  local location
+  while IFS= read -r location; do
     # Packages without a changelog are skipped, like `--all` does.
     [[ -f "${root_directory}/${location}/CHANGELOG.md" ]] || continue
 
-    rc_flag="$(cd "${root_directory}/${location}" && resolve_rc_flag "${branch_name}")"
-    [[ -n "${rc_flag}" ]] || continue
-
     (
       cd "${root_directory}/${location}"
-      yarn auto-changelog validate --formatter oxfmt --tag-prefix "${package_name}@" --rc "$@"
+      validate_package "$@"
     )
-  done < <(yarn workspaces list --no-private --json)
+  done < <(yarn workspaces list --no-private --json | jq --raw-output '.location')
 }
 
 main() {
-  if [[ $# -eq 0 ]]; then
-    echo "Missing package name, or \`--all\`."
-    exit 1
-  fi
-
-  if [[ "$1" == "--all" ]]; then
-    shift # remove `--all` from arguments
+  if jq --exit-status 'has("workspaces")' package.json >/dev/null; then
     validate_all "$@"
   else
     validate_package "$@"
