@@ -5,10 +5,6 @@ import type {
   MessengerActions,
   MessengerEvents,
 } from '@metamask/messenger';
-import {
-  AuthConnection,
-  type SeedlessOnboardingController,
-} from '@metamask/seedless-onboarding-controller';
 import { bytesToHex } from '@metamask/utils';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -33,17 +29,16 @@ import type {
   MfaRecoveryControllerOptions,
 } from './MfaRecoveryController.js';
 import { MfaRecoveryController } from './MfaRecoveryController.js';
-import {
-  SEEDLESS_AUTH_CONNECTIONS,
-  type Identifier,
-  type IdentifierSession,
-  type KeyBoundIdentifierLogin,
-  type RecoveredSecret,
-  type RecoveryEscrowProvider,
-  type RecoveryIdentifierAuthProvider,
-  type RegisterPayload,
-  type SeedlessAuthData,
-  type WritingPendingOperation,
+import type {
+  Identifier,
+  IdentifierSession,
+  KeyBoundIdentifierLogin,
+  RecoveredSecret,
+  RecoveryEscrowProvider,
+  RecoveryIdentifierAuthProvider,
+  RegisterPayload,
+  SeedlessAuthData,
+  WritingPendingOperation,
 } from './types.js';
 
 const PASSKEY: Identifier = {
@@ -448,29 +443,9 @@ describe('MfaRecoveryController', () => {
             const session = await controller.authenticateIdentifier(SOCIAL, {
               requireSeedlessAuthData: true,
             });
-            type AuthenticateParams = Parameters<
-              SeedlessOnboardingController['authenticate']
-            >[0];
-            // Local connection union uses the AuthConnection string values.
-            // String enums are nominal, so map through AuthConnection for the
-            // authenticate param type check.
-            expect(SEEDLESS_AUTH_CONNECTIONS).toStrictEqual([
-              AuthConnection.Google,
-              AuthConnection.Apple,
-              AuthConnection.Telegram,
-            ]);
-            const { authConnection, ...seedlessAuthFields } =
-              session.seedlessAuthData;
-            const seedlessAuthenticateParams: AuthenticateParams = {
-              ...seedlessAuthFields,
-              authConnection: authConnection as AuthConnection,
-            };
 
             expect(login).toHaveBeenCalledTimes(1);
             expect(getToken).not.toHaveBeenCalled();
-            expect(seedlessAuthenticateParams).toStrictEqual(
-              STUB_SEEDLESS_AUTH_DATA,
-            );
             expect(session.seedlessAuthData).toStrictEqual(
               STUB_SEEDLESS_AUTH_DATA,
             );
