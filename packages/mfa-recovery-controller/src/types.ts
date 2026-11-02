@@ -2,6 +2,21 @@
  * MFA recovery protocol types from the recovery ADR.
  */
 
+/**
+ * Social login providers accepted by seedless authenticate. Values match
+ * `SeedlessOnboardingController`'s `AuthConnection` enum.
+ */
+export const SEEDLESS_AUTH_CONNECTIONS = [
+  'google',
+  'apple',
+  'telegram',
+] as const;
+
+/**
+ * Social login provider for {@link SeedlessAuthData}.
+ */
+export type SeedlessAuthConnection = (typeof SEEDLESS_AUTH_CONNECTIONS)[number];
+
 export type Identifier = {
   type: string;
   namespace: string;
@@ -98,6 +113,73 @@ export type KeyBoundCredential = {
 };
 
 /**
+ * Seedless auth-server tokens and social login details issued by the same
+ * login that produced a key-bound identifier token. The fields match the
+ * parameters of `SeedlessOnboardingController.authenticate` (without
+ * `skipLock`), so the password unlock path can authenticate without a second
+ * social prompt.
+ *
+ * These tokens come from the AAL1 social login exchange, never from an AAL2
+ * recovery approval. They are never sent to escrows. Keep in memory only.
+ */
+export type SeedlessAuthData = {
+  /**
+   * ID token(s) verified by the TOPRF nodes.
+   */
+  idTokens: string[];
+  accessToken: string;
+  metadataAccessToken: string;
+  refreshToken: string;
+  revokeToken?: string;
+  /**
+   * Social login provider. Values match `SeedlessOnboardingController`'s
+   * `AuthConnection` enum (`google`, `apple`, `telegram`).
+   */
+  authConnection: SeedlessAuthConnection;
+  authConnectionId: string;
+  groupedAuthConnectionId?: string;
+  /**
+   * User email or id from the social login.
+   */
+  userId: string;
+  socialLoginEmail?: string;
+};
+
+/**
+ * Parameters for requesting a key-bound identifier token from an IdP.
+ */
+export type KeyBoundIdentifierTokenRequest = {
+  identifier: Identifier;
+  /**
+   * Raw 32-byte Ed25519 public key to bind into the token.
+   */
+  proofPublicKey: Uint8Array;
+  requestHash: string;
+};
+
+/**
+ * Result of one identifier login. `token` is the key-bound recovery material
+ * presented to escrows (its `providerAssertion` carries the provider ID token
+ * or assertion). `seedlessAuthData` is present when the login also completed a
+ * seedless auth-server exchange.
+ */
+export type KeyBoundIdentifierLogin = {
+  token: KeyBoundIdentifierToken;
+  seedlessAuthData?: SeedlessAuthData;
+};
+
+/**
+ * Options for `MfaRecoveryController.authenticateIdentifier`.
+ */
+export type AuthenticateIdentifierOptions = {
+  /**
+   * Fail unless the login returns complete {@link SeedlessAuthData}. Set for
+   * the seedless password unlock path.
+   */
+  requireSeedlessAuthData?: boolean;
+};
+
+/**
  * Result of first-factor identifier authentication, consumed by
  * `getRecoverySecret`.
  *
@@ -115,6 +197,20 @@ export type IdentifierSession = KeyBoundCredential & {
    * Raw 32-byte X25519 public key, the client's one-time read key.
    */
   pkE: Uint8Array;
+  /**
+   * Seedless tokens from the same login, for
+   * `SeedlessOnboardingController.authenticate`. Ignored by
+   * `getRecoverySecret`.
+   */
+  seedlessAuthData?: SeedlessAuthData;
+};
+
+/**
+ * An identifier session with the seedless authentication data required by the
+ * seedless password unlock flow.
+ */
+export type SeedlessIdentifierSession = IdentifierSession & {
+  seedlessAuthData: SeedlessAuthData;
 };
 
 /**
@@ -271,14 +367,19 @@ export type RecoveryAuthProvider = {
  * Obtains a key-bound identifier assertion from an IdP (OIDC, Passkey, SIWE).
  */
 export type RecoveryIdentifierAuthProvider = {
-  getKeyBoundIdentifierToken: (params: {
-    identifier: Identifier;
-    /**
-     * Raw 32-byte Ed25519 public key to bind into the token.
-     */
-    proofPublicKey: Uint8Array;
-    requestHash: string;
-  }) => Promise<KeyBoundIdentifierToken>;
+  getKeyBoundIdentifierToken: (
+    params: KeyBoundIdentifierTokenRequest,
+  ) => Promise<KeyBoundIdentifierToken>;
+  /**
+   * Optional. Performs one identifier login and returns the key-bound token
+   * plus, for seedless social logins, the auth-server tokens from the same
+   * exchange. When present, `authenticateIdentifier` calls this instead of
+   * `getKeyBoundIdentifierToken`. The returned token must be bound to the
+   * requested `proofPublicKey` and `requestHash`.
+   */
+  getKeyBoundIdentifierLogin?: (
+    params: KeyBoundIdentifierTokenRequest,
+  ) => Promise<KeyBoundIdentifierLogin>;
 };
 
 /**

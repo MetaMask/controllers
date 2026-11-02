@@ -22,6 +22,39 @@ included): the controller rejects any other identifier before writing, and the
 mutation can then be aborted. Set `CubistEscrowProviderOptions.authAudience` to the escrow's
 `AUTH_CONTROLLER_AUDIENCE`.
 
+## Seedless password unlock
+
+For a social login that unlocks a seedless vault with a password, provide
+`RecoveryIdentifierAuthProvider.getKeyBoundIdentifierLogin`. It must perform
+one AAL1 social login and return both the key-bound recovery token and the
+auth-server token set. Mobile then calls:
+
+```typescript
+const session = await mfaRecoveryController.authenticateIdentifier(identifier, {
+  requireSeedlessAuthData: true,
+});
+
+const { authConnection, ...seedlessAuthFields } = session.seedlessAuthData;
+await seedlessOnboardingController.authenticate({
+  ...seedlessAuthFields,
+  // Values match `AuthConnection`; cast if your TS treats string enums nominally.
+  authConnection: authConnection as AuthConnection,
+});
+// Prompt for the password, evaluate TOPRF, and decrypt the vault.
+```
+
+With `requireSeedlessAuthData: true`, the returned
+`SeedlessIdentifierSession` always has `seedlessAuthData` for
+`SeedlessOnboardingController.authenticate`. `authConnection` uses the same
+string values as seedless `AuthConnection`. If TypeScript treats that enum
+nominally, cast `authConnection` to `AuthConnection`. The same `session`
+retains the key-bound token and proof material and can later be passed to
+`getRecoverySecret(session)` without another social prompt.
+
+The seedless auth data comes only from the AAL1 social login and is never sent
+to recovery escrows. `getRecoverySecret` separately requests its AAL2
+approval when a recovery-secret read is needed.
+
 ## Installation
 
 `yarn add @metamask/mfa-recovery-controller`
