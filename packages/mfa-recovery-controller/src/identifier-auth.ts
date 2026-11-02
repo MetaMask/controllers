@@ -5,24 +5,24 @@ import {
   optional,
   size,
   string,
-  type,
+  type as structType,
 } from '@metamask/superstruct';
 import { areUint8ArraysEqual } from '@metamask/utils';
 
 import { generateSigningKey, hash, sign } from './crypto.js';
 import { MfaRecoveryError } from './errors.js';
 import { isFulfilledResult } from './escrow-utils.js';
-import {
-  SEEDLESS_AUTH_CONNECTIONS,
-  type Identifier,
-  type IdentifierAuthMode,
-  type IdentifierAuthorization,
-  type KeyBoundCredential,
-  type KeyBoundIdentifierLogin,
-  type KeyBoundIdentifierToken,
-  type RecoveryEscrowProvider,
-  type RecoveryIdentifierAuthProvider,
-  type SeedlessAuthData,
+import { SEEDLESS_AUTH_CONNECTIONS } from './types.js';
+import type {
+  Identifier,
+  IdentifierAuthMode,
+  IdentifierAuthorization,
+  KeyBoundCredential,
+  KeyBoundIdentifierLogin,
+  KeyBoundIdentifierToken,
+  RecoveryEscrowProvider,
+  RecoveryIdentifierAuthProvider,
+  SeedlessAuthData,
 } from './types.js';
 
 /**
@@ -92,7 +92,7 @@ export async function requestKeyBoundIdentifierToken({
 
 const NonEmptyStringStruct = size(string(), 1, Infinity);
 
-const SeedlessAuthDataStruct = type({
+const SeedlessAuthDataStruct = structType({
   idTokens: size(array(NonEmptyStringStruct), 1, Infinity),
   accessToken: NonEmptyStringStruct,
   metadataAccessToken: NonEmptyStringStruct,
