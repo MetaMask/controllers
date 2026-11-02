@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Use SLIP-44 coin type 16661 for the 0G native asset price lookup
+
 ## [113.0.1]
 
 ### Changed
