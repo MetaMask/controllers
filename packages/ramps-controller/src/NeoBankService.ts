@@ -559,7 +559,9 @@ export class NeoBankService {
 
   #walletRegistrationService: WalletRegistrationService | undefined;
 
-  #customerIdPromise: Promise<string> | undefined;
+  #customerIdLookup:
+    | { externalId: string; customerId: Promise<string> }
+    | undefined;
 
   constructor({
     messenger,
@@ -1079,16 +1081,20 @@ export class NeoBankService {
 
   /**
    * Resolves the MoonPay customer id through {@link getMoonpayCustomerId} at
-   * most once per service instance. Concurrent callers share the in-flight
-   * lookup and a failed lookup is retried by the next call. The lookup is a
-   * single attempt: it does not go through the retry policy.
+   * most once per session profile, so a profile switch looks the customer up
+   * again. Concurrent callers share the in-flight lookup and a failed lookup
+   * is retried by the next call. The lookup is a single attempt: it does not
+   * go through the retry policy.
    *
    * @returns Iron's internal customer id.
    */
   async #resolveCustomerId(): Promise<string> {
-    this.#customerIdPromise ??= this.getMoonpayCustomerId().catch(
-      (error: unknown) => {
-        this.#customerIdPromise = undefined;
+    const externalId = await this.#getCanonicalExternalId();
+    if (this.#customerIdLookup?.externalId !== externalId) {
+      const customerId = this.getMoonpayCustomerId().catch((error: unknown) => {
+        if (this.#customerIdLookup?.externalId === externalId) {
+          this.#customerIdLookup = undefined;
+        }
         // The lookup runs outside the service policy and throws
         // WalletRegistrationError; surface HTTP failures as HttpError like
         // every other method.
@@ -1099,9 +1105,10 @@ export class NeoBankService {
           );
         }
         throw error;
-      },
-    );
-    return await this.#customerIdPromise;
+      });
+      this.#customerIdLookup = { externalId, customerId };
+    }
+    return await this.#customerIdLookup.customerId;
   }
 
   /**

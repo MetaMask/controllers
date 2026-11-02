@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `getMusdAutorampDepositRailReadiness` and the `MusdAutorampDepositRailReadiness` type, which read from customer abilities whether the deposit rails a fiat → mUSD autoramp needs are `active`, `pending` or `blocked` ([#11225](https://github.com/MetaMask/core/pull/11225))
   - BRL needs `pix` and `pix_thirdparty`, USD needs `ach` and `ach_thirdparty`. Other fiats report `active`.
 
+### Fixed
+
+- `NeoBankService.getMicrodeposits` now looks the MoonPay customer up again when the session profile changes, instead of reusing the first profile's customer id for the life of the service ([#11225](https://github.com/MetaMask/core/pull/11225))
+
 ## [28.1.0]
 
 ### Added

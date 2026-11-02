@@ -40,6 +40,7 @@ const isAutorampTransactionQuery = (
  * `{ maxRetries: 0 }` so tests fail fast unless they opt into retries.
  * @param options.canonicalProfileId - Canonical profile id returned by the
  * stubbed `AuthenticationController:getSessionProfile` (wallet registration).
+ * Pass a function to change it between calls.
  * @returns Service instance for the test.
  */
 function createService(options?: {
@@ -47,7 +48,7 @@ function createService(options?: {
   baseUrlOverride?: string;
   omitDefaults?: boolean;
   policyOptions?: CreateServicePolicyOptions;
-  canonicalProfileId?: string;
+  canonicalProfileId?: string | (() => string);
 }): NeoBankService {
   const rootMessenger = new Messenger({
     namespace: MOCK_ANY_NAMESPACE,
@@ -56,17 +57,21 @@ function createService(options?: {
     'AuthenticationController:getBearerToken',
     async () => 'test-token',
   );
-  const canonicalProfileId =
-    options?.canonicalProfileId ?? 'canonical-profile-1';
+  const profileIdOption = options?.canonicalProfileId ?? 'canonical-profile-1';
   rootMessenger.registerActionHandler(
     'AuthenticationController:getSessionProfile',
-    async () =>
-      ({
+    async () => {
+      const canonicalProfileId =
+        typeof profileIdOption === 'function'
+          ? profileIdOption()
+          : profileIdOption;
+      return {
         identifierId: 'id-1',
         profileId: canonicalProfileId,
         canonicalProfileId,
         metaMetricsId: 'mm-1',
-      }) as never,
+      } as never;
+    },
   );
 
   const messenger = new Messenger({
@@ -1295,6 +1300,55 @@ describe('NeoBankService', () => {
       ]);
 
       expect(customerScope.isDone()).toBe(true);
+    });
+
+    it('looks the customer up again after the session profile changes', async () => {
+      let profileId = 'canonical-profile-1';
+      mockCustomerLookup();
+      nock(STAGING_BASE).get(ABILITIES_PATH).query(true).reply(200, abilities);
+      nock(STAGING_BASE)
+        .get('/neobank/customers/canonical-profile-2/external')
+        .reply(200, { id: 'iron-customer-2' });
+      const secondProfileScope = nock(STAGING_BASE)
+        .get('/neobank/customers/iron-customer-2/abilities')
+        .query(true)
+        .reply(200, abilities);
+
+      const service = createService({ canonicalProfileId: () => profileId });
+
+      await service.getCustomerAbilities();
+      profileId = 'canonical-profile-2';
+      await service.getCustomerAbilities();
+
+      expect(secondProfileScope.isDone()).toBe(true);
+    });
+
+    it('keeps the new profile lookup when the old profile lookup fails late', async () => {
+      let profileId = 'canonical-profile-1';
+      nock(STAGING_BASE)
+        .get(CUSTOMER_PATH)
+        .delay(50)
+        .reply(500, 'old lookup failed');
+      const newLookupScope = nock(STAGING_BASE)
+        .get('/neobank/customers/canonical-profile-2/external')
+        .once()
+        .reply(200, { id: 'iron-customer-2' });
+      nock(STAGING_BASE)
+        .get('/neobank/customers/iron-customer-2/abilities')
+        .query(true)
+        .times(2)
+        .reply(200, abilities);
+
+      const service = createService({ canonicalProfileId: () => profileId });
+
+      const oldProfileCall = service.getCustomerAbilities();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      profileId = 'canonical-profile-2';
+      await service.getCustomerAbilities();
+      await expect(oldProfileCall).rejects.toMatchObject({ httpStatus: 500 });
+
+      expect(await service.getCustomerAbilities()).toStrictEqual(abilities);
+      expect(newLookupScope.isDone()).toBe(true);
     });
   });
 
