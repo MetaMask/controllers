@@ -218,7 +218,11 @@ const [MOCK_DEFAULT_TRACKED_ASSET_ID] =
  *
  * @param messenger - The root messenger used to publish lifecycle events.
  */
-type LifecyclePublish = (topic: string, payload?: unknown) => void;
+type LifecyclePublish = (
+  topic: string,
+  payload?: unknown,
+  secondPayload?: unknown,
+) => void;
 
 async function activateTracking(messenger: RootMessenger): Promise<void> {
   (messenger as unknown as { publish: LifecyclePublish }).publish(
