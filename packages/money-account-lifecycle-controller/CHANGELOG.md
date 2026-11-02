@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Uncategorized
+
+- chore: add money-account-lifecycle-controller package scaffolding ([#11226](https://github.com/MetaMask/core/pull/11226))
+
 ### Added
 
 - Initial release ([#10699](https://github.com/MetaMask/core/pull/10699))
