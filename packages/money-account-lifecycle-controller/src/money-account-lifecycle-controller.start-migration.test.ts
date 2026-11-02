@@ -34,7 +34,7 @@ describe('MoneyAccountLifecycleController', () => {
         expect(mocks.createMoneyAccount).toHaveBeenCalledTimes(1);
         expect(mocks.createMoneyAccount).toHaveBeenCalledWith({ type: 'mpc' });
         expect(mocks.getIntentsByAddress).toHaveBeenCalledWith(
-          MFA_ACCOUNT_ADDRESS,
+          MFA_ACCOUNT_ADDRESS.toLowerCase(),
         );
         expect(mocks.getMoneyAccount).toHaveBeenCalledWith({
           type: 'mnemonic',
@@ -129,6 +129,34 @@ describe('MoneyAccountLifecycleController', () => {
       },
     );
 
+    it.each<{ description: string; identity: DerivedIdentity }>([
+      {
+        description: 'a previous address of another identity',
+        identity: MFA_IDENTITY,
+      },
+      {
+        description: 'the current address of another identity',
+        identity: {
+          ...SFA_IDENTITY,
+          currentAddress: MONEY_ACCOUNT_ADDRESS.toLowerCase() as Hex,
+        },
+      },
+    ])(
+      'does not migrate a money account that is also $description',
+      async ({ identity }) => {
+        await withController(async ({ controller, mocks }) => {
+          mocks.getDerivedIdentities.mockResolvedValue({
+            identities: [SFA_IDENTITY, identity],
+          });
+
+          await expect(controller.startMigration()).rejects.toThrow(
+            `Money Account ${MONEY_ACCOUNT_ADDRESS} belongs to more than one identity`,
+          );
+          expect(mocks.createMoneyAccount).not.toHaveBeenCalled();
+        });
+      },
+    );
+
     it('throws when there is no money account', async () => {
       await withController(
         { moneyAccountAddress: undefined },
@@ -177,6 +205,62 @@ describe('MoneyAccountLifecycleController', () => {
           expect(mocks.createMoneyAccount).not.toHaveBeenCalled();
         },
       );
+    });
+
+    it('throws when the wallet locks while fetching identities, even with identities recorded', async () => {
+      await withController(async ({ controller, gates, mocks }) => {
+        const { promise, resolve } =
+          createDeferredPromise<DerivedIdentitiesResponse>();
+        mocks.getDerivedIdentities.mockReturnValueOnce(promise);
+
+        const migration = controller.startMigration();
+        gates.isUnlocked = false;
+        resolve({ identities: [SFA_IDENTITY] });
+
+        await expect(migration).rejects.toThrow(
+          'Money Account migration is not available',
+        );
+        expect(mocks.createMoneyAccount).not.toHaveBeenCalled();
+      });
+    });
+
+    it.each([
+      'getDerivedIdentities',
+      'createMoneyAccount',
+      'getIntentsByAddress',
+    ] as const)(
+      'throws the error from %s unchanged, and allows a retry',
+      async (mockName) => {
+        await withController(async ({ controller, mocks }) => {
+          const error = new Error(`${mockName} failed`);
+          mocks[mockName].mockRejectedValueOnce(error);
+
+          await expect(controller.startMigration()).rejects.toThrow(error);
+          await expect(controller.startMigration()).rejects.toThrow(
+            'is not implemented yet',
+          );
+        });
+      },
+    );
+
+    it('does not fall back to earlier identities when a fetch that supersedes its own fails', async () => {
+      await withController(async ({ controller, mocks, init, refetch }) => {
+        await init();
+        const { promise, resolve } =
+          createDeferredPromise<DerivedIdentitiesResponse>();
+        mocks.getDerivedIdentities
+          .mockReturnValueOnce(promise)
+          .mockRejectedValueOnce(new Error('CHOMP is down'));
+
+        const migration = controller.startMigration();
+        await refetch();
+        resolve({ identities: [MIGRATING_IDENTITY] });
+
+        await expect(migration).rejects.toThrow(
+          'Money Account migration is not available',
+        );
+        expect(mocks.createMoneyAccount).not.toHaveBeenCalled();
+      });
     });
 
     it.each<{ description: string; identity: DerivedIdentity }>([

@@ -398,10 +398,10 @@ export class MoneyAccountLifecycleController extends BaseController<
    *
    * Reads the profile's identities fresh from CHOMP and records them, then
    * only proceeds when the wallet is still ready, no identity is migrating, and
-   * the Money Account is a valid SFA. Asks `MoneyAccountController` to create
-   * the MPC Money Account, or returns the one an earlier attempt created, and
-   * checks that its address is fresh for CHOMP: not part of any identity, and
-   * without intents.
+   * the Money Account is a valid SFA in no other identity. Asks
+   * `MoneyAccountController` to create the MPC Money Account, or returns the
+   * one an earlier attempt created, and checks that its address is fresh for
+   * CHOMP: not part of any identity, and without intents.
    *
    * Linking the MFA address to the Money Account and completing the migration
    * steps are not implemented yet, so this always throws once the checks
@@ -424,13 +424,7 @@ export class MoneyAccountLifecycleController extends BaseController<
   }
 
   async #startMigration(): Promise<void> {
-    if (
-      !this.#isEnabled(
-        this.messenger.call('RemoteFeatureFlagController:getState')
-          .remoteFeatureFlags,
-      ) ||
-      !isWalletReady(this.messenger.call('KeyringController:getState'))
-    ) {
+    if (!this.#isReady()) {
       throw new Error('Money Account migration is not available');
     }
 
@@ -451,6 +445,12 @@ export class MoneyAccountLifecycleController extends BaseController<
 
     if (identities.some(isMigrating)) {
       throw new Error('A Money Account identity is already migrating');
+    }
+
+    if (countIdentityAddresses(moneyAccount.address, identities) > 1) {
+      throw new Error(
+        `Money Account ${moneyAccount.address} belongs to more than one identity`,
+      );
     }
 
     const lifecycle = getMoneyAccountLifecycle(
@@ -481,14 +481,7 @@ export class MoneyAccountLifecycleController extends BaseController<
     mfaAddress: Hex,
     identities: DerivedIdentity[],
   ): Promise<void> {
-    const normalizedAddress = mfaAddress.toLowerCase();
-    const isInIdentity = identities.some(
-      ({ currentAddress, previousAddresses }) =>
-        [currentAddress, ...previousAddresses].some(
-          (address) => address.toLowerCase() === normalizedAddress,
-        ),
-    );
-    if (isInIdentity) {
+    if (countIdentityAddresses(mfaAddress, identities) > 0) {
       throw new Error(
         `MFA account ${mfaAddress} is already part of a Money Account identity`,
       );
@@ -496,7 +489,7 @@ export class MoneyAccountLifecycleController extends BaseController<
 
     const intents = await this.messenger.call(
       'ChompApiService:getIntentsByAddress',
-      mfaAddress,
+      mfaAddress.toLowerCase() as Hex,
     );
     if (intents.length > 0) {
       throw new Error(`MFA account ${mfaAddress} already has CHOMP intents`);
@@ -549,6 +542,7 @@ export class MoneyAccountLifecycleController extends BaseController<
           this.#syncedRemoteFeatureFlags = undefined;
           this.#derivedIdentitiesRequest = undefined;
           this.#isFetchingDerivedIdentities = false;
+          this.#derivedIdentities = undefined;
         }
         this.#reportError(error);
       });
@@ -654,6 +648,21 @@ export class MoneyAccountLifecycleController extends BaseController<
       error instanceof Error ? error : new Error(String(error)),
     );
   }
+}
+
+function countIdentityAddresses(
+  address: string,
+  identities: DerivedIdentity[],
+): number {
+  const normalizedAddress = address.toLowerCase();
+  return identities
+    .flatMap(({ currentAddress, previousAddresses }) => [
+      currentAddress,
+      ...previousAddresses,
+    ])
+    .filter(
+      (identityAddress) => identityAddress.toLowerCase() === normalizedAddress,
+    ).length;
 }
 
 function isWalletReady({
