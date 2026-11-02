@@ -7,13 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- Revert "Release 1378.0.0" ([#11207](https://github.com/MetaMask/core/pull/11207))
-- Release 1378.0.0 ([#11205](https://github.com/MetaMask/core/pull/11205))
-- chore(deps): update dependency nock to v15 ([#11055](https://github.com/MetaMask/core/pull/11055))
-- test: use the nock default export instead of named imports ([#11138](https://github.com/MetaMask/core/pull/11138))
-
 ### Added
 
 - Add optional `currentStep` to `KycSessionStatus`. Known values are `processing`, `emailOtpCollection`, `phoneOtpCollection`, `capabilityAuthorization`, `kyc`, `approved`, and `rejected` ([#11094](https://github.com/MetaMask/core/pull/11094))
