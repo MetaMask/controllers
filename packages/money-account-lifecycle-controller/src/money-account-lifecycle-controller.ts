@@ -32,7 +32,10 @@ import type {
 import type { Hex } from '@metamask/utils';
 import deepEqual from 'fast-deep-equal';
 
-import { getMoneyAccountLifecycle } from './get-money-account-lifecycle.js';
+import {
+  getMoneyAccountLifecycle,
+  isMigrating,
+} from './get-money-account-lifecycle.js';
 import type { MoneyAccountLifecycle } from './get-money-account-lifecycle.js';
 import type { MoneyAccountLifecycleControllerMethodActions } from './money-account-lifecycle-controller-method-action-types.js';
 import type {
@@ -394,10 +397,11 @@ export class MoneyAccountLifecycleController extends BaseController<
    * MFA address.
    *
    * Reads the profile's identities fresh from CHOMP and records them, then
-   * only proceeds when no identity is migrating and the Money Account is a
-   * valid SFA. Asks `MoneyAccountController` to create the MPC Money Account,
-   * or returns the one an earlier attempt created, and checks that its address
-   * is fresh for CHOMP: not part of any identity, and without intents.
+   * only proceeds when the wallet is still ready, no identity is migrating, and
+   * the Money Account is a valid SFA. Asks `MoneyAccountController` to create
+   * the MPC Money Account, or returns the one an earlier attempt created, and
+   * checks that its address is fresh for CHOMP: not part of any identity, and
+   * without intents.
    *
    * Linking the MFA address to the Money Account and completing the migration
    * steps are not implemented yet, so this always throws once the checks
@@ -438,13 +442,14 @@ export class MoneyAccountLifecycleController extends BaseController<
       throw new Error('There is no Money Account to migrate');
     }
 
-    const { identities } = await this.messenger.call(
-      'ChompApiService:getDerivedIdentities',
-    );
-    this.#derivedIdentities = identities;
-    this.#updateMoneyAccountLifecycle({ isRehydrating: false });
+    this.#fetchDerivedIdentities();
+    await this.#waitForLatestDerivedIdentities();
+    const identities = this.#derivedIdentities;
+    if (!this.#isReady() || !identities) {
+      throw new Error('Money Account migration is not available');
+    }
 
-    if (identities.some(({ status }) => status === 'MIGRATING')) {
+    if (identities.some(isMigrating)) {
       throw new Error('A Money Account identity is already migrating');
     }
 

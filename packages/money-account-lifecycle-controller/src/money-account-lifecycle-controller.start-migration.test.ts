@@ -1,4 +1,8 @@
-import type { DerivedIdentity, IntentEntry } from '@metamask/chomp-api-service';
+import type {
+  DerivedIdentitiesResponse,
+  DerivedIdentity,
+  IntentEntry,
+} from '@metamask/chomp-api-service';
 import type { MoneyAccount } from '@metamask/money-account-controller';
 import { createDeferredPromise } from '@metamask/utils';
 import type { Hex } from '@metamask/utils';
@@ -70,7 +74,7 @@ describe('MoneyAccountLifecycleController', () => {
     it.each<{ description: string; identities: DerivedIdentity[] }>([
       { description: 'the money account', identities: [MIGRATING_IDENTITY] },
       {
-        description: 'another identity',
+        description: 'another identity with a MIGRATING status',
         identities: [
           SFA_IDENTITY,
           {
@@ -78,6 +82,17 @@ describe('MoneyAccountLifecycleController', () => {
             currentAddress: '0x00000000000000000000000000000000000000ee',
             previousAddresses: [],
             status: 'MIGRATING',
+          },
+        ],
+      },
+      {
+        description: 'another identity with a migration',
+        identities: [
+          SFA_IDENTITY,
+          {
+            ...MIGRATING_IDENTITY,
+            currentAddress: '0x00000000000000000000000000000000000000ee',
+            status: 'DONE',
           },
         ],
       },
@@ -137,6 +152,31 @@ describe('MoneyAccountLifecycleController', () => {
         );
         expect(mocks.getDerivedIdentities).not.toHaveBeenCalled();
       });
+    });
+
+    it('throws without recording identities or creating the MPC Money Account when the wallet locks while fetching identities', async () => {
+      await withController(
+        async ({ controller, gates, mocks, init, triggerKeyringChange }) => {
+          await init();
+          const { promise, resolve } =
+            createDeferredPromise<DerivedIdentitiesResponse>();
+          mocks.getDerivedIdentities.mockReturnValueOnce(promise);
+
+          const migration = controller.startMigration();
+          gates.isUnlocked = false;
+          await triggerKeyringChange();
+          resolve({ identities: [MIGRATING_IDENTITY] });
+
+          await expect(migration).rejects.toThrow(
+            'Money Account migration is not available',
+          );
+          expect(getLifecycle(controller)).toStrictEqual({
+            type: 'sfa',
+            identity: SFA_IDENTITY,
+          });
+          expect(mocks.createMoneyAccount).not.toHaveBeenCalled();
+        },
+      );
     });
 
     it.each<{ description: string; identity: DerivedIdentity }>([
