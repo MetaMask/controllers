@@ -1318,10 +1318,7 @@ describe('NeoBankService', () => {
         .get(CUSTOMER_PATH)
         .once()
         .reply(200, { id: 'iron-customer-1' });
-      nock(STAGING_BASE)
-        .get(ABILITIES_PATH)
-        .query(true)
-        .reply(200, abilities);
+      nock(STAGING_BASE).get(ABILITIES_PATH).query(true).reply(200, abilities);
       const secondRequest = nock(STAGING_BASE)
         .get(ABILITIES_PATH)
         .query(true)
@@ -1409,7 +1406,9 @@ describe('NeoBankService', () => {
         .query(true)
         .reply(200, abilities);
 
-      const { service } = createService({ canonicalProfileId: () => profileId });
+      const { service } = createService({
+        canonicalProfileId: () => profileId,
+      });
 
       await service.getCustomerAbilities();
       profileId = 'canonical-profile-2';
@@ -1434,7 +1433,9 @@ describe('NeoBankService', () => {
         .times(2)
         .reply(200, abilities);
 
-      const { service } = createService({ canonicalProfileId: () => profileId });
+      const { service } = createService({
+        canonicalProfileId: () => profileId,
+      });
 
       const oldProfileCall = service.getCustomerAbilities();
       await new Promise((resolve) => setTimeout(resolve, 0));
