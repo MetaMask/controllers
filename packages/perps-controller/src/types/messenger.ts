@@ -10,7 +10,10 @@ import type {
   AuthenticatedUserStorageServiceGetNotificationPreferencesAction,
   AuthenticatedUserStorageServicePutNotificationPreferencesAction,
 } from '@metamask/authenticated-user-storage';
-import type { GeolocationControllerGetGeolocationAction } from '@metamask/geolocation-controller';
+import type {
+  GeolocationControllerGetGeolocationAction,
+  GeolocationControllerStateChangeEvent,
+} from '@metamask/geolocation-controller';
 import type {
   KeyringControllerGetStateAction,
   KeyringControllerSignPersonalMessageAction,
@@ -72,6 +75,7 @@ export type PerpsControllerAllowedActions =
  */
 export type PerpsControllerAllowedEvents =
   | RemoteFeatureFlagControllerStateChangeEvent
+  | GeolocationControllerStateChangeEvent
   | AccountsControllerSelectedAccountChangeEvent
   | AccountTreeControllerSelectedAccountGroupChangeEvent;
 

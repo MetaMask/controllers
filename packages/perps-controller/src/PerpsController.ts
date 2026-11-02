@@ -1400,6 +1400,16 @@ export class PerpsController extends BaseController<
       this.refreshEligibilityOnFeatureFlagChange.bind(this),
     );
 
+    // Same lifetime as above: a location change (e.g. a VPN toggled while
+    // the app is open) must re-evaluate geo-blocking without a restart.
+    this.messenger.subscribe(
+      'GeolocationController:stateChange',
+      () => {
+        this.refreshEligibility().catch(() => undefined);
+      },
+      (geolocationState) => geolocationState.location,
+    );
+
     // Also subscribed for the controller lifetime: the subscription profile
     // must learn the new trading address after every account switch, and the
     // preload-scoped account handler is torn down on disconnect, so it cannot
