@@ -3,7 +3,7 @@ import type { Encapsulation } from '../types.js';
 /**
  * The ML-KEM algorithms, named as in WebCrypto.
  */
-export type MlKemAlgorithm = 'ML-KEM-512' | 'ML-KEM-768' | 'ML-KEM-1024';
+export type MlKemAlgorithm = 'ML-KEM-768' | 'ML-KEM-1024';
 
 // FIPS 203, Section 3.3: The seed is `d || z`, from which the full
 // decapsulation key is deterministically expanded.
@@ -14,7 +14,6 @@ const ML_KEM_LENGTHS: Record<
   MlKemAlgorithm,
   { publicKeyLength: number; ciphertextLength: number }
 > = {
-  'ML-KEM-512': { publicKeyLength: 800, ciphertextLength: 768 },
   'ML-KEM-768': { publicKeyLength: 1184, ciphertextLength: 1088 },
   'ML-KEM-1024': { publicKeyLength: 1568, ciphertextLength: 1568 },
 };

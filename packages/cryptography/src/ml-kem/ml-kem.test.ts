@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import * as mlKem512 from './ml-kem-512.js';
 import * as mlKem768 from './ml-kem-768.js';
 import * as mlKem1024 from './ml-kem-1024.js';
 
@@ -15,7 +14,7 @@ type WycheproofVector = {
 };
 
 // Test case 2 (the first valid case) of each Wycheproof ML-KEM test file,
-// `mlkem_512_test.json`, `mlkem_768_test.json` and `mlkem_1024_test.json`:
+// `mlkem_768_test.json` and `mlkem_1024_test.json`:
 // https://github.com/C2SP/wycheproof/tree/main/testvectors_v1
 const vectors: Record<string, WycheproofVector> = JSON.parse(
   readFileSync(
@@ -25,12 +24,6 @@ const vectors: Record<string, WycheproofVector> = JSON.parse(
 );
 
 describe.each([
-  {
-    name: 'ML-KEM-512',
-    mlKem: mlKem512,
-    publicKeyLength: 800,
-    ciphertextLength: 768,
-  },
   {
     name: 'ML-KEM-768',
     mlKem: mlKem768,
