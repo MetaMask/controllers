@@ -669,7 +669,6 @@ export class TokenDataSource {
             getOccurrences: (id) => occurrencesByAssetId.get(id),
             getOccurrenceFloor: (id) =>
               getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors),
-            // Launchpad tokens (not malicious) bypass the floor too.
             findLaunchpadAssetIds: (ids) => this.#getLaunchpadAssetIds(ids),
           }),
         );
