@@ -6036,6 +6036,43 @@ describe('AssetsController', () => {
   });
 
   describe('account group changes', () => {
+    it('refreshes the latest group when it changes during startup', async () => {
+      const { client, arm, release, getGatedCallCount } =
+        createGatedQueryApiClient();
+
+      await withController(
+        { queryApiClient: client },
+        async ({ controller, messenger, getSelectedAccountsMock }) => {
+          const accountA = createMockInternalAccount({ id: 'account-a' });
+          const accountB = createMockInternalAccount({ id: 'account-b' });
+          getSelectedAccountsMock.mockReturnValue([accountA]);
+          const getAssetsSpy = vi.spyOn(controller, 'getAssets');
+
+          arm();
+          await activateTracking(messenger);
+          await waitFor(() => expect(getGatedCallCount()).toBeGreaterThan(0));
+
+          getSelectedAccountsMock.mockReturnValue([accountB]);
+          messenger.publish(
+            'AccountTreeController:selectedAccountGroupChange',
+            'entropy:mock-keyring-id-1/1',
+            'entropy:mock-keyring-id-1/0',
+          );
+
+          release();
+
+          await waitFor(() =>
+            expect(getAssetsSpy).toHaveBeenCalledWith(
+              [expect.objectContaining({ id: accountB.id })],
+              expect.objectContaining({ forceUpdate: true }),
+            ),
+          );
+          expect(getAssetsSpy).toHaveBeenCalledTimes(2);
+          getAssetsSpy.mockRestore();
+        },
+      );
+    });
+
     it('refreshes assets when the selected group changes while tracking', async () => {
       await withController(async ({ controller, messenger }) => {
         const getAssetsSpy = vi
@@ -6294,6 +6331,45 @@ describe('AssetsController', () => {
         );
         getAssetsSpy.mockRestore();
       });
+    });
+
+    it('refreshes the latest account when it changes during startup', async () => {
+      const { client, arm, release, getGatedCallCount } =
+        createGatedQueryApiClient();
+
+      await withController(
+        { queryApiClient: client },
+        async ({ controller, messenger }) => {
+          const accountA = createMockInternalAccount({ id: 'account-a' });
+          const accountB = createMockInternalAccount({ id: 'account-b' });
+          const setSelectedAccount = useAccountsControllerSelection(
+            messenger,
+            accountA,
+          );
+          const getAssetsSpy = vi.spyOn(controller, 'getAssets');
+
+          arm();
+          await activateTracking(messenger);
+          await waitFor(() => expect(getGatedCallCount()).toBeGreaterThan(0));
+
+          setSelectedAccount(accountB);
+          messenger.publish(
+            'AccountsController:selectedAccountChange',
+            accountB,
+          );
+
+          release();
+
+          await waitFor(() =>
+            expect(getAssetsSpy).toHaveBeenCalledWith(
+              [expect.objectContaining({ id: accountB.id })],
+              expect.objectContaining({ forceUpdate: true }),
+            ),
+          );
+          expect(getAssetsSpy).toHaveBeenCalledTimes(2);
+          getAssetsSpy.mockRestore();
+        },
+      );
     });
 
     it('does not refresh a selected-account change before tracking starts', async () => {

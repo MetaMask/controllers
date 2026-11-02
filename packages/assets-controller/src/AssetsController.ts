@@ -815,6 +815,14 @@ export class AssetsController extends BaseController<
    */
   #startInFlight = false;
 
+  /**
+   * Whether an account switch occurred while startup was force-fetching.
+   *
+   * The startup subscription skips its initial Accounts API fetch, so a
+   * selection made in that window must be refreshed once startup completes.
+   */
+  #pendingAccountRefresh = false;
+
   /** Currently enabled chains from NetworkEnablementController */
   #enabledChains: Set<ChainId> = new Set();
 
@@ -3565,6 +3573,21 @@ export class AssetsController extends BaseController<
       })
       .finally(() => {
         this.#startInFlight = false;
+        const shouldRefreshPendingAccount =
+          this.#pendingAccountRefresh &&
+          this.#isUiOpen() &&
+          this.#isKeyringUnlocked() &&
+          this.#isAccountTreeInitialized();
+        this.#pendingAccountRefresh = false;
+        if (shouldRefreshPendingAccount) {
+          this.#refreshTrackedAccounts(this.#getSelectedAccounts()).catch(
+            (error: unknown) => {
+              log('Failed to refresh assets after startup account switch', {
+                error,
+              });
+            },
+          );
+        }
       });
   }
 
@@ -4057,6 +4080,9 @@ export class AssetsController extends BaseController<
     // (including when the group did not change) so late subscribers can catch
     // up — ignore those until we are already tracking.
     if (this.#activeSubscriptions.size === 0) {
+      if (this.#startInFlight && groupId !== previousGroupId) {
+        this.#pendingAccountRefresh = true;
+      }
       return;
     }
     if (groupId === previousGroupId) {
@@ -4089,6 +4115,9 @@ export class AssetsController extends BaseController<
       return;
     }
     if (this.#activeSubscriptions.size === 0) {
+      if (this.#startInFlight) {
+        this.#pendingAccountRefresh = true;
+      }
       return;
     }
 

@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When `AccountTreeController` actions are not registered, selected-account reads fall back to `AccountsController:getSelectedAccount`, and asset tracking does not wait for account-tree initialization ([#10885](https://github.com/MetaMask/core/pull/10885))
   - `AccountActivityDataSource` uses the same fallback when resolving the account for a balance update.
 
+### Fixed
+
+- Refresh the newly selected account after startup completes when it changes while the initial asset fetch is in progress ([#10885](https://github.com/MetaMask/core/pull/10885))
+
 ## [20.1.0]
 
 ### Added
