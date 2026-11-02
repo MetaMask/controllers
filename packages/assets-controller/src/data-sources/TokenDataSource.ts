@@ -20,6 +20,7 @@ import type {
   DataResponse,
 } from '../types.js';
 import { findLaunchpadAssetIds } from '../utils/findLaunchpadAssetIds.js';
+import { findLowOccurrenceSpamAssetIds } from '../utils/findLowOccurrenceSpamAssetIds.js';
 import { getAssetIdsForMetadataFetch } from '../utils/getAssetIdsForMetadataFetch.js';
 import { fetchWithTimeout } from '../utils/index.js';
 import { reduceInBatchesSerially } from './evm-rpc-services/index.js';
@@ -504,29 +505,23 @@ export class TokenDataSource {
           ]);
 
         // Only assets the API knows can be judged; missing ones are kept.
-        const spamAssetIds = new Set<string>();
-        for (const assetData of occurrenceResponse) {
-          const candidateId = candidateByLowerId.get(
+        const occurrencesByLowerId = new Map(
+          occurrenceResponse.map((assetData) => [
             assetData.assetId.toLowerCase(),
-          );
-          if (
-            candidateId !== undefined &&
-            (assetData.occurrences ?? 0) <
-              getOccurrenceFloorForAsset(candidateId, suggestedOccurrenceFloors)
-          ) {
-            spamAssetIds.add(candidateId);
-          }
-        }
-
-        // Launchpad tokens have few occurrences by nature; keep them.
-        const launchpadIds = await this.#getLaunchpadAssetIds([
-          ...spamAssetIds,
-        ]);
-        for (const id of [...spamAssetIds]) {
-          if (launchpadIds.has(id.toLowerCase())) {
-            spamAssetIds.delete(id);
-          }
-        }
+            assetData.occurrences,
+          ]),
+        );
+        const spamAssetIds = new Set(
+          await findLowOccurrenceSpamAssetIds({
+            assetIds: [...candidateByLowerId.values()].filter((id) =>
+              occurrencesByLowerId.has(id.toLowerCase()),
+            ),
+            getOccurrences: (id) => occurrencesByLowerId.get(id.toLowerCase()),
+            getOccurrenceFloor: (id) =>
+              getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors),
+            findLaunchpadAssetIds: (ids) => this.#getLaunchpadAssetIds(ids),
+          }),
+        );
 
         if (spamAssetIds.size > 0) {
           cleanResponseSpam(spamAssetIds, response);
@@ -663,23 +658,22 @@ export class TokenDataSource {
         // can import whatever they want and we must keep their metadata even
         // if the API has fewer aggregator hits than the floor.
         // Balance-only heals also bypass — see `balanceHealAssetIds` below.
-        const belowFloorEvmIds = evmErc20Ids.filter(
-          (id) =>
-            !(
+        const spamEvmIds = new Set(
+          await findLowOccurrenceSpamAssetIds({
+            assetIds: evmErc20Ids,
+            isExempt: (id) =>
               customAssetIds.has(id.toLowerCase()) ||
               balanceHealAssetIds.has(id.toLowerCase()) ||
-              (occurrencesByAssetId.get(id) ?? 0) >=
-                getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors) ||
-              id.includes(`/erc20:${MUSD_ADDRESS_LOWERCASE}`)
-            ),
-        );
-        // Launchpad tokens (not malicious) bypass the occurrence floor too.
-        const launchpadIds = await this.#getLaunchpadAssetIds(belowFloorEvmIds);
-        const belowFloorEvmIdSet = new Set(
-          belowFloorEvmIds.filter((id) => !launchpadIds.has(id.toLowerCase())),
+              id.includes(`/erc20:${MUSD_ADDRESS_LOWERCASE}`),
+            getOccurrences: (id) => occurrencesByAssetId.get(id),
+            getOccurrenceFloor: (id) =>
+              getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors),
+            // Launchpad tokens (not malicious) bypass the floor too.
+            findLaunchpadAssetIds: (ids) => this.#getLaunchpadAssetIds(ids),
+          }),
         );
         const allowedEvmIds = new Set(
-          evmErc20Ids.filter((id) => !belowFloorEvmIdSet.has(id)),
+          evmErc20Ids.filter((id) => !spamEvmIds.has(id)),
         );
 
         // Non-EVM: Blockaid bulk scan.

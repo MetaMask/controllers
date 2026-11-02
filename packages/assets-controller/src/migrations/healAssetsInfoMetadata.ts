@@ -21,6 +21,7 @@ import type {
 } from '../types.js';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { findLaunchpadAssetIds } from '../utils/findLaunchpadAssetIds.js';
+import { findLowOccurrenceSpamAssetIds } from '../utils/findLowOccurrenceSpamAssetIds.js';
 
 /**
  * TEMPORARY MODULE — remove in a future release.
@@ -782,22 +783,23 @@ async function findBelowFloorAssetIds(
       assets.map((asset) => [asset.assetId.toLowerCase(), asset.occurrences]),
     );
 
-    const belowFloorAssetIds = assetIds.filter((assetId) => {
-      const chainReference = assetId.split(':')[1]?.split('/')[0] ?? '';
-      const floor = floors[chainReference] ?? DEFAULT_OCCURRENCE_FLOOR;
-      return (occurrencesByLowerId.get(assetId.toLowerCase()) ?? 0) < floor;
-    });
-
-    // Launchpad tokens (not malicious) are exempt from the occurrence floor.
-    const launchpadAssetIds = await findLaunchpadAssetIds({
-      assetIds: belowFloorAssetIds,
-      apiClient,
-      timeoutMs: FETCH_TIMEOUT_MS,
-      fetchOptions: { staleTime: 0, gcTime: 0 },
-    });
-    return belowFloorAssetIds.filter(
-      (assetId) => !launchpadAssetIds.has(assetId.toLowerCase()),
-    );
+    return (await findLowOccurrenceSpamAssetIds({
+      assetIds,
+      getOccurrences: (assetId) =>
+        occurrencesByLowerId.get(assetId.toLowerCase()),
+      getOccurrenceFloor: (assetId) => {
+        const chainReference = assetId.split(':')[1]?.split('/')[0] ?? '';
+        return floors[chainReference] ?? DEFAULT_OCCURRENCE_FLOOR;
+      },
+      // Errors propagate: a failed lookup keeps the whole batch (fail-closed).
+      findLaunchpadAssetIds: (ids) =>
+        findLaunchpadAssetIds({
+          assetIds: ids,
+          apiClient,
+          timeoutMs: FETCH_TIMEOUT_MS,
+          fetchOptions: { staleTime: 0, gcTime: 0 },
+        }),
+    })) as Caip19AssetId[];
   } catch (error) {
     cleanupLog('Failed to fetch assets', error);
     throw error;
