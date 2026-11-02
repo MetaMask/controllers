@@ -33,7 +33,10 @@ import deepEqual from 'fast-deep-equal';
 import { getMoneyAccountLifecycle } from './get-money-account-lifecycle.js';
 import type { MoneyAccountLifecycle } from './get-money-account-lifecycle.js';
 import type { MoneyAccountLifecycleControllerMethodActions } from './money-account-lifecycle-controller-method-action-types.js';
-import type { MoneyAccountUpgradeControllerGetRegistrationStatusAction } from './money-account-upgrade-controller-registration-status.js';
+import type {
+  MoneyAccountUpgradeControllerGetRegistrationStatusAction,
+  RegistrationStatus,
+} from './money-account-upgrade-controller-registration-status.js';
 
 const CONTROLLER_NAME = 'MoneyAccountLifecycleController';
 
@@ -145,6 +148,11 @@ export class MoneyAccountLifecycleController extends BaseController<
   #derivedIdentities?: DerivedIdentity[];
 
   readonly #upgradesInFlight = new Map<string, Promise<void>>();
+
+  readonly #registrationStatusRequests = new Map<
+    string,
+    Promise<RegistrationStatus>
+  >();
 
   constructor({
     messenger,
@@ -499,13 +507,25 @@ export class MoneyAccountLifecycleController extends BaseController<
   }
 
   async #fetchRegistrationStatus(address: string): Promise<void> {
-    const { isRegistered } = await this.messenger.call(
+    const addressKey = address.toLowerCase();
+    const request = this.messenger.call(
       'MoneyAccountUpgradeController:getRegistrationStatus',
       address,
     );
-    this.update((state) => {
-      state.addressRegistrations[address.toLowerCase()] = { isRegistered };
-    });
+    this.#registrationStatusRequests.set(addressKey, request);
+
+    try {
+      const { isRegistered } = await request;
+      if (this.#registrationStatusRequests.get(addressKey) === request) {
+        this.update((state) => {
+          state.addressRegistrations[addressKey] = { isRegistered };
+        });
+      }
+    } finally {
+      if (this.#registrationStatusRequests.get(addressKey) === request) {
+        this.#registrationStatusRequests.delete(addressKey);
+      }
+    }
   }
 
   #reportError(error: unknown): void {

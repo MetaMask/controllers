@@ -13,6 +13,7 @@ import {
   getLifecycle,
   withController,
 } from '../tests/helpers.js';
+import type { RegistrationStatus } from './money-account-upgrade-controller-registration-status.js';
 
 describe('MoneyAccountLifecycleController', () => {
   describe('address registration', () => {
@@ -64,6 +65,26 @@ describe('MoneyAccountLifecycleController', () => {
         expect(mocks.getRegistrationStatus).toHaveBeenCalledTimes(2);
         expect(controller.state.addressRegistrations).toStrictEqual({
           [MONEY_ACCOUNT_KEY]: { isRegistered: false },
+        });
+      });
+    });
+
+    it('discards a lookup response that arrives after a newer lookup for the same address', async () => {
+      await withController(async ({ controller, mocks, init }) => {
+        const { promise, resolve } =
+          createDeferredPromise<RegistrationStatus>();
+        mocks.getRegistrationStatus
+          .mockReturnValueOnce(promise)
+          .mockResolvedValueOnce({ isRegistered: true });
+        await init();
+
+        await controller.refresh();
+        await flushPromises();
+        resolve({ isRegistered: false });
+        await flushPromises();
+
+        expect(controller.state.addressRegistrations).toStrictEqual({
+          [MONEY_ACCOUNT_KEY]: { isRegistered: true },
         });
       });
     });
