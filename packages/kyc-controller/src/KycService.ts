@@ -25,8 +25,10 @@ import type { QueryClientConfig } from '@tanstack/query-core';
 
 import { alpha2ToAlpha3 } from './countryCodes.js';
 import type { KycServiceMethodActions } from './KycService-method-action-types.js';
+import { patchKycSessionStatus } from './types.js';
 import type {
   KycConsentRecord,
+  KycDataShare,
   KycDisclaimer,
   KycDisclaimersCatalog,
   KycSessionDisclaimers,
@@ -62,6 +64,7 @@ const MESSENGER_EXPOSED_METHODS = [
   'createJourney',
   'getSessionStatus',
   'getSessionStatusForVendor',
+  'getDataShares',
 ] as const;
 
 /**
@@ -228,7 +231,19 @@ const SessionStatusResponseStruct = type({
   consentStatus: optional(string()),
   idOSStatus: optional(string()),
   capabilityAuthorizationStatus: optional(string()),
+  currentStep: optional(string()),
 });
+
+// A single data-sharing record from the idOS relay. `vendor` is validated as a
+// plain string — like `SessionStatusResponseStruct.vendor` — because the relay
+// serves vendors this package does not model (e.g. `kalshi`, `kraken`), and one
+// of those must not invalidate the whole list.
+const DataShareStruct = type({
+  kycSessionId: string(),
+  vendor: string(),
+  sharedAt: string(),
+});
+const DataSharesResponseStruct = type({ shares: array(DataShareStruct) });
 
 // Vendor customer subset — `type` (not `object`) keeps extra vendor fields from
 // failing validation while still requiring the fields the controller needs.
@@ -369,6 +384,14 @@ export type SetAuthorizationsParams = {
 
 export type GetSessionStatusParams = {
   sessionId: string;
+};
+
+export type GetDataSharesParams = {
+  /**
+   * The vendor-agnostic external user id, from
+   * {@link KycSessionStatus.externalUserId}.
+   */
+  externalUserId: string;
 };
 
 export type ResetWrappingKeysParams = {
@@ -886,11 +909,7 @@ export class KycService extends BaseDataService<
         wrappedUkycCapabilityToken: params.wrappedUkycCapabilityToken,
       }),
     });
-    return this.#validateResponse(
-      data,
-      SessionStatusResponseStruct,
-      'authorizations',
-    );
+    return this.#validateAndPatchSessionStatus(data, 'authorizations');
   }
 
   /**
@@ -931,11 +950,7 @@ export class KycService extends BaseDataService<
       this.#baseUrl,
     );
     const data = await this.#requestJson(url, { method: 'GET' });
-    return this.#validateResponse(
-      data,
-      SessionStatusResponseStruct,
-      'session status',
-    );
+    return this.#validateAndPatchSessionStatus(data, 'session status');
   }
 
   /**
@@ -957,17 +972,64 @@ export class KycService extends BaseDataService<
       if (data === null) {
         return null;
       }
-      return this.#validateResponse(
-        data,
-        SessionStatusResponseStruct,
-        'latest session status',
-      );
+      return this.#validateAndPatchSessionStatus(data, 'latest session status');
     } catch (error) {
       if (error instanceof HttpError && error.httpStatus === 404) {
         return null;
       }
       throw error;
     }
+  }
+
+  /**
+   * Fetches the vendors the customer's verified identity data has been shared
+   * with (`GET /api/kyc/external-user-id/{externalUserId}/shares` on the idOS
+   * relay), newest first.
+   *
+   * Reads metadata only, so shares remain listed after the relay redacts the
+   * underlying session (14 days).
+   *
+   * @param params - The parameters.
+   * @param params.externalUserId - The vendor-agnostic external user id.
+   * @returns The data shares, newest first.
+   */
+  async getDataShares({
+    externalUserId,
+  }: GetDataSharesParams): Promise<KycDataShare[]> {
+    if (!this.#idosRelayBaseUrl) {
+      throw new Error(
+        'KycService: idosRelayBaseUrl is not configured; cannot fetch data shares.',
+      );
+    }
+    const url = new URL(
+      `/api/kyc/external-user-id/${encodeURIComponent(externalUserId)}/shares`,
+      this.#idosRelayBaseUrl,
+    );
+    const data = await this.#requestJson(url, { method: 'GET' });
+    const { shares } = this.#validateResponse(
+      data,
+      DataSharesResponseStruct,
+      'data shares',
+    );
+    return shares;
+  }
+
+  /**
+   * Validates a kyc-api session-status body and applies
+   * {@link patchKycSessionStatus} so `finalStatus` stays as reported unless
+   * the session is `pending` at the `kyc` step.
+   *
+   * @param data - The parsed response body.
+   * @param apiName - A human-readable name of the API, used in the error message.
+   * @returns The session status consumers should store and act on.
+   */
+  #validateAndPatchSessionStatus(
+    data: unknown,
+    apiName: string,
+  ): KycSessionStatus {
+    return patchKycSessionStatus(
+      this.#validateResponse(data, SessionStatusResponseStruct, apiName),
+    );
   }
 
   /**

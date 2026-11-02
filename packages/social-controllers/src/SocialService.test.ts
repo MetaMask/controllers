@@ -2932,6 +2932,74 @@ describe('SocialService', () => {
     });
   });
 
+  describe('unblockProfile', () => {
+    it('sends DELETE to /moderation/blocks/profiles/:profileId', async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 204 });
+
+      const service = createService();
+      const result = await service.unblockProfile({
+        profileId: mockProfileSummary.profileId,
+      });
+
+      expect(result).toBeUndefined();
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${V1_URL}/moderation/blocks/profiles/${mockProfileSummary.profileId}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${MOCK_TOKEN}` },
+        },
+      );
+    });
+
+    it('encodes the profile id in the URL path', async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 204 });
+
+      const service = createService();
+      await service.unblockProfile({ profileId: 'a/b c' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${V1_URL}/moderation/blocks/profiles/a%2Fb%20c`,
+        expect.anything(),
+      );
+    });
+
+    it('throws HttpError on non-ok response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 400 });
+
+      const service = createService();
+
+      await expect(
+        service.unblockProfile({ profileId: mockProfileSummary.profileId }),
+      ).rejects.toThrow(
+        `${SocialServiceErrorMessage.UNBLOCK_PROFILE_FAILED}: 400`,
+      );
+    });
+
+    it('always sends the request on repeated calls (staleTime: 0)', async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 204 });
+
+      const service = createService();
+      await service.unblockProfile({ profileId: mockProfileSummary.profileId });
+      await service.unblockProfile({ profileId: mockProfileSummary.profileId });
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('is callable via messenger action', async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 204 });
+
+      const messenger = createMessenger();
+      // eslint-disable-next-line no-new
+      new SocialService({ messenger, baseUrl: BASE_URL });
+
+      const result = await messenger.call('SocialService:unblockProfile', {
+        profileId: mockProfileSummary.profileId,
+      });
+
+      expect(result).toBeUndefined();
+    });
+  });
+
   describe('fetchBlockedProfiles', () => {
     const mockBlockedProfilesResponse = {
       items: [
@@ -3150,6 +3218,85 @@ describe('SocialService', () => {
       const result = await messenger.call('SocialService:fetchBlockedContent');
 
       expect(result).toStrictEqual(mockBlockedContentResponse);
+    });
+  });
+
+  describe('fetchModerationStatus', () => {
+    const mockBannedStatus = {
+      banned: true,
+      bannedAt: 1700000000,
+      reason: 'Spam or scams',
+    };
+
+    it('fetches the current user’s status from /moderation/status', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockBannedStatus),
+      });
+
+      const service = createService();
+      const result = await service.fetchModerationStatus();
+
+      expect(result).toStrictEqual(mockBannedStatus);
+      expect(mockFetch).toHaveBeenCalledWith(`${V1_URL}/moderation/status`, {
+        headers: { Authorization: `Bearer ${MOCK_TOKEN}` },
+      });
+    });
+
+    it('accepts a status without a ban', async () => {
+      const notBanned = { banned: false, bannedAt: null, reason: null };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(notBanned),
+      });
+
+      const service = createService();
+
+      expect(await service.fetchModerationStatus()).toStrictEqual(notBanned);
+    });
+
+    it('throws HttpError on non-ok response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 401 });
+
+      const service = createService();
+
+      await expect(service.fetchModerationStatus()).rejects.toThrow(
+        `${SocialServiceErrorMessage.FETCH_MODERATION_STATUS_FAILED}: 401`,
+      );
+    });
+
+    it('throws when response schema is invalid', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ ...mockBannedStatus, banned: 'yes' }),
+      });
+
+      const service = createService();
+
+      await expect(service.fetchModerationStatus()).rejects.toThrow(
+        SocialServiceErrorMessage.FETCH_MODERATION_STATUS_INVALID_RESPONSE,
+      );
+    });
+
+    it('is callable via messenger action', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockBannedStatus),
+      });
+
+      const messenger = createMessenger();
+      // eslint-disable-next-line no-new
+      new SocialService({ messenger, baseUrl: BASE_URL });
+
+      const result = await messenger.call(
+        'SocialService:fetchModerationStatus',
+      );
+
+      expect(result).toStrictEqual(mockBannedStatus);
     });
   });
 

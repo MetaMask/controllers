@@ -71,7 +71,12 @@ function buildScopeForMockingRequests(
   rpcUrl: string,
   headers: Record<string, string>,
 ): nock.Scope {
-  return nock(rpcUrl, { reqheaders: headers }).filteringRequestBody((body) => {
+  // The types for nock 15 only declare the form of `filteringRequestBody` that
+  // takes no arguments, although it still accepts a function at runtime.
+  const scope = nock(rpcUrl, { reqheaders: headers }) as unknown as {
+    filteringRequestBody: (filter: (body: string) => string) => nock.Scope;
+  };
+  return scope.filteringRequestBody((body) => {
     debug('Nock Received Request: ', body);
     return body;
   });
@@ -643,18 +648,4 @@ export function buildRequestWithReplacedBlockParam(
   const updatedParams = params.slice();
   updatedParams[blockParamIndex] = blockParam;
   return { method, params: updatedParams };
-}
-
-/**
- * Builds a pattern that matches the message of an error that was produced by
- * `fetch`. Depending on the implementation of `fetch`, the original error
- * message is either preserved (`node-fetch`) or replaced with a generic one
- * (native `fetch`), so both are accepted.
- *
- * @param message - The message that `node-fetch` would preserve.
- * @returns A regular expression that matches either message.
- */
-export function buildFetchErrorPattern(message: string): RegExp {
-  const escapedMessage = message.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  return new RegExp(`${escapedMessage}|fetch failed`, 'u');
 }

@@ -68,6 +68,7 @@ export const SocialServiceErrorMessage = {
   NOTIFICATION_PREFERENCES_CACHE_REFRESH_FAILED:
     'SocialService: Notification preferences cache refresh request failed',
   BLOCK_FAILED: 'SocialService: Block request failed',
+  UNBLOCK_PROFILE_FAILED: 'SocialService: Unblock profile request failed',
   FETCH_BLOCKED_PROFILES_FAILED:
     'SocialService: Blocked profiles request failed',
   FETCH_BLOCKED_PROFILES_INVALID_RESPONSE:
@@ -75,4 +76,8 @@ export const SocialServiceErrorMessage = {
   FETCH_BLOCKED_CONTENT_FAILED: 'SocialService: Blocked content request failed',
   FETCH_BLOCKED_CONTENT_INVALID_RESPONSE:
     'SocialService: Blocked content returned invalid response',
+  FETCH_MODERATION_STATUS_FAILED:
+    'SocialService: Moderation status request failed',
+  FETCH_MODERATION_STATUS_INVALID_RESPONSE:
+    'SocialService: Moderation status returned invalid response',
 } as const;

@@ -4,6 +4,7 @@ import type {
   MessengerActions,
   MessengerEvents,
 } from '@metamask/messenger';
+import { base64ToBytes, bytesToBase64 } from '@metamask/utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Mock, MockedFunction } from 'vitest';
 
@@ -21,7 +22,17 @@ import {
 } from './KycController.js';
 import type { KycControllerMessenger } from './KycController.js';
 import type { KycSumSubLauncher } from './providers/sumsub.js';
-import type { KycConsentRecord, KycSessionDisclaimers } from './types.js';
+import { KYC_CURRENT_STEPS } from './types.js';
+import type {
+  KycConsentRecord,
+  KycCurrentStep,
+  KycSessionDisclaimers,
+  KycSessionStatus,
+} from './types.js';
+import {
+  UKYC_LOCAL_USER_SECRET_PATH,
+  UKYC_LOCAL_USER_SECRET_SIZE_BYTES,
+} from './ukyc/constants.js';
 import {
   assertAttestedServerPublicKey,
   verifyJwtChain,
@@ -708,6 +719,95 @@ describe('KycController', () => {
     });
   });
 
+  describe('getDataShares', () => {
+    const dataShares = [
+      {
+        kycSessionId: '11111111-2222-3333-4444-555555555555',
+        vendor: 'moonpay' as const,
+        sharedAt: '2026-02-02T00:00:00.000Z',
+      },
+    ];
+
+    it('uses the external user id from the session on state', async () => {
+      await withController(
+        { options: { state: { sessionStatus: sessionStatus('approved') } } },
+        async ({ controller, handlers }) => {
+          handlers.getDataShares.mockResolvedValue(dataShares);
+
+          expect(await controller.getDataShares()).toStrictEqual(dataShares);
+          expect(handlers.getDataShares).toHaveBeenCalledWith({
+            externalUserId: 'ext-1',
+          });
+          expect(handlers.getSessionStatusForVendor).not.toHaveBeenCalled();
+        },
+      );
+    });
+
+    it('returns an empty list when nothing has been shared', async () => {
+      await withController(
+        { options: { state: { sessionStatus: sessionStatus('approved') } } },
+        async ({ controller }) => {
+          expect(await controller.getDataShares()).toStrictEqual([]);
+        },
+      );
+    });
+
+    it('resolves the latest session for the vendor when state is cold', async () => {
+      await withController(
+        { options: { state: { vendor: 'iron' } } },
+        async ({ controller, handlers }) => {
+          handlers.getSessionStatusForVendor.mockResolvedValue(
+            sessionStatus('approved', { externalUserId: 'ext-cold' }),
+          );
+          handlers.getDataShares.mockResolvedValue(dataShares);
+
+          expect(await controller.getDataShares()).toStrictEqual(dataShares);
+          expect(handlers.getSessionStatusForVendor).toHaveBeenCalledWith(
+            'iron',
+          );
+          expect(handlers.getDataShares).toHaveBeenCalledWith({
+            externalUserId: 'ext-cold',
+          });
+          // The resolved session is not written to state.
+          expect(controller.state.sessionStatus).toBeNull();
+        },
+      );
+    });
+
+    it('returns an empty list when no vendor is on state', async () => {
+      await withController(async ({ controller, handlers }) => {
+        expect(await controller.getDataShares()).toStrictEqual([]);
+        expect(handlers.getSessionStatusForVendor).not.toHaveBeenCalled();
+        expect(handlers.getDataShares).not.toHaveBeenCalled();
+      });
+    });
+
+    it('returns an empty list when the vendor has no latest session', async () => {
+      await withController(
+        { options: { state: { vendor: 'iron' } } },
+        async ({ controller, handlers }) => {
+          handlers.getSessionStatusForVendor.mockResolvedValue(null);
+
+          expect(await controller.getDataShares()).toStrictEqual([]);
+          expect(handlers.getDataShares).not.toHaveBeenCalled();
+        },
+      );
+    });
+
+    it('is exposed as a messenger action', async () => {
+      await withController(
+        { options: { state: { sessionStatus: sessionStatus('approved') } } },
+        async ({ rootMessenger, handlers }) => {
+          handlers.getDataShares.mockResolvedValue(dataShares);
+
+          expect(
+            await rootMessenger.call('KycController:getDataShares'),
+          ).toStrictEqual(dataShares);
+        },
+      );
+    });
+  });
+
   describe('refreshSessionStatus', () => {
     afterEach(() => {
       vi.useRealTimers();
@@ -822,6 +922,7 @@ describe('KycController', () => {
           );
           expect(controller.state.sessionStatus).toMatchInlineSnapshot(`
             {
+              "currentStep": "approved",
               "externalUserId": "ext-1",
               "finalStatus": "approved",
               "id": "sid",
@@ -1526,6 +1627,9 @@ describe('KycController', () => {
           );
           expect(handlers.createJourney).toHaveBeenCalledTimes(2);
           expect(controller.state.sessionStatus?.finalStatus).toBe('pending');
+          expect(controller.state.sessionStatus?.currentStep).toBe(
+            KYC_CURRENT_STEPS.processing,
+          );
           expect(handlers.getSessionStatus).toHaveBeenCalledWith({
             sessionId: 'sid',
           });
@@ -1617,6 +1721,104 @@ describe('KycController', () => {
           expect(controller.getProviderFlowStatus()).toBe('abandoned');
         },
       );
+    });
+  });
+
+  describe('ensureLocalUserSecret', () => {
+    it('creates and stores a local_user_secret when none exists', async () => {
+      await withController(async ({ controller, handlers }) => {
+        const storage = statefulUserStorage(handlers);
+
+        expect(await controller.ensureLocalUserSecret()).toBeUndefined();
+
+        expect(storage.get).toHaveBeenCalledWith(
+          UKYC_LOCAL_USER_SECRET_PATH,
+          undefined,
+        );
+        expect(storage.set).toHaveBeenCalledTimes(1);
+        expect(storage.set).toHaveBeenCalledWith(
+          UKYC_LOCAL_USER_SECRET_PATH,
+          expect.any(String),
+          undefined,
+        );
+        const [, persisted] = storage.set.mock.calls[0] as [
+          string,
+          string,
+          undefined,
+        ];
+        expect(storage.value).toBe(persisted);
+        expect(base64ToBytes(persisted)).toHaveLength(
+          UKYC_LOCAL_USER_SECRET_SIZE_BYTES,
+        );
+        expect(controller.state).toStrictEqual(getDefaultKycControllerState());
+      });
+    });
+
+    it('keeps an existing local_user_secret', async () => {
+      await withController(async ({ controller, handlers }) => {
+        const existing = bytesToBase64(
+          new Uint8Array(UKYC_LOCAL_USER_SECRET_SIZE_BYTES).fill(7),
+        );
+        const storage = statefulUserStorage(handlers, existing);
+
+        await controller.ensureLocalUserSecret();
+
+        expect(storage.set).not.toHaveBeenCalled();
+        expect(storage.value).toBe(existing);
+      });
+    });
+
+    it('stores the secret once when called concurrently', async () => {
+      await withController(async ({ controller, handlers }) => {
+        const storage = statefulUserStorage(handlers);
+
+        await Promise.all([
+          controller.ensureLocalUserSecret(),
+          controller.ensureLocalUserSecret(),
+        ]);
+
+        expect(storage.set).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('leaves session creation with a storage read when the secret already exists', async () => {
+      await withController(async ({ controller, handlers }) => {
+        const storage = statefulUserStorage(handlers);
+        await controller.ensureLocalUserSecret();
+        storage.set.mockClear();
+        storage.get.mockClear();
+
+        await controller.startSession({
+          vendor: 'iron',
+          aal2Token: AAL2_TOKEN,
+        });
+
+        expect(storage.get).toHaveBeenCalledWith(
+          UKYC_LOCAL_USER_SECRET_PATH,
+          undefined,
+        );
+        expect(storage.set).not.toHaveBeenCalled();
+      });
+    });
+
+    it('rejects when encrypted user storage cannot be read', async () => {
+      await withController(async ({ controller, handlers }) => {
+        handlers.performGetStorage.mockRejectedValue(new Error('storage down'));
+
+        await expect(controller.ensureLocalUserSecret()).rejects.toThrow(
+          'storage down',
+        );
+      });
+    });
+
+    it('is exposed as a messenger action', async () => {
+      await withController(async ({ rootMessenger, handlers }) => {
+        const storage = statefulUserStorage(handlers);
+
+        await rootMessenger.call('KycController:ensureLocalUserSecret');
+
+        expect(storage.set).toHaveBeenCalledTimes(1);
+      });
     });
   });
 
@@ -2153,6 +2355,7 @@ type ServiceHandlers = {
   createJourney: Mock;
   getSessionStatus: Mock;
   getSessionStatusForVendor: Mock;
+  getDataShares: Mock;
   performGetStorage: Mock;
   performSetStorage: Mock;
 };
@@ -2244,23 +2447,13 @@ function expectResetWrappingKeys(
  */
 function sessionStatus(
   finalStatus: string,
-  overrides: {
-    id?: string;
-    externalUserId?: string;
-    kycStatus?: string;
-    vendor?: string;
-    vendorStatus?: string;
-    capabilityAuthorizationStatus?: string;
-  } = {},
-): {
-  id: string;
-  finalStatus: string;
-  externalUserId: string;
-  kycStatus: string;
-  vendor: string;
-  vendorStatus: string;
-  capabilityAuthorizationStatus?: string;
-} {
+  overrides: Partial<KycSessionStatus> = {},
+): KycSessionStatus {
+  const currentStep: KycCurrentStep =
+    finalStatus === KYC_CURRENT_STEPS.approved ||
+    finalStatus === KYC_CURRENT_STEPS.rejected
+      ? finalStatus
+      : KYC_CURRENT_STEPS.processing;
   return {
     id: 'sid',
     finalStatus,
@@ -2268,7 +2461,36 @@ function sessionStatus(
     kycStatus: finalStatus,
     vendor: 'sumsub',
     vendorStatus: finalStatus,
+    currentStep,
     ...overrides,
+  };
+}
+
+/**
+ * Points the user-storage mocks at one in-memory value so a write is visible
+ * to the next read.
+ *
+ * @param handlers - Service handlers from {@link withController}.
+ * @param initial - Initial stored base64 value.
+ * @returns The storage mocks plus the current stored value.
+ */
+function statefulUserStorage(
+  handlers: ServiceHandlers,
+  initial: string | null = null,
+): { get: Mock; set: Mock; value: string | null } {
+  let value = initial;
+  const get = handlers.performGetStorage.mockImplementation(async () => value);
+  const set = handlers.performSetStorage.mockImplementation(
+    async (_path: string, next: string) => {
+      value = next;
+    },
+  );
+  return {
+    get,
+    set,
+    get value() {
+      return value;
+    },
   };
 }
 
@@ -2312,6 +2534,7 @@ function withController<ReturnValue>(
       'KycService:createJourney',
       'KycService:getSessionStatus',
       'KycService:getSessionStatusForVendor',
+      'KycService:getDataShares',
       'UserStorageController:performGetStorage',
       'UserStorageController:performSetStorage',
       'AuthenticationController:getPartnerIdentityToken',
@@ -2358,6 +2581,7 @@ function withController<ReturnValue>(
       .mockResolvedValue({ status: 'ok', applicantAccessToken: 'aat' }),
     getSessionStatus: vi.fn().mockResolvedValue(sessionStatus('approved')),
     getSessionStatusForVendor: vi.fn().mockResolvedValue(null),
+    getDataShares: vi.fn().mockResolvedValue([]),
     performGetStorage: vi.fn().mockResolvedValue(null),
     performSetStorage: vi.fn().mockResolvedValue(undefined),
   };
@@ -2425,6 +2649,10 @@ function withController<ReturnValue>(
   rootMessenger.registerActionHandler(
     'KycService:getSessionStatusForVendor',
     handlers.getSessionStatusForVendor,
+  );
+  rootMessenger.registerActionHandler(
+    'KycService:getDataShares',
+    handlers.getDataShares,
   );
   rootMessenger.registerActionHandler(
     'AuthenticationController:getPartnerIdentityToken',
