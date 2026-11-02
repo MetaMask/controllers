@@ -5665,7 +5665,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/auto-changelog@npm:^6.1.1, @metamask/auto-changelog@npm:^6.2.1":
+"@metamask/auto-changelog@npm:^6.1.1":
   version: 6.2.1
   resolution: "@metamask/auto-changelog@npm:6.2.1"
   dependencies:
@@ -7455,7 +7455,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/money-account-lifecycle-controller@workspace:packages/money-account-lifecycle-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/chomp-api-service": "npm:^7.0.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
