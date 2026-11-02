@@ -47,7 +47,8 @@
     "test": "vitest",
     "test:clean": "vitest --clearCache",
     "test:verbose": "vitest --reporter=verbose",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
     "@metamask/base-controller": "^10.1.0",
