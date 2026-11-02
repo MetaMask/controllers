@@ -91,6 +91,29 @@ export type MultichainTransactionsControllerTransactionFailedEvent = {
 };
 
 /**
+ * Transaction payload carried by the account-activity WebSocket event
+ * (`AccountActivityService:transactionUpdated` in `@metamask/core-backend`).
+ * Declared structurally so this package does not depend on core-backend.
+ */
+type AccountActivityTransaction = {
+  id: string;
+  chain: string;
+  status: string;
+  timestamp: number;
+  from: string;
+  to: string;
+};
+
+/**
+ * Real-time terminal-status signal for pending non-EVM transactions, emitted
+ * by `AccountActivityService` (`@metamask/core-backend`).
+ */
+type AccountActivityServiceTransactionUpdatedEvent = {
+  type: 'AccountActivityService:transactionUpdated';
+  payload: [AccountActivityTransaction];
+};
+
+/**
  * Returns the state of the {@link MultichainTransactionsController}.
  */
 export type MultichainTransactionsControllerGetStateAction =
@@ -147,7 +170,8 @@ type AllowedActions =
 type AllowedEvents =
   | AccountsControllerAccountAddedEvent
   | AccountsControllerAccountRemovedEvent
-  | AccountsControllerAccountTransactionsUpdatedEvent;
+  | AccountsControllerAccountTransactionsUpdatedEvent
+  | AccountActivityServiceTransactionUpdatedEvent;
 
 /**
  * {@link MultichainTransactionsController}'s metadata.
@@ -227,6 +251,11 @@ export class MultichainTransactionsController extends BaseController<
       'AccountsController:accountTransactionsUpdated',
       (transactionsUpdate: AccountTransactionsUpdatedEventPayload) =>
         this.#handleOnAccountTransactionsUpdated(transactionsUpdate),
+    );
+    this.messenger.subscribe(
+      'AccountActivityService:transactionUpdated',
+      (transaction: AccountActivityTransaction) =>
+        this.#handleOnBackendTransactionUpdated(transaction),
     );
   }
 
@@ -405,6 +434,58 @@ export class MultichainTransactionsController extends BaseController<
         'MultichainTransactionsController:transactionFailed',
         updatedTransaction,
       );
+    }
+  }
+
+  /**
+   * Drives a pending transaction to a terminal status when the backend
+   * account-activity WebSocket reports it. Matches by transaction id and
+   * chain; unknown ids are ignored (history is served by the Accounts API,
+   * not by this controller).
+   *
+   * @param transaction - The transaction update from the WebSocket.
+   */
+  #handleOnBackendTransactionUpdated(
+    transaction: AccountActivityTransaction,
+  ): void {
+    const status = transaction.status.toLowerCase();
+    if (
+      status !== TransactionStatus.Confirmed &&
+      status !== TransactionStatus.Failed
+    ) {
+      return;
+    }
+
+    let updatedTransaction: Transaction | undefined;
+
+    this.update((state: Draft<MultichainTransactionsControllerState>) => {
+      for (const chains of Object.values(state.nonEvmTransactions)) {
+        const entry = chains[transaction.chain as CaipChainId];
+        const index =
+          entry?.transactions.findIndex(
+            (tx) =>
+              tx.id === transaction.id &&
+              tx.status !== TransactionStatus.Confirmed &&
+              tx.status !== TransactionStatus.Failed,
+          ) ?? -1;
+
+        if (!entry || index === -1) {
+          continue;
+        }
+
+        updatedTransaction = {
+          ...entry.transactions[index],
+          status: status as TransactionStatus,
+          timestamp: transaction.timestamp,
+        };
+        entry.transactions[index] = updatedTransaction;
+        entry.lastUpdated = Date.now();
+        break;
+      }
+    });
+
+    if (updatedTransaction) {
+      this.#publishTransactionUpdateEvent(updatedTransaction);
     }
   }
 
