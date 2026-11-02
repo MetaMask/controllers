@@ -94,6 +94,7 @@ export type {
   DataResponse,
   AssetsUpdateMode,
   AssetsLoadingStatus,
+  AssetsRefreshingStatus,
   // Middleware types
   Context,
   NextFunction,
@@ -200,10 +201,15 @@ export {
 
 export {
   getAccountGroupLoadingStatus,
+  getAccountGroupRefreshingStatus,
   getAccountLoadingStatus,
+  getAccountRefreshingStatus,
   getIsAssetsLoadingForSelectedAccountGroup,
+  getIsAssetsRefreshingForSelectedAccountGroup,
   isAccountGroupLoading,
+  isAccountGroupRefreshing,
   isAccountLoading,
+  isAccountRefreshing,
 } from './selectors/loading.js';
 
 export type {

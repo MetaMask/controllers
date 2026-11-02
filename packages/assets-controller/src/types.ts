@@ -417,6 +417,13 @@ export type AssetsUpdateMode = 'full' | 'merge';
 
 export type AssetsLoadingStatus = 'loading' | 'loaded';
 
+/**
+ * Per-account refresh flag, separate from the first-load status.
+ * `'refreshing'` covers every `getAssets({ forceUpdate: true })` call,
+ * including later refreshes that must not re-enter `'loading'`.
+ */
+export type AssetsRefreshingStatus = 'refreshing' | 'idle';
+
 // ============================================================================
 // DATA SOURCE <-> CONTROLLER (DIRECT CALLS, NO MESSENGER PER SOURCE)
 // ============================================================================
@@ -498,7 +505,17 @@ export type AssetsControllerState = {
   assetPreferences: Record<Caip19AssetId, AssetPreferences>;
   /** Currently-active ISO 4217 currency code */
   selectedCurrency: SupportedCurrency;
+  /**
+   * First-load status per account. Stays `'loading'` until the fast pipeline
+   * and any slow pipeline for that fetch have both settled. Later refreshes
+   * do not change a `'loaded'` account.
+   */
   assetsLoadingStatus?: Record<AccountId, AssetsLoadingStatus>;
+  /**
+   * Refresh status per account. Set to `'refreshing'` on every forced fetch
+   * and back to `'idle'` once that fetch's fast and slow pipelines settle.
+   */
+  assetsRefreshingStatus?: Record<AccountId, AssetsRefreshingStatus>;
 };
 
 // ============================================================================

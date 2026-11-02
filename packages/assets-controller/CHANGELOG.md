@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<<<<<<< Updated upstream
+=======
+### Added
+
+- Add `init()`, which reads enabled chains from `NetworkEnablementController:getState` after every controller has been constructed. Later enablement changes still arrive on `NetworkEnablementController:stateChange` ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - `init()` also refreshes the RPC and staked balance data sources' active chains from `NetworkController:getState` and `NetworkEnablementController:getState`, which they otherwise read only at construction.
+
+### Changed
+
+- **BREAKING:** The constructor no longer calls `NetworkEnablementController:getState`. Call `init()` after the other controllers exist. `Wallet.init()` does this. Until `init()` runs, enabled chains stay empty unless a `NetworkEnablementController:stateChange` event arrives ([#10885](https://github.com/MetaMask/core/pull/10885))
+
+## [20.2.0]
+
+### Added
+
+- Add `assetsRefreshingStatus`, set to `'refreshing'` for every `getAssets({ forceUpdate: true })` call and back to `'idle'` when that fetch settles
+  - Selectors: `getAccountRefreshingStatus`, `isAccountRefreshing`, `getAccountGroupRefreshingStatus`, `isAccountGroupRefreshing`, and `getIsAssetsRefreshingForSelectedAccountGroup`
+
+### Changed
+
+- Keep `assetsLoadingStatus` at `'loading'` until both the fast pipeline and `#runBackgroundFetch` settle. `getAssets` still returns after the fast pipeline, and a later refresh does not move a `'loaded'` account back to `'loading'`
+
+>>>>>>> Stashed changes
 ## [20.0.2]
 
 ### Fixed
@@ -1211,7 +1234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor `RpcDataSource` to delegate polling to `BalanceFetcher` and `TokenDetector` services ([#7709](https://github.com/MetaMask/core/pull/7709))
 - Refactor `BalanceFetcher` and `TokenDetector` to extend `StaticIntervalPollingControllerOnly` for independent polling management ([#7709](https://github.com/MetaMask/core/pull/7709))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.2...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.2.0...HEAD
+[20.2.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.2...@metamask/assets-controller@20.2.0
 [20.0.2]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.1...@metamask/assets-controller@20.0.2
 [20.0.1]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.0...@metamask/assets-controller@20.0.1
 [20.0.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@19.1.0...@metamask/assets-controller@20.0.0

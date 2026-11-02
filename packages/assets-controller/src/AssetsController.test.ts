@@ -6081,7 +6081,106 @@ describe('AssetsController', () => {
 
         // assert: no loading status record is created.
         expect(controller.state.assetsLoadingStatus).toBeUndefined();
+        expect(controller.state.assetsRefreshingStatus).toBeUndefined();
       });
+    });
+
+    it('keeps first-load and refresh status active until the slow pipeline settles', async () => {
+      const activeChainsSpy = vi
+        .spyOn(AccountsApiDataSource.prototype, 'getActiveChainsSync')
+        .mockReturnValue([]);
+      let releaseBackground: (error?: Error) => void = () => undefined;
+      const backgroundGate = new Promise<void>((resolve, reject) => {
+        releaseBackground = (error?: Error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        };
+      });
+      const middlewareSpy = vi
+        .spyOn(RpcDataSource.prototype, 'assetsMiddleware', 'get')
+        .mockReturnValue(async () => {
+          await backgroundGate;
+        });
+
+      try {
+        await withController(
+          { isBasicFunctionality: () => false },
+          async ({ controller }) => {
+            const account = createMockInternalAccount({
+              id: 'mock-account-id-slow',
+            });
+
+            const fetchPromise = controller.getAssets([account], {
+              forceUpdate: true,
+            });
+            await fetchPromise;
+
+            expect(controller.state.assetsLoadingStatus?.[account.id]).toBe(
+              'loading',
+            );
+            expect(controller.state.assetsRefreshingStatus?.[account.id]).toBe(
+              'refreshing',
+            );
+
+            releaseBackground();
+            await flushPromises();
+
+            expect(controller.state.assetsLoadingStatus?.[account.id]).toBe(
+              'loaded',
+            );
+            expect(controller.state.assetsRefreshingStatus?.[account.id]).toBe(
+              'idle',
+            );
+          },
+        );
+      } finally {
+        activeChainsSpy.mockRestore();
+        middlewareSpy.mockRestore();
+      }
+    });
+
+    it('settles first-load and refresh status when the slow pipeline fails', async () => {
+      const activeChainsSpy = vi
+        .spyOn(AccountsApiDataSource.prototype, 'getActiveChainsSync')
+        .mockReturnValue([]);
+      let releaseBackground: () => void = () => undefined;
+      const backgroundGate = new Promise<void>((resolve) => {
+        releaseBackground = resolve;
+      });
+      const middlewareSpy = vi
+        .spyOn(RpcDataSource.prototype, 'assetsMiddleware', 'get')
+        .mockReturnValue(async () => {
+          await backgroundGate;
+          throw new Error('slow pipeline failed');
+        });
+
+      try {
+        await withController(
+          { isBasicFunctionality: () => false },
+          async ({ controller }) => {
+            const account = createMockInternalAccount({
+              id: 'mock-account-id-slow-fail',
+            });
+
+            await controller.getAssets([account], { forceUpdate: true });
+            releaseBackground();
+            await flushPromises();
+
+            expect(controller.state.assetsLoadingStatus?.[account.id]).toBe(
+              'loaded',
+            );
+            expect(controller.state.assetsRefreshingStatus?.[account.id]).toBe(
+              'idle',
+            );
+          },
+        );
+      } finally {
+        activeChainsSpy.mockRestore();
+        middlewareSpy.mockRestore();
+      }
     });
   });
   describe('account tree initialized', () => {

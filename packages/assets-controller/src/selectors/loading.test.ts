@@ -5,10 +5,15 @@ import type { AssetsControllerState } from '../AssetsController.js';
 import type { AccountId } from '../types.js';
 import {
   getAccountGroupLoadingStatus,
+  getAccountGroupRefreshingStatus,
   getAccountLoadingStatus,
+  getAccountRefreshingStatus,
   getIsAssetsLoadingForSelectedAccountGroup,
+  getIsAssetsRefreshingForSelectedAccountGroup,
   isAccountGroupLoading,
+  isAccountGroupRefreshing,
   isAccountLoading,
+  isAccountRefreshing,
 } from './loading.js';
 
 const ACCOUNT_ID_A = 'mock-account-id-a' as AccountId;
@@ -171,6 +176,136 @@ describe('getIsAssetsLoadingForSelectedAccountGroup', () => {
     const state = createState({ [ACCOUNT_ID_A]: 'loading' });
     expect(
       getIsAssetsLoadingForSelectedAccountGroup(
+        state,
+        createAccountTreeState(''),
+      ),
+    ).toBe(false);
+  });
+});
+
+const createRefreshingState = (
+  assetsRefreshingStatus: Record<AccountId, 'refreshing' | 'idle'>,
+): Pick<AssetsControllerState, 'assetsRefreshingStatus'> => ({
+  assetsRefreshingStatus,
+});
+
+describe('getAccountRefreshingStatus', () => {
+  it('returns the refresh status for an account', () => {
+    const state = createRefreshingState({
+      [ACCOUNT_ID_A]: 'refreshing',
+      [ACCOUNT_ID_B]: 'idle',
+    });
+    expect(getAccountRefreshingStatus(state, ACCOUNT_ID_A)).toBe('refreshing');
+    expect(getAccountRefreshingStatus(state, ACCOUNT_ID_B)).toBe('idle');
+  });
+
+  it('returns undefined for an account with no refresh status', () => {
+    expect(
+      getAccountRefreshingStatus(createRefreshingState({}), ACCOUNT_ID_C),
+    ).toBeUndefined();
+  });
+});
+
+describe('isAccountRefreshing', () => {
+  it('returns true while an account is refreshing', () => {
+    expect(
+      isAccountRefreshing(
+        createRefreshingState({ [ACCOUNT_ID_A]: 'refreshing' }),
+        ACCOUNT_ID_A,
+      ),
+    ).toBe(true);
+  });
+
+  it('returns false once the account is idle or has no status', () => {
+    expect(
+      isAccountRefreshing(
+        createRefreshingState({ [ACCOUNT_ID_A]: 'idle' }),
+        ACCOUNT_ID_A,
+      ),
+    ).toBe(false);
+    expect(isAccountRefreshing(createRefreshingState({}), ACCOUNT_ID_A)).toBe(
+      false,
+    );
+  });
+});
+
+describe('getAccountGroupRefreshingStatus', () => {
+  it('returns statuses for the accounts in the group', () => {
+    const state = createRefreshingState({
+      [ACCOUNT_ID_A]: 'refreshing',
+      [ACCOUNT_ID_B]: 'idle',
+    });
+    expect(
+      getAccountGroupRefreshingStatus(
+        state,
+        createAccountTreeState(GROUP_ID_1),
+        GROUP_ID_1,
+      ),
+    ).toStrictEqual({
+      [ACCOUNT_ID_A]: 'refreshing',
+      [ACCOUNT_ID_B]: 'idle',
+    });
+  });
+});
+
+describe('isAccountGroupRefreshing', () => {
+  it('returns true while any account in the group is refreshing', () => {
+    const state = createRefreshingState({
+      [ACCOUNT_ID_A]: 'idle',
+      [ACCOUNT_ID_B]: 'refreshing',
+    });
+    expect(
+      isAccountGroupRefreshing(
+        state,
+        createAccountTreeState(GROUP_ID_1),
+        GROUP_ID_1,
+      ),
+    ).toBe(true);
+  });
+
+  it('returns false when no account in the group is refreshing', () => {
+    const state = createRefreshingState({
+      [ACCOUNT_ID_A]: 'idle',
+      [ACCOUNT_ID_C]: 'refreshing',
+    });
+    expect(
+      isAccountGroupRefreshing(
+        state,
+        createAccountTreeState(GROUP_ID_1),
+        GROUP_ID_1,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('getIsAssetsRefreshingForSelectedAccountGroup', () => {
+  it('returns true while any account in the selected group is refreshing', () => {
+    const state = createRefreshingState({ [ACCOUNT_ID_C]: 'refreshing' });
+    expect(
+      getIsAssetsRefreshingForSelectedAccountGroup(
+        state,
+        createAccountTreeState(GROUP_ID_2),
+      ),
+    ).toBe(true);
+  });
+
+  it('returns false when the selected group is not refreshing', () => {
+    const state = createRefreshingState({
+      [ACCOUNT_ID_A]: 'idle',
+      [ACCOUNT_ID_B]: 'refreshing',
+    });
+    expect(
+      getIsAssetsRefreshingForSelectedAccountGroup(
+        state,
+        createAccountTreeState(GROUP_ID_2),
+      ),
+    ).toBe(false);
+  });
+
+  it('returns false when no group is selected', () => {
+    const state = createRefreshingState({ [ACCOUNT_ID_A]: 'refreshing' });
+    expect(
+      getIsAssetsRefreshingForSelectedAccountGroup(
         state,
         createAccountTreeState(''),
       ),

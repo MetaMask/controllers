@@ -2,9 +2,16 @@ import type { InternalAccount } from '@metamask/keyring-internal-api';
 import { describe, expect, it } from 'vitest';
 
 import type { AssetsControllerState } from './AssetsController.js';
-import { trackAssetsLoading } from './trackAssetsLoading.js';
+import {
+  captureAssetsFetchTracking,
+  registerAssetsBackgroundFetch,
+  trackAssetsLoading,
+} from './trackAssetsLoading.js';
 
-type FakeControllerState = Pick<AssetsControllerState, 'assetsLoadingStatus'>;
+type FakeControllerState = Pick<
+  AssetsControllerState,
+  'assetsLoadingStatus' | 'assetsRefreshingStatus'
+>;
 
 const ACCOUNT_1: InternalAccount = {
   id: 'account-1',
@@ -21,10 +28,21 @@ const ACCOUNT_1: InternalAccount = {
   },
 };
 
+async function flushMicrotasks(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 const ACCOUNT_2: InternalAccount = {
   ...ACCOUNT_1,
   id: 'account-2',
   metadata: { ...ACCOUNT_1.metadata, name: 'Test Account 2' },
+};
+
+type FetchOptions = {
+  forceUpdate?: boolean;
+  fail?: boolean;
+  deferBackground?: boolean;
+  failBackground?: boolean;
 };
 
 /**
@@ -33,6 +51,8 @@ const ACCOUNT_2: InternalAccount = {
  */
 class FakeAssetsController {
   readonly holds: (() => void)[] = [];
+
+  readonly backgroundReleases: (() => void)[] = [];
 
   state: FakeControllerState = {};
 
@@ -48,11 +68,34 @@ class FakeAssetsController {
     resolve?.();
   }
 
+  /**
+   * Let the oldest background fetch finish.
+   */
+  releaseNextBackground(): void {
+    const resolve = this.backgroundReleases.shift();
+    resolve?.();
+  }
+
   @trackAssetsLoading
   async getAssets(
     _accounts: InternalAccount[],
-    options?: { forceUpdate?: boolean; fail?: boolean },
+    options?: FetchOptions,
   ): Promise<void> {
+    const trackingToken = captureAssetsFetchTracking(this);
+    if (options?.deferBackground) {
+      registerAssetsBackgroundFetch(
+        trackingToken,
+        new Promise<void>((resolve, reject) => {
+          this.backgroundReleases.push(() => {
+            if (options.failBackground) {
+              reject(new Error('background failed'));
+              return;
+            }
+            resolve();
+          });
+        }),
+      );
+    }
     if (options?.fail) {
       throw new Error('fetch failed');
     }
@@ -73,12 +116,20 @@ describe('trackAssetsLoading', () => {
       [ACCOUNT_1.id]: 'loading',
       [ACCOUNT_2.id]: 'loading',
     });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'refreshing',
+      [ACCOUNT_2.id]: 'refreshing',
+    });
     controller.releaseNextFetch();
     await fetchPromise;
 
     expect(controller.state.assetsLoadingStatus).toStrictEqual({
       [ACCOUNT_1.id]: 'loaded',
       [ACCOUNT_2.id]: 'loaded',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'idle',
+      [ACCOUNT_2.id]: 'idle',
     });
   });
 
@@ -91,6 +142,9 @@ describe('trackAssetsLoading', () => {
 
     expect(controller.state.assetsLoadingStatus).toStrictEqual({
       [ACCOUNT_1.id]: 'loaded',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'idle',
     });
   });
 
@@ -106,7 +160,7 @@ describe('trackAssetsLoading', () => {
       [ACCOUNT_1.id]: 'loaded',
     });
 
-    // A later forced refresh of the settled account is not tracked.
+    // A later forced refresh of the settled account is not re-marked as loading.
     const refreshFetch = controller.getAssets([ACCOUNT_1], {
       forceUpdate: true,
     });
@@ -114,12 +168,18 @@ describe('trackAssetsLoading', () => {
     expect(controller.state.assetsLoadingStatus).toStrictEqual({
       [ACCOUNT_1.id]: 'loaded',
     });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'refreshing',
+    });
 
     controller.releaseNextFetch();
     await refreshFetch;
 
     expect(controller.state.assetsLoadingStatus).toStrictEqual({
       [ACCOUNT_1.id]: 'loaded',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'idle',
     });
   });
 
@@ -140,6 +200,10 @@ describe('trackAssetsLoading', () => {
       [ACCOUNT_1.id]: 'loaded',
       [ACCOUNT_2.id]: 'loading',
     });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'refreshing',
+      [ACCOUNT_2.id]: 'refreshing',
+    });
 
     controller.releaseNextFetch();
     await mixedFetch;
@@ -148,6 +212,10 @@ describe('trackAssetsLoading', () => {
       [ACCOUNT_1.id]: 'loaded',
       [ACCOUNT_2.id]: 'loaded',
     });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'idle',
+      [ACCOUNT_2.id]: 'idle',
+    });
   });
 
   it('does not mark anything when there are no accounts', async () => {
@@ -155,11 +223,13 @@ describe('trackAssetsLoading', () => {
     const fetchPromise = controller.getAssets([], { forceUpdate: true });
 
     expect(controller.state.assetsLoadingStatus).toBeUndefined();
+    expect(controller.state.assetsRefreshingStatus).toBeUndefined();
 
     controller.releaseNextFetch();
     await fetchPromise;
 
     expect(controller.state.assetsLoadingStatus).toBeUndefined();
+    expect(controller.state.assetsRefreshingStatus).toBeUndefined();
   });
 
   it('does not track calls that do not force an update', async () => {
@@ -167,10 +237,98 @@ describe('trackAssetsLoading', () => {
     const fetchPromise = controller.getAssets([ACCOUNT_1]);
 
     expect(controller.state.assetsLoadingStatus).toBeUndefined();
+    expect(controller.state.assetsRefreshingStatus).toBeUndefined();
 
     controller.releaseNextFetch();
     await fetchPromise;
 
     expect(controller.state.assetsLoadingStatus).toBeUndefined();
+    expect(controller.state.assetsRefreshingStatus).toBeUndefined();
+  });
+
+  it('keeps both flags active until a registered background fetch settles', async () => {
+    const controller = new FakeAssetsController();
+    const fetchPromise = controller.getAssets([ACCOUNT_1], {
+      forceUpdate: true,
+      deferBackground: true,
+    });
+
+    controller.releaseNextFetch();
+    await fetchPromise;
+
+    expect(controller.state.assetsLoadingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'loading',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'refreshing',
+    });
+
+    controller.releaseNextBackground();
+    await flushMicrotasks();
+
+    expect(controller.state.assetsLoadingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'loaded',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'idle',
+    });
+  });
+
+  it('settles both flags when the background fetch fails', async () => {
+    const controller = new FakeAssetsController();
+    const fetchPromise = controller.getAssets([ACCOUNT_1], {
+      forceUpdate: true,
+      deferBackground: true,
+      failBackground: true,
+    });
+
+    controller.releaseNextFetch();
+    await fetchPromise;
+    controller.releaseNextBackground();
+    await flushMicrotasks();
+
+    expect(controller.state.assetsLoadingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'loaded',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'idle',
+    });
+  });
+
+  it('does not let an older background fetch settle a newer refresh', async () => {
+    const controller = new FakeAssetsController();
+    const firstFetch = controller.getAssets([ACCOUNT_1], {
+      forceUpdate: true,
+      deferBackground: true,
+    });
+    controller.releaseNextFetch();
+    await firstFetch;
+
+    const secondFetch = controller.getAssets([ACCOUNT_1], {
+      forceUpdate: true,
+      deferBackground: true,
+    });
+    controller.releaseNextFetch();
+    await secondFetch;
+
+    controller.releaseNextBackground();
+    await flushMicrotasks();
+
+    expect(controller.state.assetsLoadingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'loading',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'refreshing',
+    });
+
+    controller.releaseNextBackground();
+    await flushMicrotasks();
+
+    expect(controller.state.assetsLoadingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'loaded',
+    });
+    expect(controller.state.assetsRefreshingStatus).toStrictEqual({
+      [ACCOUNT_1.id]: 'idle',
+    });
   });
 });

@@ -129,7 +129,12 @@ import {
   buildWsUpdateSources,
   executeAssetsPipeline,
 } from './pipeline/index.js';
-import { trackAssetsLoading } from './trackAssetsLoading.js';
+import {
+  captureAssetsFetchTracking,
+  registerAssetsBackgroundFetch,
+  trackAssetsLoading,
+  type AssetsFetchTrackingToken,
+} from './trackAssetsLoading.js';
 import type {
   AccountId,
   AssetsControllerState,
@@ -488,6 +493,12 @@ const stateMetadata: StateMetadata<AssetsControllerState> = {
     usedInUi: true,
   },
   assetsLoadingStatus: {
+    persist: false,
+    includeInStateLogs: true,
+    includeInDebugSnapshot: true,
+    usedInUi: true,
+  },
+  assetsRefreshingStatus: {
     persist: false,
     includeInStateLogs: true,
     includeInDebugSnapshot: true,
@@ -1608,6 +1619,7 @@ export class AssetsController extends BaseController<
       dataTypes?: DataType[];
     },
   ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
+    const trackingToken = captureAssetsFetchTracking(this);
     const chainIds = options?.chainIds ?? [...this.#enabledChains];
     const assetTypes = options?.assetTypes ?? ['fungible'];
     const dataTypes = options?.dataTypes ?? ['balance', 'metadata', 'price'];
@@ -1626,6 +1638,7 @@ export class AssetsController extends BaseController<
           forceUpdate: true,
           bypassServerCache: options.bypassServerCache,
         },
+        trackingToken,
       });
     }
 
@@ -1669,11 +1682,13 @@ export class AssetsController extends BaseController<
    * @param params.accounts - Accounts in this fetch.
    * @param params.chainIds - Chains in this fetch.
    * @param params.requestOptions - Shared force-update request fields.
+   * @param params.trackingToken - Fetch token whose slow pipeline should delay status settlement.
    */
   async #forceUpdateAssets({
     accounts,
     chainIds,
     requestOptions,
+    trackingToken,
   }: {
     accounts: InternalAccount[];
     chainIds: ChainId[];
@@ -1683,6 +1698,7 @@ export class AssetsController extends BaseController<
       forceUpdate: true;
       bypassServerCache?: boolean;
     };
+    trackingToken?: AssetsFetchTrackingToken;
   }): Promise<void> {
     const pipelineTrace = this.#firstInitFetchReported
       ? undefined
@@ -1694,6 +1710,7 @@ export class AssetsController extends BaseController<
         chainIds,
         request: this.#buildDataRequest(accounts, chainIds, requestOptions),
         pipelineTrace,
+        trackingToken,
       });
       return;
     }
@@ -1707,6 +1724,7 @@ export class AssetsController extends BaseController<
         requestOptions,
       ),
       pipelineTrace,
+      trackingToken,
     });
   }
 
@@ -1749,11 +1767,13 @@ export class AssetsController extends BaseController<
     chainIds,
     request,
     pipelineTrace,
+    trackingToken,
   }: {
     accounts: InternalAccount[];
     chainIds: ChainId[];
     request: DataRequest;
     pipelineTrace?: TraceCallback;
+    trackingToken?: AssetsFetchTrackingToken;
   }): Promise<void> {
     const isBasicFunctionality = this.#isBasicFunctionality();
     const fastSources = buildFastFetchSources(
@@ -1783,6 +1803,7 @@ export class AssetsController extends BaseController<
       pipelineTrace,
       chainIds: this.#getSlowPipelineChainIds(chainIds, fastResponse),
       isBasicFunctionality,
+      trackingToken,
     });
   }
 
@@ -1791,11 +1812,13 @@ export class AssetsController extends BaseController<
     chainIds,
     request,
     pipelineTrace,
+    trackingToken,
   }: {
     accounts: InternalAccount[];
     chainIds: ChainId[];
     request: DataRequest;
     pipelineTrace?: TraceCallback;
+    trackingToken?: AssetsFetchTrackingToken;
   }): Promise<void> {
     const isBasicFunctionality = this.#isBasicFunctionality();
     const fastSources = buildFastFetchSources(
@@ -1828,6 +1851,7 @@ export class AssetsController extends BaseController<
       pipelineTrace,
       chainIds: this.#getSlowPipelineChainIds(chainIds, fastResponse),
       isBasicFunctionality,
+      trackingToken,
     });
   }
 
@@ -1935,12 +1959,14 @@ export class AssetsController extends BaseController<
     request,
     pipelineTrace,
     isBasicFunctionality,
+    trackingToken,
   }: {
     accounts: InternalAccount[];
     chainIds: ChainId[];
     request: DataRequest;
     pipelineTrace?: TraceCallback;
     isBasicFunctionality: boolean;
+    trackingToken?: AssetsFetchTrackingToken;
   }): void {
     if (chainIds.length === 0) {
       return;
@@ -1950,7 +1976,7 @@ export class AssetsController extends BaseController<
       : [this.#rpcDataSource];
     const slowRequest = { ...request, chainIds };
 
-    withTrace({
+    const backgroundFetch = withTrace({
       name: TRACE_BACKGROUND_FETCH,
       trace: pipelineTrace,
       data: {
@@ -1977,6 +2003,7 @@ export class AssetsController extends BaseController<
         await this.#updateState(response);
       },
     }).catch((error: unknown) => log('Background pipeline failed', { error }));
+    registerAssetsBackgroundFetch(trackingToken, backgroundFetch);
   }
 
   #emitFastFetchTraces({
