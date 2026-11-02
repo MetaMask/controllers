@@ -11,11 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `NeoBankService.getCustomerAbilities`, exposed on the messenger, which returns the customer's rail abilities from neobank-proxy unmodified, and the `NeoBankCustomerAbilities`, `NeoBankFiatAbilities`, `NeoBankAbilityStatus`, `NeoBankCurrencyAbility` and `NeoBankAbilityCurrency` types ([#11225](https://github.com/MetaMask/core/pull/11225))
   - MoonPay rejects an autoramp create with a 422 when the rail it needs is not `Active`, so clients can check the rail first. Any non-2xx response throws an `HttpError`.
+  - It resolves the MoonPay customer through `AuthenticationController:getSessionProfile`, so hosts must delegate that action to the `NeoBankService` messenger as well as `AuthenticationController:getBearerToken`. `getMicrodeposits` needs it too.
 - Add `RampsController.refreshCustomerAbilities`, exposed on the messenger, which stores the result in the new `vbaCustomerAbilities` state ([#11225](https://github.com/MetaMask/core/pull/11225))
   - The state is not persisted. A failed fetch throws and keeps the stored value. Discarding a VBA session owned by another profile clears it.
-  - Hosts must now delegate `NeoBankService:getCustomerAbilities` to the `RampsController` messenger. It is included in `RAMPS_CONTROLLER_REQUIRED_SERVICE_ACTIONS`.
 - Add `getMusdAutorampDepositRailReadiness` and the `MusdAutorampDepositRailReadiness` type, which read from customer abilities whether the deposit rails a fiat → mUSD autoramp needs are `active`, `pending` or `blocked` ([#11225](https://github.com/MetaMask/core/pull/11225))
   - BRL needs `pix` and `pix_thirdparty`, USD needs `ach` and `ach_thirdparty`. Other fiats report `active`.
+
+### Changed
+
+- **BREAKING:** `RAMPS_CONTROLLER_REQUIRED_SERVICE_ACTIONS` now includes `NeoBankService:getCustomerAbilities`. Hosts must delegate that action to `RampsController` ([#11225](https://github.com/MetaMask/core/pull/11225))
 
 ### Fixed
 
