@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Require provider-side `finalStatus` approval before `hydrateVbaOnboarding` reports KYC as approved; relay `kycStatus` approval alone remains pending and does not start account setup ([#11243](https://github.com/MetaMask/core/pull/11243))
 - `NeoBankService.getMicrodeposits` now looks the MoonPay customer up again when the session profile changes, instead of reusing the first profile's customer id for the life of the service ([#11225](https://github.com/MetaMask/core/pull/11225))
 
 ## [28.1.0]
