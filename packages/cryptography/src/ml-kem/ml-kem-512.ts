@@ -3,14 +3,8 @@ import {
   decapsulate as mlKemDecapsulate,
   encapsulate as mlKemEncapsulate,
 } from './shared.js';
-import type { MlKemParameters } from './shared.js';
 
-// https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf, Table 3
-const ML_KEM_512: MlKemParameters = {
-  name: 'ML-KEM-512',
-  publicKeyLength: 800,
-  ciphertextLength: 768,
-};
+const ALGORITHM = 'ML-KEM-512';
 
 /**
  * Generate a shared secret and a ciphertext that encapsulates it for the
@@ -22,7 +16,7 @@ const ML_KEM_512: MlKemParameters = {
 export async function encapsulate(
   publicKey: BufferSource,
 ): Promise<Encapsulation> {
-  return mlKemEncapsulate(ML_KEM_512, publicKey);
+  return mlKemEncapsulate(ALGORITHM, publicKey);
 }
 
 /**
@@ -38,5 +32,5 @@ export async function decapsulate(
   seed: BufferSource,
   ciphertext: BufferSource,
 ): Promise<Uint8Array<ArrayBuffer>> {
-  return mlKemDecapsulate(ML_KEM_512, seed, ciphertext);
+  return mlKemDecapsulate(ALGORITHM, seed, ciphertext);
 }
