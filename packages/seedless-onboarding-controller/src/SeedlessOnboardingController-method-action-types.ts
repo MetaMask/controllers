@@ -315,6 +315,7 @@ export type SeedlessOnboardingControllerRefreshAuthTokensAction = {
  * @param params.authConnectionId - The recovery sub-verifier ID.
  * @param params.groupedAuthConnectionId - The recovery aggregate verifier ID.
  * @returns A promise that resolves once the aal2 set is stored.
+ * @throws `MissingAuthUserInfo` if either verifier ID is empty or not a string.
  */
 export type SeedlessOnboardingControllerAuthenticateForRecoveryAction = {
   type: `SeedlessOnboardingController:authenticateForRecovery`;

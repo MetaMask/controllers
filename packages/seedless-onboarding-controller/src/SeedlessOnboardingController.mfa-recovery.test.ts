@@ -405,6 +405,50 @@ describe('SeedlessOnboardingController', () => {
         },
       );
 
+      it.each([
+        ['an empty authConnectionId', { authConnectionId: '' }],
+        [
+          'a missing authConnectionId',
+          { authConnectionId: undefined as unknown as string },
+        ],
+        ['an empty groupedAuthConnectionId', { groupedAuthConnectionId: '' }],
+        [
+          'a missing groupedAuthConnectionId',
+          { groupedAuthConnectionId: undefined as unknown as string },
+        ],
+      ])('rejects %s without authenticating', async (_name, overrides) => {
+        await withController(
+          {
+            state: getMockInitialControllerState({
+              withMockAuthenticatedUser: true,
+            }),
+          },
+          async ({ controller, toprfClient, baseMessenger }) => {
+            const authenticateSpy = vi.spyOn(toprfClient, 'authenticate');
+
+            await expect(
+              baseMessenger.call(
+                'SeedlessOnboardingController:authenticateForRecovery',
+                {
+                  aal2Token: createMockJWTToken({
+                    exp: futureExp(),
+                    sub: AAL2_USER_ID,
+                  }),
+                  authConnectionId: AAL2_AUTH_CONNECTION_ID,
+                  groupedAuthConnectionId: AAL2_GROUPED_AUTH_CONNECTION_ID,
+                  ...overrides,
+                },
+              ),
+            ).rejects.toThrow(
+              SeedlessOnboardingControllerErrorMessage.MissingAuthUserInfo,
+            );
+
+            expect(authenticateSpy).not.toHaveBeenCalled();
+            expect(controller.state.recoverySession).toBeUndefined();
+          },
+        );
+      });
+
       it('throws AuthenticationError when authenticating fails', async () => {
         await withController(
           {

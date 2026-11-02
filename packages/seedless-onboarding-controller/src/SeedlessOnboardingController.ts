@@ -2281,6 +2281,7 @@ export class SeedlessOnboardingController<
    * @param params.authConnectionId - The recovery sub-verifier ID.
    * @param params.groupedAuthConnectionId - The recovery aggregate verifier ID.
    * @returns A promise that resolves once the aal2 set is stored.
+   * @throws `MissingAuthUserInfo` if either verifier ID is empty or not a string.
    */
   async authenticateForRecovery({
     aal2Token,
@@ -2291,6 +2292,17 @@ export class SeedlessOnboardingController<
     authConnectionId: string;
     groupedAuthConnectionId: string;
   }): Promise<void> {
+    if (
+      typeof authConnectionId !== 'string' ||
+      !authConnectionId ||
+      typeof groupedAuthConnectionId !== 'string' ||
+      !groupedAuthConnectionId
+    ) {
+      throw new SeedlessOnboardingError(
+        SeedlessOnboardingControllerErrorMessage.MissingAuthUserInfo,
+      );
+    }
+
     return await this.#withControllerLock(async () => {
       const { exp, sub } = decodeAal2Token(
         aal2Token,
