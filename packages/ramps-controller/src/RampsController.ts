@@ -42,12 +42,16 @@ import type {
   NeoBankServiceCreateAutorampAction,
   NeoBankServiceGetAutorampAction,
   NeoBankServiceGetAutorampsAction,
+  NeoBankServiceGetCustomerAbilitiesAction,
   NeoBankServiceGetCustomerByExternalIdAction,
   NeoBankServiceListAutorampTransactionsAction,
   NeoBankServiceGetWalletRegistrationStatusAction,
   NeoBankServiceRegisterSelfHostedWalletAction,
 } from './NeoBankService-method-action-types.js';
-import type { NeoBankServiceActions } from './NeoBankService.js';
+import type {
+  NeoBankCustomerAbilities,
+  NeoBankServiceActions,
+} from './NeoBankService.js';
 import {
   areOrdersEqual,
   deleteOrderInUserStorage,
@@ -234,6 +238,7 @@ export const RAMPS_CONTROLLER_REQUIRED_SERVICE_ACTIONS = [
   'NeoBankService:getCustomerByExternalId',
   'NeoBankService:getWalletRegistrationStatus',
   'NeoBankService:registerSelfHostedWallet',
+  'NeoBankService:getCustomerAbilities',
 ] as const satisfies readonly (
   | RampsServiceActions['type']
   | TransakServiceActions['type']
@@ -880,6 +885,13 @@ export type RampsControllerState = {
    */
   vbaAutorampListFetchedAt: number | null;
   /**
+   * Rail abilities of the signed-in profile's MoonPay customer from the last
+   * {@link RampsController.refreshCustomerAbilities}. MoonPay rejects an
+   * autoramp create when the rail it needs is not `Active`. Not persisted,
+   * since a rail can change at any time.
+   */
+  vbaCustomerAbilities: NeoBankCustomerAbilities | null;
+  /**
    * Whether the currently selected provider was auto-selected by the system
    * (no order history, no Transak) rather than chosen by the user or derived
    * from order history. When true, the UI should silently switch providers on
@@ -964,6 +976,12 @@ const rampsControllerMetadata = {
     includeInStateLogs: false,
     usedInUi: true,
   },
+  vbaCustomerAbilities: {
+    persist: false,
+    includeInDebugSnapshot: true,
+    includeInStateLogs: true,
+    usedInUi: true,
+  },
   providerAutoSelected: {
     persist: true,
     includeInDebugSnapshot: true,
@@ -1034,6 +1052,7 @@ export function getDefaultRampsControllerState(): RampsControllerState {
     autorampTransactionRecords: {},
     moneyAccountWalletRegistrations: [],
     vbaAutorampListFetchedAt: null,
+    vbaCustomerAbilities: null,
     providerAutoSelected: false,
   };
 }
@@ -1166,6 +1185,7 @@ type AllowedActions =
   | NeoBankServiceGetCustomerByExternalIdAction
   | NeoBankServiceGetWalletRegistrationStatusAction
   | NeoBankServiceRegisterSelfHostedWalletAction
+  | NeoBankServiceGetCustomerAbilitiesAction
   | AuthenticationController.AuthenticationControllerGetSessionProfileAction
   | KeyringControllerSignPersonalMessageAction
   | KycControllerReadSessionStatusAction
@@ -1414,6 +1434,7 @@ const MESSENGER_EXPOSED_METHODS = [
   'refreshAutoramp',
   'refreshAutoramps',
   'refreshAutorampTransactions',
+  'refreshCustomerAbilities',
   'startOrderPolling',
   'stopOrderPolling',
   'getBuyWidgetData',
@@ -4303,6 +4324,7 @@ export class RampsController extends BaseController<
         state.autoramps = [];
         state.autorampTransactionRecords = {};
         state.vbaAutorampListFetchedAt = null;
+        state.vbaCustomerAbilities = null;
       });
       return { ...EMPTY_VBA_ONBOARDING_SNAPSHOT };
     }
@@ -4582,6 +4604,23 @@ export class RampsController extends BaseController<
       autorampId,
     );
     return this.#applyAutorampRemoteSnapshot(remote, { allowInsert: false });
+  }
+
+  /**
+   * Fetches the MoonPay customer's rail abilities from the neo-bank proxy and
+   * stores them in `vbaCustomerAbilities`. A failed fetch throws and leaves the
+   * stored value unchanged.
+   *
+   * @returns The fetched abilities.
+   */
+  async refreshCustomerAbilities(): Promise<NeoBankCustomerAbilities> {
+    const abilities = await this.messenger.call(
+      'NeoBankService:getCustomerAbilities',
+    );
+    this.update((state) => {
+      state.vbaCustomerAbilities = abilities;
+    });
+    return abilities;
   }
 
   /**

@@ -87,7 +87,7 @@ export const CommentEngagementStruct = structType({
   replyCount: optional(number()),
 });
 
-const AuthorCommentStruct = structType({
+export const AuthorCommentStruct = structType({
   uid: string(),
   text: string(),
   timestamp: number(),
@@ -348,4 +348,10 @@ const BlockedContentStruct = structType({
 export const BlockedContentResponseStruct = structType({
   items: array(BlockedContentStruct),
   cursor: nullable(string()),
+});
+
+export const ModerationStatusResponseStruct = structType({
+  banned: boolean(),
+  bannedAt: nullable(number()),
+  reason: nullable(string()),
 });
