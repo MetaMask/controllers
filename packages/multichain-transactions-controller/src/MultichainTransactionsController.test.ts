@@ -1094,7 +1094,11 @@ describe('MultichainTransactionsController', () => {
       ).toBe('confirmed');
       expect(publishSpy).toHaveBeenCalledWith(
         'MultichainTransactionsController:transactionConfirmed',
-        { ...pendingTransaction, status: 'confirmed', timestamp: expect.any(Number) },
+        {
+          ...pendingTransaction,
+          status: 'confirmed',
+          timestamp: expect.any(Number),
+        },
       );
     });
 
@@ -1124,7 +1128,11 @@ describe('MultichainTransactionsController', () => {
       ).toBe('failed');
       expect(publishSpy).toHaveBeenCalledWith(
         'MultichainTransactionsController:transactionFailed',
-        { ...pendingTransaction, status: 'failed', timestamp: expect.any(Number) },
+        {
+          ...pendingTransaction,
+          status: 'failed',
+          timestamp: expect.any(Number),
+        },
       );
     });
 
@@ -1196,14 +1204,11 @@ describe('MultichainTransactionsController', () => {
       };
       const { rootMessenger, messenger, controller } = setupController();
       await waitForAllPromises();
-      rootMessenger.publish(
-        'AccountsController:accountTransactionsUpdated',
-        {
-          transactions: {
-            [mockBtcAccount.id]: [confirmedTransaction],
-          },
+      rootMessenger.publish('AccountsController:accountTransactionsUpdated', {
+        transactions: {
+          [mockBtcAccount.id]: [confirmedTransaction],
         },
-      );
+      });
       const publishSpy = vi.spyOn(messenger, 'publish');
 
       rootMessenger.publish('AccountActivityService:transactionUpdated', {

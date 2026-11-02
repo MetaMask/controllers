@@ -9,6 +9,10 @@ import type {
   ControllerGetStateAction,
   ControllerStateChangeEvent,
 } from '@metamask/base-controller';
+import type {
+  AccountActivityServiceTransactionUpdatedEvent,
+  Transaction as AccountActivityTransaction,
+} from '@metamask/core-backend';
 import { isEvmAccountType, TransactionStatus } from '@metamask/keyring-api';
 import type {
   Transaction,
@@ -88,29 +92,6 @@ export type MultichainTransactionsControllerTransactionSubmittedEvent = {
 export type MultichainTransactionsControllerTransactionFailedEvent = {
   type: `${typeof controllerName}:transactionFailed`;
   payload: [Transaction];
-};
-
-/**
- * Transaction payload carried by the account-activity WebSocket event
- * (`AccountActivityService:transactionUpdated` in `@metamask/core-backend`).
- * Declared structurally so this package does not depend on core-backend.
- */
-type AccountActivityTransaction = {
-  id: string;
-  chain: string;
-  status: string;
-  timestamp: number;
-  from: string;
-  to: string;
-};
-
-/**
- * Real-time terminal-status signal for pending non-EVM transactions, emitted
- * by `AccountActivityService` (`@metamask/core-backend`).
- */
-type AccountActivityServiceTransactionUpdatedEvent = {
-  type: 'AccountActivityService:transactionUpdated';
-  payload: [AccountActivityTransaction];
 };
 
 /**
