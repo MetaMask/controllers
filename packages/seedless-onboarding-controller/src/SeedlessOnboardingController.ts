@@ -95,6 +95,7 @@ import {
   parseAndValidateSecretMetadataBackup,
   serializeVaultData,
   derivePubKey,
+  findLiveKeySet,
   isWrapCurrent,
   pubKeysEqual,
 } from './utils/index.js';
@@ -148,6 +149,8 @@ const MESSENGER_EXPOSED_METHODS = [
   'authenticateForRecovery',
   'getRecoveryStatus',
   'storeRecoveryKeys',
+  'recoverWithRecoverySecret',
+  'resetPasswordWithRecoveredKeys',
 ] as const;
 
 export class SeedlessOnboardingController<
@@ -206,6 +209,15 @@ export class SeedlessOnboardingController<
    * This is used to cache the decrypted vault data to avoid decrypting the vault data multiple times.
    */
   #cachedDecryptedVaultData: DeserializedVaultData | undefined;
+
+  /**
+   * The live TOPRF1 key set and the TOPRF2 keys recovered by
+   * `recoverWithRecoverySecret`, held in memory only until
+   * `resetPasswordWithRecoveredKeys` consumes them.
+   */
+  #pendingRecovery:
+    | { keySet: WrappedKeySet; recoveryKeys: RecoveryKeys }
+    | undefined;
 
   /**
    * Creates a new SeedlessOnboardingController instance.
@@ -939,6 +951,7 @@ export class SeedlessOnboardingController<
       });
 
       this.#cachedDecryptedVaultData = undefined;
+      this.#pendingRecovery = undefined;
       this.#isUnlocked = false;
     });
   }
@@ -1221,6 +1234,7 @@ export class SeedlessOnboardingController<
     this.update(() => {
       return defaultState;
     });
+    this.#pendingRecovery = undefined;
   }
 
   /**
@@ -1459,9 +1473,6 @@ export class SeedlessOnboardingController<
     oldPassword: string;
     latestKeyIndex?: number;
   }): Promise<ChangeEncryptionKeyResult> {
-    this.#assertIsAuthenticatedUser(this.state);
-    const { authConnectionId, groupedAuthConnectionId, userId } = this.state;
-
     let encKey: Uint8Array;
     let pwEncKey: Uint8Array;
     let authKeyPair: KeyPair;
@@ -1480,15 +1491,49 @@ export class SeedlessOnboardingController<
         keyShareIndex: globalKeyIndex,
       } = await this.#recoverEncKey(oldPassword));
     }
-    const result = await this.toprfClient.changeEncKey({
-      nodeAuthTokens: this.state.nodeAuthTokens,
+    return await this.#changeEncKeyFromKeys({
+      oldKeySet: { encKey, pwEncKey, authKeyPair },
+      keyIndex: globalKeyIndex,
+      newPassword,
+    });
+  }
+
+  /**
+   * Change the TOPRF1 key from the given key set to a new password and
+   * re-encrypt the Metadata Store items under the new key.
+   *
+   * @param params - The function parameters.
+   * @param params.oldKeySet - The current TOPRF1 key set.
+   * @param params.keyIndex - The key index of the current key.
+   * @param params.newPassword - The new password.
+   * @returns A promise that resolves to the new key set.
+   */
+  async #changeEncKeyFromKeys({
+    oldKeySet,
+    keyIndex,
+    newPassword,
+  }: {
+    oldKeySet: WrappedKeySet;
+    keyIndex: number;
+    newPassword: string;
+  }): Promise<ChangeEncryptionKeyResult> {
+    this.#assertIsAuthenticatedUser(this.state);
+    const {
+      nodeAuthTokens,
       authConnectionId,
       groupedAuthConnectionId,
       userId,
-      oldEncKey: encKey,
-      oldPwEncKey: pwEncKey,
-      oldAuthKeyPair: authKeyPair,
-      newKeyShareIndex: globalKeyIndex,
+    } = this.state;
+
+    return await this.toprfClient.changeEncKey({
+      nodeAuthTokens,
+      authConnectionId,
+      groupedAuthConnectionId,
+      userId,
+      oldEncKey: oldKeySet.encKey,
+      oldPwEncKey: oldKeySet.pwEncKey,
+      oldAuthKeyPair: oldKeySet.authKeyPair,
+      newKeyShareIndex: keyIndex,
       newPassword,
       transformDataItems: (items) =>
         items
@@ -1505,7 +1550,6 @@ export class SeedlessOnboardingController<
             version: dataType === undefined ? 'v1' : version,
           })),
     });
-    return result;
   }
 
   /**
@@ -2051,6 +2095,31 @@ export class SeedlessOnboardingController<
     authPubKey: SEC1EncodedPublicKey;
     latestKeyIndex: number;
   }> {
+    const { authPubKey, keyIndex: latestKeyIndex } =
+      await this.#fetchGlobalAuthPubKey();
+    const isPasswordOutdated = await this.checkIsPasswordOutdated({
+      ...options,
+      globalAuthPubKey: authPubKey,
+    });
+    if (isPasswordOutdated) {
+      throw new Error(
+        SeedlessOnboardingControllerErrorMessage.OutdatedPassword,
+      );
+    }
+    return { authPubKey, latestKeyIndex };
+  }
+
+  /**
+   * Fetch the live (global) TOPRF1 auth public key and its key index with the
+   * aal1 node auth tokens.
+   *
+   * @returns The global auth public key and its key index.
+   * @throws `FailedToFetchAuthPubKey` if the request fails.
+   */
+  async #fetchGlobalAuthPubKey(): Promise<{
+    authPubKey: SEC1EncodedPublicKey;
+    keyIndex: number;
+  }> {
     this.#assertIsAuthenticatedUser(this.state);
     const {
       nodeAuthTokens,
@@ -2059,7 +2128,7 @@ export class SeedlessOnboardingController<
       userId,
     } = this.state;
 
-    const { authPubKey, keyIndex: latestKeyIndex } = await this.toprfClient
+    return await this.toprfClient
       .fetchAuthPubKey({
         nodeAuthTokens,
         authConnectionId,
@@ -2075,16 +2144,6 @@ export class SeedlessOnboardingController<
           },
         );
       });
-    const isPasswordOutdated = await this.checkIsPasswordOutdated({
-      ...options,
-      globalAuthPubKey: authPubKey,
-    });
-    if (isPasswordOutdated) {
-      throw new Error(
-        SeedlessOnboardingControllerErrorMessage.OutdatedPassword,
-      );
-    }
-    return { authPubKey, latestKeyIndex };
   }
 
   #resetPasswordOutdatedCache(): void {
@@ -2486,6 +2545,172 @@ export class SeedlessOnboardingController<
         return { liveKeyMatches: !isLiveKeyOutdated };
       }, 'storeRecoveryKeys'),
     );
+  }
+
+  /**
+   * Recover the live TOPRF1 keys with the recovery secret on a fresh device
+   * (forgot password, step 1).
+   *
+   * Recovers the TOPRF2 keys from the recovery verifier, reads the wrapped
+   * TOPRF1 key sets, and keeps the one matching the live auth public key in
+   * memory for {@link resetPasswordWithRecoveredKeys}. Call
+   * {@link authenticate} and {@link authenticateForRecovery} first.
+   *
+   * @param params - The function parameters.
+   * @param params.recoverySecret - The 32-byte recovery secret held in escrow.
+   * @returns A promise that resolves once the recovered keys are held.
+   */
+  async recoverWithRecoverySecret({
+    recoverySecret,
+  }: {
+    recoverySecret: Uint8Array;
+  }): Promise<void> {
+    return await this.#withControllerLock(async () =>
+      this.#executeWithTokenRefresh(async () => {
+        this.#pendingRecovery = undefined;
+        this.#assertIsAuthenticatedUser(this.state);
+        if (this.state.vault) {
+          throw new SeedlessOnboardingError(
+            SeedlessOnboardingControllerErrorMessage.VaultAlreadyExists,
+          );
+        }
+        if (!this.#requireRecoverySession().hasRecoveryShare) {
+          throw new SeedlessOnboardingError(
+            SeedlessOnboardingControllerErrorMessage.RecoveryNotEnabled,
+          );
+        }
+
+        const { encKey, authKeyPair, rateLimitResetResult } =
+          await this.#withRecoverySession(async (session) =>
+            this.toprfClient
+              .recoverEncKey({
+                ...session,
+                password: bytesToHex(recoverySecret),
+              })
+              .catch((error) => {
+                if (isAuthTokenError(error)) {
+                  throw error;
+                }
+                throw RecoveryError.getInstance(error);
+              }),
+          );
+        rateLimitResetResult.catch((error) => {
+          log('Error resetting recovery secret rate limit', error);
+        });
+        const recoveryKeys: RecoveryKeys = {
+          recoveryEncKey: encKey,
+          recoveryAuthKeyPair: authKeyPair,
+        };
+
+        const keySets =
+          await this.#recoveryItemStore.fetchWrappedKeys(recoveryKeys);
+        if (keySets.length === 0) {
+          throw new SeedlessOnboardingError(
+            SeedlessOnboardingControllerErrorMessage.RecoveryNotEnabled,
+          );
+        }
+        const { authPubKey } = await this.#fetchGlobalAuthPubKey();
+        const keySet = findLiveKeySet(keySets, authPubKey);
+        if (!keySet) {
+          throw new SeedlessOnboardingError(
+            SeedlessOnboardingControllerErrorMessage.RecoveryWrapStale,
+          );
+        }
+
+        this.#pendingRecovery = { keySet, recoveryKeys };
+      }, 'recoverWithRecoverySecret'),
+    );
+  }
+
+  /**
+   * Reset the global password with the keys recovered by
+   * {@link recoverWithRecoverySecret} (forgot password, step 2).
+   *
+   * Changes the TOPRF1 key to the new password, creates and unlocks the
+   * vault, re-wraps the recovery keys with the new key set (best-effort) and
+   * returns the user's secrets.
+   *
+   * @param params - The function parameters.
+   * @param params.newPassword - The new global password.
+   * @returns The secret metadata items.
+   */
+  async resetPasswordWithRecoveredKeys({
+    newPassword,
+  }: {
+    newPassword: string;
+  }): Promise<SecretMetadata[]> {
+    return await this.#withControllerLock(async () => {
+      assertIsValidPassword(newPassword);
+
+      // The recovered keys stop being live once the key change succeeds, so
+      // a token refresh retry must not run past this block again.
+      const { newKeySet, recoveryKeys } = await this.#executeWithTokenRefresh(
+        async () => {
+          const pending = this.#pendingRecovery;
+          if (!pending) {
+            throw new SeedlessOnboardingError(
+              SeedlessOnboardingControllerErrorMessage.NoPendingRecovery,
+            );
+          }
+          const { authPubKey, keyIndex } = await this.#fetchGlobalAuthPubKey();
+          if (!findLiveKeySet([pending.keySet], authPubKey)) {
+            this.#pendingRecovery = undefined;
+            throw new SeedlessOnboardingError(
+              SeedlessOnboardingControllerErrorMessage.RecoveryWrapStale,
+            );
+          }
+
+          let changedKeySet: WrappedKeySet;
+          try {
+            changedKeySet = await this.#changeEncKeyFromKeys({
+              oldKeySet: pending.keySet,
+              keyIndex,
+              newPassword,
+            });
+          } catch (error) {
+            if (isAuthTokenError(error)) {
+              throw error;
+            }
+            log('Error changing password with recovered keys', error);
+            throw new SeedlessOnboardingError(
+              SeedlessOnboardingControllerErrorMessage.FailedToChangePassword,
+              { cause: error },
+            );
+          }
+          this.#pendingRecovery = undefined;
+          return {
+            newKeySet: changedKeySet,
+            recoveryKeys: pending.recoveryKeys,
+          };
+        },
+        'resetPasswordWithRecoveredKeys',
+      );
+
+      await this.#createNewVaultWithAuthData({
+        password: newPassword,
+        rawToprfEncryptionKey: newKeySet.encKey as Uint8Array<ArrayBuffer>,
+        rawToprfPwEncryptionKey: newKeySet.pwEncKey as Uint8Array<ArrayBuffer>,
+        rawToprfAuthKeyPair: newKeySet.authKeyPair,
+      });
+      this.#resetPasswordOutdatedCache();
+
+      try {
+        await this.#recoveryItemStore.writeWrappedKeys(recoveryKeys, [
+          newKeySet,
+        ]);
+      } catch (error) {
+        log('Error re-wrapping recovery keys', error);
+      }
+
+      return await this.#executeWithTokenRefresh(
+        async () =>
+          this.#fetchAllSecretDataFromMetadataStore(
+            newKeySet.encKey,
+            newKeySet.authKeyPair,
+          ),
+        'resetPasswordWithRecoveredKeys',
+      );
+    });
   }
 
   /**

@@ -42,6 +42,8 @@ export type {
   SeedlessOnboardingControllerAuthenticateForRecoveryAction,
   SeedlessOnboardingControllerGetRecoveryStatusAction,
   SeedlessOnboardingControllerStoreRecoveryKeysAction,
+  SeedlessOnboardingControllerRecoverWithRecoverySecretAction,
+  SeedlessOnboardingControllerResetPasswordWithRecoveredKeysAction,
 } from './SeedlessOnboardingController-method-action-types.js';
 export type {
   RecoveryStatus,

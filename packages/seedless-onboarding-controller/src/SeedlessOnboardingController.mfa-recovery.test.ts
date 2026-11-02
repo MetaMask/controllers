@@ -5,7 +5,7 @@ import type {
   ToprfSecureBackup,
 } from '@metamask/toprf-secure-backup';
 import { TOPRFError, TOPRFErrorCode } from '@metamask/toprf-secure-backup';
-import { bytesToHex, stringToBytes } from '@metamask/utils';
+import { bytesToBase64, bytesToHex, stringToBytes } from '@metamask/utils';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import type { MockInstance } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
@@ -560,6 +560,69 @@ describe('SeedlessOnboardingController', () => {
           });
           expect(recoveryCalls(spy)).toHaveLength(0);
         });
+      });
+
+      describe('after rehydrating with the password', () => {
+        it.each([
+          [
+            'without an aal2 set',
+            async (): Promise<void> => undefined,
+            { status: 'Enabled', verified: false },
+          ],
+          [
+            'with an aal2 set',
+            async (args: {
+              toprfClient: ToprfSecureBackup;
+              baseMessenger: RootMessenger;
+            }): Promise<void> =>
+              authenticateAal2(args, { hasRecoveryShare: true }),
+            { status: 'Enabled', verified: true, hasRecoveryShare: true },
+          ],
+        ])(
+          'returns Enabled %s when recovery was enabled on another device',
+          async (_name, authenticateRecovery, expected) => {
+            await withController(
+              {
+                state: getMockInitialControllerState({
+                  withMockAuthenticatedUser: true,
+                }),
+              },
+              async ({ toprfClient, baseMessenger }) => {
+                const vaultKeySet = getVaultKeySet();
+                const recoveryKeys = createRandomRecoveryKeys();
+                vi.spyOn(toprfClient, 'recoverEncKey').mockResolvedValue({
+                  encKey: vaultKeySet.encKey,
+                  pwEncKey: vaultKeySet.pwEncKey,
+                  authKeyPair: vaultKeySet.authKeyPair,
+                  rateLimitResetResult: Promise.resolve(),
+                  keyShareIndex: 1,
+                });
+                mockRecoveryFetchAuthPubKey(toprfClient, {
+                  password: vaultKeySet.authKeyPair.pk,
+                  recovery: recoveryKeys.recoveryAuthKeyPair.pk,
+                });
+                mockFetchAllSecretDataItems(toprfClient, {
+                  vault: recoveryKeysItem(recoveryKeys),
+                  recovery: [serializeWrappedKeys([vaultKeySet])],
+                  recoveryEncKey: recoveryKeys.recoveryEncKey,
+                });
+
+                const secrets = await baseMessenger.call(
+                  'SeedlessOnboardingController:fetchAllSecretData',
+                  MOCK_PASSWORD,
+                );
+                expect(secrets).toHaveLength(1);
+                await authenticateRecovery({ toprfClient, baseMessenger });
+
+                const result = await baseMessenger.call(
+                  'SeedlessOnboardingController:getRecoveryStatus',
+                );
+
+                expect(result).toStrictEqual(expected);
+              },
+            );
+          },
+        );
       });
 
       describe('without an aal2 set', () => {
@@ -1580,13 +1643,13 @@ describe('SeedlessOnboardingController', () => {
             .spyOn(toprfClient, 'addSecretDataItem')
             .mockResolvedValue();
 
-          await expect(
-            baseMessenger.call(
+          expect(
+            await baseMessenger.call(
               'SeedlessOnboardingController:changePassword',
               NEW_PASSWORD,
               MOCK_PASSWORD,
             ),
-          ).resolves.toBeUndefined();
+          ).toBeUndefined();
           expect(addSpy).not.toHaveBeenCalled();
         });
       });
@@ -1613,13 +1676,13 @@ describe('SeedlessOnboardingController', () => {
             new Error('write failed'),
           );
 
-          await expect(
-            baseMessenger.call(
+          expect(
+            await baseMessenger.call(
               'SeedlessOnboardingController:changePassword',
               NEW_PASSWORD,
               MOCK_PASSWORD,
             ),
-          ).resolves.toBeUndefined();
+          ).toBeUndefined();
 
           // Only the wrap from before the change remains.
           mockRecoveryFetchAuthPubKey(toprfClient, {
@@ -1661,14 +1724,728 @@ describe('SeedlessOnboardingController', () => {
             .spyOn(toprfClient, 'addSecretDataItem')
             .mockResolvedValue();
 
-          await expect(
-            baseMessenger.call(
+          expect(
+            await baseMessenger.call(
               'SeedlessOnboardingController:changePassword',
               NEW_PASSWORD,
               MOCK_PASSWORD,
             ),
-          ).resolves.toBeUndefined();
+          ).toBeUndefined();
           expect(addSpy).not.toHaveBeenCalled();
+        });
+      });
+    });
+
+    describe('restore with the recovery secret', () => {
+      const NEW_PASSWORD = 'new-mock-password';
+
+      /**
+       * Derives the TOPRF1 key set of NEW_PASSWORD.
+       *
+       * @returns The new key set.
+       */
+      function getNewKeySet(): WrappedKeySet {
+        const encryptor = createMockToprfEncryptor();
+        return {
+          encKey: encryptor.deriveEncKey(NEW_PASSWORD),
+          pwEncKey: encryptor.derivePwEncKey(NEW_PASSWORD),
+          authKeyPair: encryptor.deriveAuthKeyPair(NEW_PASSWORD),
+        };
+      }
+
+      /**
+       * Runs the callback with a fresh-device controller: authenticated at
+       * aal1, no vault.
+       *
+       * @param fn - The callback.
+       * @returns Whatever the callback returns.
+       */
+      async function withFreshDeviceController<ReturnValue>(
+        fn: Parameters<typeof withController<ReturnValue>>[1],
+      ): Promise<ReturnValue> {
+        return await withController(
+          {
+            state: getMockInitialControllerState({
+              withMockAuthenticatedUser: true,
+            }),
+          },
+          fn,
+        );
+      }
+
+      /**
+       * Mocks the remote side of a restore. The live TOPRF1 key is the vault
+       * key set of MOCK_PASSWORD (the forgotten password).
+       *
+       * @param toprfClient - The ToprfSecureBackup instance.
+       * @param options - The options.
+       * @param options.wrappedKeySets - The wrapped-keys items, one key set
+       * list per item. Defaults to one item wrapping the live key set.
+       * @param options.rateLimitResetResult - The rate limit reset result.
+       * @returns The recovery keys, the live and new key sets, and the spies.
+       */
+      function mockRestore(
+        toprfClient: ToprfSecureBackup,
+        {
+          wrappedKeySets = [[getVaultKeySet()]],
+          rateLimitResetResult = Promise.resolve(),
+        }: {
+          wrappedKeySets?: WrappedKeySet[][];
+          rateLimitResetResult?: Promise<void>;
+        } = {},
+      ): {
+        recoveryKeys: RecoveryKeys;
+        liveKeySet: WrappedKeySet;
+        newKeySet: WrappedKeySet;
+        recoverSpy: MockInstance;
+        fetchAuthPubKeySpy: MockInstance;
+        changeEncKeySpy: MockInstance;
+        addSpy: MockInstance;
+      } {
+        const liveKeySet = getVaultKeySet();
+        const newKeySet = getNewKeySet();
+        const recovery = createLocalKeyResult();
+        const recoveryKeys: RecoveryKeys = {
+          recoveryEncKey: recovery.encKey,
+          recoveryAuthKeyPair: recovery.authKeyPair,
+        };
+        const recoverSpy = vi
+          .spyOn(toprfClient, 'recoverEncKey')
+          .mockResolvedValue({
+            encKey: recovery.encKey,
+            pwEncKey: recovery.pwEncKey,
+            authKeyPair: recovery.authKeyPair,
+            rateLimitResetResult,
+            keyShareIndex: 1,
+          });
+        const fetchAuthPubKeySpy = mockRecoveryFetchAuthPubKey(toprfClient, {
+          password: liveKeySet.authKeyPair.pk,
+        });
+        vi.spyOn(toprfClient, 'fetchAllSecretDataItems').mockImplementation(
+          async ({ decKey }) => {
+            let source: Uint8Array[];
+            if (
+              bytesToHex(decKey) === bytesToHex(recoveryKeys.recoveryEncKey)
+            ) {
+              source = wrappedKeySets.map((keySets) =>
+                serializeWrappedKeys(keySets),
+              );
+            } else if (bytesToHex(decKey) === bytesToHex(newKeySet.encKey)) {
+              source = recoveryKeysItem(recoveryKeys);
+            } else {
+              throw new Error('unexpected namespace');
+            }
+            return source.map((data, index) => ({
+              itemId: `server-item-${index}`,
+              data,
+              version: 'v1' as const,
+            }));
+          },
+        );
+        const changeEncKeySpy = vi
+          .spyOn(toprfClient, 'changeEncKey')
+          .mockResolvedValue(newKeySet);
+        const addSpy = vi
+          .spyOn(toprfClient, 'addSecretDataItem')
+          .mockResolvedValue();
+        return {
+          recoveryKeys,
+          liveKeySet,
+          newKeySet,
+          recoverSpy,
+          fetchAuthPubKeySpy,
+          changeEncKeySpy,
+          addSpy,
+        };
+      }
+
+      describe('recoverWithRecoverySecret', () => {
+        it('evaluates the recovery secret on the recovery verifier with the aal2 set', async () => {
+          await withFreshDeviceController(
+            async ({ controller, toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { recoverSpy, changeEncKeySpy, addSpy } =
+                mockRestore(toprfClient);
+
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+
+              expect(recoverSpy).toHaveBeenCalledWith({
+                ...AAL2_REQUEST,
+                password: bytesToHex(RECOVERY_SECRET),
+              });
+              expect(changeEncKeySpy).not.toHaveBeenCalled();
+              expect(addSpy).not.toHaveBeenCalled();
+              expect(controller.state.vault).toBeUndefined();
+            },
+          );
+        });
+
+        it('does not fail when resetting the recovery rate limit fails', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              mockRestore(toprfClient, {
+                rateLimitResetResult: Promise.reject(new Error('reset failed')),
+              });
+
+              expect(
+                await baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).toBeUndefined();
+            },
+          );
+        });
+
+        it('throws VaultAlreadyExists on a device that holds a vault', async () => {
+          await withUnlockedController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { recoverSpy } = mockRestore(toprfClient);
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.VaultAlreadyExists,
+              );
+              expect(recoverSpy).not.toHaveBeenCalled();
+            },
+          );
+        });
+
+        it('throws when the user is not authenticated at aal1', async () => {
+          await withController(async ({ toprfClient, baseMessenger }) => {
+            const { recoverSpy } = mockRestore(toprfClient);
+
+            await expect(
+              baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              ),
+            ).rejects.toThrow(
+              SeedlessOnboardingControllerErrorMessage.MissingAuthUserInfo,
+            );
+            expect(recoverSpy).not.toHaveBeenCalled();
+          });
+        });
+
+        it('throws Aal2Required without an aal2 set', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              const { recoverSpy } = mockRestore(toprfClient);
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.Aal2Required,
+              );
+              expect(recoverSpy).not.toHaveBeenCalled();
+            },
+          );
+        });
+
+        it('throws Aal2Required and clears the aal2 set when the nodes reject it', async () => {
+          await withFreshDeviceController(
+            async ({ controller, toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              mockRestore(toprfClient);
+              vi.spyOn(toprfClient, 'recoverEncKey').mockRejectedValue(
+                new TOPRFError(TOPRFErrorCode.AuthTokenExpired, 'expired'),
+              );
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.Aal2Required,
+              );
+              expect(controller.state.recoverySession).toBeUndefined();
+            },
+          );
+        });
+
+        it('throws RecoveryNotEnabled without evaluating when the nodes hold no recovery share', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: false },
+              );
+              const { recoverSpy } = mockRestore(toprfClient);
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.RecoveryNotEnabled,
+              );
+              expect(recoverSpy).not.toHaveBeenCalled();
+            },
+          );
+        });
+
+        it('throws IncorrectPassword when the recovery secret is wrong', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              mockRestore(toprfClient);
+              vi.spyOn(toprfClient, 'recoverEncKey').mockRejectedValue(
+                new TOPRFError(
+                  TOPRFErrorCode.CouldNotDeriveEncryptionKey,
+                  'could not derive',
+                ),
+              );
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.IncorrectPassword,
+              );
+            },
+          );
+        });
+
+        it('throws RecoveryNotEnabled when there is no wrapped-keys item', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              mockRestore(toprfClient, { wrappedKeySets: [] });
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.RecoveryNotEnabled,
+              );
+            },
+          );
+        });
+
+        it('throws RecoveryWrapStale when no wrapped key set is the live key', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { changeEncKeySpy } = mockRestore(toprfClient, {
+                wrappedKeySets: [[getNewKeySet()]],
+              });
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:recoverWithRecoverySecret',
+                  { recoverySecret: RECOVERY_SECRET },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.RecoveryWrapStale,
+              );
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: NEW_PASSWORD },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.NoPendingRecovery,
+              );
+              expect(changeEncKeySpy).not.toHaveBeenCalled();
+            },
+          );
+        });
+      });
+
+      describe('resetPasswordWithRecoveredKeys', () => {
+        it('resets the global password with the recovered keys, creates the vault and returns the secrets', async () => {
+          await withFreshDeviceController(
+            async ({ controller, toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const {
+                recoveryKeys,
+                liveKeySet,
+                newKeySet,
+                changeEncKeySpy,
+                addSpy,
+              } = mockRestore(toprfClient);
+
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+              const secrets = await baseMessenger.call(
+                'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                { newPassword: NEW_PASSWORD },
+              );
+
+              expect(changeEncKeySpy).toHaveBeenCalledWith({
+                nodeAuthTokens: controller.state.nodeAuthTokens,
+                authConnectionId: controller.state.authConnectionId,
+                groupedAuthConnectionId:
+                  controller.state.groupedAuthConnectionId,
+                userId: controller.state.userId,
+                oldEncKey: liveKeySet.encKey,
+                oldPwEncKey: liveKeySet.pwEncKey,
+                oldAuthKeyPair: liveKeySet.authKeyPair,
+                newKeyShareIndex: 1,
+                newPassword: NEW_PASSWORD,
+                transformDataItems: expect.any(Function),
+              });
+
+              expect(controller.state.vault).toBeDefined();
+              expect(controller.state.authPubKey).toBe(
+                bytesToBase64(newKeySet.authKeyPair.pk),
+              );
+              expect(
+                await controller.verifyVaultPassword(NEW_PASSWORD),
+              ).toBeUndefined();
+
+              expect(addSpy).toHaveBeenCalledTimes(1);
+              const [{ encKey, authKeyPair, secretData }] = addSpy.mock
+                .calls[0] as [
+                {
+                  encKey: Uint8Array;
+                  authKeyPair: KeyPair;
+                  secretData: Uint8Array;
+                },
+              ];
+              expect(encKey).toStrictEqual(recoveryKeys.recoveryEncKey);
+              expect(authKeyPair).toStrictEqual(
+                recoveryKeys.recoveryAuthKeyPair,
+              );
+              expect(parseWrappedKeys(secretData)).toStrictEqual([newKeySet]);
+
+              expect(secrets).toHaveLength(1);
+              expect(secrets[0].data).toStrictEqual(MOCK_SEED_PHRASE);
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: NEW_PASSWORD },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.NoPendingRecovery,
+              );
+            },
+          );
+        });
+
+        it('picks the live key set when the wrapped-keys items hold several', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const staleKeySet = createLocalKeyResult('stale-password');
+              const { liveKeySet, changeEncKeySpy } = mockRestore(toprfClient, {
+                wrappedKeySets: [
+                  [staleKeySet],
+                  [staleKeySet, getVaultKeySet()],
+                ],
+              });
+
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+              await baseMessenger.call(
+                'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                { newPassword: NEW_PASSWORD },
+              );
+
+              expect(changeEncKeySpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                  oldEncKey: liveKeySet.encKey,
+                  oldPwEncKey: liveKeySet.pwEncKey,
+                  oldAuthKeyPair: liveKeySet.authKeyPair,
+                }),
+              );
+            },
+          );
+        });
+
+        it('does not need a valid aal2 set', async () => {
+          await withFreshDeviceController(
+            async ({ controller, toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { changeEncKeySpy } = mockRestore(toprfClient);
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+              controller.update((state) => {
+                delete state.recoverySession;
+              });
+
+              const secrets = await baseMessenger.call(
+                'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                { newPassword: NEW_PASSWORD },
+              );
+
+              expect(changeEncKeySpy).toHaveBeenCalledTimes(1);
+              expect(secrets).toHaveLength(1);
+            },
+          );
+        });
+
+        it('still resolves when writing the wrapped-keys item fails', async () => {
+          await withFreshDeviceController(
+            async ({ controller, toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { addSpy } = mockRestore(toprfClient);
+              addSpy.mockRejectedValue(new Error('write failed'));
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+
+              const secrets = await baseMessenger.call(
+                'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                { newPassword: NEW_PASSWORD },
+              );
+
+              expect(addSpy).toHaveBeenCalledTimes(1);
+              expect(secrets).toHaveLength(1);
+              expect(controller.state.vault).toBeDefined();
+            },
+          );
+        });
+
+        it('throws FailedToChangePassword and keeps the recovered keys when the key change fails', async () => {
+          await withFreshDeviceController(
+            async ({ controller, toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { changeEncKeySpy } = mockRestore(toprfClient);
+              changeEncKeySpy.mockRejectedValueOnce(new Error('change failed'));
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: NEW_PASSWORD },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.FailedToChangePassword,
+              );
+              expect(controller.state.vault).toBeUndefined();
+
+              const secrets = await baseMessenger.call(
+                'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                { newPassword: NEW_PASSWORD },
+              );
+              expect(secrets).toHaveLength(1);
+            },
+          );
+        });
+
+        it('throws RecoveryWrapStale and drops the recovered keys when the live key changed between the steps', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { changeEncKeySpy } = mockRestore(toprfClient);
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+              mockRecoveryFetchAuthPubKey(toprfClient, {
+                password: createRandomKeyPair().pk,
+              });
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: NEW_PASSWORD },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.RecoveryWrapStale,
+              );
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: NEW_PASSWORD },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.NoPendingRecovery,
+              );
+              expect(changeEncKeySpy).not.toHaveBeenCalled();
+            },
+          );
+        });
+
+        it('refreshes the aal1 tokens and retries when the key change hits an expired token', async () => {
+          await withFreshDeviceController(
+            async ({ controller, toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { changeEncKeySpy } = mockRestore(toprfClient);
+              changeEncKeySpy.mockRejectedValueOnce(
+                new TOPRFError(TOPRFErrorCode.AuthTokenExpired, 'expired'),
+              );
+              const refreshSpy = vi
+                .spyOn(controller, 'refreshAuthTokens')
+                .mockResolvedValue();
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+
+              const secrets = await baseMessenger.call(
+                'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                { newPassword: NEW_PASSWORD },
+              );
+
+              expect(refreshSpy).toHaveBeenCalledTimes(1);
+              expect(changeEncKeySpy).toHaveBeenCalledTimes(2);
+              expect(secrets).toHaveLength(1);
+            },
+          );
+        });
+
+        it('rejects an empty new password before changing the global key', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { changeEncKeySpy } = mockRestore(toprfClient);
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: '' },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.InvalidEmptyPassword,
+              );
+              expect(changeEncKeySpy).not.toHaveBeenCalled();
+
+              const secrets = await baseMessenger.call(
+                'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                { newPassword: NEW_PASSWORD },
+              );
+              expect(secrets).toHaveLength(1);
+            },
+          );
+        });
+
+        it('throws NoPendingRecovery without a prior recoverWithRecoverySecret', async () => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              const { changeEncKeySpy } = mockRestore(toprfClient);
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: NEW_PASSWORD },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.NoPendingRecovery,
+              );
+              expect(changeEncKeySpy).not.toHaveBeenCalled();
+            },
+          );
+        });
+
+        it.each([
+          [
+            'setLocked',
+            async (baseMessenger: RootMessenger): Promise<void> =>
+              await baseMessenger.call(
+                'SeedlessOnboardingController:setLocked',
+              ),
+          ],
+          [
+            'clearState',
+            async (baseMessenger: RootMessenger): Promise<void> =>
+              baseMessenger.call('SeedlessOnboardingController:clearState'),
+          ],
+        ])('throws NoPendingRecovery after %s', async (_name, clear) => {
+          await withFreshDeviceController(
+            async ({ toprfClient, baseMessenger }) => {
+              await authenticateAal2(
+                { toprfClient, baseMessenger },
+                { hasRecoveryShare: true },
+              );
+              const { changeEncKeySpy } = mockRestore(toprfClient);
+              await baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                { recoverySecret: RECOVERY_SECRET },
+              );
+
+              await clear(baseMessenger);
+
+              await expect(
+                baseMessenger.call(
+                  'SeedlessOnboardingController:resetPasswordWithRecoveredKeys',
+                  { newPassword: NEW_PASSWORD },
+                ),
+              ).rejects.toThrow(
+                SeedlessOnboardingControllerErrorMessage.NoPendingRecovery,
+              );
+              expect(changeEncKeySpy).not.toHaveBeenCalled();
+            },
+          );
         });
       });
     });

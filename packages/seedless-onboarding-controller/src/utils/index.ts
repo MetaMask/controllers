@@ -17,6 +17,7 @@ export {
   RECOVERY_KEYS_SECRET_TYPE,
   WRAPPED_KEYS_PREFIX,
   derivePubKey,
+  findLiveKeySet,
   isRecoveryKeysItem,
   parseRecoveryKeys,
   parseRecoveryKeysItem,

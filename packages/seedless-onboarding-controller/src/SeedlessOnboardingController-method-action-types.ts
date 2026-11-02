@@ -356,6 +356,41 @@ export type SeedlessOnboardingControllerStoreRecoveryKeysAction = {
 };
 
 /**
+ * Recover the live TOPRF1 keys with the recovery secret on a fresh device
+ * (forgot password, step 1).
+ *
+ * Recovers the TOPRF2 keys from the recovery verifier, reads the wrapped
+ * TOPRF1 key sets, and keeps the one matching the live auth public key in
+ * memory for {@link resetPasswordWithRecoveredKeys}. Call
+ * {@link authenticate} and {@link authenticateForRecovery} first.
+ *
+ * @param params - The function parameters.
+ * @param params.recoverySecret - The 32-byte recovery secret held in escrow.
+ * @returns A promise that resolves once the recovered keys are held.
+ */
+export type SeedlessOnboardingControllerRecoverWithRecoverySecretAction = {
+  type: `SeedlessOnboardingController:recoverWithRecoverySecret`;
+  handler: SeedlessOnboardingController['recoverWithRecoverySecret'];
+};
+
+/**
+ * Reset the global password with the keys recovered by
+ * {@link recoverWithRecoverySecret} (forgot password, step 2).
+ *
+ * Changes the TOPRF1 key to the new password, creates and unlocks the
+ * vault, re-wraps the recovery keys with the new key set (best-effort) and
+ * returns the user's secrets.
+ *
+ * @param params - The function parameters.
+ * @param params.newPassword - The new global password.
+ * @returns The secret metadata items.
+ */
+export type SeedlessOnboardingControllerResetPasswordWithRecoveredKeysAction = {
+  type: `SeedlessOnboardingController:resetPasswordWithRecoveredKeys`;
+  handler: SeedlessOnboardingController['resetPasswordWithRecoveredKeys'];
+};
+
+/**
  * Rotate the refresh token — fetch a new refresh/revoke token pair from the
  * auth service and persist the new revoke token in the vault.
  *
@@ -457,6 +492,8 @@ export type SeedlessOnboardingControllerMethodActions =
   | SeedlessOnboardingControllerAuthenticateForRecoveryAction
   | SeedlessOnboardingControllerGetRecoveryStatusAction
   | SeedlessOnboardingControllerStoreRecoveryKeysAction
+  | SeedlessOnboardingControllerRecoverWithRecoverySecretAction
+  | SeedlessOnboardingControllerResetPasswordWithRecoveredKeysAction
   | SeedlessOnboardingControllerRotateRefreshTokenAction
   | SeedlessOnboardingControllerRevokePendingRefreshTokensAction
   | SeedlessOnboardingControllerGetAccessTokenAction

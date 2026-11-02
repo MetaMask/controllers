@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The recovery-keys item is stored next to the secret data items as secret metadata with the `mfaRecoveryKeys` type and no data type, so it is re-encrypted on password change.
   - Clients that treat every secret that is not a private key as a mnemonic cannot restore an account holding this item; only enable MFA recovery for client versions that use this release.
 - Add `Aal2Required`, `RecoveryKeyShareConflict` and `InvalidRecoveryKeysItem` error messages ([#0000](https://github.com/MetaMask/core/pull/0000))
+- Add `recoverWithRecoverySecret` and `resetPasswordWithRecoveredKeys` methods and the matching `SeedlessOnboardingController:recoverWithRecoverySecret` and `SeedlessOnboardingController:resetPasswordWithRecoveredKeys` messenger actions, to restore an account with a forgotten password on a fresh device using the MFA recovery secret ([#0000](https://github.com/MetaMask/core/pull/0000))
+  - `recoverWithRecoverySecret` requires the aal1 and aal2 sessions and no existing vault. It evaluates the recovery secret on the recovery verifier and holds the wrapped TOPRF1 key set that matches the live auth public key in memory until the next step, `setLocked` or `clearState`.
+  - `resetPasswordWithRecoveredKeys` changes the global password to `newPassword` using the recovered keys, creates and unlocks the vault, re-writes the MFA recovery wrapped-keys item with the new keys (best-effort) and returns the secret data.
+- Add `RecoveryNotEnabled`, `RecoveryWrapStale` and `NoPendingRecovery` error messages ([#0000](https://github.com/MetaMask/core/pull/0000))
 
 ### Changed
 

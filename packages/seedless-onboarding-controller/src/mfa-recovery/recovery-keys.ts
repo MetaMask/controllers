@@ -324,7 +324,22 @@ export function isWrapCurrent(
   keySets: WrappedKeySet[],
   authPubKey: SEC1EncodedPublicKey,
 ): boolean {
-  return keySets.some(({ authKeyPair }) =>
+  return findLiveKeySet(keySets, authPubKey) !== undefined;
+}
+
+/**
+ * Find the wrapped key set that holds the live TOPRF1 key, i.e. the one whose
+ * auth private key matches the live auth public key.
+ *
+ * @param keySets - The wrapped TOPRF1 key sets.
+ * @param authPubKey - The live TOPRF1 auth public key.
+ * @returns The matching key set, or undefined when none matches.
+ */
+export function findLiveKeySet(
+  keySets: WrappedKeySet[],
+  authPubKey: SEC1EncodedPublicKey,
+): WrappedKeySet | undefined {
+  return keySets.find(({ authKeyPair }) =>
     pubKeysEqual(derivePubKey(authKeyPair.sk), authPubKey),
   );
 }
