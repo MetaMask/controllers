@@ -248,6 +248,7 @@ function setupController(
     isBalanceV6Enabled?: () => boolean;
     getAssetVisibility?: GetAssetVisibility;
     getAssetsState?: () => AssetsControllerState;
+    initialize?: boolean;
   } = {},
 ): SetupResult {
   const {
@@ -339,6 +340,9 @@ function setupController(
   };
 
   const controller = new SnapDataSource(controllerOptions);
+  if (options.initialize !== false) {
+    controller.init();
+  }
 
   // Subscribe so that balance updates are reported via onAssetsUpdate
   const chainIdsFromSnaps = Object.values(installedSnaps).flatMap(
@@ -433,6 +437,28 @@ describe('SnapDataSource helper functions', () => {
 });
 
 describe('SnapDataSource', () => {
+  it('does not call SnapController in the constructor', () => {
+    const { controller, mockGetRunnableSnaps, mockGetPermissions, cleanup } =
+      setupController({
+        installedSnaps: {
+          [SOLANA_SNAP_ID]: { version: '1.0.0', chainIds: [SOLANA_MAINNET] },
+        },
+        initialize: false,
+      });
+
+    expect(mockGetRunnableSnaps).not.toHaveBeenCalled();
+    expect(mockGetPermissions).not.toHaveBeenCalled();
+    expect(controller.getActiveChainsSync()).toStrictEqual([]);
+
+    controller.init();
+
+    expect(mockGetRunnableSnaps).toHaveBeenCalledTimes(1);
+    expect(mockGetPermissions).toHaveBeenCalledWith(SOLANA_SNAP_ID);
+    expect(controller.getActiveChainsSync()).toContain(SOLANA_MAINNET);
+
+    cleanup();
+  });
+
   it('initializes with correct name', async () => {
     const { controller, cleanup } = setupController();
     expect(controller.getName()).toBe('SnapDataSource');

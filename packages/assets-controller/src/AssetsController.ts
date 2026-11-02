@@ -815,15 +815,25 @@ export class AssetsController extends BaseController<
    * This includes all accounts in the same group as the selected account
    * (EVM, Bitcoin, Solana, Tron, etc. that belong to the same logical account group).
    *
+   * When `AccountTreeController` is not registered, falls back to
+   * `AccountsController:getSelectedAccount`.
+   *
    * @returns Array of InternalAccount objects from the selected account group.
    */
   #getSelectedAccounts(): InternalAccount[] {
-    const accounts = this.messenger.call(
-      'AccountTreeController:getAccountsFromSelectedAccountGroup',
-    );
-    if (accounts.length > 0) {
-      return accounts;
+    try {
+      const accounts = this.messenger.call(
+        'AccountTreeController:getAccountsFromSelectedAccountGroup',
+      );
+      if (accounts.length > 0) {
+        return accounts;
+      }
+    } catch (error) {
+      if (!isUnregisteredActionError(error)) {
+        throw error;
+      }
     }
+
     const selectedAccount = this.messenger.call(
       'AccountsController:getSelectedAccount',
     );
@@ -836,10 +846,20 @@ export class AssetsController extends BaseController<
   /**
    * Whether `AccountTreeController.init()` has completed and the tree is ready.
    *
-   * @returns True when the account tree has been initialized.
+   * When `AccountTreeController` is not registered, returns true so tracking
+   * is not blocked on a controller the host has not installed.
+   *
+   * @returns True when the account tree has been initialized, or when that controller is absent.
    */
   #isAccountTreeInitialized(): boolean {
-    return this.messenger.call('AccountTreeController:isInitialized');
+    try {
+      return this.messenger.call('AccountTreeController:isInitialized');
+    } catch (error) {
+      if (!isUnregisteredActionError(error)) {
+        throw error;
+      }
+      return true;
+    }
   }
 
   /**
@@ -1114,17 +1134,19 @@ export class AssetsController extends BaseController<
 
   /**
    * Read the current enabled chains from NetworkEnablementController, and
-   * refresh the active chains of data sources that read
-   * NetworkEnablementController or NetworkController state at construction.
+   * refresh data sources that would otherwise read other controllers through
+   * the messenger.
    *
-   * This controller does not call those actions in its constructor. `Wallet`
-   * constructs every controller first, then `Wallet.init()` calls `init()`.
-   * Later changes arrive on `stateChange` events.
+   * This controller does not call messenger actions in its constructor.
+   * `Wallet` constructs every controller first, then `Wallet.init()` calls
+   * `init()`. Later enablement changes arrive on `stateChange` events.
    */
   async init(): Promise<void> {
     this.#initializeState();
     this.#rpcDataSource.refreshActiveChainsFromNetworkState();
     this.#stakedBalanceDataSource.refreshActiveChainsFromNetworkEnablementState();
+    this.#snapDataSource.init();
+    await this.#accountsApiDataSource.init();
   }
 
   #initializeState(): void {

@@ -10,11 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add `init()`, which reads enabled chains from `NetworkEnablementController:getState` after every controller has been constructed. Later enablement changes still arrive on `NetworkEnablementController:stateChange` ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - `init()` also refreshes the RPC and staked balance data sources' active chains from `NetworkController:getState` and `NetworkEnablementController:getState`, which they otherwise read only at construction.
+  - `init()` refreshes data sources that read other controllers through the messenger: `RpcDataSource.refreshActiveChainsFromNetworkState()` (`NetworkController:getState`), `StakedBalanceDataSource.refreshActiveChainsFromNetworkEnablementState()` (`NetworkEnablementController:getState`), `SnapDataSource.init()` (snap discovery), and `AccountsApiDataSource.init()` (supported networks and `RemoteFeatureFlagController:getState`).
+- Add `SnapDataSource.init()` and `AccountsApiDataSource.init()` ([#10885](https://github.com/MetaMask/core/pull/10885))
 
 ### Changed
 
-- **BREAKING:** The constructor no longer calls `NetworkEnablementController:getState`. Call `init()` after the other controllers exist. `Wallet.init()` does this. Until `init()` runs, enabled chains stay empty unless a `NetworkEnablementController:stateChange` event arrives ([#10885](https://github.com/MetaMask/core/pull/10885))
+- **BREAKING:** Constructors no longer call messenger actions. Call `AssetsController.init()` after the other controllers exist. `Wallet.init()` does this. Until `init()` runs, enabled chains and data-source active chains stay empty unless a later state change arrives ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - `AssetsController` no longer calls `NetworkEnablementController:getState` in its constructor.
+  - `RpcDataSource` no longer calls `NetworkController:getState` in its constructor. Call `refreshActiveChainsFromNetworkState()`, or `AssetsController.init()`.
+  - `StakedBalanceDataSource` no longer calls `NetworkEnablementController:getState` in its constructor. Call `refreshActiveChainsFromNetworkEnablementState()`, or `AssetsController.init()`.
+  - `SnapDataSource` no longer calls `SnapController:getRunnableSnaps` in its constructor. Call `init()`. When `SnapController` is not registered, discovery leaves active chains empty.
+  - `AccountsApiDataSource` no longer starts its supported-network fetch, which calls `RemoteFeatureFlagController:getState`, from the constructor. Call `init()`.
+- When `AccountTreeController` actions are not registered, selected-account reads fall back to `AccountsController:getSelectedAccount`, and asset tracking does not wait for account-tree initialization ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - `AccountActivityDataSource` uses the same fallback when resolving the account for a balance update.
 
 ## [20.1.0]
 

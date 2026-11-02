@@ -17,7 +17,6 @@ import type {
   DefaultEvents,
   RootMessenger,
 } from '../../defaults.js';
-import type { AnyInitializationConfiguration } from '../../types.js';
 import { AlwaysOnlineAdapter } from '../connectivity-controller/always-online-adapter.js';
 import { assetsController } from './assets-controller.js';
 import type { AssetsControllerInstanceOptions } from './types.js';
@@ -52,10 +51,8 @@ describe('assetsController', () => {
     await Promise.all(wallets.splice(0).map((wallet) => wallet.destroy()));
   });
 
-  it('is not part of the default initialization configurations', () => {
-    expect(Object.values(defaultConfigurations)).not.toContain(
-      assetsController,
-    );
+  it('is part of the default initialization configurations', () => {
+    expect(Object.values(defaultConfigurations)).toContain(assetsController);
   });
 
   it('is exported from the package entry point', () => {
@@ -222,7 +219,7 @@ describe('assetsController', () => {
     expect(listener).toHaveBeenCalledWith('payload');
   });
 
-  it('is constructed before the default NetworkEnablementController and reads its state during wallet init', async () => {
+  it('is constructed by default while AccountTreeController and SnapController are absent', async () => {
     const accountId = 'account-1';
     const nativeAssetId = 'eip155:1/slip44:60';
     const wallet = new Wallet({
@@ -243,23 +240,32 @@ describe('assetsController', () => {
           },
         },
       },
-      initializationConfigurations: [assetsController],
-      instanceOptions: {
-        ...getInstanceOptions(),
-        assetsController: { queryApiClient: createMockQueryApiClient() },
-      },
+      instanceOptions: getInstanceOptions(),
     });
     wallets.push(wallet);
 
-    const instance = wallet.getInstance(
-      'AssetsController',
-    ) as unknown as AssetsController;
+    const instance = wallet.getInstance('AssetsController');
     expect(instance).toBeInstanceOf(AssetsController);
 
-    await instance.init();
+    expect(() =>
+      (
+        wallet.messenger as unknown as {
+          call(action: string): unknown;
+        }
+      ).call('AccountTreeController:isInitialized'),
+    ).toThrow(/AccountTreeController:isInitialized has not been/u);
+    expect(() =>
+      (
+        wallet.messenger as unknown as {
+          call(action: string): unknown;
+        }
+      ).call('SnapController:getRunnableSnaps'),
+    ).toThrow(/SnapController:getRunnableSnaps has not been/u);
 
-    // Default NetworkEnablementController state enables Ethereum mainnet.
-    // init() reads that state even though this controller was constructed first.
+    await wallet.init();
+
+    // AssetsController is constructed before NetworkEnablementController.
+    // init() reads that controller's default state, which enables mainnet.
     const assets = await instance.getAssets([
       { id: accountId } as Parameters<AssetsController['getAssets']>[0][number],
     ]);
@@ -267,22 +273,15 @@ describe('assetsController', () => {
     expect(Object.keys(assets[accountId])).toStrictEqual([nativeAssetId]);
   });
 
-  it('is initialized by the Wallet when passed as an initialization configuration', async () => {
+  it('exposes AssetsController state on the wallet messenger by default', () => {
     const wallet = new Wallet({
-      initializationConfigurations: [
-        getNetworkEnablementControllerStub(),
-        assetsController,
-      ],
-      instanceOptions: {
-        ...getInstanceOptions(),
-        assetsController: { queryApiClient: createMockQueryApiClient() },
-      },
+      instanceOptions: getInstanceOptions(),
     });
     wallets.push(wallet);
 
-    const instance = wallet.getInstance('AssetsController');
-
-    expect(instance).toBeInstanceOf(AssetsController);
+    expect(wallet.getInstance('AssetsController')).toBeInstanceOf(
+      AssetsController,
+    );
     expect(
       (
         wallet.messenger as unknown as Messenger<
@@ -295,19 +294,9 @@ describe('assetsController', () => {
 
   it('is destroyed with the Wallet', async () => {
     const wallet = new Wallet({
-      initializationConfigurations: [
-        getNetworkEnablementControllerStub(),
-        assetsController,
-      ],
-      instanceOptions: {
-        ...getInstanceOptions(),
-        assetsController: { queryApiClient: createMockQueryApiClient() },
-      },
+      instanceOptions: getInstanceOptions(),
     });
-    const destroy = vi.spyOn(
-      wallet.getInstance('AssetsController') as unknown as AssetsController,
-      'destroy',
-    );
+    const destroy = vi.spyOn(wallet.getInstance('AssetsController'), 'destroy');
 
     await wallet.destroy();
 
@@ -343,27 +332,6 @@ function createMockQueryApiClient(): AssetsControllerInstanceOptions['queryApiCl
   } as unknown as AssetsControllerInstanceOptions['queryApiClient'];
 }
 
-/**
- * Builds a stand-in for the `NetworkEnablementController` configuration,
- * which the Wallet does not yet initialize by default.
- *
- * @returns The initialization configuration.
- */
-function getNetworkEnablementControllerStub(): AnyInitializationConfiguration {
-  return {
-    name: 'NetworkEnablementController',
-    getMessenger: (parent: RootMessenger<DefaultActions, DefaultEvents>) => {
-      registerActionHandler(
-        parent,
-        'NetworkEnablementController:getState',
-        () => NETWORK_ENABLEMENT_STATE,
-      );
-      return new Messenger({ namespace: 'NetworkEnablementControllerStub' });
-    },
-    init: (): object => ({}),
-  };
-}
-
 function getRootMessenger(): RootMessenger<DefaultActions, DefaultEvents> {
   const rootMessenger = new Messenger<'Root', DefaultActions, DefaultEvents>({
     namespace: 'Root',
@@ -380,6 +348,7 @@ function getRootMessenger(): RootMessenger<DefaultActions, DefaultEvents> {
 
 function getInstanceOptions(): WalletOptions['instanceOptions'] {
   return {
+    assetsController: { queryApiClient: createMockQueryApiClient() },
     analyticsController: {
       platformAdapter: {
         track: vi.fn(),

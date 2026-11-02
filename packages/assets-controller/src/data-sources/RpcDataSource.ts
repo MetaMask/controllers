@@ -347,7 +347,6 @@ export class RpcDataSource extends AbstractDataSource<
 
     this.#subscribeToNetworkController();
     this.#subscribeToTransactionEvents();
-    this.#initializeFromNetworkController();
   }
 
   /**
@@ -875,8 +874,11 @@ export class RpcDataSource extends AbstractDataSource<
   }
 
   /**
-   * Re-read NetworkController state and refresh Rpc `activeChains` (e.g. when
-   * network availability metadata changes after an EVM network switch).
+   * Read `NetworkController:getState` and refresh Rpc `activeChains`.
+   *
+   * The constructor does not call messenger actions. `AssetsController.init()`
+   * calls this after every controller has been constructed. Later network
+   * changes still arrive on `NetworkController:stateChange`.
    */
   refreshActiveChainsFromNetworkState(): void {
     this.#initializeFromNetworkController();

@@ -265,8 +265,17 @@ export class SnapDataSource extends AbstractDataSource<
       this.#discoverKeyringSnaps.bind(this);
 
     this.#subscribeToEvents();
+  }
 
-    // Discover keyring-capable snaps and populate activeChains dynamically
+  /**
+   * Discover keyring snaps and set `activeChains`.
+   *
+   * The constructor does not call messenger actions. `AssetsController.init()`
+   * calls this after every controller has been constructed. When
+   * `SnapController` is not registered, discovery leaves `activeChains` empty.
+   * Later snap installs and permission changes rediscover.
+   */
+  init(): void {
     this.#discoverKeyringSnaps();
   }
 

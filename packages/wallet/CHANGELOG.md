@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Export an `assetsController` initialization configuration for `AssetsController`, along with the `AssetsControllerInstanceOptions` type ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - It is not part of the default initialization configurations, because the Wallet does not yet initialize several of its dependencies (e.g. `AccountTreeController`, `SnapController`). Pass it through `initializationConfigurations`. Those configurations are constructed before the default `NetworkEnablementController`. `AssetsController.init()` reads that controller's state during `wallet.init()`, and later enablement changes arrive on `NetworkEnablementController:stateChange`.
-  - Configure it through the new optional `instanceOptions.assetsController`, which requires a `queryApiClient`.
+- **BREAKING:** Add `AssetsController` to the default initialization configurations, and export `assetsController` with the `AssetsControllerInstanceOptions` type ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - Requires `instanceOptions.assetsController.queryApiClient`.
+  - `Wallet.init()` calls `AssetsController.init()`, which reads `NetworkEnablementController:getState` after every controller has been constructed. Later enablement changes arrive on `NetworkEnablementController:stateChange`.
+  - Delegates `AccountTreeController` and `SnapController` actions and events. `Wallet` does not construct those controllers. Until a client registers them, account-group reads fall back to `AccountsController:getSelectedAccount`, asset tracking does not wait for the account tree, and snap discovery leaves snap chains empty.
+  - Also delegates the other external `AssetsControllerMessenger` actions and events (accounts, client, keyring, network, network enablement, permission, phishing, remote feature flags, preferences, and transactions). `Wallet` constructs the ones it already initializes by default.
+  - Hosts that already register `AssetsController` on the wallet root messenger must remove that registration before upgrading, or messenger registration will collide.
 
 ### Changed
 

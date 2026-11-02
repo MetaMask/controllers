@@ -1,7 +1,6 @@
 import { AssetsController } from '@metamask/assets-controller';
 import type { AssetsControllerMessenger } from '@metamask/assets-controller';
 import { Messenger } from '@metamask/messenger';
-import type { MessengerActions, MessengerEvents } from '@metamask/messenger';
 
 import type { InitializationConfiguration } from '../../types.js';
 
@@ -10,14 +9,12 @@ export type { AssetsControllerInstanceOptions } from './types.js';
 /**
  * Initialization configuration for `AssetsController`.
  *
- * This is not part of the default initialization configurations because the
- * Wallet does not yet initialize several of the controllers it depends on
- * (e.g. `AccountTreeController`, `SnapController`). Clients pass it through
- * `initializationConfigurations`. Those configurations are constructed before
- * the default `NetworkEnablementController`. `AssetsController` reads
- * `NetworkEnablementController:getState` from `init()`, which `Wallet.init()`
- * calls after every controller exists, and applies later enablement from
- * `NetworkEnablementController:stateChange`.
+ * `AccountTreeController` and `SnapController` are not Wallet defaults.
+ * Construction does not call them. Account-group reads fall back to
+ * `AccountsController` until `AccountTreeController` is registered, and snap
+ * discovery leaves snap chains empty until `SnapController` is registered.
+ * `AssetsController.init()` reads `NetworkEnablementController` during
+ * `Wallet.init()`, after every default controller exists.
  */
 export const assetsController: InitializationConfiguration<
   AssetsController,
@@ -39,20 +36,12 @@ export const assetsController: InitializationConfiguration<
     });
   },
   getMessenger: (parent) => {
-    // Most of these dependencies are not initialized by the Wallet by default,
-    // so the root messenger is widened to the full set the controller uses.
-    const rootMessenger = parent as unknown as Messenger<
-      'Root',
-      MessengerActions<AssetsControllerMessenger>,
-      MessengerEvents<AssetsControllerMessenger>
-    >;
-
     const messenger: AssetsControllerMessenger = new Messenger({
       namespace: 'AssetsController',
-      parent: rootMessenger,
+      parent,
     });
 
-    rootMessenger.delegate({
+    parent.delegate({
       messenger,
       actions: [
         'AccountsController:getSelectedAccount',

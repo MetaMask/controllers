@@ -139,8 +139,22 @@ function getRootMessenger(): RootMessenger<DefaultActions, DefaultEvents> {
   return rootMessenger;
 }
 
+function createMockQueryApiClient(): WalletOptions['instanceOptions']['assetsController']['queryApiClient'] {
+  const cache = new Map<string, unknown>();
+  return {
+    getCachedData: vi.fn((key: string[]) => cache.get(JSON.stringify(key))),
+    setCachedData: vi.fn((key: string[], data: unknown) => {
+      cache.set(JSON.stringify(key), data);
+    }),
+    queryClient: {
+      fetchQuery: vi.fn().mockResolvedValue({}),
+    },
+  } as unknown as WalletOptions['instanceOptions']['assetsController']['queryApiClient'];
+}
+
 function getInstanceOptions(): WalletOptions['instanceOptions'] {
   return {
+    assetsController: { queryApiClient: createMockQueryApiClient() },
     analyticsController: {
       platformAdapter: {
         track: vi.fn(),

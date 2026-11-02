@@ -314,8 +314,21 @@ export class AccountsApiDataSource extends AbstractDataSource<
       // return a primitive rather than a fresh object.
       (state) => getMigrationStages(state.remoteFeatureFlags).join(','),
     );
+  }
 
-    this.#initializeActiveChains().catch(console.error);
+  /**
+   * Fetch supported networks and start the active-chain refresh timer.
+   *
+   * The constructor does not call messenger actions. `AssetsController.init()`
+   * calls this after every controller has been constructed. A later call
+   * refreshes the chain list without starting another timer.
+   */
+  async init(): Promise<void> {
+    if (this.#chainsRefreshTimer) {
+      await this.#refreshActiveChains();
+      return;
+    }
+    await this.#initializeActiveChains();
   }
 
   /**

@@ -142,6 +142,8 @@ async function withController<ReturnValue>(
     ...options,
     pollInterval: 1000,
   });
+  // Active chains are read in init(), not the constructor.
+  controller.refreshActiveChainsFromNetworkEnablementState();
 
   try {
     return await fn({
@@ -185,6 +187,29 @@ describe('StakedBalanceDataSource', () => {
           expect(await controller.getActiveChains()).toStrictEqual([]);
         },
       );
+    });
+
+    it('does not call messenger actions in the constructor', async () => {
+      const { assetsControllerMessenger } = createMockMessengers({
+        registerCustomRootActions: (messenger) =>
+          registerStakedMessengerActions(messenger, {
+            enabledNetworkMap: { eip155: { [MAINNET_CHAIN_ID_HEX]: true } },
+          }),
+      });
+      const callSpy = vi.spyOn(assetsControllerMessenger, 'call');
+      const source = new StakedBalanceDataSource({
+        messenger: assetsControllerMessenger,
+        onActiveChainsUpdated: vi.fn(),
+      });
+
+      expect(callSpy).not.toHaveBeenCalled();
+
+      source.refreshActiveChainsFromNetworkEnablementState();
+
+      expect(callSpy).toHaveBeenCalledWith(
+        'NetworkEnablementController:getState',
+      );
+      source.destroy();
     });
 
     it('calls onActiveChainsUpdated with active staking chains when mainnet is enabled', async () => {

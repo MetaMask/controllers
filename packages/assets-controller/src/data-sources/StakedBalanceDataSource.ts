@@ -215,14 +215,15 @@ export class StakedBalanceDataSource extends AbstractDataSource<
       'NetworkEnablementController:stateChange',
       this.#onNetworkEnablementControllerStateChange.bind(this),
     );
-
-    this.#initializeActiveChains();
   }
 
   /**
-   * Re-read NetworkEnablementController state and refresh staking
-   * `activeChains` (e.g. when that controller was not registered yet at
-   * construction).
+   * Read `NetworkEnablementController:getState` and refresh staking
+   * `activeChains`.
+   *
+   * The constructor does not call messenger actions. `AssetsController.init()`
+   * calls this after every controller has been constructed. Later enablement
+   * changes still arrive on `NetworkEnablementController:stateChange`.
    */
   refreshActiveChainsFromNetworkEnablementState(): void {
     this.#initializeActiveChains();

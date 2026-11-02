@@ -321,11 +321,17 @@ export class AccountActivityDataSource extends AbstractDataSource<
    * @returns The accounts of the selected account group.
    */
   #getWalletAccounts(): InternalAccount[] {
-    const accounts = this.#messenger.call(
-      'AccountTreeController:getAccountsFromSelectedAccountGroup',
-    );
-    if (accounts.length > 0) {
-      return accounts;
+    try {
+      const accounts = this.#messenger.call(
+        'AccountTreeController:getAccountsFromSelectedAccountGroup',
+      );
+      if (accounts.length > 0) {
+        return accounts;
+      }
+    } catch (error) {
+      if (!isUnregisteredActionError(error)) {
+        throw error;
+      }
     }
 
     const selectedAccount = this.#messenger.call(
@@ -411,6 +417,18 @@ export class AccountActivityDataSource extends AbstractDataSource<
 
     super.destroy();
   }
+}
+
+/**
+ * Whether a messenger call failed because no controller has registered the action.
+ *
+ * @param error - The error thrown by `messenger.call`.
+ * @returns True when the action handler is not registered.
+ */
+function isUnregisteredActionError(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message.includes('has not been registered')
+  );
 }
 
 // ============================================================================

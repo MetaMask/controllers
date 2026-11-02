@@ -96,6 +96,7 @@ function createBalanceUpdate(overrides?: {
 type SetupOptions = {
   groupAccounts?: InternalAccount[];
   selectedAccount?: InternalAccount | null;
+  registerAccountTree?: boolean;
   onAssetsUpdate?: Mock;
   onActiveChainsUpdated?: Mock;
   state?: { activeChains?: ChainId[] };
@@ -129,6 +130,7 @@ function setup(options: SetupOptions = {}): SetupResult {
   const {
     groupAccounts = [createMockAccount()],
     selectedAccount = null,
+    registerAccountTree = true,
     onAssetsUpdate = vi.fn().mockResolvedValue(undefined),
     onActiveChainsUpdated = vi.fn(),
     state,
@@ -155,10 +157,12 @@ function setup(options: SetupOptions = {}): SetupResult {
     ],
   });
 
-  rootMessenger.registerActionHandler(
-    'AccountTreeController:getAccountsFromSelectedAccountGroup',
-    () => groupAccounts,
-  );
+  if (registerAccountTree) {
+    rootMessenger.registerActionHandler(
+      'AccountTreeController:getAccountsFromSelectedAccountGroup',
+      () => groupAccounts,
+    );
+  }
   rootMessenger.registerActionHandler(
     'AccountsController:getSelectedAccount',
     () => selectedAccount as InternalAccount,
@@ -296,6 +300,62 @@ describe('AccountActivityDataSource', () => {
         chainIds: [CHAIN_MAINNET],
         dataTypes: ['balance', 'metadata', 'price'],
       });
+
+      cleanup();
+    });
+
+    it('falls back to the selected account when AccountTreeController is not registered', async () => {
+      const account = createMockAccount();
+      const { onAssetsUpdate, triggerBalanceUpdated, cleanup } = setup({
+        registerAccountTree: false,
+        selectedAccount: account,
+      });
+
+      triggerBalanceUpdated({
+        address: EVM_ADDRESS,
+        chain: CHAIN_MAINNET,
+        updates: [createBalanceUpdate()],
+      });
+
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
+      expect(onAssetsUpdate.mock.calls[0][1]).toStrictEqual({
+        accountsWithSupportedChains: [
+          { account, supportedChains: [CHAIN_MAINNET] },
+        ],
+        chainIds: [CHAIN_MAINNET],
+        dataTypes: ['balance', 'metadata', 'price'],
+      });
+
+      cleanup();
+    });
+
+    it('drops the balance update when AccountTreeController throws', async () => {
+      const account = createMockAccount();
+      const { onAssetsUpdate, triggerBalanceUpdated, rootMessenger, cleanup } =
+        setup({
+          groupAccounts: [account],
+        });
+      rootMessenger.unregisterActionHandler(
+        'AccountTreeController:getAccountsFromSelectedAccountGroup',
+      );
+      rootMessenger.registerActionHandler(
+        'AccountTreeController:getAccountsFromSelectedAccountGroup',
+        () => {
+          throw new Error('account tree failed');
+        },
+      );
+
+      triggerBalanceUpdated({
+        address: EVM_ADDRESS,
+        chain: CHAIN_MAINNET,
+        updates: [createBalanceUpdate()],
+      });
+
+      await new Promise(process.nextTick);
+
+      expect(onAssetsUpdate).not.toHaveBeenCalled();
 
       cleanup();
     });

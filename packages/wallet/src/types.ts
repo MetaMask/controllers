@@ -39,7 +39,7 @@ export type WalletOptions = {
 export type InstanceSpecificOptions = {
   analyticsController: AnalyticsControllerInstanceOptions;
   approvalController?: ApprovalControllerInstanceOptions;
-  assetsController?: AssetsControllerInstanceOptions;
+  assetsController: AssetsControllerInstanceOptions;
   claimsService?: ClaimsServiceInstanceOptions;
   configRegistryApiService: ConfigRegistryApiServiceInstanceOptions;
   configRegistryController?: ConfigRegistryControllerInstanceOptions;

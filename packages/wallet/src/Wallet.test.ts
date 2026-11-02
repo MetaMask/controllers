@@ -42,8 +42,22 @@ const REMOTE_FEATURE_FLAG_OPTIONS = {
 
 const TEST_ANALYTICS_ID = '11111111-1111-4111-8111-111111111111';
 
+function createMockQueryApiClient(): WalletOptions['instanceOptions']['assetsController']['queryApiClient'] {
+  const cache = new Map<string, unknown>();
+  return {
+    getCachedData: vi.fn((key: string[]) => cache.get(JSON.stringify(key))),
+    setCachedData: vi.fn((key: string[], data: unknown) => {
+      cache.set(JSON.stringify(key), data);
+    }),
+    queryClient: {
+      fetchQuery: vi.fn().mockResolvedValue({}),
+    },
+  } as unknown as WalletOptions['instanceOptions']['assetsController']['queryApiClient'];
+}
+
 function getInstanceOptions(): WalletOptions['instanceOptions'] {
   return {
+    assetsController: { queryApiClient: createMockQueryApiClient() },
     analyticsController: {
       platformAdapter: {
         track: vi.fn(),
@@ -199,7 +213,7 @@ describe('Wallet', () => {
 
     const results = await wallet.init();
 
-    expect(results).toHaveLength(10);
+    expect(results).toHaveLength(11);
   });
 
   it('disallows modifying the messenger', async () => {

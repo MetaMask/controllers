@@ -269,6 +269,8 @@ async function withController<ReturnValue>(
     ...options,
     getAssetsState,
   });
+  // Active chains are read in init(), not the constructor.
+  controller.refreshActiveChainsFromNetworkState();
 
   try {
     return await fn({
@@ -372,6 +374,32 @@ describe('RpcDataSource', () => {
           expect(controller).toBeDefined();
         },
       );
+    });
+
+    it('does not call messenger actions in the constructor', () => {
+      const { assetsControllerMessenger } = createMockMessengers({
+        registerCustomRootActions: (rootMessenger) =>
+          registerRpcDataSourceActions(rootMessenger, {
+            networkState: createMockNetworkState(),
+          }),
+      });
+      const callSpy = vi.spyOn(assetsControllerMessenger, 'call');
+      const source = new RpcDataSource({
+        messenger: assetsControllerMessenger,
+        getAssetsState: getDefaultAssetsControllerState,
+        onActiveChainsUpdated: vi.fn(),
+        getNativeAssetForChain: vi.fn(),
+        getAssetType: vi.fn(),
+        getAssetVisibility: vi.fn(),
+        queryApiClient: createTestApiClient(),
+      });
+
+      expect(callSpy).not.toHaveBeenCalled();
+
+      source.refreshActiveChainsFromNetworkState();
+
+      expect(callSpy).toHaveBeenCalledWith('NetworkController:getState');
+      source.destroy();
     });
 
     it('reports active chains on initialization', async () => {
