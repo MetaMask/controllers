@@ -64,6 +64,7 @@ const PREDICT_WITHDRAW_TRANSACTION_MOCK = {
 
 const QUOTE_REQUEST_MOCK: QuoteRequest = {
   from: FROM_MOCK,
+  sourceAssetId: 'eip155:1/erc20:0xabc',
   sourceBalanceRaw: '10000000000000000000',
   sourceChainId: '0x1',
   sourceTokenAddress: '0xabc',

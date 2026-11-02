@@ -9,7 +9,7 @@ import {
   parseCaipAssetType,
   toCaipAssetType,
 } from '@metamask/utils';
-import type { CaipAssetType, Hex } from '@metamask/utils';
+import type { CaipAssetType, CaipChainId, Hex } from '@metamask/utils';
 import { BigNumber } from 'bignumber.js';
 
 import {
@@ -21,6 +21,7 @@ import { projectLogger } from '../logger.js';
 import type {
   EvmPaymentToken,
   FiatRates,
+  QuoteRequest,
   TransactionPayControllerMessenger,
   TransactionPaymentToken,
 } from '../types.js';
@@ -70,6 +71,34 @@ export function isNonEvmPaymentToken(
   paymentToken: TransactionPaymentToken,
 ): boolean {
   return !getEvmAsset(paymentToken.assetId);
+}
+
+/**
+ * Check if a quote request pays with an EVM source token.
+ *
+ * The protocol is derived from the CAIP-19 source asset type of the request.
+ *
+ * @param request - Quote request to check.
+ * @returns True if the source asset is on an EVM chain.
+ */
+export function isEvmQuoteRequest(
+  request: QuoteRequest<Hex | CaipChainId>,
+): request is QuoteRequest {
+  return Boolean(getEvmAsset(request.sourceAssetId));
+}
+
+/**
+ * Check if a quote request pays with a non-EVM source token.
+ *
+ * The protocol is derived from the CAIP-19 source asset type of the request.
+ *
+ * @param request - Quote request to check.
+ * @returns True if the source asset is not on an EVM chain.
+ */
+export function isNonEvmQuoteRequest(
+  request: QuoteRequest<Hex | CaipChainId>,
+): request is QuoteRequest<CaipChainId> {
+  return !isEvmQuoteRequest(request);
 }
 
 /**

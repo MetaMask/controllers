@@ -1,6 +1,6 @@
 import { Interface } from '@ethersproject/abi';
 import { abiERC20 } from '@metamask/metamask-eth-abis';
-import type { Hex } from '@metamask/utils';
+import type { CaipChainId, Hex } from '@metamask/utils';
 import { BigNumber } from 'bignumber.js';
 
 import { createModuleLogger, projectLogger } from '../logger.js';
@@ -50,9 +50,12 @@ export type ValidateQuotesRequest<QuoteType> = {
 export class QuoteError extends Error {
   readonly info: QuoteErrorInfo;
 
-  readonly quotes?: TransactionPayQuote<unknown>[];
+  readonly quotes?: TransactionPayQuote<unknown, Hex | CaipChainId>[];
 
-  constructor(info: QuoteErrorInfo, quotes?: TransactionPayQuote<unknown>[]) {
+  constructor(
+    info: QuoteErrorInfo,
+    quotes?: TransactionPayQuote<unknown, Hex | CaipChainId>[],
+  ) {
     super(info.message);
     this.name = 'QuoteError';
     this.info = info;

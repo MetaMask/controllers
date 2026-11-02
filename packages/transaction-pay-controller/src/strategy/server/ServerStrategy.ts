@@ -1,4 +1,5 @@
 import { createModuleLogger } from '@metamask/utils';
+import type { CaipChainId, Hex } from '@metamask/utils';
 
 import { projectLogger } from '../../logger.js';
 import type {
@@ -8,6 +9,7 @@ import type {
   TransactionPayQuote,
 } from '../../types.js';
 import { getPayStrategiesConfig } from '../../utils/feature-flags.js';
+import { isEvmQuoteRequest } from '../../utils/token.js';
 import { getServerQuotes } from './server-quotes.js';
 import { submitServerQuotes } from './server-submit.js';
 import { getServerUnsupportedReason } from './server-support.js';
@@ -23,10 +25,14 @@ const log = createModuleLogger(projectLogger, 'server-strategy');
  * `payStrategies.server.enabledTransactionTypes`.
  */
 export class ServerStrategy implements PayStrategy<ServerQuote> {
-  supports(request: PayStrategyGetQuotesRequest): boolean {
+  supports(request: PayStrategyGetQuotesRequest<Hex | CaipChainId>): boolean {
     const config = getPayStrategiesConfig(request.messenger);
 
     if (!config.server.enabled) {
+      return false;
+    }
+
+    if (!request.requests.every(isEvmQuoteRequest)) {
       return false;
     }
 

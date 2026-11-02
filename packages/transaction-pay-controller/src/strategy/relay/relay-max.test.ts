@@ -32,6 +32,7 @@ const FROM_MOCK = '0x1234567890123456789012345678901234567891' as Hex;
 
 const BASE_REQUEST: QuoteRequest = {
   from: FROM_MOCK,
+  sourceAssetId: 'eip155:1/erc20:0xabc',
   sourceBalanceRaw: '10000000000000000000',
   sourceChainId: '0x1',
   sourceTokenAddress: '0xabc',

@@ -1,11 +1,12 @@
 import type { TransactionMeta } from '@metamask/transaction-controller';
-import type { Hex } from '@metamask/utils';
+import type { CaipChainId, Hex } from '@metamask/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TransactionPayStrategy } from '../../constants.js';
 import type {
   PayStrategyExecuteRequest,
   PayStrategyGetQuotesRequest,
+  QuoteRequest,
   TransactionPayControllerMessenger,
   TransactionPayQuote,
 } from '../../types.js';
@@ -15,11 +16,15 @@ import {
 } from '../../utils/feature-flags.js';
 import { getTransaction } from '../../utils/transaction.js';
 import { getRelayQuotes } from './relay-quotes.js';
+import { getRelaySolanaQuotes } from './relay-solana-quotes.js';
+import { submitRelayNonEvmQuote } from './relay-submit-non-evm.js';
 import { submitRelayQuotes } from './relay-submit.js';
 import { RelayStrategy } from './RelayStrategy.js';
-import type { RelayQuote } from './types.js';
+import type { RelayQuote, RelaySolanaPayQuote } from './types.js';
 
 vi.mock(import('./relay-quotes.js'));
+vi.mock(import('./relay-solana-quotes.js'));
+vi.mock(import('./relay-submit-non-evm.js'));
 vi.mock(import('./relay-submit.js'));
 vi.mock(import('../../utils/feature-flags.js'));
 vi.mock(import('../../utils/transaction.js'));
@@ -27,15 +32,31 @@ vi.mock(import('../../utils/transaction.js'));
 describe('RelayStrategy', () => {
   const getRelayQuotesMock = vi.mocked(getRelayQuotes);
   const submitRelayQuotesMock = vi.mocked(submitRelayQuotes);
+  const getRelaySolanaQuotesMock = vi.mocked(getRelaySolanaQuotes);
+  const submitRelayNonEvmQuoteMock = vi.mocked(submitRelayNonEvmQuote);
   const getPayStrategiesConfigMock = vi.mocked(getPayStrategiesConfig);
 
   const messenger = {} as never;
+
+  const nonEvmQuoteRequest = {
+    from: '0xabc' as Hex,
+    sourceAccountId:
+      'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:7Ec4QeG8wF3RnTjHDrTuYP8hVV7WYuPFyM4hZUodkG6Z',
+    sourceAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
+    sourceBalanceRaw: '100',
+    sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+    sourceTokenAmount: '100',
+    targetAmountMinimum: '100',
+    targetChainId: '0x2' as Hex,
+    targetTokenAddress: '0xdef' as Hex,
+  } satisfies QuoteRequest<CaipChainId>;
 
   const request = {
     messenger,
     requests: [
       {
         from: '0xabc' as Hex,
+        sourceAssetId: 'eip155:1/erc20:0xabc',
         sourceBalanceRaw: '100',
         sourceChainId: '0x1' as Hex,
         sourceTokenAddress: '0xabc' as Hex,
@@ -105,6 +126,92 @@ describe('RelayStrategy', () => {
     const strategy = new RelayStrategy();
     expect(await strategy.getQuotes(request)).toStrictEqual([quote]);
     expect(getRelayQuotesMock).toHaveBeenCalledWith(request);
+  });
+
+  it('supports requests with a non-EVM source asset', () => {
+    const strategy = new RelayStrategy();
+
+    expect(
+      strategy.supports({ ...request, requests: [nonEvmQuoteRequest] }),
+    ).toBe(true);
+  });
+
+  it('routes requests with a non-EVM source asset to the Solana quote path only', async () => {
+    const nonEvmRequest = {
+      ...request,
+      requests: [nonEvmQuoteRequest],
+    } as PayStrategyGetQuotesRequest<Hex | CaipChainId>;
+    getRelaySolanaQuotesMock.mockResolvedValue([]);
+
+    const strategy = new RelayStrategy();
+    await strategy.getQuotes(nonEvmRequest);
+
+    expect(getRelaySolanaQuotesMock).toHaveBeenCalledWith(nonEvmRequest);
+    expect(getRelayQuotesMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps requests with an EVM source asset on the existing /quote path', async () => {
+    getRelayQuotesMock.mockResolvedValue([]);
+
+    const strategy = new RelayStrategy();
+    await strategy.getQuotes(request);
+
+    expect(getRelayQuotesMock).toHaveBeenCalledTimes(1);
+    expect(getRelaySolanaQuotesMock).not.toHaveBeenCalled();
+  });
+
+  it('executes a quote with a non-EVM source asset through the non-EVM submit branch only', async () => {
+    const nonEvmQuote = {
+      request: nonEvmQuoteRequest,
+      strategy: TransactionPayStrategy.Relay,
+    };
+    const executeRequest = {
+      messenger,
+      quotes: [nonEvmQuote],
+      transaction: request.transaction,
+      isSmartTransaction: vi.fn(),
+    } as unknown as PayStrategyExecuteRequest<
+      RelayQuote | RelaySolanaPayQuote,
+      Hex | CaipChainId
+    >;
+
+    submitRelayNonEvmQuoteMock.mockResolvedValue({
+      externallyHandled: true,
+      outcome: 'submitted',
+    });
+
+    const strategy = new RelayStrategy();
+
+    expect(await strategy.execute(executeRequest)).toStrictEqual({
+      externallyHandled: true,
+      outcome: 'submitted',
+    });
+    expect(submitRelayNonEvmQuoteMock).toHaveBeenCalledWith({
+      messenger,
+      quote: nonEvmQuote,
+      transaction: request.transaction,
+    });
+    expect(submitRelayQuotesMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects multiple quotes with a non-EVM source asset', async () => {
+    const nonEvmQuote = { request: nonEvmQuoteRequest };
+    const executeRequest = {
+      messenger,
+      quotes: [nonEvmQuote, nonEvmQuote],
+      transaction: request.transaction,
+      isSmartTransaction: vi.fn(),
+    } as unknown as PayStrategyExecuteRequest<
+      RelayQuote | RelaySolanaPayQuote,
+      Hex | CaipChainId
+    >;
+
+    const strategy = new RelayStrategy();
+
+    await expect(strategy.execute(executeRequest)).rejects.toThrow(
+      'Relay: Multiple non-EVM quotes are not supported',
+    );
+    expect(submitRelayNonEvmQuoteMock).not.toHaveBeenCalled();
   });
 
   describe('getRefreshInterval', () => {

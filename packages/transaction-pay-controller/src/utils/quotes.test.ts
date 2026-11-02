@@ -1,7 +1,7 @@
 import { TransactionStatus } from '@metamask/transaction-controller';
 import type { TransactionMeta } from '@metamask/transaction-controller';
 import type { BatchTransaction } from '@metamask/transaction-controller';
-import type { CaipAssetType, Hex, Json } from '@metamask/utils';
+import type { CaipAccountId, CaipAssetType, Hex, Json } from '@metamask/utils';
 import { cloneDeep } from 'lodash-es';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockedFunction } from 'vitest';
@@ -48,17 +48,22 @@ import { getTransaction, updateTransaction } from './transaction.js';
 import { QuoteError } from './validation.js';
 
 vi.mock(import('./source-amounts.js'));
-vi.mock(import('./account.js'));
+vi.mock(import('./account.js'), async (importOriginal) =>
+  mockModuleExcept(await importOriginal(), ['getCaipAccountId']),
+);
 vi.mock(import('./strategy.js'));
 vi.mock(import('./transaction.js'));
 vi.mock(import('./totals.js'));
 vi.mock(import('./token.js'), async (importOriginal) =>
   mockModuleExcept(await importOriginal(), [
+    'buildCaipAssetType',
     'computeTokenAmounts',
     'getEvmAsset',
     'getEvmPaymentToken',
     'getNativeToken',
+    'isEvmQuoteRequest',
     'isNonEvmPaymentToken',
+    'isNonEvmQuoteRequest',
   ]),
 );
 
@@ -79,7 +84,9 @@ const PAYMENT_TOKEN_MOCK: TransactionPaymentToken = {
   symbol: 'ETH',
 };
 
+const SOLANA_CHAIN_ID_MOCK = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 const SOLANA_ADDRESS_MOCK = '7Ec4QeG8wF3RnTjHDrTuYP8hVV7WYuPFyM4hZUodkG6Z';
+const SOLANA_CAIP_ACCOUNT_ID_MOCK: CaipAccountId = `${SOLANA_CHAIN_ID_MOCK}:${SOLANA_ADDRESS_MOCK}`;
 const SOLANA_WALLET_ACCOUNT_ID_MOCK = 'solana-account-uuid';
 const SOLANA_ACCOUNT_ID_MOCK = 'selected-solana-account-uuid';
 const SOLANA_ASSET_ID_MOCK: CaipAssetType =
@@ -1048,6 +1055,7 @@ describe('Quotes Utils', () => {
           {
             isMaxAmount: false,
             from: TRANSACTION_META_MOCK.txParams.from,
+            sourceAssetId: PAYMENT_TOKEN_MOCK.assetId,
             sourceBalanceRaw: '5000000',
             sourceTokenAmount:
               TRANSACTION_DATA_MOCK.sourceAmounts?.[0].sourceAmountRaw,
@@ -1852,18 +1860,30 @@ describe('Quotes Utils', () => {
       getAssetFiatRateMock.mockReturnValue({ fiatRate: '85', usdRate: '100' });
     });
 
-    it('builds no quote requests', async () => {
+    it('builds quote requests identified by the CAIP source asset and account', async () => {
       await run({ transactionData: NON_EVM_TRANSACTION_DATA });
 
-      expect(getQuotesMock).not.toHaveBeenCalled();
-
-      const transactionDataMock: Partial<TransactionData> = {};
-
-      updateTransactionDataMock.mock.calls.forEach((call) =>
-        call[1](transactionDataMock),
-      );
-
-      expect(transactionDataMock.quotes).toStrictEqual([]);
+      expect(getQuotesMock).toHaveBeenCalledWith({
+        accountSupports7702: true,
+        from: TRANSACTION_META_MOCK.txParams.from,
+        messenger,
+        requests: [
+          {
+            from: TRANSACTION_META_MOCK.txParams.from,
+            isMaxAmount: false,
+            sourceAccountId: SOLANA_CAIP_ACCOUNT_ID_MOCK,
+            sourceAssetId: SOLANA_ASSET_ID_MOCK,
+            sourceBalanceRaw: '3000000000',
+            sourceChainId: SOLANA_CHAIN_ID_MOCK,
+            sourceTokenAmount: '500000000',
+            targetAmountMinimum: TARGET_TOKEN_MOCK.amountRaw,
+            targetChainId: TARGET_TOKEN_MOCK.chainId,
+            targetTokenAddress: TARGET_TOKEN_MOCK.address,
+          },
+        ],
+        signal: expect.any(AbortSignal),
+        transaction: TRANSACTION_META_MOCK,
+      });
     });
 
     it('resolves the source account from the transaction account', async () => {
@@ -1933,11 +1953,78 @@ describe('Quotes Utils', () => {
         chainId: undefined,
         isPostQuote: undefined,
         networkFeeFiat: TOTALS_MOCK.fees.sourceNetwork.estimate.usd,
-        strategy: undefined,
+        strategy: TransactionPayStrategy.Across,
         targetFiat: TOTALS_MOCK.targetAmount.usd,
         tokenAddress: undefined,
         totalFiat: TOTALS_MOCK.total.usd,
       });
+    });
+
+    it('keeps non-EVM quotes without EVM quote support checks or batch transactions', async () => {
+      await run({ transactionData: NON_EVM_TRANSACTION_DATA });
+
+      expect(checkStrategyQuoteSupportMock).not.toHaveBeenCalled();
+      expect(getBatchTransactionsMock).not.toHaveBeenCalled();
+
+      const transactionDataMock: Partial<TransactionData> = {};
+
+      updateTransactionDataMock.mock.calls.forEach((call) =>
+        call[1](transactionDataMock),
+      );
+
+      expect(transactionDataMock.quotes).toStrictEqual([QUOTE_MOCK]);
+    });
+
+    it('keeps the durable execution checkpoint', async () => {
+      await run({ transactionData: NON_EVM_TRANSACTION_DATA });
+
+      const solanaExecution = {
+        phase: 'attempting',
+      } as NonNullable<TransactionMeta['metamaskPay']>['solanaExecution'];
+      const transactionMetaMock = {
+        metamaskPay: { solanaExecution },
+      } as TransactionMeta;
+
+      updateTransactionMock.mock.calls[0][1](transactionMetaMock);
+
+      expect(transactionMetaMock.metamaskPay?.solanaExecution).toBe(
+        solanaExecution,
+      );
+    });
+
+    it('does not build a no-op quote when no conversion is required', async () => {
+      await run({
+        transactionData: { ...NON_EVM_TRANSACTION_DATA, sourceAmounts: [] },
+      });
+
+      expect(getQuotesMock).not.toHaveBeenCalled();
+
+      const transactionDataMock: Partial<TransactionData> = {};
+
+      updateTransactionDataMock.mock.calls.forEach((call) =>
+        call[1](transactionDataMock),
+      );
+
+      expect(transactionDataMock.quotes).toStrictEqual([]);
+    });
+
+    it('builds no requests if source amounts are missing', async () => {
+      await run({
+        transactionData: {
+          ...NON_EVM_TRANSACTION_DATA,
+          sourceAmounts: undefined,
+        },
+      });
+
+      expect(getQuotesMock).not.toHaveBeenCalled();
+    });
+
+    it('builds no requests in post-quote flows', async () => {
+      await run({
+        transactionData: { ...NON_EVM_TRANSACTION_DATA, isPostQuote: true },
+      });
+
+      expect(getQuotesMock).not.toHaveBeenCalled();
     });
   });
 
@@ -2250,6 +2337,7 @@ describe('Quotes Utils', () => {
             from: TRANSACTION_META_MOCK.txParams.from,
             isMaxAmount: false,
             isPostQuote: true,
+            sourceAssetId: 'eip155:137/erc20:0x456',
             sourceBalanceRaw: SOURCE_TOKEN_MOCK.balanceRaw,
             sourceChainId: SOURCE_TOKEN_MOCK.chainId,
             sourceTokenAddress: SOURCE_TOKEN_MOCK.address,

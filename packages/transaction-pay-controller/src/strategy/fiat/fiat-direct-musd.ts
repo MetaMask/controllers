@@ -243,6 +243,10 @@ function combineDirectMusdFiatQuote({
       from: moneyAccountAddress,
       isDirectMusdMoneyAccount: true,
       recipient: moneyAccountAddress,
+      sourceAssetId: buildCaipAssetType(
+        MUSD_MONAD_FIAT_ASSET.chainId,
+        MUSD_MONAD_FIAT_ASSET.address,
+      ),
       sourceBalanceRaw: sourceAmountRaw,
       sourceChainId: MUSD_MONAD_FIAT_ASSET.chainId,
       sourceTokenAddress: MUSD_MONAD_FIAT_ASSET.address,

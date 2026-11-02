@@ -1,4 +1,5 @@
 import type { TransactionMeta } from '@metamask/transaction-controller';
+import type { CaipChainId, Hex } from '@metamask/utils';
 import { BigNumber } from 'bignumber.js';
 
 import { TransactionPayStrategy } from '../constants.js';
@@ -31,7 +32,7 @@ export function calculateTotals({
   transaction,
 }: {
   fiatPaymentAmount?: string;
-  quotes: TransactionPayQuote<unknown>[];
+  quotes: TransactionPayQuote<unknown, Hex | CaipChainId>[];
   messenger: TransactionPayControllerMessenger;
   tokens: TransactionPayRequiredToken[];
   transaction: TransactionMeta;
@@ -158,7 +159,7 @@ export function calculateTotals({
 }
 
 function getQuoteFeeTotal(
-  quote: TransactionPayQuote<unknown>,
+  quote: Pick<TransactionPayQuote<unknown>, 'fees'>,
   currency: keyof FiatValue,
 ): string {
   return new BigNumber(quote.fees.provider[currency])

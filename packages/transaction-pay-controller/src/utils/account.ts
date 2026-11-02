@@ -3,8 +3,9 @@ import {
   KnownCaipNamespace,
   parseCaipAssetType,
   parseCaipChainId,
+  toCaipAccountId,
 } from '@metamask/utils';
-import type { CaipAssetType, Hex } from '@metamask/utils';
+import type { CaipAccountId, CaipAssetType, Hex } from '@metamask/utils';
 
 import type { TransactionPayControllerMessenger } from '../types.js';
 
@@ -119,6 +120,22 @@ export function getAssetAccount(
   }
 
   return account;
+}
+
+/**
+ * Get the CAIP-10 account ID of an account on the chain of a CAIP-19 asset.
+ *
+ * @param assetId - CAIP-19 asset type.
+ * @param account - Account holding the asset.
+ * @returns The CAIP-10 account ID.
+ */
+export function getCaipAccountId(
+  assetId: CaipAssetType,
+  account: AssetAccount,
+): CaipAccountId {
+  const { chain } = parseCaipAssetType(assetId);
+
+  return toCaipAccountId(chain.namespace, chain.reference, account.address);
 }
 
 /**

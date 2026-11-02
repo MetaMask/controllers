@@ -50,6 +50,7 @@ export function buildNoOpQuote(
     original: null,
     request: {
       from,
+      sourceAssetId: paymentToken.assetId,
       sourceBalanceRaw: paymentToken.balanceRaw,
       sourceChainId: paymentToken.chainId,
       sourceTokenAddress: paymentToken.address,

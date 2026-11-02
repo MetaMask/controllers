@@ -87,6 +87,7 @@ const QUOTE_MOCK: TransactionPayQuote<AcrossQuote> = {
   },
   request: {
     from: FROM_MOCK,
+    sourceAssetId: 'eip155:1/erc20:0xabc',
     sourceBalanceRaw: '100',
     sourceChainId: '0x1',
     sourceTokenAddress: '0xabc',

@@ -6,10 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getMessengerMock } from '../../tests/messenger-mock.js';
 import { TransactionPayStrategy } from '../index.js';
-import type {
-  TransactionPayControllerState,
-  TransactionPayQuote,
-} from '../types.js';
+import type { TransactionPayQuote } from '../types.js';
 import { getStrategyByName } from '../utils/strategy.js';
 import { TransactionPayPublishHook } from './TransactionPayPublishHook.js';
 
@@ -23,8 +20,23 @@ const TRANSACTION_META_MOCK = {
 } as TransactionMeta;
 
 const QUOTE_MOCK = {
+  request: { sourceAssetId: 'eip155:1/slip44:60', sourceChainId: '0x1' },
   strategy: TransactionPayStrategy.Across,
-} as TransactionPayQuote<unknown>;
+} as unknown as TransactionPayQuote<unknown>;
+
+const EVM_PAYMENT_TOKEN_MOCK = { assetId: 'eip155:1/erc20:0x123' };
+
+const NON_EVM_PAYMENT_TOKEN_MOCK = {
+  assetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
+};
+
+const NON_EVM_QUOTE_MOCK = {
+  request: {
+    sourceAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
+    sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  },
+  strategy: TransactionPayStrategy.Relay,
+};
 
 describe('TransactionPayPublishHook', () => {
   const isSmartTransactionMock = vi.fn();
@@ -89,6 +101,72 @@ describe('TransactionPayPublishHook', () => {
     });
   });
 
+  it('passes non-EVM payment token quotes as quotes and returns the externally handled result', async () => {
+    getControllerStateMock.mockReturnValue({
+      transactionData: {
+        [TRANSACTION_META_MOCK.id]: {
+          paymentToken: NON_EVM_PAYMENT_TOKEN_MOCK,
+          quotes: [NON_EVM_QUOTE_MOCK],
+        },
+      },
+    });
+
+    executeMock.mockResolvedValue({
+      externallyHandled: true,
+      outcome: 'submitted',
+    });
+
+    const result = await runHook();
+
+    expect(getStrategyByNameMock).toHaveBeenCalledWith(
+      TransactionPayStrategy.Relay,
+    );
+    expect(executeMock).toHaveBeenCalledTimes(1);
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quotes: [NON_EVM_QUOTE_MOCK],
+      }),
+    );
+    expect(result).toStrictEqual({
+      externallyHandled: true,
+      outcome: 'submitted',
+    });
+  });
+
+  it('throws if an EVM quote remains after selecting a non-EVM payment token', async () => {
+    getControllerStateMock.mockReturnValue({
+      transactionData: {
+        [TRANSACTION_META_MOCK.id]: {
+          paymentToken: NON_EVM_PAYMENT_TOKEN_MOCK,
+          quotes: [QUOTE_MOCK],
+        },
+      },
+    });
+
+    await expect(runHook()).rejects.toThrow(
+      'MetaMask Pay: Quote does not match payment token',
+    );
+    expect(executeMock).not.toHaveBeenCalled();
+    expect(updateTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it('throws if a non-EVM quote remains after selecting an EVM payment token', async () => {
+    getControllerStateMock.mockReturnValue({
+      transactionData: {
+        [TRANSACTION_META_MOCK.id]: {
+          paymentToken: EVM_PAYMENT_TOKEN_MOCK,
+          quotes: [NON_EVM_QUOTE_MOCK],
+        },
+      },
+    });
+
+    await expect(runHook()).rejects.toThrow(
+      'MetaMask Pay: Quote does not match payment token',
+    );
+    expect(executeMock).not.toHaveBeenCalled();
+    expect(updateTransactionMock).not.toHaveBeenCalled();
+  });
+
   it('executes strategy with quotes', async () => {
     await runHook();
 
@@ -121,7 +199,7 @@ describe('TransactionPayPublishHook', () => {
       transactionData: {
         [TRANSACTION_META_MOCK.id]: {
           isLoading: false,
-          paymentToken: { address: '0x123' },
+          paymentToken: EVM_PAYMENT_TOKEN_MOCK,
           tokens: [],
         },
       },
@@ -139,7 +217,7 @@ describe('TransactionPayPublishHook', () => {
       transactionData: {
         [TRANSACTION_META_MOCK.id]: {
           isLoading: false,
-          paymentToken: { address: '0x123' },
+          paymentToken: EVM_PAYMENT_TOKEN_MOCK,
           quotes: [{ strategy: TransactionPayStrategy.None }],
           tokens: [],
         },
@@ -168,6 +246,28 @@ describe('TransactionPayPublishHook', () => {
 
     await expect(runHook()).rejects.toThrow(
       'MetaMask Pay: Fiat: Missing quote',
+    );
+    expect(executeMock).not.toHaveBeenCalled();
+    expect(updateTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no quotes', []],
+    ['only a no-op quote', [{ strategy: TransactionPayStrategy.None }]],
+  ])('throws if a non-EVM payment token has %s', async (_title, quotes) => {
+    getControllerStateMock.mockReturnValue({
+      transactionData: {
+        [TRANSACTION_META_MOCK.id]: {
+          isLoading: false,
+          paymentToken: NON_EVM_PAYMENT_TOKEN_MOCK,
+          quotes,
+          tokens: [],
+        },
+      },
+    });
+
+    await expect(runHook()).rejects.toThrow(
+      'MetaMask Pay: Missing non-EVM quote',
     );
     expect(executeMock).not.toHaveBeenCalled();
     expect(updateTransactionMock).not.toHaveBeenCalled();

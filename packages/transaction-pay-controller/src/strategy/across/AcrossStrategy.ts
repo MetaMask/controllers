@@ -2,6 +2,7 @@ import {
   TransactionType,
   hasTransactionType,
 } from '@metamask/transaction-controller';
+import type { CaipChainId, Hex } from '@metamask/utils';
 
 import type {
   PayStrategy,
@@ -15,6 +16,7 @@ import {
   isPerpsDepositRequest,
   isPerpsDepositTransaction,
 } from '../../utils/perps.js';
+import { isEvmQuoteRequest } from '../../utils/token.js';
 import { getAcrossDestination } from './across-actions.js';
 import { getAcrossQuotes } from './across-quotes.js';
 import { submitAcrossQuotes } from './across-submit.js';
@@ -23,10 +25,14 @@ import { isAcrossQuoteRequest } from './requests.js';
 import type { AcrossQuote } from './types.js';
 
 export class AcrossStrategy implements PayStrategy<AcrossQuote> {
-  supports(request: PayStrategyGetQuotesRequest): boolean {
+  supports(request: PayStrategyGetQuotesRequest<Hex | CaipChainId>): boolean {
     const config = getPayStrategiesConfig(request.messenger);
 
     if (!config.across.enabled) {
+      return false;
+    }
+
+    if (!request.requests.every(isEvmQuoteRequest)) {
       return false;
     }
 

@@ -39,6 +39,7 @@ function buildQuote(
     original: {},
     request: {
       from: FROM_MOCK,
+      sourceAssetId: `eip155:56/erc20:${TOKEN_ADDRESS_MOCK}`,
       sourceBalanceRaw: '1000',
       sourceChainId: CHAIN_ID_MOCK,
       sourceTokenAddress: TOKEN_ADDRESS_MOCK,

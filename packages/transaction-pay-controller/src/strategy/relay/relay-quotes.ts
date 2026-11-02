@@ -626,7 +626,10 @@ async function normalizeQuote(
  * @param request - Quote request.
  * @returns Dust value in USD and fiat.
  */
-function calculateDustUsd(quote: RelayQuote, request: QuoteRequest): BigNumber {
+export function calculateDustUsd(
+  quote: Pick<RelayQuote, 'details'>,
+  request: Pick<QuoteRequest, 'targetAmountMinimum'>,
+): BigNumber {
   const { currencyOut } = quote.details;
   const { amountUsd, amountFormatted, minimumAmount } = currencyOut;
   const { decimals: targetDecimals } = currencyOut.currency;
@@ -899,7 +902,9 @@ function toQuoteGasTransaction(
  * @param quote - Relay quote.
  * @returns - Provider fee in USD.
  */
-function calculateProviderFee(quote: RelayQuote): BigNumber {
+export function calculateProviderFee(
+  quote: Pick<RelayQuote, 'details'>,
+): BigNumber {
   return new BigNumber(quote.details.totalImpact.usd).abs();
 }
 
@@ -927,9 +932,9 @@ function getTransferRecipient(data: Hex): Hex {
     .decodeFunctionData('transfer', data)
     .to.toLowerCase();
 }
-function getSubsidizedFeeAmountUsd(
+export function getSubsidizedFeeAmountUsd(
   messenger: TransactionPayControllerMessenger,
-  quote: RelayQuote,
+  quote: Pick<RelayQuote, 'fees'>,
 ): BigNumber {
   const subsidizedFee = quote.fees?.subsidized;
   const amountUsd = new BigNumber(subsidizedFee?.amountUsd ?? '0');
@@ -948,7 +953,7 @@ function getSubsidizedFeeAmountUsd(
   return isSubsidizedStablecoin ? amountFormatted : amountUsd;
 }
 
-function isStablecoin(
+export function isStablecoin(
   messenger: TransactionPayControllerMessenger,
   chainId: string,
   tokenAddress: string,

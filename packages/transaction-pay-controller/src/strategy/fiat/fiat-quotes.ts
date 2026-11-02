@@ -273,6 +273,7 @@ function buildRelayRequestFromAmountFiat({
     // amount, so the relay should treat it as a fixed input rather than
     // computing it from the target.
     isPostQuote: true,
+    sourceAssetId: buildCaipAssetType(fiatAsset.chainId, fiatAsset.address),
     sourceBalanceRaw: sourceAmountRaw,
     sourceChainId: fiatAsset.chainId,
     sourceTokenAddress: fiatAsset.address,

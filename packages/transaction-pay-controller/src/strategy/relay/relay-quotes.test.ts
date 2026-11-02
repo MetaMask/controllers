@@ -87,6 +87,7 @@ const CHAIN_ID_LINEA = '0xe708' as Hex;
 
 const QUOTE_REQUEST_MOCK: QuoteRequest = {
   from: FROM_MOCK,
+  sourceAssetId: 'eip155:1/erc20:0xabc',
   sourceBalanceRaw: '10000000000000000000',
   sourceChainId: '0x1',
   sourceTokenAddress: '0xabc',
@@ -5972,6 +5973,7 @@ describe('Relay Quotes Utils', () => {
       from: FROM_MOCK,
       isHyperliquidSource: true,
       isPostQuote: true,
+      sourceAssetId: 'eip155:1337/erc20:0x00000000000000000000000000000000',
       sourceBalanceRaw: '4800000',
       sourceChainId: CHAIN_ID_HYPERCORE,
       sourceTokenAddress: '0x00000000000000000000000000000000',

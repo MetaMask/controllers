@@ -9,6 +9,7 @@ import type {
 } from '@metamask/assets-controller';
 import type { ControllerStateChangeEvent } from '@metamask/base-controller';
 import type { ControllerGetStateAction } from '@metamask/base-controller';
+import type { ConfigRegistryControllerGetNetworkConfigByCaip2ChainIdAction } from '@metamask/config-registry-controller';
 import type { GetGasFeeState } from '@metamask/gas-fee-controller';
 import type {
   KeyringControllerGetStateAction,
@@ -27,16 +28,25 @@ import type {
 } from '@metamask/ramps-controller';
 import type { RemoteFeatureFlagControllerGetStateAction } from '@metamask/remote-feature-flag-controller';
 import type { SentinelApiServiceActions } from '@metamask/sentinel-api-service';
+import type { SnapControllerHandleRequestAction } from '@metamask/snaps-controllers';
 import type {
   AuthorizationList,
+  ExternallyHandledPublishOutcome,
   TransactionControllerAddTransactionBatchAction,
+  TransactionControllerConfirmTransactionAction,
   TransactionControllerEstimateGasAction,
   TransactionControllerEstimateGasBatchAction,
+  TransactionControllerFailTransactionAction,
   TransactionControllerUnapprovedTransactionAddedEvent,
 } from '@metamask/transaction-controller';
 import type {
   BatchTransaction,
   BatchTransactionParams,
+  MetamaskPaySolanaExecution,
+  MetamaskPaySolanaFollowUpStatus,
+  MetamaskPaySolanaNotificationStatus,
+  MetamaskPaySolanaRelayStatus,
+  MetamaskPaySolanaSourceStatus,
   TransactionControllerAddTransactionAction,
   TransactionControllerGetGasFeeTokensAction,
   TransactionControllerGetStateAction,
@@ -44,7 +54,13 @@ import type {
   TransactionControllerUpdateTransactionAction,
   TransactionMeta,
 } from '@metamask/transaction-controller';
-import type { CaipAssetType, Hex, Json } from '@metamask/utils';
+import type {
+  CaipAccountId,
+  CaipAssetType,
+  CaipChainId,
+  Hex,
+  Json,
+} from '@metamask/utils';
 import type { Draft } from 'immer';
 
 import type {
@@ -60,6 +76,7 @@ export type AllowedActions =
   | AccountTreeControllerGetAccountGroupObjectAction
   | AccountsControllerGetStateAction
   | AssetsControllerGetStateAction
+  | ConfigRegistryControllerGetNetworkConfigByCaip2ChainIdAction
   | GetGasFeeState
   | KeyringControllerGetStateAction
   | KeyringControllerSignTypedMessageAction
@@ -70,10 +87,13 @@ export type AllowedActions =
   | RampsControllerGetQuoteWithFeesAction
   | RemoteFeatureFlagControllerGetStateAction
   | SentinelApiServiceActions
+  | SnapControllerHandleRequestAction
   | TransactionControllerAddTransactionAction
   | TransactionControllerAddTransactionBatchAction
+  | TransactionControllerConfirmTransactionAction
   | TransactionControllerEstimateGasAction
   | TransactionControllerEstimateGasBatchAction
+  | TransactionControllerFailTransactionAction
   | TransactionControllerGetGasFeeTokensAction
   | TransactionControllerGetStateAction
   | TransactionControllerUpdateTransactionAction;
@@ -274,6 +294,38 @@ export const KEYRING_TYPES_SUPPORTING_7702: `${KeyringTypes}`[] = [
   'Money Keyring',
 ];
 
+/** Derived lifecycle outcome of a Solana Pay execution. */
+export type SolanaPayOutcome =
+  | 'ready'
+  | 'attempting'
+  | 'submitted'
+  | 'user-rejected'
+  | 'not-submitted'
+  | 'unknown'
+  | 'source-failed'
+  | 'relay-failed'
+  | 'refunded'
+  | 'follow-up-failed'
+  | 'succeeded';
+
+/** Observed status of a Solana Pay execution, derived from its checkpoint. */
+export type SolanaPayStatus = {
+  outcome: SolanaPayOutcome;
+  phase: MetamaskPaySolanaExecution['phase'];
+  requestId: string;
+  sourceStatus: MetamaskPaySolanaSourceStatus;
+  relayStatus: MetamaskPaySolanaRelayStatus;
+  notificationStatus: MetamaskPaySolanaNotificationStatus;
+  followUpStatus: MetamaskPaySolanaFollowUpStatus;
+  sourceTransactionId?: string;
+  targetTransactionId?: string;
+  followUpTransactionId?: string;
+  sourceFailureReason?: string;
+  relayFailureReason?: string;
+  followUpFailureReason?: string;
+  submissionOutcome?: ExternallyHandledPublishOutcome;
+};
+
 /** Options for the TransactionPayController. */
 export type TransactionPayControllerOptions = {
   /**
@@ -294,6 +346,12 @@ export type TransactionPayControllerOptions = {
 
   /** Optional fiat execution configuration. */
   fiatOptions?: TransactionPayFiatOptions;
+
+  /**
+   * Infura project ID substituted for the `{infuraProjectId}` placeholder in
+   * RPC URLs from `ConfigRegistryController`, such as the Solana RPC URL.
+   */
+  infuraProjectId?: string;
 
   /**
    * Optional callback invoked during quote execution when `paymentOverride` is defined.
@@ -398,7 +456,7 @@ export type TransactionData = {
   paymentToken?: TransactionPaymentToken;
 
   /** Quotes retrieved for the transaction. */
-  quotes?: TransactionPayQuote<Json>[];
+  quotes?: TransactionPayQuote<Json, Hex | CaipChainId>[];
 
   /** Most relevant structured validation error from the latest quote attempt. */
   quoteError?: QuoteErrorInfo;
@@ -591,8 +649,40 @@ export type FiatRates = {
   usdRate: string;
 };
 
-/** Request for a quote to retrieve a required token. */
-export type QuoteRequest = {
+/**
+ * Request for a quote to retrieve a required token.
+ *
+ * The protocol of the source asset chain selects the execution path. EVM
+ * requests, the default, identify the source by Hex chain ID and token
+ * address. Non-EVM requests identify it by CAIP-2 chain ID and the CAIP-10
+ * source account instead.
+ */
+export type QuoteRequest<SourceChainId extends Hex | CaipChainId = Hex> =
+  QuoteRequestBase &
+    (SourceChainId extends Hex
+      ? EvmQuoteRequestSource
+      : NonEvmQuoteRequestSource);
+
+/** Source of a quote request using an EVM payment token. */
+type EvmQuoteRequestSource = {
+  /** Chain ID of the source token. */
+  sourceChainId: Hex;
+
+  /** Address of the source token. */
+  sourceTokenAddress: Hex;
+};
+
+/** Source of a quote request using a non-EVM payment token. */
+type NonEvmQuoteRequestSource = {
+  /** CAIP-10 account ID of the account holding the source token. */
+  sourceAccountId: CaipAccountId;
+
+  /** CAIP-2 chain ID of the source token. */
+  sourceChainId: CaipChainId;
+};
+
+/** Fields shared by quote requests for every source protocol. */
+type QuoteRequestBase = {
   /**
    * Selected account receiving post-quote output.
    * See {@link TransactionConfig.accountOverride}.
@@ -639,14 +729,14 @@ export type QuoteRequest = {
   /** Whether to skip processTransactions in relay-quotes. Defaults to `isPostQuote`. */
   skipProcessTransactions?: boolean;
 
+  /**
+   * CAIP-19 asset type of the source token. The protocol of its chain selects
+   * the strategy execution path.
+   */
+  sourceAssetId: CaipAssetType;
+
   /** Balance of the source token in atomic format without factoring token decimals. */
   sourceBalanceRaw: string;
-
-  /** Chain ID of the source token. */
-  sourceChainId: Hex;
-
-  /** Address of the source token. */
-  sourceTokenAddress: Hex;
 
   /** Amount of the required token in atomic format without factoring token decimals. */
   sourceTokenAmount: string;
@@ -697,7 +787,10 @@ export type TransactionPayFees = {
 };
 
 /** Quote returned to retrieve a required token using the payment token. */
-export type TransactionPayQuote<OriginalQuote> = {
+export type TransactionPayQuote<
+  OriginalQuote,
+  SourceChainId extends Hex | CaipChainId = Hex,
+> = {
   /** Additional amount provided by the quote beyond the minimum requested. */
   dust: FiatValue;
 
@@ -717,7 +810,7 @@ export type TransactionPayQuote<OriginalQuote> = {
   original: OriginalQuote;
 
   /** Associated quote request. */
-  request: QuoteRequest;
+  request: QuoteRequest<SourceChainId>;
 
   /**
    * Whether the target calls could not be embedded in the quote and must be
@@ -741,7 +834,9 @@ export type TransactionPayQuote<OriginalQuote> = {
 };
 
 /** Request to get quotes for a transaction. */
-export type PayStrategyGetQuotesRequest = {
+export type PayStrategyGetQuotesRequest<
+  SourceChainId extends Hex | CaipChainId = Hex,
+> = {
   /** Whether the account supports EIP-7702 authorization signing. */
   accountSupports7702: boolean;
 
@@ -758,8 +853,11 @@ export type PayStrategyGetQuotesRequest = {
   /** Controller messenger. */
   messenger: TransactionPayControllerMessenger;
 
-  /** Quote requests for required tokens. */
-  requests: QuoteRequest[];
+  /**
+   * Quote requests for required tokens. Strategies support or reject the
+   * requests based on the protocol of their `sourceAssetId`.
+   */
+  requests: QuoteRequest<SourceChainId>[];
 
   /**
    * Signal that aborts when a newer quote request supersedes this one.
@@ -773,7 +871,10 @@ export type PayStrategyGetQuotesRequest = {
 };
 
 /** Request to submit quotes for a transaction. */
-export type PayStrategyExecuteRequest<OriginalRequest> = {
+export type PayStrategyExecuteRequest<
+  OriginalQuote,
+  SourceChainId extends Hex | CaipChainId = Hex,
+> = {
   /** Whether the account supports EIP-7702 authorization signing. */
   accountSupports7702: boolean;
 
@@ -784,31 +885,37 @@ export type PayStrategyExecuteRequest<OriginalRequest> = {
   messenger: TransactionPayControllerMessenger;
 
   /** Quotes to be submitted. */
-  quotes: TransactionPayQuote<OriginalRequest>[];
+  quotes: TransactionPayQuote<OriginalQuote, SourceChainId>[];
 
   /** Metadata of the original target transaction. */
   transaction: TransactionMeta;
 };
 
 /** Request to get batch transactions for quotes. */
-export type PayStrategyGetBatchRequest<OriginalQuote> = {
+export type PayStrategyGetBatchRequest<
+  OriginalQuote,
+  SourceChainId extends Hex | CaipChainId = Hex,
+> = {
   /** Controller messenger. */
   messenger: TransactionPayControllerMessenger;
 
   /** Quotes for required tokens. */
-  quotes: TransactionPayQuote<OriginalQuote>[];
+  quotes: TransactionPayQuote<OriginalQuote, SourceChainId>[];
 
   /** Signal that aborts when a newer quote request supersedes this one. */
   signal?: AbortSignal;
 };
 
 /** Request to check whether retrieved quotes can be executed by a strategy. */
-export type PayStrategyCheckQuoteSupportRequest<OriginalQuote> = {
+export type PayStrategyCheckQuoteSupportRequest<
+  OriginalQuote,
+  SourceChainId extends Hex | CaipChainId = Hex,
+> = {
   /** Controller messenger. */
   messenger: TransactionPayControllerMessenger;
 
   /** Quotes returned by the strategy. */
-  quotes: TransactionPayQuote<OriginalQuote>[];
+  quotes: TransactionPayQuote<OriginalQuote, SourceChainId>[];
 
   /** Signal that aborts when a newer quote request supersedes this one. */
   signal?: AbortSignal;
@@ -819,8 +926,8 @@ export type PayStrategyCheckQuoteSupportRequest<OriginalQuote> = {
 
 /** Request to get refresh interval for a specific strategy. */
 export type PayStrategyGetRefreshIntervalRequest = {
-  /** Chain ID of the source or payment token. */
-  chainId: Hex;
+  /** Chain ID of the source or payment token, CAIP-2 for non-EVM sources. */
+  chainId: Hex | CaipChainId;
 
   /** Controller messenger. */
   messenger: TransactionPayControllerMessenger;
@@ -829,20 +936,43 @@ export type PayStrategyGetRefreshIntervalRequest = {
   transactionId: string;
 };
 
+/** Result of executing quotes for a transaction. */
+export type PayStrategyExecuteResult =
+  | {
+      /** Hash of the final transaction, if available. */
+      transactionHash?: Hex;
+    }
+  | {
+      /** Whether publication is owned by the strategy rather than local EVM RPC. */
+      externallyHandled: true;
+
+      /** Outcome of the external publication. */
+      outcome: ExternallyHandledPublishOutcome;
+
+      /** Reason the external transaction was not submitted, if known. */
+      error?: string;
+
+      transactionHash?: never;
+    };
+
 /** Strategy used to obtain required tokens for a transaction. */
-export type PayStrategy<OriginalQuote> = {
+export type PayStrategy<
+  OriginalQuote,
+  SourceChainId extends Hex | CaipChainId = Hex,
+> = {
   /**
-   * Check if the strategy supports the given request.
+   * Check if the strategy supports the given request, including the protocol
+   * of the source asset of each quote request.
    * Defaults to true if not implemented.
    */
   supports?: (
-    request: PayStrategyGetQuotesRequest,
+    request: PayStrategyGetQuotesRequest<Hex | CaipChainId>,
   ) => boolean | Promise<boolean>;
 
   /** Retrieve quotes for required tokens. */
   getQuotes: (
-    request: PayStrategyGetQuotesRequest,
-  ) => Promise<TransactionPayQuote<OriginalQuote>[]>;
+    request: PayStrategyGetQuotesRequest<SourceChainId>,
+  ) => Promise<TransactionPayQuote<OriginalQuote, SourceChainId>[]>;
 
   /**
    * Check if the returned quotes are supported after provider quote
@@ -853,12 +983,12 @@ export type PayStrategy<OriginalQuote> = {
    * authorization list.
    */
   checkQuoteSupport?: (
-    request: PayStrategyCheckQuoteSupportRequest<OriginalQuote>,
+    request: PayStrategyCheckQuoteSupportRequest<OriginalQuote, SourceChainId>,
   ) => boolean | Promise<boolean>;
 
   /** Retrieve batch transactions for quotes, if supported by the strategy. */
   getBatchTransactions?: (
-    request: PayStrategyGetBatchRequest<OriginalQuote>,
+    request: PayStrategyGetBatchRequest<OriginalQuote, SourceChainId>,
   ) => Promise<BatchTransaction[]>;
 
   /**
@@ -870,9 +1000,9 @@ export type PayStrategy<OriginalQuote> = {
   ) => Promise<number | undefined>;
 
   /** Execute or submit the quotes to obtain required tokens. */
-  execute: (request: PayStrategyExecuteRequest<OriginalQuote>) => Promise<{
-    transactionHash?: Hex;
-  }>;
+  execute: (
+    request: PayStrategyExecuteRequest<OriginalQuote, SourceChainId>,
+  ) => Promise<PayStrategyExecuteResult>;
 };
 
 /** Single fiat value in alternate currencies. */

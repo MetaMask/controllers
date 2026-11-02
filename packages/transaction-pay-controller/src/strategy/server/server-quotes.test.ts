@@ -76,6 +76,7 @@ const COMPLEX_TRANSACTION_META_MOCK = {
 
 const QUOTE_REQUEST_MOCK: QuoteRequest = {
   from: FROM_MOCK,
+  sourceAssetId: `eip155:1/erc20:${SOURCE_TOKEN_ADDRESS_MOCK}`,
   sourceBalanceRaw: '10000000000000000000',
   sourceChainId: '0x1',
   sourceTokenAddress: SOURCE_TOKEN_ADDRESS_MOCK,

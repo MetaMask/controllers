@@ -84,6 +84,7 @@ function getFiatQuoteMock({
       from: RECIPIENT_ADDRESS_MOCK,
       isDirectMusdMoneyAccount,
       recipient: MONEY_ACCOUNT_ADDRESS_MOCK,
+      sourceAssetId: `eip155:143/erc20:${sourceTokenAddress}`,
       sourceBalanceRaw: '12340000',
       sourceChainId: CHAIN_ID_MOCK,
       sourceTokenAddress,

@@ -1,3 +1,5 @@
+import type { CaipChainId, Hex } from '@metamask/utils';
+
 import { TransactionPayStrategy } from '../constants.js';
 import { AcrossStrategy } from '../strategy/across/AcrossStrategy.js';
 import { FiatStrategy } from '../strategy/fiat/FiatStrategy.js';
@@ -11,7 +13,7 @@ import type {
 
 export type NamedStrategy = {
   name: TransactionPayStrategy;
-  strategy: PayStrategy<unknown>;
+  strategy: PayStrategy<unknown, Hex | CaipChainId>;
 };
 
 /**
@@ -22,7 +24,7 @@ export type NamedStrategy = {
  */
 export function getStrategyByName(
   strategyName: TransactionPayStrategy,
-): PayStrategy<unknown> {
+): PayStrategy<unknown, Hex | CaipChainId> {
   switch (strategyName) {
     case TransactionPayStrategy.Across:
       return new AcrossStrategy() as never;
@@ -80,8 +82,8 @@ export function getStrategiesByName(
  * @returns Whether the strategy supports the request.
  */
 export async function checkStrategySupport(
-  strategy: PayStrategy<unknown>,
-  request: PayStrategyGetQuotesRequest,
+  strategy: PayStrategy<unknown, Hex | CaipChainId>,
+  request: PayStrategyGetQuotesRequest<Hex | CaipChainId>,
 ): Promise<boolean> {
   return strategy.supports ? await strategy.supports(request) : true;
 }
@@ -96,8 +98,8 @@ export async function checkStrategySupport(
  * @returns Whether the strategy supports the quotes.
  */
 export async function checkStrategyQuoteSupport(
-  strategy: PayStrategy<unknown>,
-  request: PayStrategyCheckQuoteSupportRequest<unknown>,
+  strategy: PayStrategy<unknown, Hex | CaipChainId>,
+  request: PayStrategyCheckQuoteSupportRequest<unknown, Hex | CaipChainId>,
 ): Promise<boolean> {
   if (strategy.checkQuoteSupport) {
     return await strategy.checkQuoteSupport(request);

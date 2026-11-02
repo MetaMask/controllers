@@ -57,6 +57,7 @@ describe('AcrossStrategy', () => {
     requests: [
       {
         from: '0xabc',
+        sourceAssetId: 'eip155:1/erc20:0xabc',
         sourceBalanceRaw: '100',
         sourceChainId: '0x1',
         sourceTokenAddress: '0xabc',
@@ -104,6 +105,25 @@ describe('AcrossStrategy', () => {
     });
   });
 
+  it('returns false when a request has a non-EVM source asset', () => {
+    const strategy = new AcrossStrategy();
+
+    expect(
+      strategy.supports({
+        ...baseRequest,
+        requests: [
+          {
+            ...baseRequest.requests[0],
+            sourceAccountId:
+              'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:7Ec4QeG8wF3RnTjHDrTuYP8hVV7WYuPFyM4hZUodkG6Z',
+            sourceAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
+            sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
   it('returns false when across is disabled', () => {
     getPayStrategiesConfigMock.mockReturnValue({
       across: {
@@ -132,6 +152,7 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
@@ -154,6 +175,7 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
@@ -164,6 +186,7 @@ describe('AcrossStrategy', () => {
           },
           {
             from: '0xabc',
+            sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
@@ -185,6 +208,7 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
@@ -207,6 +231,7 @@ describe('AcrossStrategy', () => {
           {
             from: '0xabc',
             isMaxAmount: true,
+            sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: '0x1',
             sourceTokenAddress: '0xabc',
@@ -239,6 +264,7 @@ describe('AcrossStrategy', () => {
           {
             from: '0xabc',
             isPostQuote: true,
+            sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: '0x1',
             sourceTokenAddress: '0xabc',
@@ -261,6 +287,7 @@ describe('AcrossStrategy', () => {
           {
             from: '0xabc',
             isPostQuote: true,
+            sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: '0x1',
             sourceTokenAddress: '0xabc',
@@ -305,6 +332,7 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: '0x1',
             sourceTokenAddress: '0xabc',

@@ -32,6 +32,7 @@ const HYPERLIQUID_SOURCE_REQUEST_MOCK: QuoteRequest = {
   from: ADDRESS_MOCK,
   isHyperliquidSource: true,
   isPostQuote: true,
+  sourceAssetId: 'eip155:1337/erc20:0x00000000000000000000000000000000',
   sourceBalanceRaw: SOURCE_AMOUNT_MOCK,
   sourceChainId: '0x539',
   sourceTokenAddress: '0x00000000000000000000000000000000',

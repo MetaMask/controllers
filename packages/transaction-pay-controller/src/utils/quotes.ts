@@ -1,10 +1,14 @@
 import { TransactionStatus } from '@metamask/transaction-controller';
 import type { BatchTransaction } from '@metamask/transaction-controller';
 import type { TransactionMeta } from '@metamask/transaction-controller';
-import type { Hex, Json } from '@metamask/utils';
-import { createModuleLogger } from '@metamask/utils';
+import type { CaipChainId, Hex, Json } from '@metamask/utils';
+import { createModuleLogger, parseCaipAssetType } from '@metamask/utils';
 
-import { PaymentOverride, TransactionPayStrategy } from '../constants.js';
+import {
+  DEFAULT_QUOTE_REFRESH_INTERVAL,
+  PaymentOverride,
+  TransactionPayStrategy,
+} from '../constants.js';
 import { projectLogger } from '../logger.js';
 import type {
   EvmPaymentToken,
@@ -23,6 +27,7 @@ import type {
 import { accountSupports7702 } from './7702.js';
 import {
   getAssetAccount,
+  getCaipAccountId,
   getEvmAccountAddress,
   getEvmAccountOverride,
 } from './account.js';
@@ -36,6 +41,7 @@ import {
   getStrategyByName,
 } from './strategy.js';
 import {
+  buildCaipAssetType,
   computeTokenAmounts,
   getAssetBalance,
   getAssetFiatRate,
@@ -43,12 +49,11 @@ import {
   getLiveTokenBalance,
   getTokenFiatRate,
   isNonEvmPaymentToken,
+  isNonEvmQuoteRequest,
 } from './token.js';
 import { calculateTotals } from './totals.js';
 import { getTransaction, updateTransaction } from './transaction.js';
 import { isQuoteError } from './validation.js';
-
-const DEFAULT_REFRESH_INTERVAL = 30 * 1000; // 30 Seconds
 
 const log = createModuleLogger(projectLogger, 'quotes');
 
@@ -172,6 +177,7 @@ export async function updateQuotes(
       paymentOverride,
       paymentToken,
       refundTo,
+      sourceAccount,
       sourceAmounts: latestSourceAmounts,
       tokens,
       transactionId,
@@ -350,6 +356,9 @@ function syncTransaction({
         bridgeFeeFiat: totals.fees.provider.usd,
         chainId: evmPaymentToken?.chainId,
         isPostQuote,
+        ...(tx.metamaskPay?.solanaExecution && {
+          solanaExecution: tx.metamaskPay.solanaExecution,
+        }),
         networkFeeFiat: totals.fees.sourceNetwork.estimate.usd,
         strategy,
         targetFiat: totals.targetAmount.usd,
@@ -401,7 +410,7 @@ export async function refreshQuotes(
         chainId: quotes[0].request.sourceChainId,
         messenger,
         transactionId,
-      })) ?? DEFAULT_REFRESH_INTERVAL;
+      })) ?? DEFAULT_QUOTE_REFRESH_INTERVAL;
 
     const isExpired = Date.now() - (quotesLastUpdated ?? 0) > refreshInterval;
 
@@ -479,10 +488,12 @@ function getSourceAmounts(
 }
 
 /**
- * Build quote requests required to retrieve quotes using an EVM payment token.
+ * Build quote requests required to retrieve quotes.
  *
- * Returns no requests for a non-EVM payment token, which no strategy quotes
- * yet.
+ * Every request identifies its source by CAIP-19 asset type. A non-EVM
+ * payment token also identifies the CAIP-10 account holding it, and has no
+ * token address. Post-quote flows with a non-EVM destination token are not
+ * supported and return no requests.
  *
  * @param request - Request parameters.
  * @param request.accountOverride - Optional account receiving post-quote output.
@@ -495,6 +506,7 @@ function getSourceAmounts(
  * @param request.paymentOverride - Optional payment override type for the transaction.
  * @param request.paymentToken - Payment token (source for standard flows, destination for post-quote).
  * @param request.refundTo - Optional address to receive refunds if the Relay transaction fails.
+ * @param request.sourceAccount - Account holding a non-EVM payment token.
  * @param request.sourceAmounts - Source amounts for the transaction.
  * @param request.tokens - Required tokens for the transaction.
  * @param request.transactionId - ID of the transaction.
@@ -511,6 +523,7 @@ function buildQuoteRequests({
   paymentOverride,
   paymentToken,
   refundTo,
+  sourceAccount,
   sourceAmounts,
   tokens,
   transactionId,
@@ -525,17 +538,22 @@ function buildQuoteRequests({
   paymentOverride?: PaymentOverride;
   paymentToken: TransactionPaymentToken | undefined;
   refundTo?: Hex;
+  sourceAccount: AssetAccount | undefined;
   sourceAmounts: TransactionPaySourceAmount[] | undefined;
   tokens: TransactionPayRequiredToken[];
   transactionId: string;
-}): QuoteRequest[] {
-  const evmPaymentToken = getEvmPaymentToken(paymentToken);
-
-  if (!evmPaymentToken) {
+}): QuoteRequest<Hex | CaipChainId>[] {
+  if (!paymentToken) {
     return [];
   }
 
+  const evmPaymentToken = getEvmPaymentToken(paymentToken);
+
   if (isPostQuote) {
+    if (!evmPaymentToken) {
+      return [];
+    }
+
     return buildPostQuoteRequests({
       accountOverride,
       atomic,
@@ -551,6 +569,19 @@ function buildQuoteRequests({
     });
   }
 
+  const source = evmPaymentToken
+    ? {
+        sourceChainId: evmPaymentToken.chainId,
+        sourceTokenAddress: evmPaymentToken.address,
+      }
+    : {
+        sourceAccountId: getCaipAccountId(
+          paymentToken.assetId,
+          sourceAccount as AssetAccount,
+        ),
+        sourceChainId: parseCaipAssetType(paymentToken.assetId).chainId,
+      };
+
   // Standard flow: source = paymentToken, target = required tokens
   const requests = (sourceAmounts ?? []).map((sourceAmount) => {
     const token = tokens.find(
@@ -563,9 +594,9 @@ function buildQuoteRequests({
       isMaxAmount,
       paymentOverride,
       refundTo,
-      sourceBalanceRaw: evmPaymentToken.balanceRaw,
-      sourceChainId: evmPaymentToken.chainId,
-      sourceTokenAddress: evmPaymentToken.address,
+      ...source,
+      sourceAssetId: paymentToken.assetId,
+      sourceBalanceRaw: paymentToken.balanceRaw,
       sourceTokenAmount: sourceAmount.sourceAmountRaw,
       targetAmountMinimum: token.allowUnderMinimum ? '0' : token.amountRaw,
       targetChainId: token.chainId,
@@ -653,6 +684,10 @@ function buildPostQuoteRequests({
     isPostQuote: true,
     paymentOverride,
     refundTo,
+    sourceAssetId: buildCaipAssetType(
+      sourceAmount.sourceChainId,
+      sourceAmount.sourceTokenAddress,
+    ),
     sourceBalanceRaw: sourceAmount.sourceBalanceRaw,
     sourceChainId: sourceAmount.sourceChainId,
     sourceTokenAddress: sourceAmount.sourceTokenAddress,
@@ -832,7 +867,7 @@ function refreshNonEvmPaymentTokenBalance({
 async function getQuotes(
   transaction: TransactionMeta,
   from: Hex,
-  requests: QuoteRequest[],
+  requests: QuoteRequest<Hex | CaipChainId>[],
   paymentToken: TransactionPaymentToken | undefined,
   isQuoteRequired: boolean,
   isAccountEIP7702Compatible: boolean,
@@ -843,7 +878,7 @@ async function getQuotes(
 ): Promise<{
   batchTransactions: BatchTransaction[];
   error?: QuoteErrorInfo;
-  quotes: TransactionPayQuote<Json>[];
+  quotes: TransactionPayQuote<Json, Hex | CaipChainId>[];
 }> {
   const { id: transactionId } = transaction;
   const strategies = getStrategiesByName(
@@ -902,18 +937,28 @@ async function getQuotes(
         continue;
       }
 
-      const quotes = (await strategy.getQuotes(
-        request,
-      )) as TransactionPayQuote<Json>[];
+      const quotes = (await strategy.getQuotes(request)) as TransactionPayQuote<
+        Json,
+        Hex | CaipChainId
+      >[];
 
       if (!quotes.length) {
         log('Strategy returned no quotes', { strategy: name, transactionId });
         continue;
       }
 
+      // Non-EVM quotes are signed outside the EVM batch, so the EVM-only
+      // post-quote support check and batch transactions do not apply.
+      if (requests.some(isNonEvmQuoteRequest)) {
+        log('Updated non-EVM quotes', { transactionId, quotes });
+        return { batchTransactions: [], quotes };
+      }
+
+      const evmQuotes = quotes as TransactionPayQuote<Json>[];
+
       const isQuoteSupported = await checkStrategyQuoteSupport(strategy, {
         messenger,
-        quotes,
+        quotes: evmQuotes,
         signal,
         transaction,
       });
@@ -931,7 +976,7 @@ async function getQuotes(
       const batchTransactions = strategy.getBatchTransactions
         ? await strategy.getBatchTransactions({
             messenger,
-            quotes,
+            quotes: evmQuotes,
             signal,
           })
         : [];
@@ -963,7 +1008,10 @@ async function getQuotes(
         return {
           batchTransactions: [],
           error: caughtError.info,
-          quotes: caughtError.quotes as TransactionPayQuote<Json>[],
+          quotes: caughtError.quotes as TransactionPayQuote<
+            Json,
+            Hex | CaipChainId
+          >[],
         };
       }
 

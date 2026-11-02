@@ -135,6 +135,8 @@ const QUOTE_MOCK = {
   original: ORIGINAL_QUOTE_MOCK,
   request: {
     from: QUOTE_FROM_MOCK,
+    sourceAssetId:
+      'eip155:137/erc20:0x5555555555555555555555555555555555555555',
     sourceBalanceRaw: '10000000',
     sourceChainId: SOURCE_CHAIN_ID_MOCK,
     sourceTokenAddress: '0x5555555555555555555555555555555555555555',
