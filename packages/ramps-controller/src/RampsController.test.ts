@@ -18,6 +18,7 @@ import {
   buildBrazilMusdAutorampRequest,
 } from './autorampAccount.js';
 import { MONEY_HEADLESS_ALL_PROVIDERS_FLAG_KEY } from './featureFlags.js';
+import type { NeoBankCustomerAbilities } from './NeoBankService.js';
 import type {
   AutorampTransactionStatusChangedPayload,
   RampsControllerMessenger,
@@ -10163,14 +10164,20 @@ describe('RampsController', () => {
     });
 
     describe('refreshCustomerAbilities', () => {
-      const abilities = {
+      const abilities: NeoBankCustomerAbilities = {
         fiat_deposit: {
           usd: { ach: 'Pending', ach_thirdparty: 'Pending' },
         },
         fiat_payout: {},
-        currencies: [],
+        currencies: [
+          {
+            currency: { type: 'Fiat', code: 'USD' },
+            flows: ['Onramp', 'Offramp'],
+            counterparts: [],
+          },
+        ],
         blocking_abilities: {},
-      } as const;
+      };
 
       it('stores and returns the abilities from NeoBankService', async () => {
         await withController(async ({ controller, rootMessenger }) => {

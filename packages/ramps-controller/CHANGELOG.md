@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `NeoBankService.getCustomerAbilities`, exposed on the messenger, which returns the customer's rail abilities from neobank-proxy unmodified, and the `NeoBankCustomerAbilities`, `NeoBankFiatAbilities` and `NeoBankAbilityStatus` types ([#11225](https://github.com/MetaMask/core/pull/11225))
+- Add `NeoBankService.getCustomerAbilities`, exposed on the messenger, which returns the customer's rail abilities from neobank-proxy unmodified, and the `NeoBankCustomerAbilities`, `NeoBankFiatAbilities`, `NeoBankAbilityStatus`, `NeoBankCurrencyAbility` and `NeoBankAbilityCurrency` types ([#11225](https://github.com/MetaMask/core/pull/11225))
   - MoonPay rejects an autoramp create with a 422 when the rail it needs is not `Active`, so clients can check the rail first. Any non-2xx response throws an `HttpError`.
 - Add `RampsController.refreshCustomerAbilities`, exposed on the messenger, which stores the result in the new `vbaCustomerAbilities` state ([#11225](https://github.com/MetaMask/core/pull/11225))
   - The state is not persisted. A failed fetch throws and keeps the stored value. Discarding a VBA session owned by another profile clears it.

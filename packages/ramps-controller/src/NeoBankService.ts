@@ -129,6 +129,23 @@ export type NeoBankFiatAbilities = Record<
 >;
 
 /**
+ * A MoonPay currency, as it appears in a customer's currency abilities.
+ */
+export type NeoBankAbilityCurrency =
+  | { type: 'Fiat'; code: string }
+  | { type: 'Crypto'; token: string; blockchain: string };
+
+/**
+ * What a MoonPay customer can do with one currency.
+ */
+export type NeoBankCurrencyAbility = {
+  currency: NeoBankAbilityCurrency;
+  flows: ('Onramp' | 'Offramp' | 'Swap' | 'Mint' | 'Redeem')[];
+  /** Mint/redeem counterparts. Empty except for mint-only brand tokens. */
+  counterparts: NeoBankAbilityCurrency[];
+};
+
+/**
  * A MoonPay customer's rail abilities. Shape mirrors MoonPay
  * `GET /api/customers/{id}/abilities` and is returned unmodified.
  */
@@ -138,7 +155,7 @@ export type NeoBankCustomerAbilities = {
   // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
   fiat_payout: NeoBankFiatAbilities;
   /** What the customer can do with each currency it can currently use. */
-  currencies: unknown[];
+  currencies: NeoBankCurrencyAbility[];
   /** Why a rail is `Unavailable`, keyed by rail name (e.g. `ach`). */
   // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
   blocking_abilities: Record<string, string>;
