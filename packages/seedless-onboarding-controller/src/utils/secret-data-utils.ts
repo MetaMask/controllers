@@ -4,6 +4,7 @@ import { EncAccountDataType } from '@metamask/toprf-secure-backup';
 
 import { SecretType } from '../constants.js';
 import { InvalidPrimarySecretDataTypeError } from '../errors.js';
+import { isRecoveryKeysItem } from '../mfa-recovery/recovery-keys.js';
 import { SecretMetadata } from '../SecretMetadata.js';
 import type { SocialBackupsMetadata } from '../types.js';
 
@@ -20,7 +21,8 @@ export type SecretBackupData = Omit<SocialBackupsMetadata, 'hash'> & {
  * Parse and sort secret metadata fetched from the metadata store.
  *
  * Primary SRP items are ordered first, then remaining items by client
- * timestamp (oldest first). This does not require a primary mnemonic.
+ * timestamp (oldest first). This does not require a primary mnemonic. The
+ * MFA recovery-keys item is not a user secret and is left out.
  *
  * @param secretDataItems - The encrypted metadata items fetched from storage.
  * @returns The parsed secret metadata in sort order.
@@ -28,14 +30,16 @@ export type SecretBackupData = Omit<SocialBackupsMetadata, 'hash'> & {
 export function parseSecretMetadata(
   secretDataItems: FetchedSecretDataItem[],
 ): SecretMetadata[] {
-  const results: SecretMetadata[] = secretDataItems.map((item) =>
-    SecretMetadata.fromRawMetadata(item.data, {
-      itemId: item.itemId,
-      dataType: item.dataType,
-      createdAt: item.createdAt,
-      storageVersion: item.version,
-    }),
-  );
+  const results: SecretMetadata[] = secretDataItems
+    .filter((item) => !isRecoveryKeysItem(item.data))
+    .map((item) =>
+      SecretMetadata.fromRawMetadata(item.data, {
+        itemId: item.itemId,
+        dataType: item.dataType,
+        createdAt: item.createdAt,
+        storageVersion: item.version,
+      }),
+    );
 
   // Sort: PrimarySrp first, then by client timestamp (oldest first).
   results.sort((a, b) => SecretMetadata.compare(a, b, 'asc'));

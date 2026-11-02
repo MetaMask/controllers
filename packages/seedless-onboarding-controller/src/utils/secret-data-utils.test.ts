@@ -16,6 +16,10 @@ import {
 import { SecretType } from '../constants.js';
 import { InvalidPrimarySecretDataTypeError } from '../errors.js';
 import {
+  derivePubKey,
+  serializeRecoveryKeysItem,
+} from '../mfa-recovery/recovery-keys.js';
+import {
   getDataTypeMigrationUpdates,
   getNewSocialBackupsMetadata,
   parseAndValidateSecretMetadataBackup,
@@ -59,6 +63,27 @@ describe('secret data utilities', () => {
 
       expect(results.map((result) => result.itemId)).toStrictEqual([
         'imported-srp',
+      ]);
+    });
+
+    it('leaves out the MFA recovery-keys item', () => {
+      const results = parseSecretMetadata([
+        {
+          itemId: 'recovery-keys',
+          data: serializeRecoveryKeysItem({
+            recoveryEncKey: new Uint8Array(32).fill(1),
+            recoveryAuthKeyPair: { sk: 1n, pk: derivePubKey(1n) },
+          }),
+          version: 'v1',
+        },
+        createFetchedSecretDataItem({
+          ...PrimarySRP2,
+          itemId: 'primary-srp',
+        }),
+      ]);
+
+      expect(results.map((result) => result.itemId)).toStrictEqual([
+        'primary-srp',
       ]);
     });
   });

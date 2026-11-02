@@ -302,6 +302,55 @@ export type SeedlessOnboardingControllerRefreshAuthTokensAction = {
 };
 
 /**
+ * Authenticate on the `toprf-recovery` verifier with the aal2 token and
+ * store the issued node auth tokens, the token's `exp` and `sub` (profile
+ * ID), and whether a share already exists, as `recoverySession`. The aal1 `nodeAuthTokens`,
+ * `accessToken` and `metadataAccessToken` are left as they are.
+ *
+ * @param params - The function parameters.
+ * @param params.aal2Token - The aal2 token minted by the authentication API.
+ * Its `exp` caps the lifetime of the aal2 node auth tokens.
+ * @returns A promise that resolves once the aal2 set is stored.
+ */
+export type SeedlessOnboardingControllerAuthenticateForRecoveryAction = {
+  type: `SeedlessOnboardingController:authenticateForRecovery`;
+  handler: SeedlessOnboardingController['authenticateForRecovery'];
+};
+
+/**
+ * Compute the MFA recovery status from the remote stores. Makes no writes.
+ *
+ * Needs the unlocked vault and aal1. The recovery-keys item is checked
+ * against the `toprf-recovery` share only with an aal2 set; without one the
+ * result is `verified: false`.
+ *
+ * @returns The recovery status.
+ */
+export type SeedlessOnboardingControllerGetRecoveryStatusAction = {
+  type: `SeedlessOnboardingController:getRecoveryStatus`;
+  handler: SeedlessOnboardingController['getRecoveryStatus'];
+};
+
+/**
+ * Register the TOPRF2 (recovery secret) keys for the account (flow 1).
+ *
+ * Reuses the `toprf-recovery` share if the nodes already hold one, writes
+ * the vault's TOPRF1 keys into the wrapped-keys item (TOPRF2 namespace),
+ * then writes the recovery-keys item into the TOPRF1 namespace under the
+ * metadata lock. Call {@link authenticateForRecovery} first.
+ *
+ * @param params - The function parameters.
+ * @param params.recoverySecret - The 32-byte recovery secret held in escrow.
+ * @returns Whether the vault's TOPRF1 key was still the live key after the
+ * recovery-keys item was written. If not, the item landed in an abandoned
+ * namespace; sync the password and run this again.
+ */
+export type SeedlessOnboardingControllerStoreRecoveryKeysAction = {
+  type: `SeedlessOnboardingController:storeRecoveryKeys`;
+  handler: SeedlessOnboardingController['storeRecoveryKeys'];
+};
+
+/**
  * Rotate the refresh token — fetch a new refresh/revoke token pair from the
  * auth service and persist the new revoke token in the vault.
  *
@@ -400,6 +449,9 @@ export type SeedlessOnboardingControllerMethodActions =
   | SeedlessOnboardingControllerStoreKeyringEncryptionKeyAction
   | SeedlessOnboardingControllerLoadKeyringEncryptionKeyAction
   | SeedlessOnboardingControllerRefreshAuthTokensAction
+  | SeedlessOnboardingControllerAuthenticateForRecoveryAction
+  | SeedlessOnboardingControllerGetRecoveryStatusAction
+  | SeedlessOnboardingControllerStoreRecoveryKeysAction
   | SeedlessOnboardingControllerRotateRefreshTokenAction
   | SeedlessOnboardingControllerRevokePendingRefreshTokensAction
   | SeedlessOnboardingControllerGetAccessTokenAction

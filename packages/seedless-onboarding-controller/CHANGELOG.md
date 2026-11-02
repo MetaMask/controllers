@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
+- Add `authenticateForRecovery`, `getRecoveryStatus` and `storeRecoveryKeys` methods and the matching `SeedlessOnboardingController:authenticateForRecovery`, `SeedlessOnboardingController:getRecoveryStatus` and `SeedlessOnboardingController:storeRecoveryKeys` messenger actions ([#0000](https://github.com/MetaMask/core/pull/0000))
+  - `authenticateForRecovery` authenticates on the `toprf-recovery` verifier, using the aal2 token as the id token and its `sub` (profile ID) as the user ID.
+- Add non-persisted `recoverySession` state, holding the `toprf-recovery` node auth tokens, their expiry, the profile ID and whether the nodes hold a recovery share, cleared on lock and `clearState` ([#0000](https://github.com/MetaMask/core/pull/0000))
+  - Also export the `RecoverySession` type.
+- Add `RecoveryStatus` and `RecoveryStatusResult` types, where `RecoveryStatusResult` has `status`, `verified` and an optional `hasRecoveryShare` ([#0000](https://github.com/MetaMask/core/pull/0000))
+- Add MFA recovery constants `TOPRF_RECOVERY_VERIFIER` (`'toprf-recovery'`), `RECOVERY_KEYS_PREFIX` and `WRAPPED_KEYS_PREFIX`, and `RecoveryKeys`/`WrappedKeySet` types ([#0000](https://github.com/MetaMask/core/pull/0000))
+  - The recovery-keys item is stored next to the secret data items as secret metadata with the `mfaRecoveryKeys` type and no data type, so it is re-encrypted on password change.
+  - Clients that treat every secret that is not a private key as a mnemonic cannot restore an account holding this item; only enable MFA recovery for client versions that use this release.
+- Add `Aal2Required`, `RecoveryKeyShareConflict` and `InvalidRecoveryKeysItem` error messages ([#0000](https://github.com/MetaMask/core/pull/0000))
 
 ### Changed
 
@@ -18,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
 - Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
+- Leave the MFA recovery-keys item out of the secret data returned by `fetchAllSecretData` and used for the metadata backup checks ([#0000](https://github.com/MetaMask/core/pull/0000))
+- Bump `@metamask/auth-network-utils` from `^0.3.0` to `^0.4.0` ([#0000](https://github.com/MetaMask/core/pull/0000))
 
 ## [12.0.0]
 
