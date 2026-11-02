@@ -7,4 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Initial release ([#10699](https://github.com/MetaMask/core/pull/10699))
+  - Add `MoneyAccountLifecycleController`, which tracks whether the primary Money Account is a single-factor (SFA) or multi-factor (MFA) account using CHOMP derived identities
+  - Add `init`, `refresh`, `getMoneyAccountIdentity`, and `upgradeMoneyAccount` methods, each also exposed through the messenger
+
 [Unreleased]: https://github.com/MetaMask/core/
