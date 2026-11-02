@@ -164,15 +164,12 @@ export function handleMockGetUserAssets(mockReply?: MockReply): nock.Scope {
 
 export function handleMockSetUserAssets(
   mockReply?: MockReply,
-  callback?: (uri: string, requestBody: nock.Body) => Promise<void>,
+  expectedRequestBody?: nock.RequestBodyMatcher,
 ): nock.Scope {
   const reply = mockReply ?? { status: 200 };
-  const interceptor = nock(MOCK_USER_ASSETS_URL).persist().put('');
+  const interceptor = nock(MOCK_USER_ASSETS_URL)
+    .persist()
+    .put('', expectedRequestBody);
 
-  if (callback) {
-    return interceptor.reply(reply.status, async (uri, requestBody) => {
-      return callback(uri, requestBody);
-    });
-  }
   return interceptor.reply(reply.status, reply.body);
 }
