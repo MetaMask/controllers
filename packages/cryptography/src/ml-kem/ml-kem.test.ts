@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import * as mlKem1024 from './ml-kem-1024.js';
 import * as mlKem512 from './ml-kem-512.js';
 import * as mlKem768 from './ml-kem-768.js';
+import * as mlKem1024 from './ml-kem-1024.js';
 
 type WycheproofVector = {
   seed: string;
