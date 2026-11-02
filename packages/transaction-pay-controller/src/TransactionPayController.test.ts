@@ -1052,7 +1052,7 @@ describe('TransactionPayController', () => {
     });
 
     describe('Solana Pay diagnostics', () => {
-      let lifecycleListener: jest.Mock;
+      let lifecycleListener: Mock;
 
       function publishTransactions(transactions: TransactionMeta[]): void {
         mocks.publish(
@@ -1063,7 +1063,7 @@ describe('TransactionPayController', () => {
       }
 
       beforeEach(() => {
-        lifecycleListener = jest.fn();
+        lifecycleListener = vi.fn();
         messenger.subscribe(
           'TransactionPayController:solanaPayLifecycle',
           lifecycleListener,

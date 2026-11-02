@@ -2,6 +2,7 @@ import type {
   MetamaskPaySolanaExecution,
   MetamaskPaySource,
 } from '@metamask/transaction-controller';
+import { describe, expect, it } from 'vitest';
 
 import {
   getSolanaPaySupportDiagnostics,
