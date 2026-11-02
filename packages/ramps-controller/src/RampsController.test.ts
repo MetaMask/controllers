@@ -203,6 +203,7 @@ describe('RampsController', () => {
             },
             "userRegion": null,
             "vbaAutorampListFetchedAt": null,
+            "vbaCustomerAbilities": null,
           }
         `);
       });
@@ -283,6 +284,7 @@ describe('RampsController', () => {
             },
             "userRegion": null,
             "vbaAutorampListFetchedAt": null,
+            "vbaCustomerAbilities": null,
           }
         `);
       });
@@ -2658,6 +2660,7 @@ describe('RampsController', () => {
             },
             "userRegion": null,
             "vbaAutorampListFetchedAt": null,
+            "vbaCustomerAbilities": null,
           }
         `);
       });
@@ -2703,6 +2706,7 @@ describe('RampsController', () => {
               "selected": null,
             },
             "userRegion": null,
+            "vbaCustomerAbilities": null,
           }
         `);
       });
@@ -2794,6 +2798,7 @@ describe('RampsController', () => {
             },
             "userRegion": null,
             "vbaAutorampListFetchedAt": null,
+            "vbaCustomerAbilities": null,
           }
         `);
       });
@@ -10157,6 +10162,54 @@ describe('RampsController', () => {
       });
     });
 
+    describe('refreshCustomerAbilities', () => {
+      const abilities = {
+        fiat_deposit: {
+          usd: { ach: 'Pending', ach_thirdparty: 'Pending' },
+        },
+        fiat_payout: {},
+        currencies: [],
+        blocking_abilities: {},
+      } as const;
+
+      it('stores and returns the abilities from NeoBankService', async () => {
+        await withController(async ({ controller, rootMessenger }) => {
+          const getCustomerAbilities = vi.fn().mockResolvedValue(abilities);
+          rootMessenger.registerActionHandler(
+            'NeoBankService:getCustomerAbilities',
+            getCustomerAbilities,
+          );
+
+          expect(await controller.refreshCustomerAbilities()).toStrictEqual(
+            abilities,
+          );
+          expect(getCustomerAbilities).toHaveBeenCalledTimes(1);
+          expect(controller.state.vbaCustomerAbilities).toStrictEqual(
+            abilities,
+          );
+        });
+      });
+
+      it('keeps the stored abilities when the fetch fails', async () => {
+        await withController(
+          { options: { state: { vbaCustomerAbilities: abilities } } },
+          async ({ controller, rootMessenger }) => {
+            rootMessenger.registerActionHandler(
+              'NeoBankService:getCustomerAbilities',
+              vi.fn().mockRejectedValue(new Error('proxy down')),
+            );
+
+            await expect(controller.refreshCustomerAbilities()).rejects.toThrow(
+              'proxy down',
+            );
+            expect(controller.state.vbaCustomerAbilities).toStrictEqual(
+              abilities,
+            );
+          },
+        );
+      });
+    });
+
     it('injects the Profile Sync customer id and applies the created autoramp', async () => {
       await withController(async ({ controller, rootMessenger }) => {
         rootMessenger.registerActionHandler(
@@ -11272,6 +11325,14 @@ describe('RampsController', () => {
                 },
               },
               vbaAutorampListFetchedAt: 2,
+              vbaCustomerAbilities: {
+                fiat_deposit: {
+                  brl: { pix: 'Active', pix_thirdparty: 'Active' },
+                },
+                fiat_payout: {},
+                currencies: [],
+                blocking_abilities: {},
+              },
             },
           },
         },
@@ -11305,6 +11366,7 @@ describe('RampsController', () => {
           expect(controller.state.autoramps).toStrictEqual([]);
           expect(controller.state.autorampTransactionRecords).toStrictEqual({});
           expect(controller.state.vbaAutorampListFetchedAt).toBeNull();
+          expect(controller.state.vbaCustomerAbilities).toBeNull();
         },
       );
     });

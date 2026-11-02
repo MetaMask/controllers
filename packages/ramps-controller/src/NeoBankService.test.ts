@@ -1195,6 +1195,109 @@ describe('NeoBankService', () => {
     });
   });
 
+  describe('getCustomerAbilities', () => {
+    const CUSTOMER_PATH = '/neobank/customers/canonical-profile-1/external';
+    const ABILITIES_PATH = '/neobank/customers/iron-customer-1/abilities';
+
+    const abilities = {
+      fiat_deposit: {
+        brl: { pix: 'Active', pix_thirdparty: 'Active' },
+        usd: { ach: 'Pending', ach_thirdparty: 'Unavailable' },
+      },
+      fiat_payout: {
+        brl: { pix: 'Active', pix_thirdparty: 'Active' },
+      },
+      currencies: [],
+      blocking_abilities: { ach_thirdparty: 'rule engine preflight' },
+    };
+
+    /**
+     * Stubs the customer lookup that `getCustomerAbilities` performs first.
+     *
+     * @returns The nock scope for the lookup.
+     */
+    function mockCustomerLookup(): nock.Scope {
+      return nock(STAGING_BASE)
+        .get(CUSTOMER_PATH)
+        .reply(200, { id: 'iron-customer-1' });
+    }
+
+    it('returns the abilities unchanged', async () => {
+      const customerScope = mockCustomerLookup();
+      const scope = nock(STAGING_BASE)
+        .get(ABILITIES_PATH)
+        .query({ sdk: /.+/u, controller: /.+/u, context: 'test' })
+        .matchHeader('Authorization', 'Bearer test-token')
+        .reply(200, abilities);
+
+      const service = createService();
+
+      expect(await service.getCustomerAbilities()).toStrictEqual(abilities);
+      expect(customerScope.isDone()).toBe(true);
+      expect(scope.isDone()).toBe(true);
+    });
+
+    it('throws an HttpError when the customer does not exist yet (404)', async () => {
+      nock(STAGING_BASE).get(CUSTOMER_PATH).reply(404, 'customer not found');
+
+      const service = createService();
+
+      await expect(service.getCustomerAbilities()).rejects.toMatchObject({
+        httpStatus: 404,
+      });
+    });
+
+    it('throws an HttpError carrying the upstream body on a 5xx', async () => {
+      mockCustomerLookup();
+      nock(STAGING_BASE)
+        .get(ABILITIES_PATH)
+        .query(true)
+        .reply(500, 'upstream exploded');
+
+      const service = createService();
+
+      await expect(service.getCustomerAbilities()).rejects.toThrow(
+        /status '500' - upstream exploded/u,
+      );
+    });
+
+    it.each([
+      ['an array', []],
+      ['an object without fiat_deposit', { fiat_payout: {} }],
+      ['a null fiat_deposit', { fiat_deposit: null }],
+    ])('throws when the body is %s', async (_label, body) => {
+      mockCustomerLookup();
+      nock(STAGING_BASE).get(ABILITIES_PATH).query(true).reply(200, body);
+
+      const service = createService();
+
+      await expect(service.getCustomerAbilities()).rejects.toThrow(
+        'Malformed response received from neo-bank abilities API',
+      );
+    });
+
+    it('shares the customer id lookup with getMicrodeposits', async () => {
+      const customerScope = nock(STAGING_BASE)
+        .get(CUSTOMER_PATH)
+        .once()
+        .reply(200, { id: 'iron-customer-1' });
+      nock(STAGING_BASE).get(ABILITIES_PATH).query(true).reply(200, abilities);
+      nock(STAGING_BASE)
+        .get('/neobank/customers/iron-customer-1/microdeposits')
+        .query(true)
+        .reply(200, []);
+
+      const service = createService();
+
+      await Promise.all([
+        service.getCustomerAbilities(),
+        service.getMicrodeposits(),
+      ]);
+
+      expect(customerScope.isDone()).toBe(true);
+    });
+  });
+
   describe('Money Account wallet registration', () => {
     it('resolves the Iron customer id via neobank customer lookup', async () => {
       nock(STAGING_BASE)

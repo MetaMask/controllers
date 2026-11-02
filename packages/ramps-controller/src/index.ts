@@ -51,6 +51,7 @@ export type {
   RampsControllerRefreshAutorampAction,
   RampsControllerRefreshAutorampsAction,
   RampsControllerRefreshAutorampTransactionsAction,
+  RampsControllerRefreshCustomerAbilitiesAction,
   RampsControllerStartOrderPollingAction,
   RampsControllerStopOrderPollingAction,
   RampsControllerGetBuyWidgetDataAction,
@@ -287,6 +288,7 @@ export type {
   AutorampAccount,
   ApplyAutorampRemoteStatusResult,
   CreateAutorampRequest,
+  MusdAutorampDepositRailReadiness,
 } from './autorampAccount.js';
 export {
   AutorampStatus,
@@ -299,6 +301,7 @@ export {
   markAutorampNotified,
   buildMusdAutorampRequest,
   buildBrazilMusdAutorampRequest,
+  getMusdAutorampDepositRailReadiness,
 } from './autorampAccount.js';
 export { buildOwnershipMessage } from './ownership-message.js';
 export type {
@@ -322,6 +325,9 @@ export type {
   NeoBankServiceMessenger,
   NeoBankAutorampResponse,
   NeoBankMicrodeposit,
+  NeoBankAbilityStatus,
+  NeoBankCustomerAbilities,
+  NeoBankFiatAbilities,
   NeoBankRequestOptions,
   NeoBankQueryParams,
   GetWalletRegistrationStatusParams,
@@ -341,6 +347,7 @@ export type {
   NeoBankServiceGetCustomerByExternalIdAction,
   NeoBankServiceGetMoonpayCustomerIdAction,
   NeoBankServiceGetMicrodepositsAction,
+  NeoBankServiceGetCustomerAbilitiesAction,
   NeoBankServiceGetWalletRegistrationStatusAction,
   NeoBankServiceRegisterSelfHostedWalletAction,
 } from './NeoBankService-method-action-types.js';
