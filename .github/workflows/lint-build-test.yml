@@ -22,10 +22,10 @@ jobs:
             24.x
             26.x
           ALL: ${{
-              github.ref_name == 'main' ||
-              startsWith(github.head_ref, 'release/') ||
-              startsWith(github.base_ref, 'release/') ||
-              startsWith(github.event.merge_group.base_ref, 'refs/heads/release/')
+            github.ref_name == 'main' ||
+            startsWith(github.head_ref, 'release/') ||
+            startsWith(github.base_ref, 'release/') ||
+            startsWith(github.event.merge_group.base_ref, 'refs/heads/release/')
             }}
         run: |
           supported=$(jq --raw-input --slurp --compact-output 'split("\n") | map(select(. != ""))' <<< "$SUPPORTED_VERSIONS")
