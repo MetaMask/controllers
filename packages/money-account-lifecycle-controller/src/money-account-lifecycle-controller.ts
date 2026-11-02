@@ -140,6 +140,8 @@ export class MoneyAccountLifecycleController extends BaseController<
 
   #derivedIdentitiesRequest?: Promise<DerivedIdentitiesResponse>;
 
+  #isFetchingDerivedIdentities = false;
+
   #derivedIdentities?: DerivedIdentity[];
 
   readonly #upgradesInFlight = new Map<string, Promise<void>>();
@@ -253,6 +255,7 @@ export class MoneyAccountLifecycleController extends BaseController<
    * lifecycle and registration statuses. CHOMP cannot push updates, so clients
    * call this to pick up changes made elsewhere, such as another device
    * migrating the Money Account to MFA (for example, when a screen gains focus).
+   * Joins a fetch already in flight instead of starting another.
    *
    * @returns A promise that resolves once the latest fetch has been recorded,
    * or straight away when the feature is disabled or the wallet is not ready.
@@ -263,7 +266,9 @@ export class MoneyAccountLifecycleController extends BaseController<
       return;
     }
 
-    this.#fetchDerivedIdentities();
+    if (!this.#isFetchingDerivedIdentities) {
+      this.#fetchDerivedIdentities();
+    }
     await this.#waitForLatestDerivedIdentities();
   }
 
@@ -271,14 +276,16 @@ export class MoneyAccountLifecycleController extends BaseController<
    * Triggers the Money Account upgrade process for the primary Money Account,
    * including its EIP-7702 upgrade, through `MoneyAccountUpgradeController`.
    * Only a Money Account that is not in an identity or is a valid SFA is
-   * upgraded. Makes a single attempt; clients decide when to call it and how to
-   * retry. Concurrent calls share the attempt in flight.
+   * upgraded, judged from the latest identity fetch. Makes a single attempt;
+   * clients decide when to call it and how to retry. Concurrent calls share the
+   * attempt in flight. After upgrading, refetches identities so the recorded
+   * lifecycle reflects the upgrade.
    *
    * @returns A promise that resolves once the attempt completes, or straight
    * away when the feature is disabled, the wallet is not ready, or the Money
    * Account cannot be upgraded.
    * @throws When there is no Money Account, or the error from fetching
-   * identities or from the upgrade, unchanged.
+   * identities before upgrading or from the upgrade, unchanged.
    */
   async upgradeMoneyAccount(): Promise<void> {
     if (!this.#isReady()) {
@@ -307,15 +314,13 @@ export class MoneyAccountLifecycleController extends BaseController<
   }
 
   async #upgradeMoneyAccount(moneyAccountAddress: string): Promise<void> {
-    const moneyAccountKey = moneyAccountAddress.toLowerCase();
-    if (!this.state.moneyAccounts[moneyAccountKey]) {
-      await this.#waitForLatestDerivedIdentities();
-      if (!this.#isReady()) {
-        return;
-      }
+    await this.#waitForLatestDerivedIdentities();
+    if (!this.#isReady()) {
+      return;
     }
 
-    const lifecycle = this.state.moneyAccounts[moneyAccountKey];
+    const lifecycle =
+      this.state.moneyAccounts[moneyAccountAddress.toLowerCase()];
     if (lifecycle?.type !== 'sfa' && lifecycle?.type !== 'notInIdentity') {
       return;
     }
@@ -324,9 +329,12 @@ export class MoneyAccountLifecycleController extends BaseController<
       'MoneyAccountUpgradeController:upgradeAccount',
       moneyAccountAddress as Hex,
     );
-    await this.#fetchRegistrationStatus(moneyAccountAddress).catch(
-      (error: unknown) => this.#reportError(error),
-    );
+    if (!this.#isReady()) {
+      return;
+    }
+
+    this.#fetchDerivedIdentities();
+    await this.#waitForLatestDerivedIdentities().catch(() => undefined);
   }
 
   async #waitForLatestDerivedIdentities(): Promise<void> {
@@ -336,7 +344,18 @@ export class MoneyAccountLifecycleController extends BaseController<
 
     let request = this.#derivedIdentitiesRequest;
     while (request) {
-      await request;
+      try {
+        await request;
+      } catch (error) {
+        // A failed latest request clears #derivedIdentitiesRequest, which may
+        // happen before this resumes, so only a newer request supersedes it.
+        if (
+          !this.#derivedIdentitiesRequest ||
+          this.#derivedIdentitiesRequest === request
+        ) {
+          throw error;
+        }
+      }
       request =
         this.#derivedIdentitiesRequest === request
           ? undefined
@@ -364,6 +383,7 @@ export class MoneyAccountLifecycleController extends BaseController<
       if (!this.#isReady(remoteFeatureFlags)) {
         this.#syncedRemoteFeatureFlags = undefined;
         this.#derivedIdentitiesRequest = undefined;
+        this.#isFetchingDerivedIdentities = false;
         this.#derivedIdentities = undefined;
         return;
       }
@@ -385,10 +405,12 @@ export class MoneyAccountLifecycleController extends BaseController<
   #fetchDerivedIdentities(): void {
     const request = this.messenger.call('ChompApiService:getDerivedIdentities');
     this.#derivedIdentitiesRequest = request;
+    this.#isFetchingDerivedIdentities = true;
 
     request
       .then(({ identities }) => {
         if (this.#derivedIdentitiesRequest === request) {
+          this.#isFetchingDerivedIdentities = false;
           this.#derivedIdentities = identities;
           this.#updateMoneyAccountLifecycle({ isRehydrating: true });
         }
@@ -397,6 +419,7 @@ export class MoneyAccountLifecycleController extends BaseController<
         if (this.#derivedIdentitiesRequest === request) {
           this.#syncedRemoteFeatureFlags = undefined;
           this.#derivedIdentitiesRequest = undefined;
+          this.#isFetchingDerivedIdentities = false;
         }
         this.#reportError(error);
       });

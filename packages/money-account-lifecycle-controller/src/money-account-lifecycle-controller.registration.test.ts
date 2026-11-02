@@ -150,6 +150,7 @@ describe('MoneyAccountLifecycleController', () => {
           await init();
 
           await controller.upgradeMoneyAccount();
+          await flushPromises();
 
           expect(mocks.upgradeAccount).toHaveBeenCalledTimes(1);
           expect(mocks.upgradeAccount).toHaveBeenCalledWith(
@@ -199,7 +200,7 @@ describe('MoneyAccountLifecycleController', () => {
       await withController(async ({ controller, mocks }) => {
         await controller.upgradeMoneyAccount();
 
-        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(1);
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
         expect(controller.state.moneyAccounts).toStrictEqual({
           [MONEY_ACCOUNT_KEY]: { type: 'sfa', identity: SFA_IDENTITY },
         });
@@ -220,7 +221,7 @@ describe('MoneyAccountLifecycleController', () => {
         resolve({ identities: [SFA_IDENTITY] });
         await upgrade;
 
-        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(1);
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
         expect(mocks.upgradeAccount).toHaveBeenCalledWith(
           MONEY_ACCOUNT_ADDRESS,
         );
@@ -236,10 +237,58 @@ describe('MoneyAccountLifecycleController', () => {
 
         await controller.upgradeMoneyAccount();
 
-        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(3);
         expect(mocks.upgradeAccount).toHaveBeenCalledWith(
           MONEY_ACCOUNT_ADDRESS,
         );
+      });
+    });
+
+    it('waits for the identity fetch in flight even when a lifecycle was persisted', async () => {
+      await withController(
+        {
+          options: {
+            state: {
+              moneyAccounts: {
+                [MONEY_ACCOUNT_KEY]: { type: 'sfa', identity: SFA_IDENTITY },
+              },
+            },
+          },
+        },
+        async ({ controller, mocks, init }) => {
+          const { promise, resolve } =
+            createDeferredPromise<DerivedIdentitiesResponse>();
+          mocks.getDerivedIdentities.mockReturnValueOnce(promise);
+          await init();
+
+          const upgrade = controller.upgradeMoneyAccount();
+          resolve({ identities: [MIGRATING_IDENTITY] });
+          await upgrade;
+
+          expect(mocks.upgradeAccount).not.toHaveBeenCalled();
+        },
+      );
+    });
+
+    it('resolves with the newer identities when a fetch it waited for is superseded and fails', async () => {
+      await withController(async ({ controller, mocks, init, refetch }) => {
+        const { promise, reject } =
+          createDeferredPromise<DerivedIdentitiesResponse>();
+        mocks.getDerivedIdentities
+          .mockReturnValueOnce(promise)
+          .mockResolvedValue({ identities: [MFA_IDENTITY] });
+        await init();
+
+        const upgrade = controller.upgradeMoneyAccount();
+        await refetch();
+        reject(new Error('CHOMP unavailable'));
+        await upgrade;
+
+        expect(getLifecycle(controller)).toStrictEqual({
+          type: 'mfa',
+          identity: MFA_IDENTITY,
+        });
+        expect(mocks.upgradeAccount).not.toHaveBeenCalled();
       });
     });
 
@@ -334,6 +383,61 @@ describe('MoneyAccountLifecycleController', () => {
       });
     });
 
+    it('refetches identities after upgrading and records the new lifecycle', async () => {
+      await withController(async ({ controller, mocks, init }) => {
+        mocks.getDerivedIdentities
+          .mockResolvedValueOnce({ identities: [] })
+          .mockResolvedValue({ identities: [SFA_IDENTITY] });
+        await init();
+
+        await controller.upgradeMoneyAccount();
+
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
+        expect(getLifecycle(controller)).toStrictEqual({
+          type: 'sfa',
+          identity: SFA_IDENTITY,
+        });
+        expect(controller.getMoneyAccountIdentity()).toStrictEqual({
+          currentAddress: MONEY_ACCOUNT_ADDRESS,
+          previousAddresses: [],
+          status: 'DONE',
+        });
+      });
+    });
+
+    it('does not refetch identities after upgrading when the wallet locked during the upgrade', async () => {
+      await withController(
+        async ({ controller, mocks, gates, init, triggerKeyringChange }) => {
+          const { promise, resolve } = createDeferredPromise<void>();
+          mocks.upgradeAccount.mockReturnValueOnce(promise);
+          await init();
+
+          const upgrade = controller.upgradeMoneyAccount();
+          await flushPromises();
+          gates.isUnlocked = false;
+          await triggerKeyringChange();
+          resolve();
+          await upgrade;
+
+          expect(mocks.upgradeAccount).toHaveBeenCalledTimes(1);
+          expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(1);
+        },
+      );
+    });
+
+    it('reports a failed identity refetch after upgrading, without rejecting', async () => {
+      await withController(async ({ controller, mocks, init }) => {
+        await init();
+        const error = new Error('CHOMP unavailable');
+        mocks.getDerivedIdentities.mockRejectedValueOnce(error);
+
+        await controller.upgradeMoneyAccount();
+
+        expect(mocks.upgradeAccount).toHaveBeenCalledTimes(1);
+        expect(mocks.captureException).toHaveBeenCalledWith(error);
+      });
+    });
+
     it('reports a failed registration status refresh after upgrading, without rejecting', async () => {
       await withController(async ({ controller, mocks, init }) => {
         await init();
@@ -341,6 +445,7 @@ describe('MoneyAccountLifecycleController', () => {
         mocks.getRegistrationStatus.mockRejectedValueOnce(error);
 
         await controller.upgradeMoneyAccount();
+        await flushPromises();
 
         expect(mocks.upgradeAccount).toHaveBeenCalledTimes(1);
         expect(mocks.captureException).toHaveBeenCalledWith(error);

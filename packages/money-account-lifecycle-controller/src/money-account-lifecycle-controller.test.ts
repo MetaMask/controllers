@@ -406,25 +406,60 @@ describe('MoneyAccountLifecycleController', () => {
       });
     });
 
-    it('supersedes a fetch in flight so its stale response is discarded', async () => {
+    it('joins a fetch in flight instead of starting another', async () => {
       await withController(async ({ controller, mocks }) => {
         const { promise, resolve } =
           createDeferredPromise<DerivedIdentitiesResponse>();
-        mocks.getDerivedIdentities
-          .mockReturnValueOnce(promise)
-          .mockResolvedValueOnce({ identities: [MFA_IDENTITY] });
+        mocks.getDerivedIdentities.mockReturnValueOnce(promise);
         controller.init();
 
-        const refresh = controller.refresh();
-        resolve({ identities: [SFA_IDENTITY] });
-        await refresh;
-        await flushPromises();
+        const first = controller.refresh();
+        const second = controller.refresh();
+        resolve({ identities: [MFA_IDENTITY] });
+        await Promise.all([first, second]);
 
-        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(1);
         expect(getLifecycle(controller)).toStrictEqual({
           type: 'mfa',
           identity: MFA_IDENTITY,
         });
+      });
+    });
+
+    it('resolves with the newer fetch when a superseded fetch fails', async () => {
+      await withController(async ({ controller, mocks, refetch }) => {
+        const { promise, reject } =
+          createDeferredPromise<DerivedIdentitiesResponse>();
+        mocks.getDerivedIdentities
+          .mockReturnValueOnce(promise)
+          .mockResolvedValue({ identities: [MFA_IDENTITY] });
+        controller.init();
+
+        const refresh = controller.refresh();
+        await refetch();
+        reject(new Error('CHOMP unavailable'));
+
+        expect(await refresh).toBeUndefined();
+        expect(getLifecycle(controller)).toStrictEqual({
+          type: 'mfa',
+          identity: MFA_IDENTITY,
+        });
+      });
+    });
+
+    it('rejects with the error when a fetch it joined fails', async () => {
+      await withController(async ({ controller, mocks }) => {
+        const error = new Error('CHOMP unavailable');
+        const { promise, reject } =
+          createDeferredPromise<DerivedIdentitiesResponse>();
+        mocks.getDerivedIdentities.mockReturnValueOnce(promise);
+        controller.init();
+
+        const refresh = controller.refresh();
+        reject(error);
+
+        await expect(refresh).rejects.toBe(error);
+        expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(1);
       });
     });
 
