@@ -66,6 +66,11 @@ function isRetryableError(error: unknown): boolean {
 const AutorampResponseStruct = type({ id: size(string(), 1, Infinity) });
 
 /**
+ * The validated body of an autoramp response.
+ */
+type AutorampResponseBody = Infer<typeof AutorampResponseStruct>;
+
+/**
  * An autoramp payload read only for its `deposit_rails`: any object is
  * accepted, and {@link extractPixDepositInstructions} tolerates anything in
  * `deposit_rails`.
@@ -816,7 +821,7 @@ export class NeoBankService extends BaseDataService<
       gcTime: 0,
       responseStruct: AutorampResponseStruct,
       queryFn: async () =>
-        this.#getJson<Infer<typeof AutorampResponseStruct>>(
+        this.#getJson<AutorampResponseBody>(
           `autoramps/${encodeURIComponent(autorampId)}`,
         ),
     });
@@ -840,7 +845,7 @@ export class NeoBankService extends BaseDataService<
   async getAutoramps(
     params: { customerId?: string } = {},
   ): Promise<AutorampRemoteSnapshot[]> {
-    const autoramps: Infer<typeof AutorampResponseStruct>[] = [];
+    const autoramps: AutorampResponseBody[] = [];
     const seenCursors = new Set<string>();
     let cursor: string | undefined;
 
@@ -1054,11 +1059,7 @@ export class NeoBankService extends BaseDataService<
       gcTime: 0,
       responseStruct: AutorampResponseStruct,
       mutationFn: async () =>
-        this.#postJson<Infer<typeof AutorampResponseStruct>>(
-          'autoramps',
-          body,
-          options,
-        ),
+        this.#postJson<AutorampResponseBody>('autoramps', body, options),
     });
     return mapNeoBankAutorampToRemoteSnapshot(
       response as NeoBankAutorampResponse,
