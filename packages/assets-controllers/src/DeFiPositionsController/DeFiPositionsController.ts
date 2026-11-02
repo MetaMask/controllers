@@ -16,11 +16,11 @@ import type { TransactionControllerTransactionConfirmedEvent } from '@metamask/t
 import type { Hex } from '@metamask/utils';
 
 import { calculateDeFiPositionMetrics } from './calculate-defi-metrics.js';
+import type { DeFiPositionsControllerMethodActions } from './DeFiPositionsController-method-action-types.js';
 import type { DefiPositionResponse } from './fetch-positions.js';
 import { buildPositionFetcher } from './fetch-positions.js';
 import { groupDeFiPositions } from './group-defi-positions.js';
 import type { GroupedDeFiPositions } from './group-defi-positions.js';
-import type { DeFiPositionsControllerMethodActions } from './DeFiPositionsController-method-action-types.js';
 
 const TEN_MINUTES_IN_MS = 600_000;
 

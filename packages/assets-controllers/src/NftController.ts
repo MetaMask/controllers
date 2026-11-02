@@ -53,7 +53,6 @@ import type {
   AssetsContractControllerGetERC721AssetSymbolAction,
   AssetsContractControllerGetERC721TokenURIAction,
 } from './AssetsContractController-method-action-types.js';
-import type { NftControllerMethodActions } from './NftController-method-action-types.js';
 import {
   compareNftMetadata,
   getFormattedIpfsUrl,
@@ -63,6 +62,7 @@ import {
 import { Source } from './constants.js';
 import { getNftOwnershipForMultipleNfts } from './multicall.js';
 import type { NftOwnershipResult } from './multicall.js';
+import type { NftControllerMethodActions } from './NftController-method-action-types.js';
 import type {
   ApiNftContract,
   ReservoirResponse,
