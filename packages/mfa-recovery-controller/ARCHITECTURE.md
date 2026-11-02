@@ -69,8 +69,8 @@ matches the hash computed over its hex-encoded form.
 
 Public surface (all exposed as messenger actions): `register`,
 `updateRecoverySecret`, `updateIdentifiers`, `authenticateIdentifier`,
-`getRecoverySecret`, `getIdentifiers`, `repairReplicas`, `resume`, `abort`,
-`getPhase`, `acquireLock`, `renewLock`, `releaseLock` (see
+`getRecoverySecret`, `getIdentifiers`, `resume`, `abort`, `getPhase`,
+`acquireLock`, `renewLock`, `releaseLock` (see
 [Recovery Lock](README.md#recovery-lock)).
 
 `getIdentifiers` takes an AAL1 approval and returns the enrolled identifiers
@@ -90,23 +90,22 @@ stateDiagram-v2
   writing --> writing: more receipts, still missing replicas
   writing --> idle: every target escrow has a valid receipt
   writing --> idle: every remaining escrow rejects
-  writing --> idle: abort() after the approval expired, write not applied
   writing --> writing: resume() retries only missing receipts
   authorizing --> writing: resume() authorizes then writes
 ```
 
 Rules:
 
-- **`abort()`** drops `authorizing`. It drops `writing` only when there are no
-  receipts, the approval has expired, and every target escrow is still at
-  `expectedVersion`; otherwise `abort_not_allowed`.
+- **`abort()`** drops `authorizing` only. `writing` must `resume()`
+  (`abort_not_allowed`).
 - `writing` is persisted before the **first escrow apply**, after the
   AuthController token is issued, every target escrow has accepted identifier
   authorization, and the per-escrow payloads are wrapped. An ambiguous apply
   failure remains resumable, while pre-write failures stay abortable.
 - `register` / `updateRecoverySecret` / `updateIdentifiers` require idle
   pending state (`pending_mutation`). `resume()` finishes a persisted
-  mutation and is a no-op when idle.
+  mutation. When idle it is a no-op, or repairs lagging replicas if given an
+  identifier.
 
 ### Pending state validation
 
@@ -225,11 +224,12 @@ Versioning:
 - An escrow with no record reports version `0`. New mutations require every
   escrow at the same version (`replica_lagging`).
 
-`repairReplicas(identifier)` reads every escrow's version and identifiers. Escrows
-one version behind the highest get one mutation addressed only to them:
-`register` if they have no record, `updateIdentifiers` if their identifiers
-differ, otherwise `updateRecoverySecret` with the secret read from the highest
-escrow. Escrows further behind fail with `replica_corruption`.
+`resume(identifier)` with no pending mutation reads every escrow's version and
+identifiers. Escrows one version behind the highest get one mutation
+addressed only to them: `register` if they have no record,
+`updateIdentifiers` if their identifiers differ, otherwise
+`updateRecoverySecret` with the secret read from the highest escrow. Escrows
+further behind fail with `replica_corruption`.
 
 `resume()` is the same write path without creating a new mutation:
 authorizing pending gets a fresh token then replicates; writing pending

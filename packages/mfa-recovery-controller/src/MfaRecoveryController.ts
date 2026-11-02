@@ -42,9 +42,8 @@ import {
   pendingPayloadHasIdentifiers,
   pendingPayloadHasRecoverySecret,
 } from './pending-operation-validation.js';
-import { getRecoveryPhase } from './state-machine.js';
+import { assertAbortAllowed, getRecoveryPhase } from './state-machine.js';
 import type {
-  AuthControllerToken,
   GetIdentifiersResponse,
   Identifier,
   IdentifierAuthorization,
@@ -81,7 +80,6 @@ const MESSENGER_EXPOSED_METHODS = [
   'authenticateIdentifier',
   'getRecoverySecret',
   'getIdentifiers',
-  'repairReplicas',
   'resume',
   'abort',
   'getPhase',
@@ -553,95 +551,33 @@ export class MfaRecoveryController extends BaseController<
   }
 
   /**
-   * Copies the highest escrow record to escrows one version behind it. Call
-   * it when a mutation fails with `replica_lagging`.
+   * Completes a persisted pending mutation. With none pending and an
+   * `identifier`, copies the highest escrow record to escrows one version
+   * behind it; pass one when a mutation fails with `replica_lagging`.
    *
    * @param identifier - Enrolled identifier, used to read the secret and to
-   * authorize the update.
+   * authorize a replica repair. Unused while a mutation is pending.
    */
-  async repairReplicas(identifier: Identifier): Promise<void> {
-    this.#assertValidIdentifiers([identifier]);
-    await this.#assertEscrowsAvailable(this.#escrows);
-    const replicas = await this.#readReplicas(this.#escrows);
-    const epoch = Math.max(...replicas.map(({ version }) => version));
-    const [leader] = replicas.filter(({ version }) => version === epoch);
-    const laggingEscrows = this.#escrows.filter(
-      (_, index) => replicas[index].version < epoch,
-    );
-    if (laggingEscrows.length === 0) {
-      return;
-    }
-    if (replicas.some(({ version }) => version < epoch - 1)) {
-      throw new MfaRecoveryError(
-        'Escrows are more than one version apart',
-        'replica_corruption',
-      );
-    }
-
-    const identifierHashes = await Promise.all(
-      replicas.map(async ({ identifiers }) => await hash(identifiers)),
-    );
-    if (epoch > 1 && new Set(identifierHashes).size > 1) {
-      await this.#mutate(
-        {
-          operation: 'updateIdentifiers',
-          payload: { identifiers: leader.identifiers },
-          identifier,
-          epoch: epoch - 1,
-        },
-        laggingEscrows,
-      );
-      return;
-    }
-
-    const secret = await this.getRecoverySecret(
-      await this.authenticateIdentifier(identifier),
-    );
-    if (secret.epoch !== epoch) {
-      throw new MfaRecoveryError(
-        'Could not read the highest escrow record',
-        'read_failed',
-      );
-    }
-    const recoverySecret = bytesToHex(secret.recoverySecret);
-    await this.#mutate(
-      epoch === 1
-        ? {
-            operation: 'register',
-            payload: { identifiers: leader.identifiers, recoverySecret },
-            identifier: null,
-            epoch: 0,
-          }
-        : {
-            operation: 'updateRecoverySecret',
-            payload: { recoverySecret },
-            identifier,
-            epoch: epoch - 1,
-          },
-      laggingEscrows,
-    );
-  }
-
-  /**
-   * Completes a persisted pending mutation, if any.
-   */
-  async resume(): Promise<void> {
-    await this.#withLock(async () => {
-      await this.#repairPendingMutation();
+  async resume(identifier?: Identifier): Promise<void> {
+    const hadPending = await this.#withLock(async () => {
+      const pending = await this.#loadPending();
+      if (pending) {
+        await this.#finishPendingMutation(pending);
+      }
+      return pending !== null;
     });
+    if (!hadPending && identifier) {
+      await this.#repairReplicas(identifier);
+    }
   }
 
   /**
-   * Drops the pending mutation. A `writing` one is dropped only once its
-   * approval has expired, it has no receipts, and every target escrow is still
-   * at `expectedVersion`.
+   * Drops `authorizing` pending. `writing` must be finished with {@link resume}.
    */
   async abort(): Promise<void> {
     await this.#withLock(async () => {
       const pending = await this.#loadPending();
-      if (pending?.phase === 'writing') {
-        await this.#assertNotApplied(pending);
-      }
+      assertAbortAllowed(pending);
       if (pending) {
         await this.#clearPending();
       }
@@ -671,7 +607,7 @@ export class MfaRecoveryController extends BaseController<
       const replicas = await this.#readReplicas(escrows);
       if (new Set(replicas.map(({ version }) => version)).size > 1) {
         throw new MfaRecoveryError(
-          'Escrows are at different versions; call repairReplicas',
+          'Escrows are at different versions; call resume with an identifier',
           'replica_lagging',
         );
       }
@@ -736,12 +672,7 @@ export class MfaRecoveryController extends BaseController<
     return { authControllerToken: approval, approvedIdentifiers: identifiers };
   }
 
-  async #repairPendingMutation(): Promise<void> {
-    const pending = await this.#loadPending();
-    if (!pending) {
-      return;
-    }
-
+  async #finishPendingMutation(pending: PendingOperation): Promise<void> {
     if (pending.phase === 'authorizing') {
       await this.#assertEscrowsAvailable(
         this.#getTargetEscrows(pending.mutation),
@@ -769,9 +700,11 @@ export class MfaRecoveryController extends BaseController<
 
     await this.#assertEscrowsAvailable(remainingEscrows);
 
-    const writing = this.#isApprovalLive(pending.authControllerToken)
-      ? pending
-      : { ...pending, ...(await this.#authorizeMutation(mutation)) };
+    const claims = decodeAuthControllerToken(pending.authControllerToken);
+    const writing =
+      claims && claims.exp > this.#now()
+        ? pending
+        : { ...pending, ...(await this.#authorizeMutation(mutation)) };
     await this.#assertPending(writing);
     const authorizations = await this.#authorizeEscrows(
       writing,
@@ -822,6 +755,75 @@ export class MfaRecoveryController extends BaseController<
     await this.#clearPending();
   }
 
+  // Runs outside the controller lock: `#mutate` and `getRecoverySecret` take it.
+  async #repairReplicas(identifier: Identifier): Promise<void> {
+    this.#assertValidIdentifiers([identifier]);
+    await this.#assertEscrowsAvailable(this.#escrows);
+    const replicas = await this.#readReplicas(this.#escrows);
+    const epoch = Math.max(...replicas.map(({ version }) => version));
+    if (replicas.some(({ version }) => version < epoch - 1)) {
+      throw new MfaRecoveryError(
+        'Escrows are more than one version apart',
+        'replica_corruption',
+      );
+    }
+    const laggingEscrows = this.#escrows.filter(
+      (_, index) => replicas[index].version < epoch,
+    );
+    if (laggingEscrows.length === 0) {
+      return;
+    }
+    await this.#mutate(
+      await this.#getRepairParams(identifier, replicas, epoch),
+      laggingEscrows,
+    );
+  }
+
+  // Lagging escrows are at `epoch - 1`: replay the write they missed.
+  async #getRepairParams(
+    identifier: Identifier,
+    replicas: GetIdentifiersResponse[],
+    epoch: number,
+  ): Promise<MutateParams> {
+    const [leader] = replicas.filter(({ version }) => version === epoch);
+    const identifierHashes = await Promise.all(
+      replicas.map(async ({ identifiers }) => await hash(identifiers)),
+    );
+    if (epoch > 1 && new Set(identifierHashes).size > 1) {
+      return {
+        operation: 'updateIdentifiers',
+        payload: { identifiers: leader.identifiers },
+        identifier,
+        epoch: epoch - 1,
+      };
+    }
+
+    const secret = await this.getRecoverySecret(
+      await this.authenticateIdentifier(identifier),
+    );
+    if (secret.epoch !== epoch) {
+      throw new MfaRecoveryError(
+        'Could not read the highest escrow record',
+        'read_failed',
+      );
+    }
+    const recoverySecret = bytesToHex(secret.recoverySecret);
+    if (epoch === 1) {
+      return {
+        operation: 'register',
+        payload: { identifiers: leader.identifiers, recoverySecret },
+        identifier: null,
+        epoch: 0,
+      };
+    }
+    return {
+      operation: 'updateRecoverySecret',
+      payload: { recoverySecret },
+      identifier,
+      epoch: epoch - 1,
+    };
+  }
+
   // Every escrow must answer; a missing record reads as version 0.
   async #readReplicas(
     escrows: RecoveryEscrowProvider[],
@@ -833,34 +835,6 @@ export class MfaRecoveryController extends BaseController<
     return await Promise.all(
       escrows.map(async (escrow) => await escrow.getIdentifiers(approval)),
     );
-  }
-
-  // An expired approval can no longer land, so matching versions prove the
-  // write never happened.
-  async #assertNotApplied({
-    mutation,
-    receipts,
-    authControllerToken,
-  }: WritingPendingOperation): Promise<void> {
-    if (receipts.length === 0 && !this.#isApprovalLive(authControllerToken)) {
-      const replicas = await this.#readReplicas(
-        this.#getTargetEscrows(mutation),
-      );
-      if (
-        replicas.every(({ version }) => version === mutation.expectedVersion)
-      ) {
-        return;
-      }
-    }
-    throw new MfaRecoveryError(
-      'Cannot abort a mutation that may have been applied',
-      'abort_not_allowed',
-    );
-  }
-
-  #isApprovalLive(token: AuthControllerToken): boolean {
-    const claims = decodeAuthControllerToken(token);
-    return claims !== undefined && claims.exp > this.#now();
   }
 
   #getTargetEscrows(mutation: Mutation): RecoveryEscrowProvider[] {
