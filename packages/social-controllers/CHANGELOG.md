@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `fetchModerationStatus` to `SocialService` (`SocialService:fetchModerationStatus`). Calls `GET /v1/moderation/status` and returns whether the moderation team has banned the current user, when, and the reason they may be shown. Export `ModerationStatusResponse` and `SocialServiceFetchModerationStatusAction` ([#11211](https://github.com/MetaMask/core/pull/11211))
+
+## [3.14.2]
+
 ### Fixed
 
 - Pass the realtime feed item's `authorComment` through from the backend instead of deriving it from trade comments. An absent `authorComment` stays absent and an explicit `null` stays `null`. A present value is validated with the same struct the REST feed uses, and a malformed value drops the realtime item ([#11209](https://github.com/MetaMask/core/pull/11209))
@@ -354,7 +360,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `unfollowTrader` — unfollows traders and removes addresses from state
     - `updateFollowing` — fetches following list and replaces addresses in state
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.1...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.2...HEAD
+[3.14.2]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.1...@metamask/social-controllers@3.14.2
 [3.14.1]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.0...@metamask/social-controllers@3.14.1
 [3.14.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.13.0...@metamask/social-controllers@3.14.0
 [3.13.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.12.1...@metamask/social-controllers@3.13.0
