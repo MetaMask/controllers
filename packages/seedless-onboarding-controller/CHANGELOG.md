@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
 - Add `authenticateForRecovery`, `getRecoveryStatus` and `storeRecoveryKeys` methods and the matching `SeedlessOnboardingController:authenticateForRecovery`, `SeedlessOnboardingController:getRecoveryStatus` and `SeedlessOnboardingController:storeRecoveryKeys` messenger actions ([#0000](https://github.com/MetaMask/core/pull/0000))
   - `authenticateForRecovery` authenticates on the `toprf-recovery` verifier, using the aal2 token as the id token and its `sub` (profile ID) as the user ID.
+  - `changePassword` re-writes the MFA recovery wrapped-keys item with the new TOPRF1 keys when recovery is enabled (best-effort).
 - Add non-persisted `recoverySession` state, holding the `toprf-recovery` node auth tokens, their expiry, the profile ID and whether the nodes hold a recovery share, cleared on lock and `clearState` ([#0000](https://github.com/MetaMask/core/pull/0000))
   - Also export the `RecoverySession` type.
 - Add `RecoveryStatus` and `RecoveryStatusResult` types, where `RecoveryStatusResult` has `status`, `verified` and an optional `hasRecoveryShare` ([#0000](https://github.com/MetaMask/core/pull/0000))

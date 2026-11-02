@@ -692,6 +692,7 @@ export class SeedlessOnboardingController<
    * Update the password of the seedless onboarding flow.
    *
    * Changing password will also update the encryption key, metadata store and the vault with new encrypted values.
+   * If MFA recovery is enabled, the recovery wrapped-keys item is re-written with the new keys (best-effort).
    *
    * @param newPassword - The new password to update.
    * @param oldPassword - The old password to verify.
@@ -740,6 +741,13 @@ export class SeedlessOnboardingController<
 
         this.#resetPasswordOutdatedCache();
 
+        // keep MFA recovery pointing at the live TOPRF1 keys
+        await this.#rewrapRecoveryKeys({
+          encKey: newEncKey,
+          pwEncKey: newPwEncKey,
+          authKeyPair: newAuthKeyPair,
+        });
+
         // store the keyring encryption key if it exists
         if (keyringEncryptionKey) {
           await this.storeKeyringEncryptionKey(keyringEncryptionKey);
@@ -761,6 +769,31 @@ export class SeedlessOnboardingController<
         );
       }
     });
+  }
+
+  /**
+   * Re-write the MFA recovery wrapped-keys item with the TOPRF1 keys of the
+   * new password, so recovery keeps reaching the live namespace.
+   *
+   * Best-effort: the password change is already committed on the nodes, so
+   * failures are logged and not thrown. A stale wrap is reported by
+   * `getRecoveryStatus` and repaired by `storeRecoveryKeys`.
+   *
+   * @param keySet - The new TOPRF1 key set.
+   */
+  async #rewrapRecoveryKeys(keySet: WrappedKeySet): Promise<void> {
+    try {
+      const recoveryKeys = await this.#recoveryItemStore.fetchRecoveryKeys({
+        encKey: keySet.encKey,
+        authKeyPair: keySet.authKeyPair,
+      });
+      if (!recoveryKeys) {
+        return;
+      }
+      await this.#recoveryItemStore.writeWrappedKeys(recoveryKeys, [keySet]);
+    } catch (error) {
+      log('Error re-wrapping recovery keys', error);
+    }
   }
 
   /**

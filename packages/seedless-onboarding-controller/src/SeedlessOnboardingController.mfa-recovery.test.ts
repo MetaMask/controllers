@@ -27,6 +27,7 @@ import type {
 } from './mfa-recovery/recovery-keys.js';
 import {
   parseRecoveryKeysItem,
+  parseWrappedKeys,
   RECOVERY_KEYS_SECRET_TYPE,
   serializeRecoveryKeysItem,
   serializeWrappedKeys,
@@ -1281,7 +1282,9 @@ describe('SeedlessOnboardingController', () => {
           mockRecoveryFetchAuthPubKey(toprfClient, {
             password: getVaultKeySet().authKeyPair.pk,
           });
-          const fetchSpy = vi.spyOn(toprfClient, 'fetchAllSecretDataItems');
+          const fetchSpy = vi
+            .spyOn(toprfClient, 'fetchAllSecretDataItems')
+            .mockResolvedValue([]);
           const encryptor = createMockToprfEncryptor();
           const changeEncKeySpy = vi
             .spyOn(toprfClient, 'changeEncKey')
@@ -1297,7 +1300,11 @@ describe('SeedlessOnboardingController', () => {
             MOCK_PASSWORD,
           );
 
-          expect(fetchSpy).not.toHaveBeenCalled();
+          // The re-wrap reads the recovery-keys item with the new TOPRF1 key.
+          expect(fetchSpy).toHaveBeenCalledTimes(1);
+          expect(fetchSpy.mock.calls[0][0].decKey).toStrictEqual(
+            encryptor.deriveEncKey(NEW_PASSWORD),
+          );
           const [{ newPassword, transformDataItems }] =
             changeEncKeySpy.mock.calls[0];
           expect(newPassword).toBe(NEW_PASSWORD);
@@ -1321,6 +1328,233 @@ describe('SeedlessOnboardingController', () => {
             { data: seedPhraseData, dataType: undefined, version: 'v1' },
             { data: recoveryKeysData, dataType: undefined, version: 'v1' },
           ]);
+        });
+      });
+    });
+
+    describe('changePassword re-wrap', () => {
+      const NEW_PASSWORD = 'new-mock-password';
+
+      /**
+       * Mocks `changeEncKey` to return the key set of NEW_PASSWORD.
+       *
+       * @param toprfClient - The ToprfSecureBackup instance.
+       * @returns The new TOPRF1 key set.
+       */
+      function mockPasswordChange(
+        toprfClient: ToprfSecureBackup,
+      ): WrappedKeySet {
+        const encryptor = createMockToprfEncryptor();
+        const newKeySet: WrappedKeySet = {
+          encKey: encryptor.deriveEncKey(NEW_PASSWORD),
+          pwEncKey: encryptor.derivePwEncKey(NEW_PASSWORD),
+          authKeyPair: encryptor.deriveAuthKeyPair(NEW_PASSWORD),
+        };
+        vi.spyOn(toprfClient, 'changeEncKey').mockResolvedValue(newKeySet);
+        return newKeySet;
+      }
+
+      /**
+       * Mocks `fetchAllSecretDataItems`, answering by decryption key.
+       *
+       * @param toprfClient - The ToprfSecureBackup instance.
+       * @param namespaces - The items per decryption key.
+       * @returns The spy.
+       */
+      function mockNamespaces(
+        toprfClient: ToprfSecureBackup,
+        namespaces: { decKey: Uint8Array; items: Uint8Array[] }[],
+      ): MockInstance {
+        return vi
+          .spyOn(toprfClient, 'fetchAllSecretDataItems')
+          .mockImplementation(async ({ decKey }) => {
+            const namespace = namespaces.find(
+              (candidate) =>
+                bytesToHex(candidate.decKey) === bytesToHex(decKey),
+            );
+            if (!namespace) {
+              throw new Error('unexpected namespace');
+            }
+            return namespace.items.map((data, index) => ({
+              itemId: `server-item-${index}`,
+              data,
+              version: 'v1' as const,
+            }));
+          });
+      }
+
+      it('writes the new TOPRF1 keys to the wrapped-keys item when recovery is enabled', async () => {
+        await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
+          await authenticateAal2(
+            { toprfClient, baseMessenger },
+            { hasRecoveryShare: true },
+          );
+          const recoveryKeys = createRandomRecoveryKeys();
+          const newKeySet = mockPasswordChange(toprfClient);
+          mockRecoveryFetchAuthPubKey(toprfClient, {
+            password: getVaultKeySet().authKeyPair.pk,
+          });
+          mockNamespaces(toprfClient, [
+            {
+              decKey: newKeySet.encKey,
+              items: recoveryKeysItem(recoveryKeys),
+            },
+          ]);
+          const addSpy = vi
+            .spyOn(toprfClient, 'addSecretDataItem')
+            .mockResolvedValue();
+
+          await baseMessenger.call(
+            'SeedlessOnboardingController:changePassword',
+            NEW_PASSWORD,
+            MOCK_PASSWORD,
+          );
+
+          expect(addSpy).toHaveBeenCalledTimes(1);
+          const [{ encKey, authKeyPair, secretData }] = addSpy.mock
+            .calls[0] as [
+            {
+              encKey: Uint8Array;
+              authKeyPair: KeyPair;
+              secretData: Uint8Array;
+            },
+          ];
+          expect(encKey).toStrictEqual(recoveryKeys.recoveryEncKey);
+          expect(authKeyPair).toStrictEqual(recoveryKeys.recoveryAuthKeyPair);
+          expect(parseWrappedKeys(secretData)).toStrictEqual([newKeySet]);
+
+          // The stored wrap now matches the live key, so the status is Enabled.
+          mockRecoveryFetchAuthPubKey(toprfClient, {
+            password: newKeySet.authKeyPair.pk,
+            recovery: recoveryKeys.recoveryAuthKeyPair.pk,
+          });
+          mockNamespaces(toprfClient, [
+            {
+              decKey: newKeySet.encKey,
+              items: recoveryKeysItem(recoveryKeys),
+            },
+            {
+              decKey: recoveryKeys.recoveryEncKey,
+              items: [secretData],
+            },
+          ]);
+          expect(
+            await baseMessenger.call(
+              'SeedlessOnboardingController:getRecoveryStatus',
+            ),
+          ).toStrictEqual({
+            status: 'Enabled',
+            verified: true,
+            hasRecoveryShare: true,
+          });
+        });
+      });
+
+      it('does not write a wrapped-keys item when MFA recovery is not enabled', async () => {
+        await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
+          const newKeySet = mockPasswordChange(toprfClient);
+          mockRecoveryFetchAuthPubKey(toprfClient, {
+            password: getVaultKeySet().authKeyPair.pk,
+          });
+          mockNamespaces(toprfClient, [
+            {
+              decKey: newKeySet.encKey,
+              items: [new SecretMetadata(MOCK_SEED_PHRASE).toBytes()],
+            },
+          ]);
+          const addSpy = vi
+            .spyOn(toprfClient, 'addSecretDataItem')
+            .mockResolvedValue();
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:changePassword',
+              NEW_PASSWORD,
+              MOCK_PASSWORD,
+            ),
+          ).resolves.toBeUndefined();
+          expect(addSpy).not.toHaveBeenCalled();
+        });
+      });
+
+      it('still resolves and leaves the wrap stale when writing the wrapped-keys item fails', async () => {
+        await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
+          await authenticateAal2(
+            { toprfClient, baseMessenger },
+            { hasRecoveryShare: true },
+          );
+          const recoveryKeys = createRandomRecoveryKeys();
+          const oldKeySet = getVaultKeySet();
+          const newKeySet = mockPasswordChange(toprfClient);
+          mockRecoveryFetchAuthPubKey(toprfClient, {
+            password: oldKeySet.authKeyPair.pk,
+          });
+          mockNamespaces(toprfClient, [
+            {
+              decKey: newKeySet.encKey,
+              items: recoveryKeysItem(recoveryKeys),
+            },
+          ]);
+          vi.spyOn(toprfClient, 'addSecretDataItem').mockRejectedValue(
+            new Error('write failed'),
+          );
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:changePassword',
+              NEW_PASSWORD,
+              MOCK_PASSWORD,
+            ),
+          ).resolves.toBeUndefined();
+
+          // Only the wrap from before the change remains.
+          mockRecoveryFetchAuthPubKey(toprfClient, {
+            password: newKeySet.authKeyPair.pk,
+            recovery: recoveryKeys.recoveryAuthKeyPair.pk,
+          });
+          mockNamespaces(toprfClient, [
+            {
+              decKey: newKeySet.encKey,
+              items: recoveryKeysItem(recoveryKeys),
+            },
+            {
+              decKey: recoveryKeys.recoveryEncKey,
+              items: [serializeWrappedKeys([oldKeySet])],
+            },
+          ]);
+          expect(
+            await baseMessenger.call(
+              'SeedlessOnboardingController:getRecoveryStatus',
+            ),
+          ).toStrictEqual({
+            status: 'WrapStale',
+            verified: true,
+            hasRecoveryShare: true,
+          });
+        });
+      });
+
+      it('still resolves without writing when reading the recovery-keys item fails', async () => {
+        await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
+          mockPasswordChange(toprfClient);
+          mockRecoveryFetchAuthPubKey(toprfClient, {
+            password: getVaultKeySet().authKeyPair.pk,
+          });
+          vi.spyOn(toprfClient, 'fetchAllSecretDataItems').mockRejectedValue(
+            new Error('fetch failed'),
+          );
+          const addSpy = vi
+            .spyOn(toprfClient, 'addSecretDataItem')
+            .mockResolvedValue();
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:changePassword',
+              NEW_PASSWORD,
+              MOCK_PASSWORD,
+            ),
+          ).resolves.toBeUndefined();
+          expect(addSpy).not.toHaveBeenCalled();
         });
       });
     });
