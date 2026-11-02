@@ -8,7 +8,6 @@ import { Messenger } from '@metamask/messenger';
 import { InMemoryStorageAdapter } from '@metamask/storage-service';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import * as walletExports from '../../../index.js';
 import type { WalletOptions } from '../../../types.js';
 import { Wallet } from '../../../Wallet.js';
 import { defaultConfigurations } from '../../defaults.js';
@@ -53,10 +52,6 @@ describe('assetsController', () => {
 
   it('is part of the default initialization configurations', () => {
     expect(Object.values(defaultConfigurations)).toContain(assetsController);
-  });
-
-  it('is exported from the package entry point', () => {
-    expect(walletExports.assetsController).toBe(assetsController);
   });
 
   it('initializes an AssetsController with default state', () => {

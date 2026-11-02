@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **BREAKING:** Add `AssetsController` to the default initialization configurations, and export `assetsController` with the `AssetsControllerInstanceOptions` type ([#10885](https://github.com/MetaMask/core/pull/10885))
+- **BREAKING:** Add `AssetsController` to the default initialization configurations ([#10885](https://github.com/MetaMask/core/pull/10885))
   - Requires `instanceOptions.assetsController.queryApiClient`.
   - `Wallet.init()` calls `AssetsController.init()`, which reads `NetworkEnablementController:getState` after every controller has been constructed. Later enablement changes arrive on `NetworkEnablementController:stateChange`.
   - Delegates `AccountTreeController` and `SnapController` actions and events. `Wallet` does not construct those controllers. Until a client registers them, account-group reads fall back to `AccountsController:getSelectedAccount`, asset tracking does not wait for the account tree, and snap discovery leaves snap chains empty.
