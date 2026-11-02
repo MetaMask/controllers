@@ -22,7 +22,7 @@
     "changelog:merge": "node --import ./scripts/resolver/register.ts scripts/merge-changelog-conflicts.ts",
     "changelog:update": "yarn workspaces foreach --all --no-private --parallel --interlaced --verbose run changelog:update",
     "changelog:validate": "yarn workspaces foreach --all --no-private --parallel --interlaced --verbose run changelog:validate",
-    "changelog:validate:all": "auto-changelog validate --all --formatter oxfmt",
+    "changelog:validate:all": "scripts/validate-changelog.sh --all",
     "close-stale-release-prs": "node --import ./scripts/resolver/register.ts scripts/close-stale-release-prs.ts",
     "codeowners:check": "node --import ./scripts/resolver/register.ts scripts/manage-codeowners.ts check",
     "codeowners:generate": "node --import ./scripts/resolver/register.ts scripts/manage-codeowners.ts generate",

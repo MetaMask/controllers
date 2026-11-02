@@ -135,3 +135,38 @@ setup_release_repo() {
   run should_validate_as_release_candidate "release/1.0.0" "1.1.0" "${base_version}"
   [ "$status" -eq 0 ]
 }
+
+# --- resolve_rc_flag ---------------------------------------------------------
+
+@test "rc flag is printed for a package bumped on the release branch" {
+  setup_release_repo
+  echo '{"name":"@metamask/foo","version":"1.1.0"}' >packages/foo/package.json
+  git add -A
+  git commit -qm "bump foo"
+
+  cd packages/foo
+  run env CHANGELOG_BASE_REF=main bash -c "source '${SCRIPT}'; resolve_rc_flag release/1.0.0"
+  [ "$status" -eq 0 ]
+  [ "$output" = "--rc" ]
+}
+
+@test "rc flag is empty for a package not bumped on the release branch" {
+  setup_release_repo
+
+  cd packages/foo
+  run env CHANGELOG_BASE_REF=main bash -c "source '${SCRIPT}'; resolve_rc_flag release/1.0.0"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "rc flag is empty outside a release branch" {
+  setup_release_repo
+  echo '{"name":"@metamask/foo","version":"1.1.0"}' >packages/foo/package.json
+  git add -A
+  git commit -qm "bump foo"
+
+  cd packages/foo
+  run env CHANGELOG_BASE_REF=main bash -c "source '${SCRIPT}'; resolve_rc_flag feature/some-work"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}

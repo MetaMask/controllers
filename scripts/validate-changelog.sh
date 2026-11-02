@@ -72,17 +72,8 @@ should_validate_as_release_candidate() {
   return 0
 }
 
-main() {
-  if [[ $# -eq 0 ]]; then
-    echo "Missing package name."
-    exit 1
-  fi
-
-  local package_name="$1"
-  shift # remove package name from arguments
-
-  local branch_name
-  branch_name="$(resolve_branch_name)"
+resolve_rc_flag() {
+  local branch_name="$1"
 
   local current_version
   current_version="$(jq --raw-output '.version' package.json)"
@@ -93,9 +84,65 @@ main() {
   fi
 
   if should_validate_as_release_candidate "${branch_name}" "${current_version}" "${base_version}"; then
-    yarn auto-changelog validate --formatter oxfmt --tag-prefix "${package_name}@" --rc "$@"
+    echo "--rc"
+  fi
+}
+
+validate_package() {
+  local package_name="$1"
+  shift # remove package name from arguments
+
+  local branch_name
+  branch_name="$(resolve_branch_name)"
+
+  local rc_flag
+  rc_flag="$(resolve_rc_flag "${branch_name}")"
+
+  # `rc_flag` is intentionally unquoted so that it expands to nothing when empty.
+  # shellcheck disable=SC2086
+  yarn auto-changelog validate --formatter oxfmt --tag-prefix "${package_name}@" ${rc_flag} "$@"
+}
+
+validate_all() {
+  local branch_name
+  branch_name="$(resolve_branch_name)"
+
+  yarn auto-changelog validate --all --formatter oxfmt "$@"
+
+  [[ "${branch_name}" =~ ^release/ ]] || return 0
+
+  local root_directory
+  root_directory="$(pwd)"
+
+  local workspace location package_name rc_flag
+  while IFS= read -r workspace; do
+    location="$(jq --raw-output '.location' <<<"${workspace}")"
+    package_name="$(jq --raw-output '.name' <<<"${workspace}")"
+
+    # Packages without a changelog are skipped, like `--all` does.
+    [[ -f "${root_directory}/${location}/CHANGELOG.md" ]] || continue
+
+    rc_flag="$(cd "${root_directory}/${location}" && resolve_rc_flag "${branch_name}")"
+    [[ -n "${rc_flag}" ]] || continue
+
+    (
+      cd "${root_directory}/${location}"
+      yarn auto-changelog validate --formatter oxfmt --tag-prefix "${package_name}@" --rc "$@"
+    )
+  done < <(yarn workspaces list --no-private --json)
+}
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    echo "Missing package name, or \`--all\`."
+    exit 1
+  fi
+
+  if [[ "$1" == "--all" ]]; then
+    shift # remove `--all` from arguments
+    validate_all "$@"
   else
-    yarn auto-changelog validate --formatter oxfmt --tag-prefix "${package_name}@" "$@"
+    validate_package "$@"
   fi
 }
 
