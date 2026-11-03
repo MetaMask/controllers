@@ -1516,6 +1516,16 @@ describe('NetworkController', () => {
   });
 
   describe('getNetworkClientById', () => {
+    describe('if passed an empty network client ID', () => {
+      it('throws', async () => {
+        await withController(({ controller }) => {
+          expect(() => controller.getNetworkClientById('')).toThrow(
+            'No network client ID was provided.',
+          );
+        });
+      });
+    });
+
     describe('if passed an Infura network client ID', () => {
       describe('if the ID refers to an existing Infura network client', () => {
         it('returns the network client', async () => {
