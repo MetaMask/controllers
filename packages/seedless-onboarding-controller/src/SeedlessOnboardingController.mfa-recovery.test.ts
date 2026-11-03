@@ -105,7 +105,9 @@ describe('SeedlessOnboardingController', () => {
      * @param password - The password.
      * @returns The `createLocalKey` result.
      */
-    function createLocalKeyResult(password = bytesToHex(RECOVERY_SECRET)): {
+    function createLocalKeyResult(
+      password: string = bytesToHex(RECOVERY_SECRET),
+    ): {
       encKey: Uint8Array;
       pwEncKey: Uint8Array;
       authKeyPair: KeyPair;
@@ -245,7 +247,7 @@ describe('SeedlessOnboardingController', () => {
      * @returns Whatever the callback returns.
      */
     async function withUnlockedController<ReturnValue>(
-      fn: Parameters<typeof withController<ReturnValue>>[1],
+      fn: NonNullable<Parameters<typeof withController<ReturnValue>>[1]>,
     ): Promise<ReturnValue> {
       return await withController(
         {
@@ -1377,6 +1379,7 @@ describe('SeedlessOnboardingController', () => {
         async (_name, aal2State) => {
           await withUnlockedController(
             async ({ controller, toprfClient, baseMessenger }) => {
+              // @ts-expect-error Accessing protected method for testing
               controller.update((state) => {
                 Object.assign(state, aal2State);
               });
@@ -1801,7 +1804,7 @@ describe('SeedlessOnboardingController', () => {
        * @returns Whatever the callback returns.
        */
       async function withFreshDeviceController<ReturnValue>(
-        fn: Parameters<typeof withController<ReturnValue>>[1],
+        fn: NonNullable<Parameters<typeof withController<ReturnValue>>[1]>,
       ): Promise<ReturnValue> {
         return await withController(
           {
@@ -2248,6 +2251,7 @@ describe('SeedlessOnboardingController', () => {
                 'SeedlessOnboardingController:recoverWithRecoverySecret',
                 { recoverySecret: RECOVERY_SECRET },
               );
+              // @ts-expect-error Accessing protected method for testing
               controller.update((state) => {
                 delete state.recoverySession;
               });
