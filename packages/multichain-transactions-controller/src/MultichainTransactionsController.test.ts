@@ -257,6 +257,32 @@ async function waitForAllPromises(): Promise<void> {
   await new Promise(process.nextTick);
 }
 
+/**
+ * Sets up a controller with one submitted pending transaction in state for
+ * the mock BTC account, ready to be driven to a terminal status.
+ *
+ * @returns The controller setup plus the pending transaction.
+ */
+const setupPendingTransaction = async (): Promise<
+  ReturnType<typeof setupController> & { pendingTransaction: Transaction }
+> => {
+  const pendingTransaction = {
+    ...mockTransactionResult.data[0],
+    id: 'pending-tx-id',
+    status: 'submitted' as const,
+  };
+  const setup = setupController();
+  // Flush the constructor's initial history fetch so it does not
+  // overwrite the pending entry published below.
+  await waitForAllPromises();
+  setup.rootMessenger.publish('AccountsController:accountTransactionsUpdated', {
+    transactions: {
+      [mockBtcAccount.id]: [pendingTransaction],
+    },
+  });
+  return { ...setup, pendingTransaction };
+};
+
 const NEW_ACCOUNT_ID = 'new-account-id';
 const TEST_ACCOUNT_ID = 'test-account-id';
 
@@ -1045,33 +1071,14 @@ describe('MultichainTransactionsController', () => {
   });
 
   describe('AccountActivityService:transactionUpdated', () => {
-    const setupPendingTransaction = async (): Promise<
-      ReturnType<typeof setupController> & { pendingTransaction: Transaction }
-    > => {
-      const pendingTransaction = {
-        ...mockTransactionResult.data[0],
-        id: 'pending-tx-id',
-        status: 'submitted' as const,
-      };
-      const setup = setupController();
-      // Flush the constructor's initial history fetch so it does not
-      // overwrite the pending entry published below.
-      await waitForAllPromises();
-      setup.rootMessenger.publish(
-        'AccountsController:accountTransactionsUpdated',
-        {
-          transactions: {
-            [mockBtcAccount.id]: [pendingTransaction],
-          },
-        },
-      );
-      return { ...setup, pendingTransaction };
-    };
-
     it('marks a pending transaction as confirmed and publishes transactionConfirmed', async () => {
       const { rootMessenger, messenger, controller, pendingTransaction } =
         await setupPendingTransaction();
-      const publishSpy = vi.spyOn(messenger, 'publish');
+      const transactionConfirmedListener = vi.fn();
+      messenger.subscribe(
+        'MultichainTransactionsController:transactionConfirmed',
+        transactionConfirmedListener,
+      );
 
       rootMessenger.publish('AccountActivityService:transactionUpdated', {
         id: pendingTransaction.id,
@@ -1092,20 +1099,21 @@ describe('MultichainTransactionsController', () => {
         entry.transactions.find((tx) => tx.id === pendingTransaction.id)
           ?.status,
       ).toBe('confirmed');
-      expect(publishSpy).toHaveBeenCalledWith(
-        'MultichainTransactionsController:transactionConfirmed',
-        {
-          ...pendingTransaction,
-          status: 'confirmed',
-          timestamp: expect.any(Number),
-        },
-      );
+      expect(transactionConfirmedListener).toHaveBeenCalledWith({
+        ...pendingTransaction,
+        status: 'confirmed',
+        timestamp: expect.any(Number),
+      });
     });
 
     it('marks a pending transaction as failed and publishes transactionFailed', async () => {
       const { rootMessenger, messenger, controller, pendingTransaction } =
         await setupPendingTransaction();
-      const publishSpy = vi.spyOn(messenger, 'publish');
+      const transactionFailedListener = vi.fn();
+      messenger.subscribe(
+        'MultichainTransactionsController:transactionFailed',
+        transactionFailedListener,
+      );
 
       rootMessenger.publish('AccountActivityService:transactionUpdated', {
         id: pendingTransaction.id,
@@ -1126,20 +1134,21 @@ describe('MultichainTransactionsController', () => {
         entry.transactions.find((tx) => tx.id === pendingTransaction.id)
           ?.status,
       ).toBe('failed');
-      expect(publishSpy).toHaveBeenCalledWith(
-        'MultichainTransactionsController:transactionFailed',
-        {
-          ...pendingTransaction,
-          status: 'failed',
-          timestamp: expect.any(Number),
-        },
-      );
+      expect(transactionFailedListener).toHaveBeenCalledWith({
+        ...pendingTransaction,
+        status: 'failed',
+        timestamp: expect.any(Number),
+      });
     });
 
     it('ignores updates with an invalid chain id', async () => {
       const { rootMessenger, messenger, controller, pendingTransaction } =
         await setupPendingTransaction();
-      const publishSpy = vi.spyOn(messenger, 'publish');
+      const transactionConfirmedListener = vi.fn();
+      messenger.subscribe(
+        'MultichainTransactionsController:transactionConfirmed',
+        transactionConfirmedListener,
+      );
 
       rootMessenger.publish('AccountActivityService:transactionUpdated', {
         id: pendingTransaction.id,
@@ -1160,16 +1169,17 @@ describe('MultichainTransactionsController', () => {
         entry.transactions.find((tx) => tx.id === pendingTransaction.id)
           ?.status,
       ).toBe('submitted');
-      expect(publishSpy).not.toHaveBeenCalledWith(
-        'MultichainTransactionsController:transactionConfirmed',
-        expect.anything(),
-      );
+      expect(transactionConfirmedListener).not.toHaveBeenCalled();
     });
 
     it('ignores updates for unknown transaction ids', async () => {
       const { rootMessenger, messenger, controller, pendingTransaction } =
         await setupPendingTransaction();
-      const publishSpy = vi.spyOn(messenger, 'publish');
+      const transactionConfirmedListener = vi.fn();
+      messenger.subscribe(
+        'MultichainTransactionsController:transactionConfirmed',
+        transactionConfirmedListener,
+      );
 
       rootMessenger.publish('AccountActivityService:transactionUpdated', {
         id: 'some-other-tx',
@@ -1190,16 +1200,17 @@ describe('MultichainTransactionsController', () => {
         entry.transactions.find((tx) => tx.id === pendingTransaction.id)
           ?.status,
       ).toBe('submitted');
-      expect(publishSpy).not.toHaveBeenCalledWith(
-        'MultichainTransactionsController:transactionConfirmed',
-        expect.anything(),
-      );
+      expect(transactionConfirmedListener).not.toHaveBeenCalled();
     });
 
     it('ignores non-terminal statuses', async () => {
       const { rootMessenger, messenger, controller, pendingTransaction } =
         await setupPendingTransaction();
-      const publishSpy = vi.spyOn(messenger, 'publish');
+      const transactionConfirmedListener = vi.fn();
+      messenger.subscribe(
+        'MultichainTransactionsController:transactionConfirmed',
+        transactionConfirmedListener,
+      );
 
       rootMessenger.publish('AccountActivityService:transactionUpdated', {
         id: pendingTransaction.id,
@@ -1220,10 +1231,7 @@ describe('MultichainTransactionsController', () => {
         entry.transactions.find((tx) => tx.id === pendingTransaction.id)
           ?.status,
       ).toBe('submitted');
-      expect(publishSpy).not.toHaveBeenCalledWith(
-        'MultichainTransactionsController:transactionConfirmed',
-        expect.anything(),
-      );
+      expect(transactionConfirmedListener).not.toHaveBeenCalled();
     });
 
     it('does not overwrite a transaction that already reached a terminal status', async () => {
@@ -1239,7 +1247,11 @@ describe('MultichainTransactionsController', () => {
           [mockBtcAccount.id]: [confirmedTransaction],
         },
       });
-      const publishSpy = vi.spyOn(messenger, 'publish');
+      const transactionFailedListener = vi.fn();
+      messenger.subscribe(
+        'MultichainTransactionsController:transactionFailed',
+        transactionFailedListener,
+      );
 
       rootMessenger.publish('AccountActivityService:transactionUpdated', {
         id: confirmedTransaction.id,
@@ -1260,10 +1272,7 @@ describe('MultichainTransactionsController', () => {
         entry.transactions.find((tx) => tx.id === confirmedTransaction.id)
           ?.status,
       ).toBe('confirmed');
-      expect(publishSpy).not.toHaveBeenCalledWith(
-        'MultichainTransactionsController:transactionFailed',
-        expect.anything(),
-      );
+      expect(transactionFailedListener).not.toHaveBeenCalled();
     });
   });
 
