@@ -10,21 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-- Add `authenticateForRecovery`, `getRecoveryStatus` and `storeRecoveryKeys` methods and the matching `SeedlessOnboardingController:authenticateForRecovery`, `SeedlessOnboardingController:getRecoveryStatus` and `SeedlessOnboardingController:storeRecoveryKeys` messenger actions ([#0000](https://github.com/MetaMask/core/pull/0000))
-  - `authenticateForRecovery` takes the recovery `authConnectionId` (sub-verifier) and `groupedAuthConnectionId` (aggregate verifier) as caller-supplied params, uses the aal2 token as the id token and its `sub` (profile ID) as the user ID.
-  - `changePassword` re-writes the MFA recovery wrapped-keys item with the new TOPRF1 keys when recovery is enabled (best-effort). It finds the recovery-keys item among the items already fetched for the key change, so accounts without MFA recovery make no extra requests.
-- Add non-persisted `recoverySession` state, holding the recovery node auth tokens, their expiry, the profile ID, the recovery verifier IDs and whether the nodes hold a recovery share, cleared on lock and `clearState` ([#0000](https://github.com/MetaMask/core/pull/0000))
-  - Also export the `RecoverySession` type.
-- Add `RecoveryStatus` and `RecoveryStatusResult` types, where `RecoveryStatusResult` has `status`, `verified` and an optional `hasRecoveryShare` ([#0000](https://github.com/MetaMask/core/pull/0000))
-- Add MFA recovery constants `RECOVERY_KEYS_PREFIX` and `WRAPPED_KEYS_PREFIX`, and `RecoveryKeys`/`WrappedKeySet` types ([#0000](https://github.com/MetaMask/core/pull/0000))
-  - The recovery-keys item is stored next to the secret data items as an `EncAccountDataType.WrappedKeys` item under the fixed `wrapped_recovery` item ID, and the wrapped-keys item is stored in the recovery namespace under `wrapped_seedless`. The metadata store overwrites each in place.
-  - `WrappedKeys` items are left out of the returned secret data, and are re-inserted with their item ID on password change.
-  - Client versions without `WrappedKeys` support fail to fetch secret data and to change the password for an account holding these items; only enable MFA recovery for client versions that use this release.
-- Add `Aal2Required`, `RecoveryKeyShareConflict` and `InvalidRecoveryKeysItem` error messages ([#0000](https://github.com/MetaMask/core/pull/0000))
-- Add `recoverWithRecoverySecret` and `resetPasswordWithRecoveredKeys` methods and the matching `SeedlessOnboardingController:recoverWithRecoverySecret` and `SeedlessOnboardingController:resetPasswordWithRecoveredKeys` messenger actions, to restore an account with a forgotten password on a fresh device using the MFA recovery secret ([#0000](https://github.com/MetaMask/core/pull/0000))
-  - `recoverWithRecoverySecret` requires the aal1 and aal2 sessions and no existing vault. It evaluates the recovery secret on the recovery verifier and holds the wrapped TOPRF1 key set that matches the live auth public key in memory until the next step, `setLocked` or `clearState`.
-  - `resetPasswordWithRecoveredKeys` changes the global password to `newPassword` using the recovered keys, creates and unlocks the vault, re-writes the MFA recovery wrapped-keys item with the new keys (best-effort) and returns the secret data.
-- Add `RecoveryNotEnabled`, `RecoveryWrapStale` and `NoPendingRecovery` error messages ([#0000](https://github.com/MetaMask/core/pull/0000))
+- Add `authenticateForRecovery`, `getRecoveryStatus`, and `storeRecoveryKeys`, and the matching `SeedlessOnboardingController:authenticateForRecovery`, `SeedlessOnboardingController:getRecoveryStatus`, and `SeedlessOnboardingController:storeRecoveryKeys` messenger actions ([#11220](https://github.com/MetaMask/core/pull/11220))
+  - `authenticateForRecovery` takes `authConnectionId` and `groupedAuthConnectionId`, and uses the aal2 token as the id token and its `sub` as the user ID.
+- Add non-persisted `recoverySession` state and the `RecoverySession` type. The session holds recovery-node tokens, expiry, profile ID, verifier IDs, and whether the nodes hold a recovery share, and is cleared on lock and `clearState` ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Add `RecoveryStatus` and `RecoveryStatusResult` (`status`, `verified`, optional `hasRecoveryShare`) ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Add `RECOVERY_KEYS_PREFIX`, `WRAPPED_KEYS_PREFIX`, `RecoveryKeys`, and `WrappedKeySet`. Recovery keys are stored as a `WrappedKeys` item at `wrapped_recovery`; wrapped vault keys are stored at `wrapped_seedless`. Clients without `WrappedKeys` support cannot fetch secret data or change the password for accounts that hold these items ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Add `recoverWithRecoverySecret` and `resetPasswordWithRecoveredKeys`, and the matching messenger actions, to restore an account with a forgotten password on a fresh device ([#11220](https://github.com/MetaMask/core/pull/11220))
+  - `recoverWithRecoverySecret` requires aal1 and aal2 sessions and no existing vault, and holds the matching wrapped TOPRF1 keys until the next step, `setLocked`, or `clearState`.
+  - `resetPasswordWithRecoveredKeys` sets `newPassword`, creates and unlocks the vault, best-effort rewrites the wrapped-keys item, and returns the secret data.
+- Add `Aal2Required`, `RecoveryKeyShareConflict`, `InvalidRecoveryKeysItem`, `RecoveryNotEnabled`, `RecoveryWrapStale`, and `NoPendingRecovery` ([#11220](https://github.com/MetaMask/core/pull/11220))
 
 ### Changed
 
@@ -33,8 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
 - Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
-- Leave the MFA recovery-keys item out of the secret data returned by `fetchAllSecretData` and used for the metadata backup checks ([#0000](https://github.com/MetaMask/core/pull/0000))
-- Bump `@metamask/auth-network-utils` from `^0.3.0` to `^0.4.0` ([#0000](https://github.com/MetaMask/core/pull/0000))
+- When recovery is enabled, `changePassword` best-effort rewrites the MFA recovery wrapped-keys item with the new TOPRF1 keys ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Omit the MFA recovery-keys item from `fetchAllSecretData` and from metadata backup checks ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Bump `@metamask/auth-network-utils` from `^0.3.0` to `^0.4.0` ([#11220](https://github.com/MetaMask/core/pull/11220))
 
 ## [12.0.0]
 
