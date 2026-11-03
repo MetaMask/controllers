@@ -41,10 +41,6 @@ export default defineConfig({
     coverage: {
       enabled: true,
 
-      // Configure the coverage provider. We use `istanbul` here, because it is
-      // more stable than `v8`.
-      provider: 'istanbul',
-
       // The files to include in the coverage report.
       include: ['scripts/**/*.ts'],
 
