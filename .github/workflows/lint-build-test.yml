@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   prepare-environment:
-    name: Get Node versions
+    name: Prepare environment
     runs-on: ubuntu-latest
     outputs:
       node-versions: ${{ steps.prepare-environment.outputs.node-versions }}
