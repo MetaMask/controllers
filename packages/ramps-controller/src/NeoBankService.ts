@@ -22,7 +22,10 @@ import type {
 } from './autoramp-types.js';
 import type { NeoBankServiceMethodActions } from './NeoBankService-method-action-types.js';
 import { RAMPS_SDK_VERSION, RampsEnvironment } from './RampsService.js';
-import { WalletRegistrationService } from './wallet-registration-service.js';
+import {
+  WalletRegistrationError,
+  WalletRegistrationService,
+} from './wallet-registration-service.js';
 import type {
   RegistrationOutcome,
   RegistrationStatus,
@@ -87,6 +90,78 @@ export type NeoBankAutorampResponse = {
 };
 
 /**
+ * A MoonPay microdeposit: a small test credit a bank sends when a user links
+ * their account. Shape mirrors MoonPay `GET /api/customers/{id}/microdeposits`
+ * and is returned unmodified. There is no id field, so consumers derive their
+ * own key.
+ */
+export type NeoBankMicrodeposit = {
+  /** Decimal string, e.g. `"0.34"`. */
+  amount: string;
+  /** Currency code, e.g. `"USD"`. */
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
+  currency_code: string;
+  /** ISO-8601 datetime. */
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
+  created_at: string;
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
+  counterparty_name?: string;
+};
+
+/**
+ * Status of one MoonPay rail ability. Only `Active` lets the customer use the
+ * rail.
+ */
+export type NeoBankAbilityStatus =
+  | 'Active'
+  | 'Pending'
+  | 'Unavailable'
+  | 'Blocked'
+  | 'Maintenance';
+
+/**
+ * Rail statuses keyed by lowercase fiat code, then rail name, e.g. `usd.ach`
+ * or `brl.pix_thirdparty`.
+ */
+export type NeoBankFiatAbilities = Record<
+  string,
+  Record<string, NeoBankAbilityStatus>
+>;
+
+/**
+ * A MoonPay currency, as it appears in a customer's currency abilities.
+ */
+export type NeoBankAbilityCurrency =
+  | { type: 'Fiat'; code: string }
+  | { type: 'Crypto'; token: string; blockchain: string };
+
+/**
+ * What a MoonPay customer can do with one currency.
+ */
+export type NeoBankCurrencyAbility = {
+  currency: NeoBankAbilityCurrency;
+  flows: ('Onramp' | 'Offramp' | 'Swap' | 'Mint' | 'Redeem')[];
+  /** Mint/redeem counterparts. Empty except for mint-only brand tokens. */
+  counterparts: NeoBankAbilityCurrency[];
+};
+
+/**
+ * A MoonPay customer's rail abilities. Shape mirrors MoonPay
+ * `GET /api/customers/{id}/abilities` and is returned unmodified.
+ */
+export type NeoBankCustomerAbilities = {
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
+  fiat_deposit: NeoBankFiatAbilities;
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
+  fiat_payout: NeoBankFiatAbilities;
+  /** What the customer can do with each currency it can currently use. */
+  currencies: NeoBankCurrencyAbility[];
+  /** Why a rail is `Unavailable`, keyed by rail name (e.g. `ach`). */
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- MoonPay API field
+  blocking_abilities: Record<string, string>;
+};
+
+/**
  * Optional headers for neo-bank mutating requests.
  */
 export type NeoBankRequestOptions = {
@@ -132,6 +207,8 @@ const MESSENGER_EXPOSED_METHODS = [
   'attachAutorampQuote',
   'getCustomerByExternalId',
   'getMoonpayCustomerId',
+  'getMicrodeposits',
+  'getCustomerAbilities',
   'getWalletRegistrationStatus',
   'registerSelfHostedWallet',
   'getPixDepositInstructions',
@@ -481,6 +558,10 @@ export class NeoBankService {
   readonly #baseUrlOverride?: string;
 
   #walletRegistrationService: WalletRegistrationService | undefined;
+
+  #customerIdLookup:
+    | { externalId: string; customerId: Promise<string> }
+    | undefined;
 
   constructor({
     messenger,
@@ -929,6 +1010,105 @@ export class NeoBankService {
    */
   async getMoonpayCustomerId(): Promise<string> {
     return await this.#getWalletRegistrationService().getMoonpayCustomerId();
+  }
+
+  /**
+   * Lists the customer's bank-link microdeposits via neobank-proxy
+   * `GET /neobank/customers/{customer_id}/microdeposits` (MoonPay
+   * `GET /api/customers/{id}/microdeposits`).
+   *
+   * The customer id is resolved through {@link getMoonpayCustomerId} at most
+   * once per service instance; concurrent callers share the in-flight lookup
+   * and a failed lookup is retried by the next call. A 404 (from the customer
+   * lookup or the list) means there is no customer or no deposits yet and
+   * resolves `[]`. Any other non-2xx response throws an {@link HttpError}. The
+   * customer lookup is a single attempt: it does not go through the retry
+   * policy.
+   *
+   * @returns MoonPay microdeposits, unmodified.
+   */
+  async getMicrodeposits(): Promise<NeoBankMicrodeposit[]> {
+    let response: unknown;
+    try {
+      const customerId = await this.#resolveCustomerId();
+      response = await this.#getJson<unknown>(
+        `customers/${encodeURIComponent(customerId)}/microdeposits`,
+      );
+    } catch (error) {
+      if ((error as { httpStatus?: unknown }).httpStatus === 404) {
+        return [];
+      }
+      throw error;
+    }
+    if (!Array.isArray(response)) {
+      throw new Error(
+        'Malformed response received from neo-bank microdeposits API',
+      );
+    }
+    return response as NeoBankMicrodeposit[];
+  }
+
+  /**
+   * Reads the customer's rail abilities via neobank-proxy
+   * `GET /neobank/customers/{customer_id}/abilities` (MoonPay
+   * `GET /api/customers/{id}/abilities`).
+   *
+   * MoonPay rejects an autoramp create with a 422 when the rail it needs is not
+   * `Active`, even for an `Active` customer. The customer id is resolved the
+   * same way as in {@link getMicrodeposits}. Any non-2xx response, including a
+   * 404 when there is no customer yet, throws an {@link HttpError}.
+   *
+   * @returns MoonPay customer abilities, unmodified.
+   */
+  async getCustomerAbilities(): Promise<NeoBankCustomerAbilities> {
+    const customerId = await this.#resolveCustomerId();
+    const response = await this.#getJson<unknown>(
+      `customers/${encodeURIComponent(customerId)}/abilities`,
+    );
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('fiat_deposit' in response) ||
+      !response.fiat_deposit ||
+      typeof response.fiat_deposit !== 'object'
+    ) {
+      throw new Error(
+        'Malformed response received from neo-bank abilities API',
+      );
+    }
+    return response as NeoBankCustomerAbilities;
+  }
+
+  /**
+   * Resolves the MoonPay customer id through {@link getMoonpayCustomerId} at
+   * most once per session profile, so a profile switch looks the customer up
+   * again. Concurrent callers share the in-flight lookup and a failed lookup
+   * is retried by the next call. The lookup is a single attempt: it does not
+   * go through the retry policy.
+   *
+   * @returns Iron's internal customer id.
+   */
+  async #resolveCustomerId(): Promise<string> {
+    const externalId = await this.#getCanonicalExternalId();
+    if (this.#customerIdLookup?.externalId !== externalId) {
+      const customerId = this.getMoonpayCustomerId().catch((error: unknown) => {
+        if (this.#customerIdLookup?.externalId === externalId) {
+          this.#customerIdLookup = undefined;
+        }
+        // The lookup runs outside the service policy and throws
+        // WalletRegistrationError; surface HTTP failures as HttpError like
+        // every other method.
+        if (error instanceof WalletRegistrationError && error.httpStatus) {
+          throw new HttpError(
+            error.httpStatus,
+            `Fetching neo-bank customer lookup failed with status '${error.httpStatus}'${error.body ? ` - ${error.body}` : ''}`,
+          );
+        }
+        throw error;
+      });
+      this.#customerIdLookup = { externalId, customerId };
+    }
+    return await this.#customerIdLookup.customerId;
   }
 
   /**

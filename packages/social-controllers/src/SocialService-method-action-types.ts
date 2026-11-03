@@ -432,6 +432,22 @@ export type SocialServiceBlockAction = {
 };
 
 /**
+ * Removes the current user's block on a trader.
+ *
+ * Calls `DELETE ${baseUrl}/moderation/blocks/profiles/${profileId}`.
+ * Unblocking a trader who is not blocked is a no-op. The caller is
+ * identified server-side from the JWT sub claim carried in the
+ * Authorization header.
+ *
+ * @param options - Options bag.
+ * @param options.profileId - Profile id (UUID) of the trader to unblock.
+ */
+export type SocialServiceUnblockProfileAction = {
+  type: `SocialService:unblockProfile`;
+  handler: SocialService['unblockProfile'];
+};
+
+/**
  * Fetches traders the current user has blocked.
  *
  * Calls `GET ${baseUrl}/moderation/blocks/profiles`. Results are most
@@ -464,6 +480,19 @@ export type SocialServiceFetchBlockedContentAction = {
 };
 
 /**
+ * Fetches whether the moderation team has banned the current user.
+ *
+ * Calls `GET ${baseUrl}/moderation/status`. The caller is identified
+ * server-side from the JWT sub claim carried in the Authorization header.
+ *
+ * @returns The current user's ban status, with the reason they may be shown.
+ */
+export type SocialServiceFetchModerationStatusAction = {
+  type: `SocialService:fetchModerationStatus`;
+  handler: SocialService['fetchModerationStatus'];
+};
+
+/**
  * Union of all SocialService action types.
  */
 export type SocialServiceMethodActions =
@@ -491,5 +520,7 @@ export type SocialServiceMethodActions =
   | SocialServiceOptInToLeaderboardAction
   | SocialServiceRefreshNotificationPreferencesCacheAction
   | SocialServiceBlockAction
+  | SocialServiceUnblockProfileAction
   | SocialServiceFetchBlockedProfilesAction
-  | SocialServiceFetchBlockedContentAction;
+  | SocialServiceFetchBlockedContentAction
+  | SocialServiceFetchModerationStatusAction;

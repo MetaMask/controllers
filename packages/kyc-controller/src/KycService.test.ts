@@ -532,6 +532,7 @@ describe('KycService', () => {
       kycStatus: 'approved',
       vendor: 'sumsub',
       vendorStatus: 'GREEN',
+      currentStep: 'approved',
     };
 
     it('posts the wrapped secrets and returns the session status', async () => {
@@ -631,6 +632,7 @@ describe('KycService', () => {
         consentStatus: 'given',
         idOSStatus: 'active',
         capabilityAuthorizationStatus: 'stored',
+        currentStep: 'approved',
       };
       nock(MOCK_API_URL).get('/sessions/sid/status').reply(200, response);
       const { service } = getService();
@@ -648,12 +650,87 @@ describe('KycService', () => {
         kycStatus: 'pending',
         vendor: 'sumsub',
         vendorStatus: 'YELLOW',
+        currentStep: 'processing',
       };
       nock(MOCK_API_URL).get('/sessions/a%2Fb/status').reply(200, response);
       const { service } = getService();
 
       expect(
         await service.getSessionStatus({ sessionId: 'a/b' }),
+      ).toStrictEqual(response);
+    });
+
+    it('reports finalStatus as new when the session is pending at the kyc step', async () => {
+      const response = {
+        id: 'sid',
+        finalStatus: 'pending',
+        externalUserId: 'ext-1',
+        kycStatus: 'pending',
+        vendor: 'sumsub',
+        vendorStatus: 'YELLOW',
+        currentStep: 'kyc',
+      };
+      nock(MOCK_API_URL).get('/sessions/sid/status').reply(200, response);
+      const { service } = getService();
+
+      expect(
+        await service.getSessionStatus({ sessionId: 'sid' }),
+      ).toStrictEqual({
+        ...response,
+        finalStatus: 'new',
+      });
+    });
+
+    it('keeps a pending finalStatus when currentStep is not kyc', async () => {
+      const response = {
+        id: 'sid',
+        finalStatus: 'pending',
+        externalUserId: 'ext-1',
+        kycStatus: 'pending',
+        vendor: 'iron',
+        vendorStatus: 'pending',
+        currentStep: 'phoneOtpCollection',
+      };
+      nock(MOCK_API_URL).get('/sessions/sid/status').reply(200, response);
+      const { service } = getService();
+
+      expect(
+        await service.getSessionStatus({ sessionId: 'sid' }),
+      ).toStrictEqual(response);
+    });
+
+    it('keeps finalStatus and an unrecognized currentStep', async () => {
+      const response = {
+        id: 'sid',
+        finalStatus: 'pending',
+        externalUserId: 'ext-1',
+        kycStatus: 'pending',
+        vendor: 'iron',
+        vendorStatus: 'pending',
+        currentStep: 'addressCollection',
+      };
+      nock(MOCK_API_URL).get('/sessions/sid/status').reply(200, response);
+      const { service } = getService();
+
+      expect(
+        await service.getSessionStatus({ sessionId: 'sid' }),
+      ).toStrictEqual(response);
+    });
+
+    it('returns the session when currentStep is omitted', async () => {
+      const response = {
+        id: 'sid',
+        finalStatus: 'pending',
+        externalUserId: 'ext-1',
+        kycStatus: 'pending',
+        vendor: 'iron',
+        vendorStatus: 'pending',
+      };
+      nock(MOCK_API_URL).get('/sessions/sid/status').reply(200, response);
+      const { service } = getService();
+
+      expect(
+        await service.getSessionStatus({ sessionId: 'sid' }),
       ).toStrictEqual(response);
     });
 
@@ -740,6 +817,7 @@ describe('KycService', () => {
       kycStatus: 'approved',
       vendor: 'iron',
       vendorStatus: 'GREEN',
+      currentStep: 'approved',
     };
 
     it('returns the latest session status for the vendor', async () => {
@@ -785,6 +863,105 @@ describe('KycService', () => {
       await expect(service.getSessionStatusForVendor('iron')).rejects.toThrow(
         /failed with status '500'/u,
       );
+    });
+  });
+
+  describe('getDataShares', () => {
+    const shares = [
+      {
+        kycSessionId: '11111111-2222-3333-4444-555555555555',
+        vendor: 'moonpay',
+        sharedAt: '2026-02-02T00:00:00.000Z',
+      },
+      {
+        kycSessionId: '66666666-7777-8888-9999-000000000000',
+        vendor: 'iron',
+        sharedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    it('unwraps the shares envelope from the idOS relay', async () => {
+      nock(MOCK_IDOS_RELAY_URL)
+        .get('/api/kyc/external-user-id/ext-1/shares')
+        .matchHeader('authorization', 'Bearer test-bearer')
+        .reply(200, { shares });
+      const { service } = getService();
+
+      expect(
+        await service.getDataShares({ externalUserId: 'ext-1' }),
+      ).toStrictEqual(shares);
+    });
+
+    it('returns an empty array when no data has been shared', async () => {
+      nock(MOCK_IDOS_RELAY_URL)
+        .get('/api/kyc/external-user-id/ext-1/shares')
+        .reply(200, { shares: [] });
+      const { service } = getService();
+
+      expect(
+        await service.getDataShares({ externalUserId: 'ext-1' }),
+      ).toStrictEqual([]);
+    });
+
+    it('keeps shares for vendors this package does not model', async () => {
+      const relayShares = [
+        {
+          kycSessionId: '11111111-2222-3333-4444-555555555555',
+          vendor: 'kraken',
+          sharedAt: '2026-02-02T00:00:00.000Z',
+        },
+      ];
+      nock(MOCK_IDOS_RELAY_URL)
+        .get('/api/kyc/external-user-id/ext-1/shares')
+        .reply(200, { shares: relayShares });
+      const { service } = getService();
+
+      expect(
+        await service.getDataShares({ externalUserId: 'ext-1' }),
+      ).toStrictEqual(relayShares);
+    });
+
+    it('encodes the external user id in the path', async () => {
+      nock(MOCK_IDOS_RELAY_URL)
+        .get('/api/kyc/external-user-id/ext%2F1/shares')
+        .reply(200, { shares: [] });
+      const { service } = getService();
+
+      expect(
+        await service.getDataShares({ externalUserId: 'ext/1' }),
+      ).toStrictEqual([]);
+    });
+
+    it('throws when no idOS relay base URL is configured', async () => {
+      const { service } = getService({ idosRelayBaseUrl: null });
+
+      await expect(
+        service.getDataShares({ externalUserId: 'ext-1' }),
+      ).rejects.toThrow(
+        /idosRelayBaseUrl is not configured; cannot fetch data shares/u,
+      );
+    });
+
+    it('throws on a malformed response', async () => {
+      nock(MOCK_IDOS_RELAY_URL)
+        .get('/api/kyc/external-user-id/ext-1/shares')
+        .reply(200, { shares: [{ kycSessionId: 'sid' }] });
+      const { service } = getService();
+
+      await expect(
+        service.getDataShares({ externalUserId: 'ext-1' }),
+      ).rejects.toThrow(/Malformed response received from data shares API/u);
+    });
+
+    it('throws an HttpError on a non-ok response', async () => {
+      nock(MOCK_IDOS_RELAY_URL)
+        .get('/api/kyc/external-user-id/ext-1/shares')
+        .reply(500);
+      const { service } = getService();
+
+      await expect(
+        service.getDataShares({ externalUserId: 'ext-1' }),
+      ).rejects.toThrow(/failed with status '500'/u);
     });
   });
 

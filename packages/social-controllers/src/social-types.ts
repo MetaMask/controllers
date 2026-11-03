@@ -843,6 +843,14 @@ export type BlockOptions =
     };
 
 /**
+ * Options for `DELETE /v1/moderation/blocks/profiles/:profileId`.
+ */
+export type UnblockProfileOptions = {
+  /** Profile id (UUID) of the trader to unblock. */
+  profileId: string;
+};
+
+/**
  * Options for the cursor-paginated moderation list endpoints. Omit `cursor`
  * for the first page.
  */
@@ -906,6 +914,19 @@ export type BlockedContentResponse = {
   items: BlockedContent[];
   /** Pass as `cursor` for the next page. `null` on the last page. */
   cursor: string | null;
+};
+
+/**
+ * Response from `GET /v1/moderation/status`: whether the moderation team has
+ * banned the current user. A banned user cannot post, reply, or react.
+ */
+export type ModerationStatusResponse = {
+  /** Whether the current user is banned. */
+  banned: boolean;
+  /** When the ban was placed, in Unix epoch seconds. `null` when not banned. */
+  bannedAt: number | null;
+  /** The reason the moderation team gave the user, if any. Safe to show. */
+  reason: string | null;
 };
 
 // ---------------------------------------------------------------------------

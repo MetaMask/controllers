@@ -41,6 +41,7 @@ export type {
   SocialServiceFetchMyFollowingAction,
   SocialServiceFetchMyFollowersAction,
   SocialServiceFetchLeaderboardAction,
+  SocialServiceFetchModerationStatusAction,
   SocialServiceFetchOpenPositionsAction,
   SocialServiceFetchPositionByIdAction,
   SocialServiceFetchTraderFeedAction,
@@ -54,6 +55,7 @@ export type {
   SocialServiceTranslateCommentAction,
   SocialServiceRefreshNotificationPreferencesCacheAction,
   SocialServiceRemoveCommentReactionAction,
+  SocialServiceUnblockProfileAction,
   SocialServiceUnfollowAction,
 } from './SocialService-method-action-types.js';
 
@@ -117,6 +119,7 @@ export type {
   FollowResponse,
   LeaderboardEntry,
   LeaderboardResponse,
+  ModerationStatusResponse,
   Pagination,
   PerChainBreakdown,
   Position,
@@ -138,6 +141,7 @@ export type {
   TraderProfileResponse,
   TraderRankingTag,
   TraderStats,
+  UnblockProfileOptions,
   UnfollowOptions,
   UnfollowResponse,
 } from './social-types.js';
