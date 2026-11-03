@@ -321,7 +321,10 @@ export type {
 } from './autoramp-types.js';
 export type {
   NeoBankServiceActions,
+  NeoBankServiceCacheUpdatedEvent,
   NeoBankServiceEvents,
+  NeoBankServiceGranularCacheUpdatedEvent,
+  NeoBankServiceInvalidateQueriesAction,
   NeoBankServiceMessenger,
   NeoBankAutorampResponse,
   NeoBankMicrodeposit,
