@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Add `@metamask/assets-controller` as a dependency ([#10885](https://github.com/MetaMask/core/pull/10885))
+- Add `@metamask/assets-controller` `^20.2.0` as a dependency ([#10885](https://github.com/MetaMask/core/pull/10885))
 
 ## [21.0.0]
 
