@@ -299,6 +299,81 @@ describe('parseRealtimeFeedItem', () => {
     expect(item).not.toHaveProperty('authorComment');
   });
 
+  it('maps raw trade comments to author comments, newest first', () => {
+    const rawComment = {
+      uid: 'comment-1',
+      commentText: 'Bought the dip',
+      timestamp: 100,
+      sourceLanguage: 'pt',
+      translations: { en: 'Bought the dip' },
+      metrics: {
+        reactions: [
+          {
+            emotion: '🔥',
+            count: 1,
+            profiles: [{ id: 'profile-2', name: 'Reacting trader' }],
+          },
+        ],
+        userReaction: null,
+      },
+      replies: [{}, {}],
+    };
+    const value = {
+      ...fullHydratedPosition,
+      metadata: {
+        ...fullHydratedPosition.metadata,
+        trades: [
+          {
+            ...fullHydratedPosition.metadata.trades[1],
+            comments: [
+              rawComment,
+              {
+                uid: 'comment-0',
+                commentText: 'First call',
+                timestamp: 90,
+                metrics: { reactions: [], userReaction: null },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(normalizeRealtimeFeedItem(value)?.trades[0].comments).toStrictEqual([
+      {
+        uid: 'comment-1',
+        text: 'Bought the dip',
+        timestamp: 100,
+        sourceLanguage: 'pt',
+        translations: { en: 'Bought the dip' },
+        engagement: {
+          reactions: rawComment.metrics.reactions,
+          userReaction: null,
+          replyCount: 2,
+        },
+      },
+      {
+        uid: 'comment-0',
+        text: 'First call',
+        timestamp: 90,
+        sourceLanguage: null,
+        translations: {},
+        engagement: { reactions: [], userReaction: null, replyCount: 0 },
+      },
+    ]);
+  });
+
+  it('drops malformed trade comments and keeps the realtime item', () => {
+    const item = parseRealtimeFeedItem(fullHydratedPosition);
+
+    expect(item).toMatchObject({ positionId: 'position-1' });
+    expect(item?.trades.map((trade) => trade.comments)).toStrictEqual([
+      [],
+      [],
+      [],
+    ]);
+  });
+
   it('rejects incomplete event data', () => {
     expect(parseRealtimeFeedItem({ itemId: 'missing-fields' })).toBeUndefined();
   });
