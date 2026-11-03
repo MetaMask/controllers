@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add optional `comments` (`AuthorComment[]`) to the `Trade` type and `TradeStruct`, carrying every author comment on a fill, newest first ([#TBD](https://github.com/MetaMask/core/pull/TBD))
+- Add optional `comments` (`AuthorComment[]`) to the `Trade` type and `TradeStruct`, carrying every author comment on a fill, newest first ([#11265](https://github.com/MetaMask/core/pull/11265))
   - Position, positions, and feed responses validate each comment with the same struct as `authorComment`; responses that omit `comments` still validate.
   - The realtime feed parser maps the raw socket comments (`commentText`, `metrics`, `replies`) to the same shape. A malformed comment is dropped and the rest of the realtime item is kept.
 
