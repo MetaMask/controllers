@@ -58,7 +58,13 @@ function extractJSDoc(node: MethodDeclaration, source: SourceFile): string {
     const fullText = source.getFullText();
     const start = jsDoc.getFullStart();
     const end = jsDoc.getEnd();
-    const rawJsDoc = fullText.substring(start, end).trim();
+    // The node's range can begin with line comments that precede the JSDoc
+    // block (e.g. `// TODO: ...`), so skip to the line that opens the block.
+    const lines = fullText.substring(start, end).trim().split('\n');
+    const openingLine = lines.findIndex((line) =>
+      line.trim().startsWith('/**'),
+    );
+    const rawJsDoc = lines.slice(Math.max(openingLine, 0)).join('\n');
     return formatJSDoc(rawJsDoc);
   }
 
