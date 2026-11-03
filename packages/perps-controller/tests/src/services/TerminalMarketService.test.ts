@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mocked } from 'vitest';
 
 import { TERMINAL_API_CONFIG } from '../../../src/constants/perpsConfig.js';
@@ -117,10 +117,6 @@ describe('TerminalMarketService', () => {
     mockDeps = createMockInfrastructure();
     service = new TerminalMarketService(mockDeps);
     vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   describe('fetchMarkets', () => {
@@ -652,6 +648,73 @@ describe('TerminalMarketService', () => {
       });
       expect(result.markets[0]).not.toHaveProperty('futureMarket');
       expect(result).not.toHaveProperty('futureEnvelope');
+    });
+
+    it('maps isolated-only margin metadata into market info', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [
+              createSnapshotMarket({ onlyIsolated: null, marginMode: null }),
+              createSnapshotMarket({
+                id: 'hype-hyperliquid-mainnet',
+                symbol: 'HYPE',
+                onlyIsolated: true,
+                marginMode: 'strictIsolated',
+              }),
+              createSnapshotMarket({
+                id: 'purr-hyperliquid-mainnet',
+                symbol: 'PURR',
+                onlyIsolated: false,
+                marginMode: 'noCross',
+              }),
+            ],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result.marketInfos).toStrictEqual([
+        { name: 'BTC', szDecimals: 5, maxLeverage: 50, marginTableId: 0 },
+        {
+          name: 'HYPE',
+          szDecimals: 5,
+          maxLeverage: 50,
+          marginTableId: 0,
+          onlyIsolated: true,
+          marginMode: 'strictIsolated',
+        },
+        {
+          name: 'PURR',
+          szDecimals: 5,
+          maxLeverage: 50,
+          marginTableId: 0,
+          marginMode: 'noCross',
+        },
+      ]);
+    });
+
+    it('rejects an unknown margin mode', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [createSnapshotMarket({ marginMode: 'crossOnly' })],
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('failed schema validation');
     });
 
     it('maps a null rolling pair as unavailable', async () => {

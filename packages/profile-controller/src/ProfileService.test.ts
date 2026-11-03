@@ -4,7 +4,7 @@ import type {
   MessengerActions,
   MessengerEvents,
 } from '@metamask/messenger';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ProfileService,
@@ -96,15 +96,10 @@ function createService(
 
 describe('ProfileService', () => {
   const mockFetch = vi.fn();
-  const originalFetch = global.fetch;
 
   beforeEach(() => {
-    global.fetch = mockFetch;
+    vi.stubGlobal('fetch', mockFetch);
     mockFetch.mockReset();
-  });
-
-  afterAll(() => {
-    global.fetch = originalFetch;
   });
 
   describe('getProfile', () => {
@@ -618,19 +613,16 @@ describe('ProfileService', () => {
   });
 
   describe('disconnectX', () => {
-    it('sends DELETE to the profile X endpoint', async () => {
+    it('sends DELETE to the shared X account endpoint', async () => {
       mockFetch.mockResolvedValue({ ok: true, status: 204, json: () => null });
 
       const service = createService();
       await service.disconnectX('profile-123');
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${V1_URL}/profiles/profile-123/x`,
-        {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${MOCK_TOKEN}` },
-        },
-      );
+      expect(mockFetch).toHaveBeenCalledWith(`${V1_URL}/profiles/x/account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${MOCK_TOKEN}` },
+      });
     });
 
     it('invalidates the cached profile so the next getProfile reflects the disconnection', async () => {
@@ -659,14 +651,14 @@ describe('ProfileService', () => {
       expect(result).toStrictEqual(mockProfileResponse);
     });
 
-    it('encodes the profile ID in the URL', async () => {
+    it('does not include the profile ID in the URL (identity comes from the bearer token)', async () => {
       mockFetch.mockResolvedValue({ ok: true, status: 204, json: () => null });
 
       const service = createService();
       await service.disconnectX('user/with/slashes');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        `${V1_URL}/profiles/user%2Fwith%2Fslashes/x`,
+        `${V1_URL}/profiles/x/account`,
         expect.anything(),
       );
     });

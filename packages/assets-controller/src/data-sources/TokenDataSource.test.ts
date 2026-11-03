@@ -6,7 +6,7 @@ import type {
   PhishingControllerBulkScanTokensAction,
 } from '@metamask/phishing-controller';
 import { TokenScanResultType } from '@metamask/phishing-controller';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 
 import type { AssetsControllerMessenger } from '../AssetsController.js';
@@ -138,8 +138,8 @@ function createDataRequest(
 function createMiddlewareContext(overrides?: Partial<Context>): Context {
   return {
     request: createDataRequest(),
-    response: {},
     ...overrides,
+    response: overrides?.response ?? {},
   };
 }
 
@@ -196,10 +196,6 @@ function setupController(options: {
 }
 
 describe('TokenDataSource', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
   it('initializes with correct name', () => {
     const { controller } = setupController({
       messenger: createTestMessenger(),
@@ -217,7 +213,7 @@ describe('TokenDataSource', () => {
     expect(typeof middleware).toBe('function');
   });
 
-  it('middleware passes to next when no detected assets', async () => {
+  it('middleware passes to next when the response has no balances', async () => {
     const { controller } = setupController({
       messenger: createTestMessenger(),
     });
@@ -232,22 +228,7 @@ describe('TokenDataSource', () => {
     expect(next).toHaveBeenCalledWith(context);
   });
 
-  it('middleware passes to next when detected assets is empty', async () => {
-    const { controller } = setupController({
-      messenger: createTestMessenger(),
-    });
-
-    const next = vi.fn().mockResolvedValue(undefined);
-    const context = createMiddlewareContext({
-      response: { detectedAssets: {} },
-    });
-
-    await controller.assetsMiddleware(context, next);
-
-    expect(next).toHaveBeenCalledWith(context);
-  });
-
-  it('middleware fetches metadata for detected assets', async () => {
+  it('middleware fetches metadata for response balances', async () => {
     const { controller, apiClient } = setupController({
       messenger: createTestMessenger(),
       supportedNetworks: ['eip155:1'],
@@ -257,8 +238,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -326,9 +309,8 @@ describe('TokenDataSource', () => {
   });
 
   it('middleware heals low-occurrence balance-only assets without spam-filtering them out', async () => {
-    // Already-tracked balances missing assetsInfo are healed via assetsBalance
-    // (not detectedAssets). Spam filtering must not strip those holdings or
-    // withhold metadata — DetectionMiddleware intentionally skips them.
+    // Balances already tracked in state, but missing metadata, are enriched
+    // without spam filtering.
     const lowOccurrenceAsset =
       'eip155:1/erc20:0x1111111111111111111111111111111111111111' as Caip19AssetId;
 
@@ -339,6 +321,14 @@ describe('TokenDataSource', () => {
         createMockAssetResponse(lowOccurrenceAsset, { occurrences: 1 }),
       ],
       suggestedOccurrenceFloors: { '1': 3 },
+      getAssetsState: (): Partial<AssetsControllerState> => ({
+        assetsInfo: {},
+        assetsBalance: {
+          'mock-account-id': {
+            [lowOccurrenceAsset]: { amount: '50' },
+          },
+        },
+      }),
     });
 
     const next = vi.fn().mockResolvedValue(undefined);
@@ -365,7 +355,7 @@ describe('TokenDataSource', () => {
     expect(next).toHaveBeenCalledWith(context);
   });
 
-  it('middleware still spam-filters newly detected low-occurrence assets even when also in assetsBalance', async () => {
+  it('middleware spam-filters new low-occurrence balances', async () => {
     const spamAsset =
       'eip155:1/erc20:0x2222222222222222222222222222222222222222' as Caip19AssetId;
 
@@ -379,9 +369,6 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [spamAsset],
-        },
         assetsBalance: {
           'mock-account-id': {
             [spamAsset]: { amount: '50' },
@@ -400,12 +387,9 @@ describe('TokenDataSource', () => {
           | undefined
       )?.[spamAsset],
     ).toBeUndefined();
-    expect(context.response.detectedAssets?.['mock-account-id']).not.toContain(
-      spamAsset,
-    );
   });
 
-  it('middleware skips assets with existing metadata containing image in response', async () => {
+  it('middleware skips a response token whose metadata is already complete', async () => {
     const { controller, apiClient } = setupController({
       messenger: createTestMessenger(),
       supportedNetworks: ['eip155:1'],
@@ -414,8 +398,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
         assetsInfo: {
           [MOCK_TOKEN_ASSET]: {
@@ -424,6 +410,8 @@ describe('TokenDataSource', () => {
             symbol: 'EXT',
             decimals: 18,
             image: 'https://existing.com/icon.png',
+            aggregators: ['metamask'],
+            occurrences: 5,
           },
         },
       },
@@ -435,7 +423,7 @@ describe('TokenDataSource', () => {
     expect(next).toHaveBeenCalledWith(context);
   });
 
-  it('middleware skips assets with existing metadata containing image in state', async () => {
+  it('middleware skips a state token whose metadata is already complete', async () => {
     const { controller, apiClient } = setupController({
       messenger: createTestMessenger(),
       supportedNetworks: ['eip155:1'],
@@ -447,6 +435,8 @@ describe('TokenDataSource', () => {
             symbol: 'STT',
             decimals: 18,
             image: 'https://state.com/icon.png',
+            aggregators: ['metamask'],
+            occurrences: 5,
           },
         },
       }),
@@ -455,8 +445,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -477,8 +469,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
         assetsInfo: {
           [MOCK_TOKEN_ASSET]: {
@@ -520,8 +514,11 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET, unsupportedAsset],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+            [unsupportedAsset]: { amount: '1' },
+          },
         },
       },
     });
@@ -554,8 +551,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [unsupportedAsset],
+        assetsBalance: {
+          'mock-account-id': {
+            [unsupportedAsset]: { amount: '1' },
+          },
         },
       },
     });
@@ -578,8 +577,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -603,8 +604,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -630,8 +633,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_NATIVE_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_NATIVE_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -659,8 +664,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_SPL_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_SPL_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -709,8 +716,10 @@ describe('TokenDataSource', () => {
       const next = vi.fn().mockResolvedValue(undefined);
       const context = createMiddlewareContext({
         response: {
-          detectedAssets: {
-            'mock-account-id': [assetId],
+          assetsBalance: {
+            'mock-account-id': {
+              [assetId]: { amount: '1' },
+            },
           },
         },
       });
@@ -743,8 +752,10 @@ describe('TokenDataSource', () => {
             image: 'https://dai.com/icon.png',
           },
         },
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -755,7 +766,7 @@ describe('TokenDataSource', () => {
     expect(context.response.assetsInfo?.[MOCK_TOKEN_ASSET]).toBeDefined();
   });
 
-  it('middleware handles multiple detected assets from multiple accounts', async () => {
+  it('middleware fetches metadata for balances from multiple accounts', async () => {
     const secondAsset =
       'eip155:1/erc20:0x6b175474e89094c44da98b954eedeac495271d0f' as Caip19AssetId;
 
@@ -774,9 +785,13 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'account-1': [MOCK_TOKEN_ASSET],
-          'account-2': [secondAsset],
+        assetsBalance: {
+          'account-1': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
+          'account-2': {
+            [secondAsset]: { amount: '1' },
+          },
         },
       },
     });
@@ -809,9 +824,13 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'account-1': [MOCK_TOKEN_ASSET],
-          'account-2': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'account-1': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
+          'account-2': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -849,8 +868,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': assetIds,
+        assetsBalance: {
+          'mock-account-id': Object.fromEntries(
+            assetIds.map((assetId) => [assetId, { amount: '1' }]),
+          ),
         },
       },
     });
@@ -880,8 +901,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -912,11 +935,11 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [
-            MOCK_TOKEN_ASSET,
-            'invalid-asset-id' as Caip19AssetId,
-          ],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+            ['invalid-asset-id' as Caip19AssetId]: { amount: '1' },
+          },
         },
       },
     });
@@ -954,9 +977,6 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET, spamAsset],
-        },
         assetsBalance: {
           'mock-account-id': {
             [MOCK_TOKEN_ASSET]: { amount: '100' },
@@ -977,13 +997,6 @@ describe('TokenDataSource', () => {
     ] as Record<string, unknown> | undefined;
     expect(accountBalances?.[MOCK_TOKEN_ASSET]).toBeDefined();
     expect(accountBalances?.[spamAsset]).toBeUndefined();
-
-    expect(context.response.detectedAssets?.['mock-account-id']).toContain(
-      MOCK_TOKEN_ASSET,
-    );
-    expect(context.response.detectedAssets?.['mock-account-id']).not.toContain(
-      spamAsset,
-    );
   });
 
   it('middleware strips stub metadata of filtered-out assets so it does not persist', async () => {
@@ -1003,9 +1016,6 @@ describe('TokenDataSource', () => {
     // persist to state and mask re-detection of the spam token.
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [spamAsset],
-        },
         assetsBalance: {
           'mock-account-id': {
             [spamAsset]: { amount: '50' },
@@ -1055,7 +1065,7 @@ describe('TokenDataSource', () => {
 
     const next = vi.fn().mockResolvedValue(undefined);
     // Websocket-shaped update: brand-new tokens (absent from state) with
-    // seeded metadata stubs. Runs BEFORE DetectionMiddleware.
+    // seeded metadata stubs.
     const context = createMiddlewareContext({
       request: createDataRequest({ dataTypes: ['balance'] }),
       response: {
@@ -1283,8 +1293,10 @@ describe('TokenDataSource', () => {
     const context = createMiddlewareContext({
       request: createDataRequest({ chainIds: ['eip155:143'] }),
       response: {
-        detectedAssets: {
-          'mock-account-id': [monadToken],
+        assetsBalance: {
+          'mock-account-id': {
+            [monadToken]: { amount: '1' },
+          },
         },
       },
     });
@@ -1313,8 +1325,10 @@ describe('TokenDataSource', () => {
     const context = createMiddlewareContext({
       request: createDataRequest({ chainIds: ['eip155:137'] }),
       response: {
-        detectedAssets: {
-          'mock-account-id': [polygonToken],
+        assetsBalance: {
+          'mock-account-id': {
+            [polygonToken]: { amount: '1' },
+          },
         },
       },
     });
@@ -1341,8 +1355,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [spamAsset],
+        assetsBalance: {
+          'mock-account-id': {
+            [spamAsset]: { amount: '1' },
+          },
         },
       },
     });
@@ -1381,8 +1397,10 @@ describe('TokenDataSource', () => {
     const context = createMiddlewareContext({
       request: createDataRequest(),
       response: {
-        detectedAssets: {
-          'mock-account-id': [checksummedCustomAsset],
+        assetsBalance: {
+          'mock-account-id': {
+            [checksummedCustomAsset]: { amount: '1' },
+          },
         },
       },
     });
@@ -1416,8 +1434,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [musdAsset],
+        assetsBalance: {
+          'mock-account-id': {
+            [musdAsset]: { amount: '1' },
+          },
         },
       },
     });
@@ -1442,8 +1462,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [noOccurrenceAsset],
+        assetsBalance: {
+          'mock-account-id': {
+            [noOccurrenceAsset]: { amount: '1' },
+          },
         },
       },
     });
@@ -1489,8 +1511,11 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [maliciousSolanaToken, benignSolanaToken],
+        assetsBalance: {
+          'mock-account-id': {
+            [maliciousSolanaToken]: { amount: '1' },
+            [benignSolanaToken]: { amount: '1' },
+          },
         },
       },
     });
@@ -1517,7 +1542,13 @@ describe('TokenDataSource', () => {
 
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
-      response: {},
+      response: {
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_NATIVE_ASSET]: { amount: '0' },
+          },
+        },
+      },
     });
 
     await controller.assetsMiddleware(context, next);
@@ -1528,25 +1559,21 @@ describe('TokenDataSource', () => {
     );
   });
 
-  it('middleware always includes native asset IDs in the fetch', async () => {
+  it('middleware does not fetch a native that is not a balance', async () => {
     const { controller, apiClient } = setupController({
       messenger: createTestMessenger(),
       supportedNetworks: ['eip155:1'],
       nativeAssetIds: [MOCK_NATIVE_ASSET],
-      assetsResponse: [
-        createMockAssetResponse(MOCK_TOKEN_ASSET),
-        createMockAssetResponse(MOCK_NATIVE_ASSET, {
-          name: 'Ethereum',
-          symbol: 'ETH',
-        }),
-      ],
+      assetsResponse: [createMockAssetResponse(MOCK_TOKEN_ASSET)],
     });
 
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -1554,62 +1581,43 @@ describe('TokenDataSource', () => {
     await controller.assetsMiddleware(context, next);
 
     expect(apiClient.tokens.fetchV3Assets).toHaveBeenCalledWith(
-      expect.arrayContaining([MOCK_TOKEN_ASSET, MOCK_NATIVE_ASSET]),
+      [MOCK_TOKEN_ASSET],
       expect.objectContaining({ includeIconUrl: true }),
-    );
-    expect(context.response.assetsInfo?.[MOCK_NATIVE_ASSET]).toBeDefined();
-    expect(context.response.assetsInfo?.[MOCK_NATIVE_ASSET]?.type).toBe(
-      'native',
     );
   });
 
-  it('middleware fetches native asset IDs even when detectedAssets is undefined', async () => {
+  it('middleware skips a native balance whose metadata is already complete', async () => {
     const { controller, apiClient } = setupController({
       messenger: createTestMessenger(),
       supportedNetworks: ['eip155:1'],
       nativeAssetIds: [MOCK_NATIVE_ASSET],
-      assetsResponse: [
-        createMockAssetResponse(MOCK_NATIVE_ASSET, {
-          name: 'Ethereum',
-          symbol: 'ETH',
-        }),
-      ],
-    });
-
-    const next = vi.fn().mockResolvedValue(undefined);
-    // detectedAssets is intentionally omitted (undefined) to mirror the real-world
-    // case where DetectionMiddleware finds zero balances and zero custom assets
-    const context = createMiddlewareContext({
-      response: {},
-    });
-
-    await controller.assetsMiddleware(context, next);
-
-    expect(apiClient.tokens.fetchV3Assets).toHaveBeenCalledWith(
-      [MOCK_NATIVE_ASSET],
-      expect.objectContaining({ includeIconUrl: true }),
-    );
-    expect(context.response.assetsInfo?.[MOCK_NATIVE_ASSET]).toBeDefined();
-  });
-
-  it('middleware fetches native asset IDs when detectedAssets is an empty object', async () => {
-    const { controller, apiClient } = setupController({
-      messenger: createTestMessenger(),
-      supportedNetworks: ['eip155:1'],
-      nativeAssetIds: [MOCK_NATIVE_ASSET],
-      assetsResponse: [
-        createMockAssetResponse(MOCK_NATIVE_ASSET, {
-          name: 'Ethereum',
-          symbol: 'ETH',
-        }),
-      ],
+      getAssetsState: () => ({
+        assetsInfo: {
+          [MOCK_NATIVE_ASSET]: {
+            type: 'native',
+            symbol: 'ETH',
+            name: 'Ethereum',
+            decimals: 18,
+            image: 'https://example.com/eth.png',
+            aggregators: [],
+            occurrences: 1,
+          },
+        },
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_NATIVE_ASSET]: { amount: '0' },
+          },
+        },
+      }),
     });
 
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_TOKEN_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -1617,13 +1625,12 @@ describe('TokenDataSource', () => {
     await controller.assetsMiddleware(context, next);
 
     expect(apiClient.tokens.fetchV3Assets).toHaveBeenCalledWith(
-      [MOCK_NATIVE_ASSET],
+      [MOCK_TOKEN_ASSET],
       expect.objectContaining({ includeIconUrl: true }),
     );
-    expect(context.response.assetsInfo?.[MOCK_NATIVE_ASSET]).toBeDefined();
   });
 
-  it('middleware deduplicates native asset IDs with detected assets', async () => {
+  it('middleware deduplicates native asset IDs with response balances', async () => {
     const { controller, apiClient } = setupController({
       messenger: createTestMessenger(),
       supportedNetworks: ['eip155:1'],
@@ -1639,8 +1646,10 @@ describe('TokenDataSource', () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createMiddlewareContext({
       response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_NATIVE_ASSET],
+        assetsBalance: {
+          'mock-account-id': {
+            [MOCK_NATIVE_ASSET]: { amount: '1' },
+          },
         },
       },
     });
@@ -1651,45 +1660,6 @@ describe('TokenDataSource', () => {
       [MOCK_NATIVE_ASSET],
       expect.objectContaining({ includeIconUrl: true }),
     );
-  });
-
-  it('middleware includes multiple native asset IDs across chains', async () => {
-    const polygonNativeAsset = 'eip155:137/slip44:966' as Caip19AssetId;
-
-    const { controller, apiClient } = setupController({
-      messenger: createTestMessenger(),
-      supportedNetworks: ['eip155:1', 'eip155:137'],
-      nativeAssetIds: [MOCK_NATIVE_ASSET, polygonNativeAsset],
-      assetsResponse: [
-        createMockAssetResponse(MOCK_NATIVE_ASSET, {
-          name: 'Ethereum',
-          symbol: 'ETH',
-        }),
-        createMockAssetResponse(polygonNativeAsset, {
-          name: 'Polygon',
-          symbol: 'POL',
-        }),
-      ],
-    });
-
-    const next = vi.fn().mockResolvedValue(undefined);
-    const context = createMiddlewareContext({
-      response: {
-        detectedAssets: {
-          'mock-account-id': [MOCK_TOKEN_ASSET],
-        },
-      },
-    });
-
-    await controller.assetsMiddleware(context, next);
-
-    expect(apiClient.tokens.fetchV3Assets).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        MOCK_TOKEN_ASSET,
-        MOCK_NATIVE_ASSET,
-        polygonNativeAsset,
-      ]),
-      expect.objectContaining({ includeIconUrl: true }),
-    );
+    expect(context.response.assetsInfo?.[MOCK_NATIVE_ASSET]).toBeDefined();
   });
 });

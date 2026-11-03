@@ -492,6 +492,14 @@
 /packages/money-account-controller/typedoc.json       @MetaMask/accounts-engineers @MetaMask/core-platform
 /packages/money-account-controller/vitest.config.*    @MetaMask/accounts-engineers @MetaMask/core-platform
 
+### money-account-lifecycle-controller
+/packages/money-account-lifecycle-controller                    @MetaMask/earn
+/packages/money-account-lifecycle-controller/CHANGELOG.md       @MetaMask/core-platform @MetaMask/earn
+/packages/money-account-lifecycle-controller/package.json       @MetaMask/core-platform @MetaMask/earn
+/packages/money-account-lifecycle-controller/tsconfig.*         @MetaMask/core-platform @MetaMask/earn
+/packages/money-account-lifecycle-controller/typedoc.json       @MetaMask/core-platform @MetaMask/earn
+/packages/money-account-lifecycle-controller/vitest.config.*    @MetaMask/core-platform @MetaMask/earn
+
 ### money-account-mfa-whitelist
 /packages/money-account-mfa-whitelist                    @MetaMask/earn
 /packages/money-account-mfa-whitelist/CHANGELOG.md       @MetaMask/core-platform @MetaMask/earn
@@ -897,6 +905,7 @@
 /packages/wallet/src/initialization/instances/keyring-controller/                @MetaMask/accounts-engineers @MetaMask/core-platform
 /packages/wallet/src/initialization/instances/logging-controller/                @MetaMask/confirmations
 /packages/wallet/src/initialization/instances/network-controller/                @MetaMask/core-platform @MetaMask/metamask-assets
+/packages/wallet/src/initialization/instances/network-enablement-controller/     @MetaMask/metamask-assets
 /packages/wallet/src/initialization/instances/passkey-controller/                @MetaMask/web3auth
 /packages/wallet/src/initialization/instances/permission-controller/             @MetaMask/core-platform
 /packages/wallet/src/initialization/instances/remote-feature-flag-controller/    @MetaMask/core-platform @MetaMask/extension-platform @MetaMask/mobile-platform
