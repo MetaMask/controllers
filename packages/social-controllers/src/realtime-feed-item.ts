@@ -14,8 +14,27 @@ import {
   unknown as unknownStruct,
 } from '@metamask/superstruct';
 
-import type { FeedItem, FeedActorSummary, Trade } from './social-types.js';
-import { AuthorCommentStruct, FeedItemStruct } from './structs.js';
+import type {
+  AuthorComment,
+  FeedItem,
+  FeedActorSummary,
+  Trade,
+} from './social-types.js';
+import {
+  AuthorCommentStruct,
+  CommentEngagementStruct,
+  FeedItemStruct,
+} from './structs.js';
+
+const RawTradeCommentStruct = structType({
+  uid: string(),
+  commentText: string(),
+  timestamp: number(),
+  sourceLanguage: optional(nullable(string())),
+  translations: optional(record(string(), string())),
+  metrics: CommentEngagementStruct,
+  replies: optional(array(unknownStruct())),
+});
 
 const RawTradeStruct = assign(
   structType({
@@ -123,6 +142,29 @@ const toActor = (actor: {
     : { followerCount: actor.followerCount }),
 });
 
+// Same mapping as social-api's `mapAuthorComment`, so a socket fill carries
+// the comments the REST payload would. Malformed entries are dropped.
+const toTradeComments = (comments: unknown[]): AuthorComment[] =>
+  comments.flatMap((comment) => {
+    if (!is(comment, RawTradeCommentStruct)) {
+      return [];
+    }
+    return [
+      {
+        uid: comment.uid,
+        text: comment.commentText,
+        timestamp: comment.timestamp,
+        sourceLanguage: comment.sourceLanguage ?? null,
+        translations: comment.translations ?? {},
+        engagement: {
+          reactions: comment.metrics.reactions,
+          userReaction: comment.metrics.userReaction,
+          replyCount: comment.replies?.length ?? 0,
+        },
+      },
+    ];
+  });
+
 const toTrade = (trade: {
   direction: 'buy' | 'sell';
   intent: 'enter' | 'exit';
@@ -134,6 +176,7 @@ const toTrade = (trade: {
   marketCap: number | null;
   timestamp: number;
   transactionHash: string;
+  comments: unknown[];
 }): Trade => ({
   direction: trade.direction,
   intent: trade.intent,
@@ -146,6 +189,7 @@ const toTrade = (trade: {
   marketCap: trade.marketCap,
   timestamp: trade.timestamp,
   transactionHash: trade.transactionHash,
+  comments: toTradeComments(trade.comments),
 });
 
 const isNormalizedRealtimeFeedItem = (value: unknown): value is FeedItem =>
