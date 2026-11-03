@@ -32,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **BREAKING:** Remove `onRetry`, `onBreak` and `onDegraded` from `RampsService` ([#11214](https://github.com/MetaMask/core/pull/11214))
-  - `BaseDataService` does not expose its policy, so there is no replacement for observing retries, circuit breaks or degraded responses. Retry and circuit-breaker behavior can still be configured through the `policyOptions` constructor option.
 - **BREAKING:** Remove `onRetry`, `onBreak` and `onDegraded` from `NeoBankService` ([#10882](https://github.com/MetaMask/core/pull/10882))
 
 ## [29.0.0]
