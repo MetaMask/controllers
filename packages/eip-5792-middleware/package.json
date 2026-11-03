@@ -38,7 +38,7 @@
     "build:docs": "typedoc",
     "build:only-clean": "rimraf './dist' './tsconfig.build.tsbuildinfo'",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/eip-5792-middleware",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/eip-5792-middleware",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",
     "since-latest-release": "../../scripts/since-latest-release.sh",
@@ -57,7 +57,7 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@metamask/keyring-controller": "^28.2.0",
     "@metamask/rpc-errors": "^7.0.3",
     "@typescript/native": "npm:typescript@^7.0.2",
