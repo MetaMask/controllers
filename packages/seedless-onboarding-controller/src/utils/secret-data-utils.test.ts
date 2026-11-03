@@ -1,5 +1,8 @@
 import { keccak256AndHexify } from '@metamask/auth-network-utils';
-import { EncAccountDataType } from '@metamask/toprf-secure-backup';
+import {
+  EncAccountDataType,
+  WrappedKeysItemId,
+} from '@metamask/toprf-secure-backup';
 import { stringToBytes } from '@metamask/utils';
 import { describe, expect, it } from 'vitest';
 
@@ -66,10 +69,11 @@ describe('secret data utilities', () => {
       ]);
     });
 
-    it('leaves out the MFA recovery-keys item', () => {
+    it('leaves out WrappedKeys (MFA recovery) items', () => {
       const results = parseSecretMetadata([
         {
-          itemId: 'recovery-keys',
+          itemId: WrappedKeysItemId.WrappedRecovery,
+          dataType: EncAccountDataType.WrappedKeys,
           data: serializeRecoveryKeysItem({
             recoveryEncKey: new Uint8Array(32).fill(1),
             recoveryAuthKeyPair: { sk: 1n, pk: derivePubKey(1n) },

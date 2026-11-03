@@ -1,10 +1,16 @@
 import { deriveStateFromMetadata } from '@metamask/base-controller';
 import type {
+  FetchedSecretDataItem,
   KeyPair,
   SEC1EncodedPublicKey,
   ToprfSecureBackup,
 } from '@metamask/toprf-secure-backup';
-import { TOPRFError, TOPRFErrorCode } from '@metamask/toprf-secure-backup';
+import {
+  EncAccountDataType,
+  TOPRFError,
+  TOPRFErrorCode,
+  WrappedKeysItemId,
+} from '@metamask/toprf-secure-backup';
 import { bytesToBase64, bytesToHex, stringToBytes } from '@metamask/utils';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import type { MockInstance } from 'vitest';
@@ -26,11 +32,13 @@ import type {
   WrappedKeySet,
 } from './mfa-recovery/recovery-keys.js';
 import {
+  isRecoveryKeysItem,
   parseRecoveryKeysItem,
   parseWrappedKeys,
   RECOVERY_KEYS_SECRET_TYPE,
   serializeRecoveryKeysItem,
   serializeWrappedKeys,
+  WRAPPED_KEYS_PREFIX,
 } from './mfa-recovery/recovery-keys.js';
 import { SecretMetadata } from './SecretMetadata.js';
 
@@ -162,8 +170,38 @@ describe('SeedlessOnboardingController', () => {
     }
 
     /**
-     * Mocks `fetchAllSecretDataItems`, answering by namespace. The items get
+     * Builds the fetched items for the given item data, the way the metadata
+     * store returns them: recovery-keys and wrapped-keys items are
+     * `WrappedKeys` items under their fixed item ID, other items get
      * server-assigned item IDs, which carry no meaning.
+     *
+     * @param source - The item data.
+     * @returns The fetched items.
+     */
+    function toFetchedItems(source: Uint8Array[]): FetchedSecretDataItem[] {
+      return source.map((data, index) => {
+        if (isRecoveryKeysItem(data)) {
+          return {
+            itemId: WrappedKeysItemId.WrappedRecovery,
+            data,
+            version: 'v2',
+            dataType: EncAccountDataType.WrappedKeys,
+          };
+        }
+        if (new TextDecoder().decode(data).startsWith(WRAPPED_KEYS_PREFIX)) {
+          return {
+            itemId: WrappedKeysItemId.WrappedSeedless,
+            data,
+            version: 'v2',
+            dataType: EncAccountDataType.WrappedKeys,
+          };
+        }
+        return { itemId: `server-item-${index}`, data, version: 'v1' };
+      });
+    }
+
+    /**
+     * Mocks `fetchAllSecretDataItems`, answering by namespace.
      *
      * @param toprfClient - The ToprfSecureBackup instance.
      * @param items - The item data per namespace.
@@ -196,11 +234,7 @@ describe('SeedlessOnboardingController', () => {
           } else {
             throw new Error('unexpected namespace');
           }
-          return source.map((data, index) => ({
-            itemId: `server-item-${index}`,
-            data,
-            version: 'v1' as const,
-          }));
+          return toFetchedItems(source);
         });
     }
 
@@ -820,8 +854,8 @@ describe('SeedlessOnboardingController', () => {
                       pwEncKey: new Uint8Array(32).fill(4),
                       authKeyPair: createRandomKeyPair(),
                     },
+                    vaultKeySet,
                   ]),
-                  serializeWrappedKeys([vaultKeySet]),
                 ],
                 recoveryEncKey: recoveryKeys.recoveryEncKey,
               });
@@ -1044,7 +1078,8 @@ describe('SeedlessOnboardingController', () => {
                   encKey: created.encKey,
                   authKeyPair: created.authKeyPair,
                   secretData: serializeWrappedKeys([vaultKeySet]),
-                  version: 'v1',
+                  itemId: WrappedKeysItemId.WrappedSeedless,
+                  dataType: EncAccountDataType.WrappedKeys,
                 },
               ],
               [
@@ -1052,7 +1087,8 @@ describe('SeedlessOnboardingController', () => {
                   encKey: vaultKeySet.encKey,
                   authKeyPair: vaultKeySet.authKeyPair,
                   secretData: expect.any(Uint8Array),
-                  version: 'v1',
+                  itemId: WrappedKeysItemId.WrappedRecovery,
+                  dataType: EncAccountDataType.WrappedKeys,
                 },
               ],
             ]);
@@ -1167,7 +1203,8 @@ describe('SeedlessOnboardingController', () => {
                 encKey: existing.encKey,
                 authKeyPair: existing.authKeyPair,
                 secretData: serializeWrappedKeys([vaultKeySet]),
-                version: 'v1',
+                itemId: WrappedKeysItemId.WrappedSeedless,
+                dataType: EncAccountDataType.WrappedKeys,
               },
             ],
             [
@@ -1175,7 +1212,8 @@ describe('SeedlessOnboardingController', () => {
                 encKey: vaultKeySet.encKey,
                 authKeyPair: vaultKeySet.authKeyPair,
                 secretData: expect.any(Uint8Array),
-                version: 'v1',
+                itemId: WrappedKeysItemId.WrappedRecovery,
+                dataType: EncAccountDataType.WrappedKeys,
               },
             ],
           ]);
@@ -1450,15 +1488,21 @@ describe('SeedlessOnboardingController', () => {
           expect(
             transformDataItems?.([
               {
-                itemId: 'server-item-0',
+                itemId: WrappedKeysItemId.WrappedRecovery,
                 data: recoveryKeysData,
-                version: 'v1',
+                version: 'v2',
+                dataType: EncAccountDataType.WrappedKeys,
               },
               { itemId: 'server-item-1', data: seedPhraseData, version: 'v1' },
             ]),
           ).toStrictEqual([
             { data: seedPhraseData, dataType: undefined, version: 'v1' },
-            { data: recoveryKeysData, dataType: undefined, version: 'v1' },
+            {
+              data: recoveryKeysData,
+              dataType: EncAccountDataType.WrappedKeys,
+              version: 'v2',
+              itemId: WrappedKeysItemId.WrappedRecovery,
+            },
           ]);
         });
       });
@@ -1507,11 +1551,7 @@ describe('SeedlessOnboardingController', () => {
             if (!namespace) {
               throw new Error('unexpected namespace');
             }
-            return namespace.items.map((data, index) => ({
-              itemId: `server-item-${index}`,
-              data,
-              version: 'v1' as const,
-            }));
+            return toFetchedItems(namespace.items);
           });
       }
 
@@ -1835,11 +1875,7 @@ describe('SeedlessOnboardingController', () => {
             } else {
               throw new Error('unexpected namespace');
             }
-            return source.map((data, index) => ({
-              itemId: `server-item-${index}`,
-              data,
-              version: 'v1' as const,
-            }));
+            return toFetchedItems(source);
           },
         );
         const changeEncKeySpy = vi
@@ -2168,7 +2204,7 @@ describe('SeedlessOnboardingController', () => {
           );
         });
 
-        it('picks the live key set when the wrapped-keys items hold several', async () => {
+        it('picks the live key set when the wrapped-keys item holds several', async () => {
           await withFreshDeviceController(
             async ({ toprfClient, baseMessenger }) => {
               await authenticateAal2(
@@ -2177,10 +2213,7 @@ describe('SeedlessOnboardingController', () => {
               );
               const staleKeySet = createLocalKeyResult('stale-password');
               const { liveKeySet, changeEncKeySpy } = mockRestore(toprfClient, {
-                wrappedKeySets: [
-                  [staleKeySet],
-                  [staleKeySet, getVaultKeySet()],
-                ],
+                wrappedKeySets: [[staleKeySet, getVaultKeySet()]],
               });
 
               await baseMessenger.call(

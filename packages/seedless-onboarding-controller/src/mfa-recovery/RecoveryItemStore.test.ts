@@ -3,7 +3,12 @@ import type {
   KeyPair,
   ToprfSecureBackup,
 } from '@metamask/toprf-secure-backup';
-import { TOPRFError, TOPRFErrorCode } from '@metamask/toprf-secure-backup';
+import {
+  EncAccountDataType,
+  TOPRFError,
+  TOPRFErrorCode,
+  WrappedKeysItemId,
+} from '@metamask/toprf-secure-backup';
 import { stringToBytes } from '@metamask/utils';
 import type { Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
@@ -43,6 +48,14 @@ const WRAPPED_KEY_SETS: WrappedKeySet[] = [
   },
 ];
 
+const OTHER_WRAPPED_KEY_SETS: WrappedKeySet[] = [
+  {
+    encKey: new Uint8Array([1, 1]),
+    pwEncKey: new Uint8Array([2, 2]),
+    authKeyPair: { sk: 43n, pk: derivePubKey(43n) },
+  },
+];
+
 const REQUEST: RecoveryRequest = {
   nodeAuthTokens: [
     { authToken: 'aal2', nodeIndex: 1, nodePubKey: 'nodePubKey' },
@@ -61,6 +74,25 @@ const REQUEST: RecoveryRequest = {
  */
 function createItem(itemId: string, data: Uint8Array): FetchedSecretDataItem {
   return { itemId, data, version: 'v1' };
+}
+
+/**
+ * Build a fetched `WrappedKeys` item.
+ *
+ * @param itemId - The fixed item ID.
+ * @param data - The item data.
+ * @returns The fetched item.
+ */
+function createWrappedKeysItem(
+  itemId: WrappedKeysItemId,
+  data: Uint8Array,
+): FetchedSecretDataItem {
+  return {
+    itemId,
+    data,
+    version: 'v2',
+    dataType: EncAccountDataType.WrappedKeys,
+  };
 }
 
 type MockToprf = {
@@ -118,11 +150,11 @@ describe('RecoveryItemStore', () => {
       });
     });
 
-    it('returns undefined when every recovery-keys item is malformed', async () => {
+    it('returns undefined when the recovery-keys item is malformed', async () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
-        createItem(
-          'item-1',
+        createWrappedKeysItem(
+          WrappedKeysItemId.WrappedRecovery,
           stringToBytes(JSON.stringify({ type: RECOVERY_KEYS_SECRET_TYPE })),
         ),
       ]);
@@ -130,45 +162,35 @@ describe('RecoveryItemStore', () => {
       expect(await store.fetchRecoveryKeys(VAULT_KEYS)).toBeUndefined();
     });
 
-    it('returns the keys from the recovery-keys item with the latest timestamp', async () => {
+    it('returns the keys from the wrapped_recovery item', async () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
-        createItem('item-1', serializeRecoveryKeysItem(RECOVERY_KEYS, 2)),
-        createItem('item-2', serializeRecoveryKeysItem(OTHER_RECOVERY_KEYS, 1)),
-      ]);
-
-      expect(await store.fetchRecoveryKeys(VAULT_KEYS)).toStrictEqual(
-        RECOVERY_KEYS,
-      );
-    });
-
-    it('returns the later item when timestamps are equal', async () => {
-      const { store, toprf } = createStore();
-      toprf.fetchAllSecretDataItems.mockResolvedValue([
-        createItem('item-1', serializeRecoveryKeysItem(RECOVERY_KEYS, 1)),
-        createItem('item-2', serializeRecoveryKeysItem(OTHER_RECOVERY_KEYS, 1)),
-      ]);
-
-      expect(await store.fetchRecoveryKeys(VAULT_KEYS)).toStrictEqual(
-        OTHER_RECOVERY_KEYS,
-      );
-    });
-
-    it('skips malformed recovery-keys items', async () => {
-      const { store, toprf } = createStore();
-      toprf.fetchAllSecretDataItems.mockResolvedValue([
-        createItem('item-1', serializeRecoveryKeysItem(RECOVERY_KEYS, 1)),
         createItem(
-          'item-2',
-          stringToBytes(
-            JSON.stringify({ type: RECOVERY_KEYS_SECRET_TYPE, timestamp: 2 }),
-          ),
+          'srp',
+          new SecretMetadata(stringToBytes('seed phrase')).toBytes(),
+        ),
+        createWrappedKeysItem(
+          WrappedKeysItemId.WrappedRecovery,
+          serializeRecoveryKeysItem(RECOVERY_KEYS),
         ),
       ]);
 
       expect(await store.fetchRecoveryKeys(VAULT_KEYS)).toStrictEqual(
         RECOVERY_KEYS,
       );
+    });
+
+    it('ignores recovery-keys data that is not under the wrapped_recovery WrappedKeys item', async () => {
+      const { store, toprf } = createStore();
+      toprf.fetchAllSecretDataItems.mockResolvedValue([
+        createItem('item-1', serializeRecoveryKeysItem(RECOVERY_KEYS)),
+        createWrappedKeysItem(
+          WrappedKeysItemId.WrappedRecoveryPending,
+          serializeRecoveryKeysItem(OTHER_RECOVERY_KEYS),
+        ),
+      ]);
+
+      expect(await store.fetchRecoveryKeys(VAULT_KEYS)).toBeUndefined();
     });
 
     it('rethrows auth token errors', async () => {
@@ -200,12 +222,14 @@ describe('RecoveryItemStore', () => {
   });
 
   describe('fetchWrappedKeys', () => {
-    it('returns the key sets from every wrapped-keys item and ignores malformed ones', async () => {
+    it('returns the key sets from the wrapped_seedless item', async () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
-        createItem('item-1', serializeRecoveryKeysItem(RECOVERY_KEYS)),
-        createItem('item-2', stringToBytes('garbage')),
-        createItem('item-3', serializeWrappedKeys(WRAPPED_KEY_SETS)),
+        createItem('item-1', serializeWrappedKeys(OTHER_WRAPPED_KEY_SETS)),
+        createWrappedKeysItem(
+          WrappedKeysItemId.WrappedSeedless,
+          serializeWrappedKeys(WRAPPED_KEY_SETS),
+        ),
       ]);
 
       expect(await store.fetchWrappedKeys(RECOVERY_KEYS)).toStrictEqual(
@@ -215,6 +239,18 @@ describe('RecoveryItemStore', () => {
         decKey: RECOVERY_KEYS.recoveryEncKey,
         authKeyPair: RECOVERY_KEYS.recoveryAuthKeyPair,
       });
+    });
+
+    it('returns an empty array when the wrapped-keys item is malformed', async () => {
+      const { store, toprf } = createStore();
+      toprf.fetchAllSecretDataItems.mockResolvedValue([
+        createWrappedKeysItem(
+          WrappedKeysItemId.WrappedSeedless,
+          stringToBytes('garbage'),
+        ),
+      ]);
+
+      expect(await store.fetchWrappedKeys(RECOVERY_KEYS)).toStrictEqual([]);
     });
 
     it('returns an empty array when there are no wrapped-keys items', async () => {
@@ -235,7 +271,7 @@ describe('RecoveryItemStore', () => {
   });
 
   describe('writeWrappedKeys', () => {
-    it('adds a wrapped-keys item to the TOPRF2 namespace', async () => {
+    it('writes the wrapped_seedless item to the TOPRF2 namespace', async () => {
       const { store, toprf } = createStore();
       toprf.addSecretDataItem.mockResolvedValue(undefined);
 
@@ -245,13 +281,14 @@ describe('RecoveryItemStore', () => {
         encKey: RECOVERY_KEYS.recoveryEncKey,
         authKeyPair: RECOVERY_KEYS.recoveryAuthKeyPair,
         secretData: serializeWrappedKeys(WRAPPED_KEY_SETS),
-        version: 'v1',
+        itemId: WrappedKeysItemId.WrappedSeedless,
+        dataType: EncAccountDataType.WrappedKeys,
       });
     });
   });
 
   describe('writeRecoveryKeys', () => {
-    it('adds a recovery-keys item without a data type to the TOPRF1 namespace', async () => {
+    it('writes the wrapped_recovery item to the TOPRF1 namespace', async () => {
       vi.useFakeTimers({ now: 1234 });
       try {
         const { store, toprf } = createStore();
@@ -266,7 +303,8 @@ describe('RecoveryItemStore', () => {
           encKey: ENC_KEY,
           authKeyPair: AUTH_KEY_PAIR,
           secretData: serializeRecoveryKeysItem(RECOVERY_KEYS, 1234),
-          version: 'v1',
+          itemId: WrappedKeysItemId.WrappedRecovery,
+          dataType: EncAccountDataType.WrappedKeys,
         });
       } finally {
         vi.useRealTimers();

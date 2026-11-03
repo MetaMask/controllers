@@ -1535,8 +1535,11 @@ export class SeedlessOnboardingController<
       oldAuthKeyPair: oldKeySet.authKeyPair,
       newKeyShareIndex: keyIndex,
       newPassword,
-      transformDataItems: (items) =>
-        items
+      transformDataItems: (items) => {
+        const isWrappedKeysItem = (item: FetchedSecretDataItem): boolean =>
+          item.dataType === EncAccountDataType.WrappedKeys;
+        const secretItems = items
+          .filter((item) => !isWrappedKeysItem(item))
           .sort((a, b) =>
             SecretMetadata.compare(
               SecretMetadata.fromRawMetadata(a.data, { dataType: a.dataType }),
@@ -1548,7 +1551,19 @@ export class SeedlessOnboardingController<
             data,
             dataType,
             version: dataType === undefined ? 'v1' : version,
-          })),
+          }));
+        // WrappedKeys items are not user secrets and must keep their fixed
+        // item ID, which the metadata store requires for this data type.
+        const wrappedKeysItems = items
+          .filter(isWrappedKeysItem)
+          .map(({ data, dataType, version, itemId }) => ({
+            data,
+            dataType,
+            version,
+            itemId,
+          }));
+        return [...secretItems, ...wrappedKeysItems];
+      },
     });
   }
 

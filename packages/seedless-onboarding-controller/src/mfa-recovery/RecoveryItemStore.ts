@@ -4,6 +4,10 @@ import type {
   SEC1EncodedPublicKey,
   ToprfSecureBackup,
 } from '@metamask/toprf-secure-backup';
+import {
+  EncAccountDataType,
+  WrappedKeysItemId,
+} from '@metamask/toprf-secure-backup';
 
 import {
   controllerName,
@@ -13,7 +17,6 @@ import { SeedlessOnboardingError } from '../errors.js';
 import { createModuleLogger, projectLogger } from '../logger.js';
 import {
   isAuthTokenError,
-  isRecoveryKeysItem,
   parseRecoveryKeysItem,
   parseWrappedKeys,
   serializeRecoveryKeysItem,
@@ -29,8 +32,8 @@ const log = createModuleLogger(projectLogger, controllerName);
  * item (TOPRF1 namespace, next to the user's secrets), the wrapped-keys item
  * (TOPRF2 namespace), and the recovery verifier auth public key.
  *
- * The metadata store assigns its own item IDs, so items are told apart by
- * their content rather than by item ID.
+ * Both items are `WrappedKeys` items under a fixed item ID, which the metadata
+ * store overwrites in place, so each namespace holds at most one of each.
  */
 export class RecoveryItemStore {
   readonly #getToprfClient: () => ToprfSecureBackup;
@@ -45,7 +48,7 @@ export class RecoveryItemStore {
   }
 
   /**
-   * Read the latest recovery-keys item from the TOPRF1 namespace.
+   * Read the recovery-keys item from the TOPRF1 namespace.
    *
    * @param params - The function parameters.
    * @param params.encKey - The TOPRF1 encryption key.
@@ -59,49 +62,50 @@ export class RecoveryItemStore {
     encKey: Uint8Array;
     authKeyPair: KeyPair;
   }): Promise<RecoveryKeys | undefined> {
-    const items = await this.#fetchSecretDataItems(encKey, authKeyPair);
-    let latest: ReturnType<typeof parseRecoveryKeysItem> | undefined;
-    for (const { data } of items) {
-      if (!isRecoveryKeysItem(data)) {
-        continue;
-      }
-      try {
-        const item = parseRecoveryKeysItem(data);
-        if (!latest || item.timestamp >= latest.timestamp) {
-          latest = item;
-        }
-      } catch (error) {
-        log('Ignoring malformed recovery-keys item', error);
-      }
+    const item = await this.#fetchWrappedKeysItem(
+      encKey,
+      authKeyPair,
+      WrappedKeysItemId.WrappedRecovery,
+    );
+    if (!item) {
+      return undefined;
     }
-    return latest?.recoveryKeys;
+    try {
+      return parseRecoveryKeysItem(item.data).recoveryKeys;
+    } catch (error) {
+      log('Ignoring malformed recovery-keys item', error);
+      return undefined;
+    }
   }
 
   /**
-   * Read the TOPRF1 key sets from the wrapped-keys items in the TOPRF2
+   * Read the TOPRF1 key sets from the wrapped-keys item in the TOPRF2
    * namespace.
    *
    * @param recoveryKeys - The TOPRF2 keys.
-   * @returns The wrapped key sets, or an empty array when there are no
-   * well-formed items.
+   * @returns The wrapped key sets, or an empty array when there is no
+   * well-formed item.
    */
   async fetchWrappedKeys(recoveryKeys: RecoveryKeys): Promise<WrappedKeySet[]> {
-    const items = await this.#fetchSecretDataItems(
+    const item = await this.#fetchWrappedKeysItem(
       recoveryKeys.recoveryEncKey,
       recoveryKeys.recoveryAuthKeyPair,
+      WrappedKeysItemId.WrappedSeedless,
     );
-    return items.flatMap(({ data }) => {
-      try {
-        return parseWrappedKeys(data);
-      } catch (error) {
-        log('Ignoring malformed wrapped-keys item', error);
-        return [];
-      }
-    });
+    if (!item) {
+      return [];
+    }
+    try {
+      return parseWrappedKeys(item.data);
+    } catch (error) {
+      log('Ignoring malformed wrapped-keys item', error);
+      return [];
+    }
   }
 
   /**
-   * Add a wrapped-keys item to the TOPRF2 namespace.
+   * Write the wrapped-keys item to the TOPRF2 namespace, replacing any
+   * existing one.
    *
    * @param recoveryKeys - The TOPRF2 keys.
    * @param keySets - The TOPRF1 key sets to wrap.
@@ -114,12 +118,14 @@ export class RecoveryItemStore {
       encKey: recoveryKeys.recoveryEncKey,
       authKeyPair: recoveryKeys.recoveryAuthKeyPair,
       secretData: serializeWrappedKeys(keySets),
-      version: 'v1',
+      itemId: WrappedKeysItemId.WrappedSeedless,
+      dataType: EncAccountDataType.WrappedKeys,
     });
   }
 
   /**
-   * Add a recovery-keys item to the TOPRF1 namespace.
+   * Write the recovery-keys item to the TOPRF1 namespace, replacing any
+   * existing one.
    *
    * @param params - The function parameters.
    * @param params.recoveryKeys - The TOPRF2 keys to store.
@@ -139,7 +145,8 @@ export class RecoveryItemStore {
       encKey,
       authKeyPair,
       secretData: serializeRecoveryKeysItem(recoveryKeys),
-      version: 'v1',
+      itemId: WrappedKeysItemId.WrappedRecovery,
+      dataType: EncAccountDataType.WrappedKeys,
     });
   }
 
@@ -167,6 +174,27 @@ export class RecoveryItemStore {
         { cause: error },
       );
     }
+  }
+
+  /**
+   * Fetch the `WrappedKeys` item with the given item ID from a namespace.
+   *
+   * @param decKey - The decryption key of the namespace.
+   * @param authKeyPair - The auth key pair of the namespace.
+   * @param itemId - The fixed item ID of the item.
+   * @returns The item, or undefined when the namespace has none.
+   */
+  async #fetchWrappedKeysItem(
+    decKey: Uint8Array,
+    authKeyPair: KeyPair,
+    itemId: WrappedKeysItemId,
+  ): Promise<FetchedSecretDataItem | undefined> {
+    const items = await this.#fetchSecretDataItems(decKey, authKeyPair);
+    return items.find(
+      (item) =>
+        item.itemId === itemId &&
+        item.dataType === EncAccountDataType.WrappedKeys,
+    );
   }
 
   /**

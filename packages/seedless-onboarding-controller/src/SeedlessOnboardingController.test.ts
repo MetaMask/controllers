@@ -24,6 +24,7 @@ import {
   EncAccountDataType,
   TOPRFError,
   TOPRFErrorCode,
+  WrappedKeysItemId,
 } from '@metamask/toprf-secure-backup';
 import type {
   FetchAuthPubKeyResult,
@@ -2555,7 +2556,8 @@ describe('SeedlessOnboardingController', () => {
                     },
                   }),
                   type: RECOVERY_KEYS_SECRET_TYPE as unknown as SecretType,
-                  itemId: 'recovery-keys-item-id',
+                  itemId: WrappedKeysItemId.WrappedRecovery,
+                  dataType: EncAccountDataType.WrappedKeys,
                 },
                 {
                   data: MOCK_PRIVATE_KEY,
@@ -4262,6 +4264,23 @@ describe('SeedlessOnboardingController', () => {
 
           const [legacyTransformed] = transformDataItems?.([legacyItem]) ?? [];
           expect(legacyTransformed?.version).toBe('v1');
+
+          const wrappedKeysItem = {
+            data: stringToBytes('wrapped-recovery'),
+            dataType: EncAccountDataType.WrappedKeys,
+            version: 'v2' as const,
+            itemId: WrappedKeysItemId.WrappedRecovery,
+          };
+          const withWrappedKeys = transformDataItems?.([
+            wrappedKeysItem,
+            ...unsortedItems,
+          ]);
+          expect(withWrappedKeys).toHaveLength(4);
+          expect(withWrappedKeys?.[0].dataType).toBe(
+            EncAccountDataType.PrimarySrp,
+          );
+          expect(withWrappedKeys?.[0].itemId).toBeUndefined();
+          expect(withWrappedKeys?.[3]).toStrictEqual(wrappedKeysItem);
         },
       );
     });
