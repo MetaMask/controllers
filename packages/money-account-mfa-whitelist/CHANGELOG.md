@@ -7,17 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- Release 1385.0.0 ([#11271](https://github.com/MetaMask/core/pull/11271))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-- Release/1377.0.0 ([#11203](https://github.com/MetaMask/core/pull/11203))
-- Release 1372.0.0 ([#11154](https://github.com/MetaMask/core/pull/11154))
-- test: run earn packages on Vitest ([#10962](https://github.com/MetaMask/core/pull/10962))
-- chore: opt into Jest types per package instead of in tsconfig.base.json ([#10862](https://github.com/MetaMask/core/pull/10862))
-
 ## [0.2.0]
 
 ### Added
