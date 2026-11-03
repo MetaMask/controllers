@@ -706,6 +706,48 @@ describe('RampsController', () => {
       });
     });
 
+    it.each(['garbage', '', 'NaN', 'Infinity', null])(
+      'falls back to the aggregator quote when the native fee is %j',
+      async (totalFee) => {
+        await withController(async ({ messenger, rootMessenger }) => {
+          rootMessenger.registerActionHandler(
+            'RampsService:getQuotes',
+            async () => buildQuotesResponse('/providers/transak-native'),
+          );
+          rootMessenger.registerActionHandler(
+            'TransakService:getBuyQuote',
+            async () => ({ totalFee }) as never,
+          );
+
+          const quote = await callGetQuoteWithFees(messenger);
+
+          expect(quote?.quote.providerFee).toBe(0.5);
+          expect(quote?.quote.networkFee).toBe(0.2);
+        });
+      },
+    );
+
+    it('treats an unparseable aggregator network fee as zero', async () => {
+      await withController(async ({ messenger, rootMessenger }) => {
+        rootMessenger.registerActionHandler(
+          'RampsService:getQuotes',
+          async () =>
+            buildQuotesResponse('/providers/transak-native', {
+              networkFee: 'garbage' as never,
+            }),
+        );
+        rootMessenger.registerActionHandler(
+          'TransakService:getBuyQuote',
+          async () => ({ totalFee: 0.9 }) as never,
+        );
+
+        const quote = await callGetQuoteWithFees(messenger);
+
+        expect(quote?.quote.networkFee).toBe('0');
+        expect(quote?.quote.providerFee).toBe('0.9');
+      });
+    });
+
     it('returns undefined when no quote is available', async () => {
       await withController(async ({ messenger, rootMessenger }) => {
         rootMessenger.registerActionHandler(

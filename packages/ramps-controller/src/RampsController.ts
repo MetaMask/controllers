@@ -64,6 +64,7 @@ import {
   TERMINAL_ORDER_STATUSES,
 } from './orderStatus.js';
 import { buildOwnershipMessage } from './ownership-message.js';
+import { parseDecimal } from './parseDecimal.js';
 import {
   mergePaymentMethodsById,
   pickPaymentMethod,
@@ -1533,10 +1534,8 @@ const NATIVE_TRANSAK_PROVIDER_CODES = [
  * @returns The fee as a non-negative BigNumber.
  */
 function getSafeRampsFee(value: number | string | undefined): BigNumber {
-  const fee = new BigNumber(value ?? 0);
-  return fee.isFinite() && fee.isGreaterThanOrEqualTo(0)
-    ? fee
-    : new BigNumber(0);
+  const fee = parseDecimal(value ?? 0);
+  return fee?.isGreaterThanOrEqualTo(0) ? fee : new BigNumber(0);
 }
 
 /** EVM ERC-20 CAIP-19. Hex case is not part of the address. */
@@ -3273,9 +3272,9 @@ export class RampsController extends BaseController<
         isFeeExcludedFromFiat,
       );
 
-      const nativeTotalFee = new BigNumber(nativeQuote.totalFee ?? NaN);
+      const nativeTotalFee = parseDecimal(nativeQuote.totalFee);
 
-      if (!nativeTotalFee.isFinite() || nativeTotalFee.isLessThan(0)) {
+      if (!nativeTotalFee?.isGreaterThanOrEqualTo(0)) {
         return quote;
       }
 
