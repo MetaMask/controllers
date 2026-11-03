@@ -8,7 +8,11 @@ import type { Mock } from 'vitest';
 import { getMessengerMock } from '../tests/messenger-mock.js';
 import { updateFiatPayment } from './actions/update-fiat-payment.js';
 import { updatePaymentToken } from './actions/update-payment-token.js';
-import { PaymentOverride, TransactionPayStrategy } from './constants.js';
+import {
+  PaymentOverride,
+  TransactionPayClientId,
+  TransactionPayStrategy,
+} from './constants.js';
 import { TransactionPayController } from './index.js';
 import { deriveFiatAssetForFiatPayment } from './strategy/fiat/utils.js';
 import type {
@@ -591,6 +595,24 @@ describe('TransactionPayController', () => {
       createController();
 
       const result = messenger.call('TransactionPayController:getFiatOptions');
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('getClientId', () => {
+    it('returns the configured client ID', () => {
+      createController({ clientId: TransactionPayClientId.Mobile });
+
+      const result = messenger.call('TransactionPayController:getClientId');
+
+      expect(result).toBe(TransactionPayClientId.Mobile);
+    });
+
+    it('returns undefined when no client ID is configured', () => {
+      createController();
+
+      const result = messenger.call('TransactionPayController:getClientId');
 
       expect(result).toBeUndefined();
     });
