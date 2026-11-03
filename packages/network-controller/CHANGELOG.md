@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **BREAKING:** Remove the `failoverUrls` property from `RpcEndpoint` (`InfuraRpcEndpoint` and `CustomRpcEndpoint`), and therefore from the endpoints accepted by `addNetwork` and `updateNetwork` ([#TBD](https://github.com/MetaMask/core/pull/TBD))
+- **BREAKING:** Remove the `failoverUrls` property from `RpcEndpoint` (`InfuraRpcEndpoint` and `CustomRpcEndpoint`), and therefore from the endpoints accepted by `addNetwork` and `updateNetwork` ([#11266](https://github.com/MetaMask/core/pull/11266))
   - Failover URLs are now sourced only from the `failoverUrls` constructor option, keyed by chain ID. The value stored on an endpoint in state was previously used as a fallback when the constructor option had no entry for the chain; it is now ignored.
   - Clients should stop writing `failoverUrls` to RPC endpoints, and can migrate persisted state to remove the stale property.
 - Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
