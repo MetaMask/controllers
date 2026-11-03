@@ -25,16 +25,21 @@ describe('aggregateAccountStates', () => {
     expect(aggregateAccountStates([])).toEqual(fallback);
   });
 
-  it('returns the single state unchanged when given one element', () => {
+  it('canonicalizes balances when given one state', () => {
     const single: AccountState = {
-      spendableBalance: '100',
-      withdrawableBalance: '100',
-      totalBalance: '200',
+      spendableBalance: '100.000000',
+      withdrawableBalance: '100.000000',
+      totalBalance: '200.000000',
       marginUsed: '50',
       unrealizedPnl: '10',
       returnOnEquity: '20',
     };
-    expect(aggregateAccountStates([single])).toEqual(single);
+    expect(aggregateAccountStates([single])).toEqual({
+      ...single,
+      spendableBalance: '100',
+      withdrawableBalance: '100',
+      totalBalance: '200',
+    });
   });
 
   it('sums numeric fields from two states and recalculates ROE', () => {
@@ -186,11 +191,101 @@ describe('aggregateAccountStates', () => {
     expect(parseFloat(result.marginUsed)).toBeCloseTo(81, 0);
     expect(parseFloat(result.unrealizedPnl)).toBeCloseTo(17, 0);
   });
+
+  it('emits canonical six-decimal balances when aggregating DEX states', () => {
+    const stateA: AccountState = {
+      spendableBalance: '0.0000009',
+      withdrawableBalance: '0.0000009',
+      totalBalance: '0.0000009',
+      marginUsed: '0',
+      unrealizedPnl: '0',
+      returnOnEquity: '0',
+    };
+    const stateB: AccountState = {
+      spendableBalance: '0.0000009',
+      withdrawableBalance: '0.0000009',
+      totalBalance: '0.0000009',
+      marginUsed: '0',
+      unrealizedPnl: '0',
+      returnOnEquity: '0',
+    };
+
+    const result = aggregateAccountStates([stateA, stateB]);
+
+    expect(result.spendableBalance).toBe('0.000001');
+    expect(result.withdrawableBalance).toBe('0.000001');
+    expect(result.totalBalance).toBe('0.000001');
+  });
 });
 
 describe('spot balance helpers', () => {
   it('returns zero spot balance when no spot state is provided', () => {
     expect(getSpotBalance()).toBe(0);
+  });
+
+  it('emits the same exact balance for equivalent decimal inputs', () => {
+    const accountState: AccountState = {
+      spendableBalance: '0',
+      withdrawableBalance: '0',
+      totalBalance: '0',
+      marginUsed: '0',
+      unrealizedPnl: '0',
+      returnOnEquity: '0',
+    };
+
+    const results = [
+      ['8.000006', '6.524823'],
+      ['4.000004', '2.524821'],
+    ].map(([total, hold]) =>
+      addSpotBalanceToAccountState(
+        accountState,
+        { balances: [{ coin: 'USDC', total, hold }] } as never,
+        { foldIntoCollateral: true },
+      ),
+    );
+
+    expect(
+      results.map(
+        ({ spendableBalance, withdrawableBalance, totalBalance }) => ({
+          spendableBalance,
+          withdrawableBalance,
+          totalBalance,
+        }),
+      ),
+    ).toEqual([
+      {
+        spendableBalance: '1.475183',
+        withdrawableBalance: '1.475183',
+        totalBalance: '1.475183',
+      },
+      {
+        spendableBalance: '1.475183',
+        withdrawableBalance: '1.475183',
+        totalBalance: '1.475183',
+      },
+    ]);
+  });
+
+  it('preserves a genuine one-micro-USDC balance change', () => {
+    const accountState: AccountState = {
+      spendableBalance: '0',
+      withdrawableBalance: '0',
+      totalBalance: '0',
+      marginUsed: '0',
+      unrealizedPnl: '0',
+      returnOnEquity: '0',
+    };
+    const getWithdrawableBalance = (total: string) =>
+      addSpotBalanceToAccountState(
+        accountState,
+        {
+          balances: [{ coin: 'USDC', total, hold: '6.524823' }],
+        } as never,
+        { foldIntoCollateral: true },
+      ).withdrawableBalance;
+
+    expect(getWithdrawableBalance('8.000006')).toBe('1.475183');
+    expect(getWithdrawableBalance('8.000007')).toBe('1.475184');
   });
 
   it('bumps totalBalance, spendableBalance, and withdrawableBalance by spot USDC without mutating the input', () => {
@@ -468,6 +563,14 @@ describe('cross margin summary aggregation', () => {
       maintenanceMargin: '10',
       marginUsed: '50',
       notional: '500',
+    });
+  });
+
+  it('sums decimal DEX summaries without floating-point artifacts', () => {
+    expect(
+      sumCrossMarginSummaries([withSummary('0.1'), withSummary('0.2')]),
+    ).toMatchObject({
+      accountValue: '0.3',
     });
   });
 

@@ -3,7 +3,9 @@
  * Handles account selection and EVM account filtering
  */
 import type { InternalAccount } from '@metamask/keyring-internal-api';
+import { BigNumber } from 'bignumber.js';
 
+import { USDC_DECIMALS } from '../constants/hyperLiquidConfig.js';
 import { PERPS_CONSTANTS } from '../constants/perpsConfig.js';
 import type { SpotClearinghouseStateResponse } from '../types/hyperliquid-types.js';
 import type {
@@ -157,42 +159,33 @@ export function calculateWeightedReturnOnEquity(
 // not inflate the balances shown or validated by withdraw/payment flows.
 const SPOT_COLLATERAL_COINS = new Set<string>(['USDC']);
 
+function getSpotCollateralAmount(
+  spotState: SpotClearinghouseStateResponse | null | undefined,
+  field: 'hold' | 'total',
+): BigNumber {
+  if (!spotState?.balances || !Array.isArray(spotState.balances)) {
+    return new BigNumber(0);
+  }
+
+  return spotState.balances.reduce((sum, balance) => {
+    if (!balance.coin || !SPOT_COLLATERAL_COINS.has(balance.coin)) {
+      return sum;
+    }
+    const value = new BigNumber(balance[field] ?? '0');
+    return value.isFinite() ? sum.plus(value) : sum;
+  }, new BigNumber(0));
+}
+
 export function getSpotBalance(
   spotState?: SpotClearinghouseStateResponse | null,
 ): number {
-  if (!spotState?.balances || !Array.isArray(spotState.balances)) {
-    return 0;
-  }
-
-  return spotState.balances.reduce(
-    (sum: number, balance: { coin?: string; total?: string }) => {
-      if (!balance.coin || !SPOT_COLLATERAL_COINS.has(balance.coin)) {
-        return sum;
-      }
-      const value = parseFloat(balance.total ?? '0');
-      return Number.isFinite(value) ? sum + value : sum;
-    },
-    0,
-  );
+  return getSpotCollateralAmount(spotState, 'total').toNumber();
 }
 
 export function getSpotHold(
   spotState?: SpotClearinghouseStateResponse | null,
 ): number {
-  if (!spotState?.balances || !Array.isArray(spotState.balances)) {
-    return 0;
-  }
-
-  return spotState.balances.reduce(
-    (sum: number, balance: { coin?: string; hold?: string }) => {
-      if (!balance.coin || !SPOT_COLLATERAL_COINS.has(balance.coin)) {
-        return sum;
-      }
-      const value = parseFloat(balance.hold ?? '0');
-      return Number.isFinite(value) ? sum + value : sum;
-    },
-    0,
-  );
+  return getSpotCollateralAmount(spotState, 'hold').toNumber();
 }
 
 /**
@@ -239,21 +232,21 @@ export function addSpotBalanceToAccountState(
   // over-report withdrawable funds for Standard / default users.
   const foldIntoCollateral = options?.foldIntoCollateral ?? false;
 
-  const spotBalance = getSpotBalance(spotState);
-  const spotHold = getSpotHold(spotState);
-  const freeSpot = Math.max(0, spotBalance - spotHold);
+  const spotBalance = getSpotCollateralAmount(spotState, 'total');
+  const spotHold = getSpotCollateralAmount(spotState, 'hold');
+  const freeSpot = BigNumber.max(0, spotBalance.minus(spotHold));
 
-  const currentTotal = parseFloat(accountState.totalBalance);
-  const currentSpendable = parseFloat(accountState.spendableBalance);
-  const currentWithdrawable = parseFloat(accountState.withdrawableBalance);
+  const currentTotal = new BigNumber(accountState.totalBalance);
+  const currentSpendable = new BigNumber(accountState.spendableBalance);
+  const currentWithdrawable = new BigNumber(accountState.withdrawableBalance);
 
   // Preserve sentinel totals (e.g. PERPS_CONSTANTS.FallbackDataDisplay '--')
   // rather than coercing them to NaN.
-  if (!Number.isFinite(currentTotal)) {
+  if (!currentTotal.isFinite()) {
     return accountState;
   }
 
-  if (spotBalance === 0) {
+  if (spotBalance.isZero()) {
     // No spot wealth means no hold either in the HL payload shape, so the
     // later totalBalance adjustment would also be a no-op.
     return accountState;
@@ -283,27 +276,29 @@ export function addSpotBalanceToAccountState(
   // double-counting on Unified/PM accounts where marginSummary.accountValue
   // already includes the margin that HL surfaces via spot.hold. Standard
   // mode has spotHold = 0 by construction, so the subtraction is a no-op.
-  const nextTotal = currentTotal + spotBalance - spotHold;
+  const nextTotal = canonicalizeUsdc(
+    currentTotal.plus(spotBalance).minus(spotHold),
+  );
 
   return {
     ...accountState,
-    totalBalance: nextTotal.toString(),
+    totalBalance: nextTotal,
     spendableBalance: nextSpendable,
     withdrawableBalance: nextWithdrawable,
   };
 }
 
 function resolveFoldedBalance(
-  currentNumeric: number,
+  currentNumeric: BigNumber,
   currentRaw: string,
-  freeSpot: number,
+  freeSpot: BigNumber,
   foldIntoCollateral: boolean,
 ): string {
   if (!foldIntoCollateral) {
     return currentRaw;
   }
-  if (Number.isFinite(currentNumeric)) {
-    return (currentNumeric + freeSpot).toString();
+  if (currentNumeric.isFinite()) {
+    return canonicalizeUsdc(currentNumeric.plus(freeSpot));
   }
   // Non-finite currentNumeric means the adapter passed a sentinel like
   // `PERPS_CONSTANTS.FallbackDataDisplay` ("--") during loading. Preserve
@@ -311,6 +306,10 @@ function resolveFoldedBalance(
   // UI treats "--" as "loading" and would otherwise show a misleading
   // spot-only figure while the per-DEX perps fetch is still in flight.
   return currentRaw;
+}
+
+function canonicalizeUsdc(value: BigNumber): string {
+  return value.decimalPlaces(USDC_DECIMALS, BigNumber.ROUND_DOWN).toFixed();
 }
 
 /**
@@ -331,8 +330,8 @@ export function sumCrossMarginSummaries(
   }
   const sum = (field: keyof CrossMarginSummary): string =>
     summaries
-      .reduce((total, summary) => total + parseFloat(summary[field]), 0)
-      .toString();
+      .reduce((total, summary) => total.plus(summary[field]), new BigNumber(0))
+      .toFixed();
   return {
     accountValue: sum('accountValue'),
     maintenanceMargin: sum('maintenanceMargin'),
@@ -368,16 +367,15 @@ export function aggregateAccountStates(states: AccountState[]): AccountState {
     }
 
     return {
-      spendableBalance: (
-        parseFloat(acc.spendableBalance) + parseFloat(state.spendableBalance)
-      ).toString(),
-      withdrawableBalance: (
-        parseFloat(acc.withdrawableBalance) +
-        parseFloat(state.withdrawableBalance)
-      ).toString(),
-      totalBalance: (
-        parseFloat(acc.totalBalance) + parseFloat(state.totalBalance)
-      ).toString(),
+      spendableBalance: addDecimalValues(
+        acc.spendableBalance,
+        state.spendableBalance,
+      ),
+      withdrawableBalance: addDecimalValues(
+        acc.withdrawableBalance,
+        state.withdrawableBalance,
+      ),
+      totalBalance: addDecimalValues(acc.totalBalance, state.totalBalance),
       marginUsed: (
         parseFloat(acc.marginUsed) + parseFloat(state.marginUsed)
       ).toString(),
@@ -387,6 +385,14 @@ export function aggregateAccountStates(states: AccountState[]): AccountState {
       returnOnEquity: '0',
     };
   }, fallback);
+
+  aggregated.spendableBalance = canonicalizeUsdcString(
+    aggregated.spendableBalance,
+  );
+  aggregated.withdrawableBalance = canonicalizeUsdcString(
+    aggregated.withdrawableBalance,
+  );
+  aggregated.totalBalance = canonicalizeUsdcString(aggregated.totalBalance);
 
   // Recalculate ROE across all DEXs
   const totalMarginUsed = parseFloat(aggregated.marginUsed);
@@ -406,4 +412,13 @@ export function aggregateAccountStates(states: AccountState[]): AccountState {
   }
 
   return aggregated;
+}
+
+function addDecimalValues(left: string, right: string): string {
+  return new BigNumber(left).plus(right).toFixed();
+}
+
+function canonicalizeUsdcString(value: string): string {
+  const amount = new BigNumber(value);
+  return amount.isFinite() ? canonicalizeUsdc(amount) : value;
 }
