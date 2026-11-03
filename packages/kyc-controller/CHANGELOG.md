@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `KycController.deleteEncryptedStorage`, which deletes the caller's encrypted KYC blobs ([#KYC-71](https://consensyssoftware.atlassian.net/browse/KYC-71))
+  - `KycService.createDeletion` posts `POST /deletions` with a fresh client public key and returns `deletionId` plus the `ukycCapabilityToken` wrapping key
+  - The controller mints a client-presented `delete`-scoped uKYC capability token with a 4 hour lifetime, wraps it with that key, and `KycService.completeDeletion` sends it to `DELETE /deletions/{deletionId}`
+  - Both service methods are exposed as the `KycService:createDeletion` and `KycService:completeDeletion` messenger actions, and the controller method as `KycController:deleteEncryptedStorage`
+  - Controller state is left unchanged
+
 ## [0.14.0]
 
 ### Added

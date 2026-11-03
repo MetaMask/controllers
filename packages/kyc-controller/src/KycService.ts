@@ -61,6 +61,8 @@ const MESSENGER_EXPOSED_METHODS = [
   'createUkycSession',
   'resetWrappingKeys',
   'setAuthorizations',
+  'createDeletion',
+  'completeDeletion',
   'createJourney',
   'getSessionStatus',
   'getSessionStatusForVendor',
@@ -211,6 +213,12 @@ const UkycSessionResponseStruct = type({
   ukycCapabilityToken: EncryptionSchemaStruct,
 });
 export type UkycSessionResponse = Infer<typeof UkycSessionResponseStruct>;
+
+const CreateDeletionResponseStruct = type({
+  deletionId: string(),
+  ukycCapabilityToken: EncryptionSchemaStruct,
+});
+export type CreateDeletionResponse = Infer<typeof CreateDeletionResponseStruct>;
 
 const ApplicantAccessTokenResponseStruct = type({
   status: string(),
@@ -379,6 +387,25 @@ export type CapabilityAuthorization = {
 export type SetAuthorizationsParams = {
   sessionId: string;
   wrappedEncryptionDataKey: CapabilityAuthorization;
+  wrappedUkycCapabilityToken: CapabilityAuthorization;
+};
+
+export type CreateDeletionParams = {
+  /**
+   * The client's per-request X25519 public key (unpadded base64url). Generated
+   * with the matching private key used to wrap the `delete`-scoped
+   * `ukyc_capability_token`, so the deletion server can open that box.
+   */
+  sessionClientPublicKey: string;
+};
+
+export type CompleteDeletionParams = {
+  /**
+   * Deletion id returned by {@link KycService.createDeletion}. Relay uses it
+   * to find the server-side private key for this request.
+   */
+  deletionId: string;
+  /** `delete`-scoped uKYC capability token, sealed with `wrapEncryptionKey`. */
   wrappedUkycCapabilityToken: CapabilityAuthorization;
 };
 
@@ -910,6 +937,59 @@ export class KycService extends BaseDataService<
       }),
     });
     return this.#validateAndPatchSessionStatus(data, 'authorizations');
+  }
+
+  /**
+   * Prepares deletion of the caller's encrypted KYC blobs
+   * (`POST /deletions`).
+   *
+   * The client registers a fresh X25519 public key. The response carries the
+   * deletion id and the `ukycCapabilityToken` encryption schema used to wrap
+   * a `delete`-scoped capability token and submit it via
+   * {@link KycService.completeDeletion}.
+   *
+   * @param params - The deletion parameters.
+   * @param params.sessionClientPublicKey - Per-request X25519 public key
+   * (unpadded base64url).
+   * @returns The deletion id and the capability-token encryption schema.
+   */
+  async createDeletion(
+    params: CreateDeletionParams,
+  ): Promise<CreateDeletionResponse> {
+    const url = new URL('/deletions', this.#baseUrl);
+    const data = await this.#requestJson(url, {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionClientPublicKey: params.sessionClientPublicKey,
+      }),
+    });
+    return this.#validateResponse(
+      data,
+      CreateDeletionResponseStruct,
+      'deletions',
+    );
+  }
+
+  /**
+   * Completes a prepared deletion (`DELETE /deletions/{deletionId}`) by
+   * forwarding the wrapped `delete`-scoped uKYC capability token. Relay
+   * redacts the encrypted blobs for the user named by that token.
+   *
+   * @param params - The wrapped deletion.
+   * @param params.deletionId - Deletion id from {@link KycService.createDeletion}.
+   * @param params.wrappedUkycCapabilityToken - Sealed `delete`-scoped token.
+   */
+  async completeDeletion(params: CompleteDeletionParams): Promise<void> {
+    const url = new URL(
+      `/deletions/${encodeURIComponent(params.deletionId)}`,
+      this.#baseUrl,
+    );
+    await this.#requestJson(url, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        wrappedUkycCapabilityToken: params.wrappedUkycCapabilityToken,
+      }),
+    });
   }
 
   /**

@@ -588,6 +588,80 @@ describe('KycService', () => {
     });
   });
 
+  describe('createDeletion', () => {
+    const encryptionSchema: EncryptionSchema = {
+      serverPublicKey: { kty: 'OKP', crv: 'X25519', x: 'spk-x' },
+      jwtChain: 'capability.jwt.chain',
+    };
+    const response = {
+      deletionId: 'deletion-1',
+      ukycCapabilityToken: encryptionSchema,
+    };
+
+    it('posts the client public key and returns the deletion wrapping key', async () => {
+      nock(MOCK_API_URL)
+        .post(
+          '/deletions',
+          (body: Record<string, unknown>) =>
+            body.sessionClientPublicKey === SESSION_CLIENT_PUBLIC_KEY,
+        )
+        .reply(201, response);
+      const { service } = getService();
+
+      expect(
+        await service.createDeletion({
+          sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
+        }),
+      ).toStrictEqual(response);
+    });
+
+    it('throws on a malformed response', async () => {
+      nock(MOCK_API_URL).post('/deletions').reply(201, { unexpected: true });
+      const { service } = getService();
+
+      await expect(
+        service.createDeletion({
+          sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
+        }),
+      ).rejects.toThrow(/Malformed response received from deletions API/u);
+    });
+  });
+
+  describe('completeDeletion', () => {
+    const wrappedUkycCapabilityToken = { nonce: 'nonce-1', data: 'data-1' };
+
+    it('deletes with the wrapped token and accepts an empty response', async () => {
+      nock(MOCK_API_URL)
+        .delete(
+          '/deletions/deletion-1',
+          (body: Record<string, unknown>) =>
+            JSON.stringify(body.wrappedUkycCapabilityToken) ===
+            JSON.stringify(wrappedUkycCapabilityToken),
+        )
+        .reply(204);
+      const { service } = getService();
+
+      await expect(
+        service.completeDeletion({
+          deletionId: 'deletion-1',
+          wrappedUkycCapabilityToken,
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('url-encodes the deletion id', async () => {
+      nock(MOCK_API_URL).delete('/deletions/a%2Fb').reply(204);
+      const { service } = getService();
+
+      await expect(
+        service.completeDeletion({
+          deletionId: 'a/b',
+          wrappedUkycCapabilityToken,
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('createJourney', () => {
     it('fetches the applicant access token for a session', async () => {
       const response = { status: 'ok', applicantAccessToken: 'aat' };

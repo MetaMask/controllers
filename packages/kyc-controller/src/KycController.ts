@@ -100,6 +100,10 @@ export type KycProviderFlowStatus = (typeof KYC_PROVIDER_FLOW_STATUSES)[number];
 // rather than a fixed short window, so this is a session-scoped window.
 const UKYC_CAPABILITY_TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
 
+// Lifetime of the `delete`-scoped `ukyc_capability_token`. The token is minted
+// and presented immediately, so four hours is enough.
+const UKYC_DELETE_CAPABILITY_TOKEN_TTL_MS = 4 * 60 * 60 * 1000;
+
 // First wait between UKYC session-status polls. Each later wait grows by this
 // step, so the delays are 10s, 20s, 30s, and so on.
 const SESSION_STATUS_POLL_INTERVAL_MS = 10_000;
@@ -286,6 +290,7 @@ const MESSENGER_EXPOSED_METHODS = [
   'recordVendorDisclaimers',
   'hasCompletedVendorDisclaimers',
   'launchProviderFlow',
+  'deleteEncryptedStorage',
 ] as const;
 
 export type KycControllerGetStateAction = ControllerGetStateAction<
@@ -1286,6 +1291,48 @@ export class KycController extends BaseController<
   }
 
   /**
+   * Deletes the caller's encrypted KYC blobs from MetaMask servers.
+   *
+   * Mints a fresh X25519 keypair, fetches a wrapping key from
+   * `POST /deletions`, seals a `delete`-scoped `ukyc_capability_token` (4 hour
+   * lifetime, client-presented) for that key, and submits it to
+   * `DELETE /deletions/{deletionId}`. Does not clear controller state.
+   */
+  async deleteEncryptedStorage(): Promise<void> {
+    const sessionClientPrivateKey = x25519.utils.randomSecretKey();
+    const sessionClientPublicKey = toBase64Url(
+      x25519.getPublicKey(sessionClientPrivateKey),
+    );
+
+    const { deletionId, ukycCapabilityToken: capabilityTokenSchema } =
+      await this.messenger.call('KycService:createDeletion', {
+        sessionClientPublicKey,
+      });
+
+    await this.#verifyCapabilityTokenSchema(capabilityTokenSchema);
+
+    const localUserSecret = await getOrCreateLocalUserSecret(
+      this.#localUserSecretStore,
+    );
+    const clientMaterial = deriveClientMaterial(localUserSecret);
+    const ukycCapabilityToken = signStorageAccessToken({
+      material: clientMaterial,
+      operations: ['delete'],
+      expiresAt: new Date(Date.now() + UKYC_DELETE_CAPABILITY_TOKEN_TTL_MS),
+    });
+    const wrappedUkycCapabilityToken = wrapEncryptionKey(
+      sessionClientPrivateKey,
+      capabilityTokenSchema.serverPublicKey.x,
+      stringToBytes(encodeStorageAccessTokenForHeader(ukycCapabilityToken)),
+    );
+
+    await this.messenger.call('KycService:completeDeletion', {
+      deletionId,
+      wrappedUkycCapabilityToken,
+    });
+  }
+
+  /**
    * Presents the identity-provider verification UI. Currently launches SumSub.
    *
    * @param params - Optional SDK presentation options.
@@ -1414,6 +1461,42 @@ export class KycController extends BaseController<
         this.#recordLaunchOutcomeAndTrackAnalytics('failed');
       }
       return 'failed';
+    }
+  }
+
+  /**
+   * Verifies the deletion wrapping key. A deletion response carries only the
+   * `ukycCapabilityToken` schema, attested by the idOS relay.
+   *
+   * Fetch and verification failures are rethrown as a short message suitable
+   * for display. The original error is preserved on `cause`.
+   *
+   * @param capabilityTokenSchema - Encryption schema for the capability token.
+   * @throws When the relay signing keys cannot be fetched, or the schema's
+   * `jwtChain` does not verify.
+   */
+  async #verifyCapabilityTokenSchema(
+    capabilityTokenSchema: EncryptionSchema,
+  ): Promise<void> {
+    let idosRelayKeys: Jwk[];
+    try {
+      ({ keys: idosRelayKeys } = await this.messenger.call(
+        'KycService:fetchIdosRelayJwks',
+      ));
+    } catch (error) {
+      throw wrapError(
+        error,
+        'KycController.#verifyCapabilityTokenSchema: Unable to fetch JWKS needed to verify wrapping keys.',
+      );
+    }
+
+    try {
+      assertAttestedServerPublicKey(idosRelayKeys, capabilityTokenSchema);
+    } catch (error) {
+      throw wrapError(
+        error,
+        'KycController.#verifyCapabilityTokenSchema: Failed to verify the wrapping keys.',
+      );
     }
   }
 
