@@ -317,17 +317,13 @@ export class AccountsApiDataSource extends AbstractDataSource<
   }
 
   /**
-   * Fetch supported networks and start the active-chain refresh timer.
+   * Fetch supported networks and ensure the active-chain refresh timer runs.
    *
    * The constructor does not call messenger actions. `AssetsController.init()`
-   * calls this after every controller has been constructed. A later call
-   * refreshes the chain list without starting another timer.
+   * calls this after every controller has been constructed. Repeated calls
+   * refresh the chain list without starting another timer.
    */
   async init(): Promise<void> {
-    if (this.#chainsRefreshTimer) {
-      await this.#refreshActiveChains();
-      return;
-    }
     await this.#initializeActiveChains();
   }
 
@@ -352,12 +348,21 @@ export class AccountsApiDataSource extends AbstractDataSource<
   // ============================================================================
 
   async #initializeActiveChains(): Promise<void> {
+    if (this.#chainsRefreshTimer) {
+      await this.#refreshActiveChains();
+      return;
+    }
+
     try {
       const chains = await this.#fetchActiveChains();
       const previous = [...this.state.activeChains];
       this.updateActiveChains(chains, (updatedChains) =>
         this.#onActiveChainsUpdated(this.getName(), updatedChains, previous),
       );
+
+      if (this.#chainsRefreshTimer) {
+        return;
+      }
 
       // Periodically refresh active chains (every 20 minutes)
       this.#chainsRefreshTimer = setInterval(

@@ -383,6 +383,19 @@ describe('AccountsApiDataSource', () => {
     controller.destroy();
   });
 
+  it('starts one refresh timer when init is called concurrently', async () => {
+    const { controller } = await setupController({
+      initialize: false,
+      supportedChains: [1],
+    });
+
+    await Promise.all([controller.init(), controller.init()]);
+
+    expect(activeTimers).toHaveLength(1);
+
+    controller.destroy();
+  });
+
   it('refreshActiveChains re-fetches supported networks and updates activeChains', async () => {
     const { controller, apiClient, activeChainsUpdateHandler } =
       await setupController({ supportedChains: [1] });
