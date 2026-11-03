@@ -44,16 +44,16 @@ export default defineConfig({
     coverage: {
       enabled: true,
 
-      // Configure the coverage provider. We use `istanbul` here, because it is
-      // more stable than `v8`.
-      provider: 'istanbul',
-
       // The files to include in the coverage report.
       include: ['src/**/*.ts'],
 
       // The files to exclude from the coverage report. An index file only
       // re-exports, so it has nothing to cover.
-      exclude: ['src/**/index.ts', 'src/**/*.d.ts'],
+      exclude: [
+        'src/**/index.ts',
+        'src/**/*.d.ts',
+        'src/**/*-method-action-types.ts',
+      ],
 
       // `lcovonly` rather than `lcov`, which also writes a second HTML report.
       reporter: ['text', 'html', 'json-summary', 'lcovonly'],
