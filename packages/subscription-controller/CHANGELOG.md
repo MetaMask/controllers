@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-
 ### Added
 
 - Expose `startPolling` and `stopPollingByPollingToken` methods through the SubscriptionController messenger ([#11245](https://github.com/MetaMask/core/pull/11245))

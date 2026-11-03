@@ -7,14 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-- Release/1377.0.0 ([#11203](https://github.com/MetaMask/core/pull/11203))
-- Release 1372.0.0 ([#11154](https://github.com/MetaMask/core/pull/11154))
-- test: run earn packages on Vitest ([#10962](https://github.com/MetaMask/core/pull/10962))
-- chore: opt into Jest types per package instead of in tsconfig.base.json ([#10862](https://github.com/MetaMask/core/pull/10862))
-
 ### Added
 
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
