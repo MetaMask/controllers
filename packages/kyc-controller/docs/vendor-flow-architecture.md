@@ -13,16 +13,16 @@ implementation.
 
 ## 1. Goals
 
-| Goal                                    | Meaning                                                                                                                                                                                                                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vendor-neutral consumer surface         | Clients drive initialize / resume / SumSub presentation without vendor-branded public APIs.                                                                                                                                     |
-| Cheap vendor deltas                     | A new vendor is the shared requirement graph plus a few vendor-only nodes, plus any truly nested UX (e.g. MoonPay iframes).                                                                                                     |
-| Dependencies as data                    | Requirements and their dependencies form a directed acyclic graph (DAG). When a requirement starts and stops mattering is derived from the graph, not configured per requirement.                                               |
-| Backend-authoritative resume            | After backgrounding, process death, or clean reinstall, the client rediscovers truth from kyc-api and remints local secrets.                                                                                                    |
-| Rewind without a rewind graph           | Requirements that become unsatisfied again are handled by recomputing satisfaction — not by encoding “jump back to gate X.”                                                                                                     |
-| Requirements retire at durable outcomes | Once a lasting backend outcome exists below a requirement in the graph, the requirement’s inputs may expire or change without forcing a rewind (e.g. aal2 after session creation; capability authorization after the decision). |
-| Independent post-session work           | Vendor disclaimers, session disclaimers, and capability authorization have no edges between them, so they are independently checkable and may become unsatisfied again until the session is decided.                            |
-| Vendor work after approval              | A vendor may need more than an approved KYC session before the customer can use it (Iron: the account must be `Active`). Consumers key off a derived `ready` phase, not `finalStatus: approved`.                                |
+| Goal                                    | Meaning                                                                                                                                                                                                                                             |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vendor-neutral consumer surface         | Clients drive initialize / resume / SumSub presentation without vendor-branded public APIs.                                                                                                                                                         |
+| Cheap vendor deltas                     | A new vendor is the shared requirement graph plus a few vendor-only nodes, plus any truly nested UX (e.g. MoonPay iframes).                                                                                                                         |
+| Dependencies as data                    | Requirements and their dependencies form a directed acyclic graph (DAG). When a requirement starts and stops mattering is derived from the graph, not configured per requirement.                                                                   |
+| Backend-authoritative resume            | After backgrounding, process death, or clean reinstall, the client rediscovers truth from kyc-api and remints local secrets.                                                                                                                        |
+| Rewind without a rewind graph           | Requirements that become unsatisfied again are handled by recomputing satisfaction — not by encoding “jump back to gate X.”                                                                                                                         |
+| Requirements retire at durable outcomes | Once a lasting backend outcome exists below a requirement in the graph, the requirement’s inputs may expire or change without forcing a rewind (e.g. aal2 after session creation; capability authorization once the flow is `ready` or `rejected`). |
+| Independent post-session work           | Vendor disclaimers, session disclaimers, and capability authorization have no edges between them, so they are independently checkable and may become unsatisfied again until the flow is `ready` or `rejected`.                                     |
+| Vendor work after approval              | A vendor may need more than an approved KYC session before the customer can use it (Iron: the account must be `Active`). Consumers key off a derived `ready` phase, not `finalStatus: approved`.                                                    |
 
 ---
 
@@ -68,12 +68,17 @@ Each unit of work is a **requirement**, a node in the graph.
   while the child stays valid.” How long a parent keeps mattering comes only
   from the durable-node rule below.
 - A **durable** node is one whose satisfaction is a lasting backend fact. Its
-  satisfaction retires every node above it. There are two:
-  `createKycSession` (a UKYC session exists) and `vendorDecision` (the session
-  is `approved` or `rejected`).
-- An edge out of a durable node may carry an **outcome label**
-  (`vendorDecision` → `approved`). The child only comes into play when the
-  parent’s outcome matches.
+  satisfaction retires every node above it. There are three:
+  `createKycSession` (a UKYC session exists), `ready` (the session is
+  `approved` and every post-approval requirement holds), and `rejected` (the
+  session is `rejected`).
+- `vendorDecision` (the session is `approved` or `rejected`) is **not**
+  durable. Being decided retires nothing on its own; retirement waits for
+  `ready` or `rejected`.
+- An edge out of `vendorDecision` may carry an **outcome label**
+  (`approved` or `rejected`). The child only comes into play when the
+  decision’s outcome matches. The evaluator reads the outcome directly from
+  the session’s `finalStatus`; it is not a field on `Requirement`.
 
 ```typescript
 type RequirementId = string;
@@ -95,13 +100,6 @@ type Requirement = {
   requiredBy?: RequirementId[];
   /** Satisfaction is a durable backend fact that retires every ancestor. */
   durable?: boolean;
-  /**
-   * For durable nodes with more than one way to be satisfied: every possible
-   * outcome. Outcome-labeled edges out of this node must use one of these.
-   */
-  outcomes?: readonly DecisionOutcome[];
-  /** For durable nodes with `outcomes`: which outcome holds once satisfied. */
-  outcome?: (ctx: VendorFlowContext) => DecisionOutcome | undefined;
   /** True iff this work is currently done. */
   isSatisfied: (ctx: VendorFlowContext) => boolean;
   /**
@@ -135,26 +133,29 @@ flowchart TD
   cap --> sumsub
   keo --> sumsub
   kpo --> sumsub
-  sumsub --> decision["vendorDecision ◆"]
+  sumsub --> decision[vendorDecision]
   decision -->|approved| iron["ironAccountActive (Iron)"]
-  decision -->|approved, MoonPay / Kalshi| ready(["ready"])
+  decision -->|approved| ready["ready ◆"]
   iron --> ready
-  decision -->|rejected| rejected(["rejected"])
+  decision -->|rejected| rejected["rejected ◆"]
 ```
 
-Rounded nodes (`ready`, `rejected`) are flow outcomes, not requirements.
+`ready` and `rejected` are the graph’s two sinks; every other node is an
+ancestor of at least one of them.
 
 `vendorDecision` is a requirement the client cannot satisfy itself. It has two
 outcomes, `approved` and `rejected`, and is satisfied by either:
 
-| `finalStatus` | `vendorDecision`              | Effect                                                                                                                                  |
-| ------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `approved`    | satisfied, outcome `approved` | Every node above it retires. Nodes behind an `approved` edge (Iron: `ironAccountActive`) come into play; with none, the flow is `ready` |
-| `rejected`    | satisfied, outcome `rejected` | Every node above it retires. Nodes behind an `approved` edge are excluded; the flow is `rejected`                                       |
-| anything else | blocker                       | `satisfy` returns `processing` and lets the evaluate loop poll                                                                          |
+| `finalStatus` | `vendorDecision`              | Effect                                                                                                                                                             |
+| ------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `approved`    | satisfied, outcome `approved` | `rejected` is excluded. MoonPay / Kalshi: `ready` is satisfied at once and retires every node above it. Iron: `ironAccountActive` comes into play; `ready` follows |
+| `rejected`    | satisfied, outcome `rejected` | `rejected` is satisfied and retires every node above it. `ready` and `ironAccountActive` are excluded                                                              |
+| anything else | blocker                       | `satisfy` returns `processing` and lets the evaluate loop poll                                                                                                     |
 
-Both outcomes retire the same ancestors, because either way the session is
-decided. They only differ in what comes after.
+Because `vendorDecision` is not durable, an approved Iron session keeps its
+post-session nodes in play until the account is `Active` and `ready` is
+satisfied. MoonPay and Kalshi see no difference: their `ready` is satisfied
+in the same evaluation as the approval.
 
 MoonPay’s own “moonpay session” (session token → check/login iframes → access
 token) is **not** a UKYC session and is not a node. It is a nested sub-flow
@@ -167,9 +168,9 @@ graph is in exactly one state, checked in this order:
 
 1. **Retired** — some durable node below it is satisfied. Never blocks; its
    inputs are irrelevant.
-2. **Excluded** — an outcome-labeled edge into it comes from a satisfied
-   durable node with a different outcome (e.g. `ironAccountActive` after a
-   rejection). Never matters.
+2. **Excluded** — the session is decided and an outcome-labeled edge into it
+   carries the other outcome (e.g. `ready` and `ironAccountActive` after a
+   rejection; `rejected` after an approval). Never matters.
 3. **Waiting** — some parent is waiting, unsatisfiable, or a blocker. Not
    acted on yet, and nothing is fetched for it.
 4. **Satisfied** — `isSatisfied` is true.
@@ -200,9 +201,12 @@ no longer matters.
 describes one attempt; product policy may retry it. `isUnsatisfiable`
 describes the current state: no attempt can succeed, so none is made.
 
-Durable nodes are special in one way: their `isSatisfied` and `outcome` are
-always evaluated from the fresh session status, even when they would
-otherwise be waiting, because every retirement depends on them.
+Durable nodes are special in one way: their `isSatisfied`, and the decision
+outcome, are always evaluated from fresh backend facts, even when they would
+otherwise be waiting, because every retirement depends on them. So
+`isSatisfied` on a durable node reads backend facts directly and never
+depends on its parents’ classification (see
+[§3.7](#37-durable-sinks-ready-and-rejected)).
 
 While a node is not retired, it is **always re-checked**. It can be satisfied,
 flip false (expired token, stale disclaimer, vendor account no longer active),
@@ -217,24 +221,28 @@ local bookkeeping.
 
 The milestones used throughout this doc are names for durable-node facts:
 
-| Milestone         | Holds when                                                                     | Source                                                                      |
-| ----------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `sessionCreated`  | `createKycSession` is satisfied: a UKYC session resolves for the active vendor | persisted `sessionStatus.id` confirmed by kyc-api, or vendor session lookup |
-| `sessionDecided`  | `vendorDecision` is satisfied: `finalStatus` is `approved` or `rejected`       | `GET /sessions/{id}/status`                                                 |
-| `sessionApproved` | `vendorDecision` is satisfied with outcome `approved`                          | `GET /sessions/{id}/status`                                                 |
+| Milestone        | Holds when                                                                     | Source                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `sessionCreated` | `createKycSession` is satisfied: a UKYC session resolves for the active vendor | persisted `sessionStatus.id` confirmed by kyc-api, or vendor session lookup               |
+| `ready`          | `ready` is satisfied: `finalStatus` is `approved` and post-approval work holds | `GET /sessions/{id}/status`, plus the vendor’s post-approval facts (Iron: account status) |
+| `rejected`       | `rejected` is satisfied: `finalStatus` is `rejected`                           | `GET /sessions/{id}/status`                                                               |
+
+`finalStatus: approved` on its own is not a milestone: it satisfies
+`vendorDecision`, which retires nothing.
 
 **The backend is always the source of truth.** By kyc-api contract, a
 session’s `approved` / `rejected` status is final. The client does **not**
 enforce that contract: durable nodes are always evaluated from the latest
-kyc-api response. If kyc-api later reports a non-final status for the same
-session, `vendorDecision` is unsatisfied again and every node it had retired
-comes back into play.
+backend response. If kyc-api later reports a non-final status for the same
+session, or Iron reports the account is no longer `Active`, the durable node
+is unsatisfied again and every node it had retired comes back into play.
 
 `vendorDecision` uses the same set as `FINAL_STATUSES_TO_SKIP_AUTH_REFRESH`
 today (`approved`, `rejected`). It deliberately **excludes** `retry`, which is
 in `TERMINAL_SESSION_STATUSES` (polling stops) but does not end the
 applicant’s work. Under the rules above, `retry` needs no special case: the
-decision is unsatisfied, nothing retires, and SumSub can run again. See
+decision is unsatisfied, neither sink is satisfied, nothing retires, and
+SumSub can run again. See
 [§11](#11-open-questions).
 
 ### 3.5 Derived groups
@@ -242,16 +250,17 @@ decision is unsatisfied, nothing retires, and SumSub can run again. See
 Applying the rules to the graph produces three groups. They are **derived**,
 not configured; the names are shorthand used in the rest of this doc.
 
-| Group         | Nodes                                                                                                                          | Can run when                                                                              | Retires when                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------- |
-| Pre-session   | `aal2`, `identitySharingConsent`, `partnerIdentityToken`, `moonpayAccessToken`, `createKycSession`                             | from the start (`createKycSession` once its parents are satisfied)                        | `createKycSession` is satisfied |
-| Post-session  | `vendorDisclaimers`, `sessionDisclaimers`, `capabilityAuthorization`, `kalshiEmailOtp`, `kalshiPhoneOtp`, `sumsubJourneyStart` | `createKycSession` is satisfied (`sumsubJourneyStart` once all its parents are satisfied) | `vendorDecision` is satisfied   |
-| Post-approval | `ironAccountActive`                                                                                                            | `vendorDecision` is satisfied with outcome `approved`                                     | never: no durable node below it |
+| Group         | Nodes                                                                                                                                            | Can run when                                                                                                     | Retires when                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Pre-session   | `aal2`, `identitySharingConsent`, `partnerIdentityToken`, `moonpayAccessToken`, `createKycSession`                                               | from the start (`createKycSession` once its parents are satisfied)                                               | `createKycSession` is satisfied    |
+| Post-session  | `vendorDisclaimers`, `sessionDisclaimers`, `capabilityAuthorization`, `kalshiEmailOtp`, `kalshiPhoneOtp`, `sumsubJourneyStart`, `vendorDecision` | `createKycSession` is satisfied (`sumsubJourneyStart` and `vendorDecision` once all their parents are satisfied) | `ready` or `rejected` is satisfied |
+| Post-approval | `ironAccountActive`                                                                                                                              | `vendorDecision` is satisfied with outcome `approved`                                                            | `ready` is satisfied               |
 
-`sumsubJourneyStart` is not durable. That is why the disclaimers and
-capability authorization stay in play after SumSub launches: the next durable
-node below them is `vendorDecision`. The old “SumSub is a guarded advance”
-special case is just rule 3: it is waiting until every parent is satisfied.
+Neither `sumsubJourneyStart` nor `vendorDecision` is durable. That is why the
+disclaimers and capability authorization stay in play after SumSub launches,
+and for Iron after approval: the next durable nodes below them are `ready`
+and `rejected`. The old “SumSub is a guarded advance” special case is just
+rule 3: it is waiting until every parent is satisfied.
 
 **Pre-session nodes** exist only to create the UKYC session.
 
@@ -262,18 +271,26 @@ special case is just rule 3: it is waiting until every parent is satisfied.
 | `partnerIdentityToken`              | short-lived mint; only consumed by session create       |
 | `moonpayAccessToken` (MoonPay only) | MoonPay session secret; only consumed by session create |
 
-**Post-session nodes** exist only to reach a decision.
+**Post-session nodes** exist only to reach `ready` or `rejected`.
 
-| Requirement                         | Can flip false while in play                                                                                     | After `vendorDecision` is satisfied                                                                                              |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `vendorDisclaimers`                 | Catalog version moves; accepted ids no longer current                                                            | The catalog is not re-checked. For Iron, re-signing after approval is driven by the account status instead (`ironAccountActive`) |
-| `sessionDisclaimers`                | Session catalog / consent flags change                                                                           | Same                                                                                                                             |
-| `capabilityAuthorization`           | Status moves to `expired` (refresh it). `wiped` is unsatisfiable: it must not be resubmitted by this client flow | Expiry is ignored (matches `needsCapabilityAuthorizationRefresh` today)                                                          |
-| `kalshiEmailOtp` / `kalshiPhoneOtp` | Backend `currentStep` demands OTP (again)                                                                        | OTP is never requested                                                                                                           |
-| `sumsubJourneyStart`                | Documents still required; journey token must be refetched after restart                                          | SumSub is never launched                                                                                                         |
+| Requirement                         | Can flip false while in play                                                                                     | After `ready` or `rejected` is satisfied                                |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `vendorDisclaimers`                 | Catalog version moves; accepted ids no longer current                                                            | The catalog is not re-checked                                           |
+| `sessionDisclaimers`                | Session catalog / consent flags change                                                                           | Same                                                                    |
+| `capabilityAuthorization`           | Status moves to `expired` (refresh it). `wiped` is unsatisfiable: it must not be resubmitted by this client flow | Expiry is ignored                                                       |
+| `kalshiEmailOtp` / `kalshiPhoneOtp` | Backend `currentStep` demands OTP (again)                                                                        | OTP is never requested                                                  |
+| `sumsubJourneyStart`                | Documents still required; journey token must be refetched after restart                                          | SumSub is never launched                                                |
+| `vendorDecision`                    | kyc-api reports a non-final status again                                                                         | Not re-checked as a requirement; `ready` / `rejected` read the decision |
 
-A rejected session excludes every post-approval node. Every other node is
-retired, so nothing is left to satisfy; the outcome is `rejected`.
+For an approved Iron session that is not yet `ready`, the post-session nodes
+are still in play: a new disclaimer version or an expired capability
+authorization becomes a blocker, and `ironAccountActive` waits until it is
+fixed. Today’s `needsCapabilityAuthorizationRefresh` skips the refresh as soon
+as the session is `approved`; this model does not (see
+[§11](#11-open-questions)).
+
+A rejected session excludes `ready` and every post-approval node. Every other
+node is retired by `rejected`, so nothing is left to satisfy.
 
 ### 3.6 Iron account status
 
@@ -287,26 +304,39 @@ is the target status; the requirement is satisfied exactly when the account is
 | `SigningsRequired`  | blocker   | `needsUser`: fetch the current Iron vendor disclaimers, have the applicant accept them, and submit them again (`POST /vendors/iron/disclaimers`, the same submission `vendorDisclaimers` uses). Then wait for `Active` |
 | any other status    | blocker   | `processing`: wait and poll                                                                                                                                                                                            |
 
-No durable node sits below it, so it never retires. It reflects live vendor
-state, and the backend is the source of truth, so if the account later
-reports `SigningsRequired` the applicant is asked to re-sign, and if it
-reports another non-`Active` status the phase goes back to `processing`.
+It retires once `ready` is satisfied. `ready` reads the account status itself
+(see [§3.7](#37-durable-sinks-ready-and-rejected)), and the backend is the
+source of truth: if the account later leaves `Active`, `ready` is unsatisfied
+again, `ironAccountActive` and the post-session nodes come back into play,
+and the applicant is asked to re-sign (`SigningsRequired`) or the phase goes
+back to `processing` (any other status).
 
 Re-signing lives inside `ironAccountActive` because the graph cannot express
 it as an edge: `SigningsRequired` → `vendorDisclaimers` would point back up to
-an ancestor and create a cycle. The two also use different signals: before
-the decision the disclaimer catalog says whether acceptance is current; after
-approval the Iron account status says so. Sharing the submission code keeps
+an ancestor and create a cycle. The two use different signals:
+`vendorDisclaimers` reads the disclaimer catalog, and `ironAccountActive`
+reads the Iron account status. Between approval and `ready` both are in play,
+and either can ask the applicant to sign. Sharing the submission code keeps
 the UX identical without giving one requirement two sources of truth.
 
-### 3.7 Flow outcome: `ready`
+### 3.7 Durable sinks: `ready` and `rejected`
 
-A session is **`ready`** when `vendorDecision` is satisfied with outcome
-`approved` and every node in the vendor’s graph is retired, excluded, or
-satisfied.
+`ready` and `rejected` are durable requirements with no children. The client
+never does work for them: once their parents are satisfied, they are
+satisfied, so `satisfy` is a no-op.
 
-- MoonPay and Kalshi have no post-approval nodes, so `ready` is the same as
-  `approved`.
+| Node       | Parents                                                                | `isSatisfied` (from fresh backend facts)                                                                  |
+| ---------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `ready`    | `vendorDecision` via an `approved` edge, plus every post-approval node | `finalStatus` is `approved` and every post-approval node’s `isSatisfied` is true (Iron: account `Active`) |
+| `rejected` | `vendorDecision` via a `rejected` edge                                 | `finalStatus` is `rejected`                                                                               |
+
+`ready` calls its post-approval parents’ `isSatisfied` directly instead of
+reading their classification, because a satisfied `ready` retires those
+parents. That is the general rule for durable nodes in
+[§3.3](#33-evaluation-rules).
+
+- MoonPay and Kalshi have no post-approval nodes, so `ready` is satisfied in
+  the same evaluation as `approved`.
 - Iron is `approved` but not `ready` until the account is `Active`.
 
 Consumers that gate product access (ramps, card, money) must key off `ready`,
@@ -317,12 +347,14 @@ consumer.
 
 - **No cycles.** Anything that would need a back edge (like Iron re-signing)
   is modeled inside a node’s `satisfy`.
-- **Outcome labels only on edges out of durable nodes.** Live statuses, like
+- **Outcome labels only on edges out of `vendorDecision`.** Live statuses, like
   the Iron account status, belong inside a node’s `isSatisfied` / `satisfy`.
   Otherwise the graph’s shape would change between polls.
 - **Shared nodes only reference shared nodes.** Vendor-only nodes attach
   themselves with `requiredBy` (e.g. `moonpayAccessToken` is required by
   `createKycSession`), so a shared node never lists a vendor’s extras.
+- **Every path ends at a durable sink.** Every node is an ancestor of `ready`
+  or `rejected`, so everything retires once the flow finishes.
 - **New durable nodes need a lasting backend fact.** A node is durable only if
   its satisfaction is something the backend reports on every resume.
 
@@ -378,13 +410,18 @@ const REQUIREMENTS = {
       'capabilityAuthorization',
     ],
   },
-  vendorDecision: {
-    dependsOn: ['sumsubJourneyStart'],
-    durable: true,
-    outcomes: ['approved', 'rejected'],
-  },
+  vendorDecision: { dependsOn: ['sumsubJourneyStart'] },
   ironAccountActive: {
     dependsOn: [{ id: 'vendorDecision', outcome: 'approved' }],
+    requiredBy: ['ready'],
+  },
+  ready: {
+    dependsOn: [{ id: 'vendorDecision', outcome: 'approved' }],
+    durable: true,
+  },
+  rejected: {
+    dependsOn: [{ id: 'vendorDecision', outcome: 'rejected' }],
+    durable: true,
   },
 };
 
@@ -398,6 +435,8 @@ const SHARED = [
   'capabilityAuthorization',
   'sumsubJourneyStart',
   'vendorDecision',
+  'ready',
+  'rejected',
 ] as const;
 
 const IRON: VendorFlowDefinition = {
@@ -438,8 +477,10 @@ graph, not from a position in the list.
 | `kalshiEmailOtp` (vendor OTP, not MetaMask aal2 OTP)     | post-session  |      |         | ✓      |
 | `kalshiPhoneOtp`                                         | post-session  |      |         | ✓      |
 | `sumsubJourneyStart` (fetch journey token → launch SDK)  | post-session  | ✓    | ✓       | ✓      |
-| `vendorDecision` ◆                                       | —             | ✓    | ✓       | ✓      |
+| `vendorDecision`                                         | post-session  | ✓    | ✓       | ✓      |
 | `ironAccountActive`                                      | post-approval | ✓    |         |        |
+| `ready` ◆                                                | —             | ✓    | ✓       | ✓      |
+| `rejected` ◆                                             | —             | ✓    | ✓       | ✓      |
 
 ### 4.4 Definition-time validation
 
@@ -449,11 +490,11 @@ any user hits them:
 - Every id in `requirements`, `dependsOn`, and `requiredBy` exists in the
   library, and every edge’s endpoints are both in the vendor’s set.
 - The vendor’s graph has no cycles.
-- It contains exactly one `createKycSession` and one `vendorDecision`.
-- Every node is either an ancestor of `vendorDecision` or reachable from it
-  through an outcome-labeled edge; no node floats unattached.
-- Outcome labels only appear on edges out of durable nodes, and each label is
-  one of that node’s declared `outcomes`.
+- It contains exactly one each of `createKycSession`, `vendorDecision`,
+  `ready`, and `rejected`.
+- `ready` and `rejected` are the only nodes with no children, and every other
+  node is an ancestor of at least one of them; no node floats unattached.
+- Outcome labels only appear on edges out of `vendorDecision`.
 
 The same definitions can generate a per-vendor diagram like the one in
 [§3.2](#32-the-graph).
@@ -497,8 +538,9 @@ The two OTP nodes are siblings of each other and of the disclaimers and
 capability authorization. kyc-api does not require email OTP before phone OTP,
 so there is no edge between them; either can be completed first.
 
-Both retire once `vendorDecision` is satisfied. A decided session never
-prompts for Kalshi OTP, even if `currentStep` is stale.
+Both retire once `ready` or `rejected` is satisfied. For Kalshi that happens
+as soon as the session is decided, so a decided session never prompts for
+Kalshi OTP, even if `currentStep` is stale.
 
 ### 5.3 Iron account activation
 
@@ -516,13 +558,14 @@ phase type: the applicant sees `needsUser` while re-signing is needed,
 On every trigger (user action, status poll tick, disclaimer refresh, app
 foreground, cold start, reinstall discovery):
 
-1. Refresh the durable facts: does a UKYC session exist for the vendor, and
-   what is its `finalStatus`?
+1. Refresh the durable facts: does a UKYC session exist for the vendor, what
+   is its `finalStatus`, and, once it is `approved`, what are the vendor’s
+   post-approval facts (Iron: account status)?
 2. Classify every node with the rules in [§3.3](#33-evaluation-rules), in
    topological order. Fetch signals only for nodes that reach the
    `isSatisfied` check; retired, excluded, and waiting nodes need no fetch
-   (no aal2 refresh after create; no disclaimer or capability refresh after
-   the decision; no Iron account fetch before approval).
+   (no aal2 refresh after create; no disclaimer or capability refresh once
+   `ready` or `rejected` is satisfied; no Iron account fetch before approval).
 3. Derive the phase ([§7.2](#72-persistence-rules)).
 4. Run `satisfy` for blockers: surface `needsUser` blockers by list priority,
    and run automated ones in parallel where safe.
@@ -560,19 +603,20 @@ classifies every still-valid node as satisfied or retired. Do not store a
 
 ### 6.3 Events and engine behavior
 
-| Event                                                                                                                    | Engine behavior                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| A node flips false while not retired (stale disclaimer, expired capability)                                              | It becomes a blocker again; nodes below it go back to waiting. The user may see a rewind                                                      |
-| Pre-session input expires after create (aal2, partner identity, MoonPay token)                                           | Ignore; the node is retired                                                                                                                   |
-| Post-session input expires or changes after the decision (capability expired, new disclaimer version, OTP step reported) | Ignore; the node is retired. Iron re-signing after approval comes only from the account reporting `SigningsRequired`                          |
-| Session becomes decided while the user is mid-requirement (e.g. disclaimer screen open)                                  | The node retires; discard its in-flight `satisfy` result (generation guard); drop the blocker and show the decision or the post-approval wait |
-| Iron session is approved and the account is neither `Active` nor `SigningsRequired`                                      | `processing`; keep polling                                                                                                                    |
-| Iron account reports `SigningsRequired` (before or after `ready`)                                                        | `needsUser`: re-sign the current Iron vendor disclaimers, then poll for `Active`                                                              |
-| Iron account leaves `Active` for another status after `ready`                                                            | Follow the backend: the node is a blocker again and the phase goes back to `processing`                                                       |
-| kyc-api reports a non-final status for a session the client already observed as `approved` / `rejected`                  | Follow kyc-api: `vendorDecision` is unsatisfied, the nodes it retired come back into play, and polling resumes                                |
-| `createKycSession` fails                                                                                                 | No session exists; keep evaluating pre-session nodes (including reminting expired aal2)                                                       |
-| A node reports `isUnsatisfiable` (e.g. capability authorization `wiped`)                                                 | Dead end: do not call `satisfy`; nodes below it stay waiting; phase is `error`; stop polling. Re-evaluated on the next trigger                |
-| `satisfy` returns `failed`                                                                                               | Product policy: retry, reset, or wait for the session decision                                                                                |
+| Event                                                                                                                             | Engine behavior                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| A node flips false while not retired (stale disclaimer, expired capability)                                                       | It becomes a blocker again; nodes below it go back to waiting. The user may see a rewind                                            |
+| Pre-session input expires after create (aal2, partner identity, MoonPay token)                                                    | Ignore; the node is retired                                                                                                         |
+| Post-session input expires or changes after `ready` or `rejected` (capability expired, new disclaimer version, OTP step reported) | Ignore; the node is retired                                                                                                         |
+| Iron session is approved but not `ready`, and a post-session input expires or changes                                             | The node is a blocker again; `ironAccountActive` waits until it is fixed                                                            |
+| The flow becomes `ready` or `rejected` while the user is mid-requirement (e.g. disclaimer screen open)                            | The node retires; discard its in-flight `satisfy` result (generation guard); drop the blocker and show the outcome                  |
+| Iron session is approved and the account is neither `Active` nor `SigningsRequired`                                               | `processing`; keep polling                                                                                                          |
+| Iron account reports `SigningsRequired` (before or after `ready`)                                                                 | `needsUser`: re-sign the current Iron vendor disclaimers, then poll for `Active`                                                    |
+| Iron account leaves `Active` after `ready`                                                                                        | Follow the backend: `ready` is unsatisfied, `ironAccountActive` and the post-session nodes come back into play, and polling resumes |
+| kyc-api reports a non-final status for a session the client already observed as `approved` / `rejected`                           | Follow kyc-api: `ready` / `rejected` is unsatisfied, the nodes it retired come back into play, and polling resumes                  |
+| `createKycSession` fails                                                                                                          | No session exists; keep evaluating pre-session nodes (including reminting expired aal2)                                             |
+| A node reports `isUnsatisfiable` (e.g. capability authorization `wiped`)                                                          | Dead end: do not call `satisfy`; nodes below it stay waiting; phase is `error`; stop polling. Re-evaluated on the next trigger      |
+| `satisfy` returns `failed`                                                                                                        | Product policy: retry, reset, or wait for the session decision                                                                      |
 
 Avoid encoding “SumSub failed ⇒ always return to terms” as a global phase edge
 if the accurate model is “recompute the graph.”
@@ -593,26 +637,31 @@ entry after reinstall:
 3. **Session exists:** fetch a **fresh** session status. A persisted status
    may be shown while the fetch is in flight, but the fresh response decides
    which nodes are retired.
-   - `rejected`: every node is retired or excluded; surface the decision.
-   - `approved`: pre- and post-session nodes are retired. Evaluate the
-     post-approval nodes (Iron: fetch the account status). `ready` if there
-     are none or they are satisfied; `needsUser` if the Iron account is
-     `SigningsRequired`; otherwise `processing`.
-   - otherwise: pre-session nodes are retired; evaluate post-session nodes. Do
-     **not** demand aal2, identity-sharing consent, or partner/MoonPay tokens
-     because they are missing locally.
+   - `rejected`: `rejected` is satisfied; every node is retired or excluded;
+     surface the decision.
+   - `approved`: fetch the post-approval facts (Iron: account status). If
+     `ready` is satisfied (MoonPay and Kalshi always; Iron when `Active`),
+     every node is retired or excluded. Otherwise (Iron) pre-session nodes are
+     retired; evaluate post-session and post-approval nodes: `needsUser` if a
+     disclaimer, capability authorization, or `SigningsRequired` needs the
+     applicant, otherwise `processing`.
+   - otherwise: pre-session nodes are retired; evaluate post-session nodes.
+
+   In every case, do **not** demand aal2, identity-sharing consent, or
+   partner/MoonPay tokens because they are missing locally.
+
 4. Launch SumSub only if the evaluation makes it a blocker.
 
-| Scenario                                                     | Durable facts       | Behavior                                                                          |
-| ------------------------------------------------------------ | ------------------- | --------------------------------------------------------------------------------- |
-| Background → foreground, session undecided                   | session exists      | Refresh session; evaluate post-session nodes                                      |
-| Background → foreground, session rejected while backgrounded | decision `rejected` | Show rejection; nothing to satisfy                                                |
-| Background → foreground, session approved while backgrounded | decision `approved` | Evaluate post-approval nodes; `ready` or keep waiting                             |
-| Process kill / restart, session id still valid               | any                 | Same as above; ignore expired local aal2 / MoonPay tokens                         |
-| Clean reinstall, backend has an undecided session            | session exists      | Remint nothing for create; evaluate post-session nodes                            |
-| Clean reinstall, backend has an approved session             | decision `approved` | No aal2, consent, disclaimers, or capability needed; evaluate post-approval nodes |
-| Clean reinstall, backend has a rejected session              | decision `rejected` | Show rejection                                                                    |
-| Clean reinstall, no backend session                          | none                | Full pre-session path                                                             |
+| Scenario                                                     | Durable facts                     | Behavior                                                                                                  |
+| ------------------------------------------------------------ | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Background → foreground, session undecided                   | session exists                    | Refresh session; evaluate post-session nodes                                                              |
+| Background → foreground, session rejected while backgrounded | `rejected`                        | Show rejection; nothing to satisfy                                                                        |
+| Background → foreground, session approved while backgrounded | `ready`, or session exists (Iron) | `ready`; or (Iron, not `Active`) evaluate post-session and post-approval nodes                            |
+| Process kill / restart, session id still valid               | any                               | Same as above; ignore expired local aal2 / MoonPay tokens                                                 |
+| Clean reinstall, backend has an undecided session            | session exists                    | Remint nothing for create; evaluate post-session nodes                                                    |
+| Clean reinstall, backend has an approved session             | `ready`, or session exists (Iron) | No aal2 or consent needed. `ready`; or (Iron, not `Active`) evaluate post-session and post-approval nodes |
+| Clean reinstall, backend has a rejected session              | `rejected`                        | Show rejection                                                                                            |
+| Clean reinstall, no backend session                          | none                              | Full pre-session path                                                                                     |
 
 ### 7.2 Persistence rules
 
@@ -620,7 +669,7 @@ entry after reinstall:
 
 - Active `vendor`
 - UKYC `sessionStatus.id` (last-known status only as a display cache). It is
-  the local hint for both durable nodes; confirm with kyc-api when possible
+  the local hint for every durable node; confirm with kyc-api when possible
 - Optional product / analytics hints
 - Disclaimer acceptance records as **optimistic caches** keyed by document
   identity/version. Re-compare to the current catalog / `consented` flags
@@ -647,8 +696,8 @@ entry after reinstall:
 | `idle`       | No active vendor flow / after `reset`                                                                                                                              |
 | `needsUser`  | At least one blocker whose `satisfy` needs the applicant                                                                                                           |
 | `processing` | Blockers exist but none needs the applicant (automated work, the vendor decision, or post-approval activation)                                                     |
-| `ready`      | `vendorDecision` is `approved` and no node is a blocker, waiting, or unsatisfiable                                                                                 |
-| `rejected`   | `vendorDecision` is `rejected`                                                                                                                                     |
+| `ready`      | The `ready` node is satisfied                                                                                                                                      |
+| `rejected`   | The `rejected` node is satisfied                                                                                                                                   |
 | `error`      | Some node is unsatisfiable, or a hard failure that product policy does not retry. Takes precedence over `needsUser` and `processing`, since the flow cannot finish |
 
 `ready` and `rejected` are named to avoid confusion with
@@ -662,21 +711,22 @@ screen, or expose all of them for a checklist UI.
 
 ## 8. Authority split
 
-| Concern                                                                              | Authority                                                                   |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Pre-session tokens, MoonPay iframes, partner identity mint                           | Client, until `createKycSession` is satisfied                               |
-| Durable nodes (`createKycSession`, `vendorDecision`)                                 | kyc-api session existence and `finalStatus`                                 |
-| Graph shape                                                                          | Vendor definitions and the requirement library (static, validated in tests) |
-| `currentStep`                                                                        | kyc-api                                                                     |
-| Disclaimer catalog currency and consent flags                                        | kyc-api disclaimer endpoints, until `vendorDecision` is satisfied           |
-| Capability authorization status (`new` / `pending` / `stored` / `expired` / `wiped`) | kyc-api session status, until `vendorDecision` is satisfied                 |
-| Iron account status (`Active`, `SigningsRequired`, …)                                | Backend (endpoint TBD), once approved                                       |
-| SumSub SDK presentation                                                              | Injected client launcher; journey token from kyc-api                        |
-| Coarse UI phase                                                                      | Derived from node classification                                            |
+| Concern                                                                              | Authority                                                                                     |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Pre-session tokens, MoonPay iframes, partner identity mint                           | Client, until `createKycSession` is satisfied                                                 |
+| Durable nodes (`createKycSession`, `ready`, `rejected`)                              | kyc-api session existence and `finalStatus`; for Iron’s `ready`, also the Iron account status |
+| Graph shape                                                                          | Vendor definitions and the requirement library (static, validated in tests)                   |
+| `currentStep`                                                                        | kyc-api                                                                                       |
+| Disclaimer catalog currency and consent flags                                        | kyc-api disclaimer endpoints, until `ready` or `rejected` is satisfied                        |
+| Capability authorization status (`new` / `pending` / `stored` / `expired` / `wiped`) | kyc-api session status, until `ready` or `rejected` is satisfied                              |
+| Iron account status (`Active`, `SigningsRequired`, …)                                | Backend (endpoint TBD), once approved                                                         |
+| SumSub SDK presentation                                                              | Injected client launcher; journey token from kyc-api                                          |
+| Coarse UI phase                                                                      | Derived from node classification                                                              |
 
 Open `currentStep` values (unknown strings passed through) must be tolerated:
 an unrecognized step is a signal to refresh and recompute rather than assume a
-fixed enum. After the decision, `currentStep` does not create blockers.
+fixed enum. Once `ready` or `rejected` is satisfied, `currentStep` does not
+create blockers.
 
 ---
 
@@ -716,7 +766,9 @@ Checklist:
    - work needed to reach a decision: `dependsOn: ['createKycSession']` and
      `requiredBy: ['sumsubJourneyStart']` (or another post-session node)
    - work needed after approval before the customer can use the vendor:
-     `dependsOn: [{ id: 'vendorDecision', outcome: 'approved' }]`
+     `dependsOn: [{ id: 'vendorDecision', outcome: 'approved' }]` and
+     `requiredBy: ['ready']`. `ready.isSatisfied` then includes its
+     `isSatisfied`
 4. Add a new durable node only if the backend reports a new lasting fact that
    should retire the nodes above it.
 5. Anything that would need a back edge goes inside a node’s `satisfy`.
@@ -746,8 +798,27 @@ Checklist:
   (`ironAccountActive` would report them with `isUnsatisfiable`, so the phase
   becomes `error` instead of polling forever) or need some other applicant
   action.
-- **Watching after `ready`.** `ironAccountActive` never retires, so if Iron
-  later reports `SigningsRequired` (e.g. new terms) or another status, the
-  flow follows the backend on the next fetch. Confirm whether an `Active`
+- **Post-session nodes between approval and `ready` (Iron).** Because
+  `vendorDecision` is not durable, an approved Iron session that is waiting
+  for `Active` still re-checks disclaimers and capability authorization, and
+  asks the applicant to fix them if they go stale. Today’s
+  `needsCapabilityAuthorizationRefresh` stops refreshing at `approved`.
+  Confirm that Iron activation really needs current disclaimers and capability
+  authorization.
+- **Watching after `ready`.** `ready` reads the Iron account status on every
+  evaluation, so if Iron later reports `SigningsRequired` (e.g. new terms) or
+  another status, `ready` is unsatisfied and the post-session nodes come back
+  into play, including capability authorization. Confirm whether an `Active`
   account can move to `SigningsRequired`, and whether the KYC flow or the
   consuming product owns re-signing once the customer is `ready`.
+- **Alternative ways to satisfy a requirement.** Every `dependsOn` edge is an
+  AND: a node runs only once all of its parents are satisfied. Confirm whether
+  a requirement can ever be satisfied by two or more non-overlapping sets of
+  parents, e.g. `createKycSession` accepting either a partner identity token
+  or some other proof of identity. Alternatives that only differ in UX, like
+  MoonPay’s check iframe versus login iframe, already fit inside one node’s
+  `satisfy`. Alternatives with different parents would need OR edges (or
+  “any of” groups). That changes the waiting rule (one satisfied alternative
+  is enough), needs a new state for the unused alternatives so they are not
+  surfaced as blockers, needs a rule for which alternative the UI offers
+  first, and extends definition-time validation.
