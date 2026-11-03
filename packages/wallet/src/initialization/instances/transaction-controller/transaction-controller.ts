@@ -11,6 +11,7 @@ export const transactionController: InitializationConfiguration<
   TransactionControllerMessenger
 > = {
   name: 'TransactionController',
+  reference: TransactionController,
   init: ({ state, messenger, options }) => {
     const { disableSwaps = false, ...rest } = options;
 
@@ -47,7 +48,7 @@ export const transactionController: InitializationConfiguration<
       events: [
         'AccountActivityService:transactionUpdated',
         // TODO: Replace with `NetworkController:stateChanged` once TransactionController migrates.
-        // eslint-disable-next-line no-restricted-syntax
+
         'NetworkController:stateChange',
       ],
     });

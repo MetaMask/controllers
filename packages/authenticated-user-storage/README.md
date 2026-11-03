@@ -26,13 +26,13 @@ or
 - **`env`** -- selects the backend environment (`DEV`, `UAT`, or `PRD`).
 
 ```typescript
-import { Messenger } from '@metamask/messenger';
 import { AuthenticatedUserStorageService } from '@metamask/authenticated-user-storage';
 import type {
   AuthenticatedUserStorageMessenger,
   AuthenticatedUserStorageActions,
   AuthenticatedUserStorageEvents,
 } from '@metamask/authenticated-user-storage';
+import { Messenger } from '@metamask/messenger';
 
 // Create the messenger
 const messenger = new Messenger<
@@ -108,6 +108,26 @@ const updated: NotificationPreferences = {
   socialAI: { ... },
 };
 await service.putNotificationPreferences(updated, 'extension');
+```
+
+### Identity-sharing consent
+
+Identity-sharing consent is a boolean per partner audience (`kyc`, `iron`). A grant for one audience does not unlock another. `putIdentitySharingConsent` updates a single audience; `getIdentitySharingConsent` returns the granted map, or `null` if none has been recorded.
+
+```typescript
+import type {
+  IdentitySharingConsent,
+  IdentitySharingConsentWrite,
+} from '@metamask/authenticated-user-storage';
+
+const consent: IdentitySharingConsent | null =
+  await service.getIdentitySharingConsent();
+
+const write: IdentitySharingConsentWrite = {
+  audience: 'kyc',
+  granted: true,
+};
+await service.putIdentitySharingConsent(write, 'extension');
 ```
 
 ### Assets watchlist

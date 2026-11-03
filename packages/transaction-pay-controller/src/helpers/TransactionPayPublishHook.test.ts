@@ -2,9 +2,10 @@ import type {
   PublishHookResult,
   TransactionMeta,
 } from '@metamask/transaction-controller';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getMessengerMock } from '../../tests/messenger-mock.js';
 import { TransactionPayStrategy } from '../index.js';
-import { getMessengerMock } from '../tests/messenger-mock.js';
 import type {
   TransactionPayControllerState,
   TransactionPayQuote,
@@ -12,7 +13,7 @@ import type {
 import { getStrategyByName } from '../utils/strategy.js';
 import { TransactionPayPublishHook } from './TransactionPayPublishHook.js';
 
-jest.mock('../utils/strategy');
+vi.mock(import('../utils/strategy.js'));
 
 const TRANSACTION_META_MOCK = {
   id: '123-456',
@@ -26,9 +27,9 @@ const QUOTE_MOCK = {
 } as TransactionPayQuote<unknown>;
 
 describe('TransactionPayPublishHook', () => {
-  const isSmartTransactionMock = jest.fn();
-  const executeMock = jest.fn();
-  const getStrategyByNameMock = jest.mocked(getStrategyByName);
+  const isSmartTransactionMock = vi.fn();
+  const executeMock = vi.fn();
+  const getStrategyByNameMock = vi.mocked(getStrategyByName);
 
   const {
     messenger,
@@ -50,7 +51,7 @@ describe('TransactionPayPublishHook', () => {
   }
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     getKeyringControllerStateMock.mockReturnValue({
       isUnlocked: true,
@@ -70,8 +71,8 @@ describe('TransactionPayPublishHook', () => {
 
     getStrategyByNameMock.mockReturnValue({
       execute: executeMock,
-      getQuotes: jest.fn(),
-    } as never);
+      getQuotes: vi.fn(),
+    });
 
     isSmartTransactionMock.mockReturnValue(false);
 
@@ -81,7 +82,7 @@ describe('TransactionPayPublishHook', () => {
           quotes: [QUOTE_MOCK, QUOTE_MOCK],
         },
       },
-    } as TransactionPayControllerState);
+    });
 
     getTransactionControllerStateMock.mockReturnValue({
       transactions: [TRANSACTION_META_MOCK],
@@ -124,7 +125,7 @@ describe('TransactionPayPublishHook', () => {
           tokens: [],
         },
       },
-    } as unknown as TransactionPayControllerState);
+    });
 
     const result = await runHook();
 
@@ -143,7 +144,7 @@ describe('TransactionPayPublishHook', () => {
           tokens: [],
         },
       },
-    } as unknown as TransactionPayControllerState);
+    });
 
     const result = await runHook();
 
@@ -163,7 +164,7 @@ describe('TransactionPayPublishHook', () => {
           tokens: [],
         },
       },
-    } as TransactionPayControllerState);
+    });
 
     await expect(runHook()).rejects.toThrow(
       'MetaMask Pay: Fiat: Missing quote',

@@ -1,10 +1,10 @@
 import type { Hex } from '@metamask/utils';
 import { remove0x } from '@metamask/utils';
 import { BN } from 'bn.js';
-import { isEqual } from 'lodash';
+import { isEqual } from 'lodash-es';
 
 import { createModuleLogger, projectLogger } from '../logger.js';
-import { TransactionStatus } from '../types.js';
+import { TransactionContainerType, TransactionStatus } from '../types.js';
 import type {
   SimulationBalanceChange,
   SimulationData,
@@ -148,11 +148,13 @@ export class ResimulateHelper {
  *
  * @param originalTransactionMeta - The original transaction metadata.
  * @param newTransactionMeta - The new transaction metadata.
+ * @param isTransactionTrusted - Whether the transaction only interacts with trusted contracts.
  * @returns Whether the transaction should be resimulated.
  */
 export function shouldResimulate(
   originalTransactionMeta: TransactionMeta,
   newTransactionMeta: TransactionMeta,
+  isTransactionTrusted = false,
 ): ResimulateResponse {
   const { id: transactionId } = newTransactionMeta;
 
@@ -166,17 +168,31 @@ export function shouldResimulate(
     newTransactionMeta,
   );
 
+  const enforcedSimulationsUpdated =
+    originalTransactionMeta.containerTypes?.includes(
+      TransactionContainerType.EnforcedSimulations,
+    ) !==
+    newTransactionMeta.containerTypes?.includes(
+      TransactionContainerType.EnforcedSimulations,
+    );
+
   const valueAndNativeBalanceMismatch = hasValueAndNativeBalanceMismatch(
     originalTransactionMeta,
     newTransactionMeta,
   );
 
   const resimulate =
-    parametersUpdated || securityAlert || valueAndNativeBalanceMismatch;
+    parametersUpdated ||
+    securityAlert ||
+    enforcedSimulationsUpdated ||
+    valueAndNativeBalanceMismatch;
 
   let blockTime: number | undefined;
 
-  if (securityAlert || valueAndNativeBalanceMismatch) {
+  if (
+    (securityAlert || valueAndNativeBalanceMismatch) &&
+    !isTransactionTrusted
+  ) {
     const nowSeconds = Math.floor(Date.now() / 1000);
     blockTime = nowSeconds + BLOCK_TIME_ADDITIONAL_SECONDS;
   }
@@ -187,6 +203,7 @@ export function shouldResimulate(
       blockTime,
       parametersUpdated,
       securityAlert,
+      enforcedSimulationsUpdated,
       valueAndNativeBalanceMismatch,
     });
   }

@@ -1,4 +1,6 @@
 import type { GasFeeEstimates as GasFeeControllerEstimates } from '@metamask/gas-fee-controller';
+import type { Mocked } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { TransactionControllerMessenger } from '../TransactionController.js';
 import type {
@@ -78,10 +80,10 @@ const TRANSACTION_GAS_FEE_ESTIMATES_GAS_PRICE_MOCK: GasPriceGasFeeEstimates = {
  *
  * @returns The mock GasFeeFlow.
  */
-function createGasFeeFlowMock(): jest.Mocked<GasFeeFlow> {
+function createGasFeeFlowMock(): Mocked<GasFeeFlow> {
   return {
-    matchesTransaction: jest.fn(),
-    getGasFees: jest.fn(),
+    matchesTransaction: vi.fn(),
+    getGasFees: vi.fn(),
   };
 }
 
@@ -169,7 +171,7 @@ describe('gas-flow', () => {
         gasFeeControllerEstimates: GAS_FEE_CONTROLLER_FEE_MARKET_ESTIMATES_MOCK,
         transactionGasFeeEstimates:
           TRANSACTION_GAS_FEE_ESTIMATES_GAS_PRICE_MOCK,
-      } as never);
+      });
 
       expect(result).toStrictEqual({
         gasPrice: '0.000000009',
@@ -180,7 +182,7 @@ describe('gas-flow', () => {
       const result = mergeGasFeeEstimates({
         gasFeeControllerEstimates: GAS_FEE_CONTROLLER_FEE_MARKET_ESTIMATES_MOCK,
         transactionGasFeeEstimates: { type: 'unknown' } as never,
-      } as never);
+      });
 
       expect(result).toStrictEqual(
         GAS_FEE_CONTROLLER_FEE_MARKET_ESTIMATES_MOCK,

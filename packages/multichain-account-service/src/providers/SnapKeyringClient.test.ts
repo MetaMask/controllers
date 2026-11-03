@@ -1,4 +1,6 @@
 import { SolScope } from '@metamask/keyring-api';
+import { describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 
 import { createSnapKeyringClient } from './SnapKeyringClient.js';
 import type { Sender } from './SnapKeyringClient.js';
@@ -11,10 +13,10 @@ import type { Sender } from './SnapKeyringClient.js';
  */
 function makeSender(response: unknown = []): {
   sender: Sender;
-  send: jest.Mock;
+  send: Mock;
 } {
-  const send = jest.fn().mockResolvedValue(response);
-  return { sender: { send } as unknown as Sender, send };
+  const send = vi.fn().mockResolvedValue(response);
+  return { sender: { send }, send };
 }
 
 describe('createSnapKeyringClient', () => {

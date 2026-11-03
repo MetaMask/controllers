@@ -1,10 +1,12 @@
-import { createSandbox } from '@metamask/utils/node';
-import execa from 'execa';
+import { createSandbox } from '@metamask/node-utils';
+import { execa } from 'execa';
+import type { Result } from 'execa';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 
-const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
-const TSX_PATH = path.join(ROOT_DIR, 'node_modules', '.bin', 'tsx');
+const ROOT_DIR = path.resolve(import.meta.dirname, '..', '..', '..');
+const RESOLVER_PATH = path.join(ROOT_DIR, 'scripts', 'resolver', 'register.ts');
 const CLI_PATH = path.join(
   ROOT_DIR,
   'packages',
@@ -19,8 +21,8 @@ const CLI_PATH = path.join(
  * @param args - The CLI arguments.
  * @returns The execa result.
  */
-async function runCLI(args: string[]): Promise<execa.ExecaReturnValue> {
-  return await execa(TSX_PATH, [CLI_PATH, ...args], {
+async function runCLI(args: string[]): Promise<Result> {
+  return await execa('node', ['--import', RESOLVER_PATH, CLI_PATH, ...args], {
     cwd: ROOT_DIR,
     reject: false,
     all: true,
@@ -54,7 +56,7 @@ async function listGeneratedFiles(dir: string): Promise<string[]> {
 
 const { withinSandbox } = createSandbox('messenger/cli-functional');
 
-jest.setTimeout(30_000);
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('generate-action-types CLI (functional)', () => {
   describe('--generate', () => {
@@ -126,8 +128,7 @@ class FooController {
            * Union of all FooController action types.
            */
           export type FooControllerMethodActions =
-            | FooControllerGetStateAction
-            | FooControllerResetAction;
+            FooControllerGetStateAction | FooControllerResetAction;
           "
         `);
       });

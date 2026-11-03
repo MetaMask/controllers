@@ -6,6 +6,9 @@
 
 /* eslint-disable */
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mocked } from 'vitest';
+
 import {
   PerpsController,
   getDefaultPerpsControllerState,
@@ -25,27 +28,24 @@ import {
   createMockMessenger,
 } from '../helpers/serviceMocks.js';
 
-jest.mock('@nktkas/hyperliquid', () => ({}));
-jest.mock('@myx-trade/sdk', () => ({
-  MyxClient: jest.fn(),
-  OrderStatusEnum: { Successful: 9 },
+vi.mock('@nktkas/hyperliquid', () => ({}));
+
+vi.mock('../../src/providers/HyperLiquidProvider');
+
+vi.mock('../../src/utils/wait', () => ({
+  wait: vi.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../src/providers/HyperLiquidProvider');
-jest.mock('../../src/providers/MYXProvider');
-
-jest.mock('../../src/utils/wait', () => ({
-  wait: jest.fn().mockResolvedValue(undefined),
-}));
-
-jest.mock('../../src/services/EligibilityService', () => ({
-  EligibilityService: jest.fn().mockImplementation(() => ({
-    checkAndUpdateEligibility: jest
-      .fn()
-      .mockResolvedValue({ isEligible: true }),
-    isCurrentlyEligible: jest.fn().mockReturnValue(true),
-    subscribeToEligibilityChanges: jest.fn().mockReturnValue(() => undefined),
-  })),
+vi.mock('../../src/services/EligibilityService', () => ({
+  EligibilityService: vi.fn().mockImplementation(function () {
+    return {
+      checkAndUpdateEligibility: vi
+        .fn()
+        .mockResolvedValue({ isEligible: true }),
+      isCurrentlyEligible: vi.fn().mockReturnValue(true),
+      subscribeToEligibilityChanges: vi.fn().mockReturnValue(() => undefined),
+    };
+  }),
 }));
 
 /** Expose protected methods for testing. */
@@ -84,16 +84,16 @@ function buildMarket(
 
 describe('PerpsController — market categories & filtering', () => {
   let controller: TestablePerpsController;
-  let mockProvider: jest.Mocked<HyperLiquidProvider>;
-  let mockInfrastructure: jest.Mocked<PerpsPlatformDependencies>;
+  let mockProvider: Mocked<HyperLiquidProvider>;
+  let mockInfrastructure: Mocked<PerpsPlatformDependencies>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockProvider = createMockHyperLiquidProvider();
     mockInfrastructure = createMockInfrastructure();
 
-    const mockCall = jest.fn().mockReturnValue(undefined);
+    const mockCall = vi.fn().mockReturnValue(undefined);
 
     controller = new TestablePerpsController({
       messenger: createMockMessenger({ call: mockCall }),
@@ -122,9 +122,10 @@ describe('PerpsController — market categories & filtering', () => {
       expect(categories).not.toContain('new');
     });
 
-    it('includes all 7 data categories', () => {
+    it('includes all 8 data categories', () => {
       const categories = controller.getMarketCategories();
       expect(categories).toContain('crypto');
+      expect(categories).toContain('memecoin');
       expect(categories).toContain('stock');
       expect(categories).toContain('pre-ipo');
       expect(categories).toContain('index');

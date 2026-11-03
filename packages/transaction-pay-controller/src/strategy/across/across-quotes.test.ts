@@ -6,15 +6,16 @@ import type {
   TransactionMeta,
 } from '@metamask/transaction-controller';
 import type { Hex } from '@metamask/utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDefaultRemoteFeatureFlagControllerState } from '../../../../remote-feature-flag-controller/src/remote-feature-flag-controller.js';
+import { getMessengerMock } from '../../../tests/messenger-mock.js';
 import {
   ARBITRUM_USDC_ADDRESS,
   CHAIN_ID_ARBITRUM,
   CHAIN_ID_HYPERCORE,
   TransactionPayStrategy,
 } from '../../constants.js';
-import { getMessengerMock } from '../../tests/messenger-mock.js';
 import type { QuoteRequest } from '../../types.js';
 import {
   getGasBuffer,
@@ -29,22 +30,22 @@ import { ACROSS_HYPERCORE_USDC_PERPS_ADDRESS } from './perps.js';
 import * as acrossTransactions from './transactions.js';
 import type { AcrossSwapApprovalResponse } from './types.js';
 
-jest.mock('../../utils/token');
-jest.mock('../../utils/gas', () => ({
-  ...jest.requireActual('../../utils/gas'),
-  calculateGasCost: jest.fn(),
-  calculateGasFeeTokenCost: jest.fn(),
+vi.mock(import('../../utils/token.js'));
+vi.mock(import('../../utils/gas.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  calculateGasCost: vi.fn(),
+  calculateGasFeeTokenCost: vi.fn(),
 }));
-jest.mock('../../utils/feature-flags', () => ({
-  ...jest.requireActual('../../utils/feature-flags'),
-  getGasBuffer: jest.fn(),
-  isEIP7702Chain: jest.fn(),
-  getSlippage: jest.fn(),
+vi.mock(import('../../utils/feature-flags.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getGasBuffer: vi.fn(),
+  isEIP7702Chain: vi.fn(),
+  getSlippage: vi.fn(),
 }));
 
-jest.mock('@metamask/controller-utils', () => ({
-  ...jest.requireActual('@metamask/controller-utils'),
-  successfulFetch: jest.fn(),
+vi.mock(import('@metamask/controller-utils'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  successfulFetch: vi.fn(),
 }));
 
 const FROM_MOCK = '0x1234567890123456789012345678901234567891' as Hex;
@@ -65,11 +66,11 @@ const QUOTE_REQUEST_MOCK: QuoteRequest = {
   from: FROM_MOCK,
   sourceBalanceRaw: '10000000000000000000',
   sourceChainId: '0x1',
-  sourceTokenAddress: '0xabc' as Hex,
+  sourceTokenAddress: '0xabc',
   sourceTokenAmount: '1000000000000000000',
   targetAmountMinimum: '123',
   targetChainId: '0x2',
-  targetTokenAddress: '0xdef' as Hex,
+  targetTokenAddress: '0xdef',
 };
 
 const QUOTE_MOCK: AcrossSwapApprovalResponse = {
@@ -83,22 +84,22 @@ const QUOTE_MOCK: AcrossSwapApprovalResponse = {
   },
   inputAmount: '1000000000000000000',
   inputToken: {
-    address: '0xabc' as Hex,
+    address: '0xabc',
     chainId: 1,
     decimals: 18,
     symbol: 'ETH',
   },
   minOutputAmount: '150',
   outputToken: {
-    address: '0xdef' as Hex,
+    address: '0xdef',
     chainId: 2,
     decimals: 6,
     symbol: 'USDC',
   },
   swapTx: {
     chainId: 1,
-    to: '0xswap' as Hex,
-    data: '0xdeadbeef' as Hex,
+    to: '0xswap',
+    data: '0xdeadbeef',
     maxFeePerGas: '0x1',
     maxPriorityFeePerGas: '0x1',
   },
@@ -163,7 +164,7 @@ function buildExecTransactionData(): Hex {
 }
 
 function getRequestBody(): { actions: unknown[] } {
-  const [, options] = jest.mocked(successfulFetch).mock.calls[0];
+  const [, options] = vi.mocked(successfulFetch).mock.calls[0];
 
   return JSON.parse((options?.body as string) ?? '{}') as {
     actions: unknown[];
@@ -171,14 +172,14 @@ function getRequestBody(): { actions: unknown[] } {
 }
 
 describe('Across Quotes', () => {
-  const successfulFetchMock = jest.mocked(successfulFetch);
-  const getTokenFiatRateMock = jest.mocked(getTokenFiatRate);
-  const getGasBufferMock = jest.mocked(getGasBuffer);
-  const getSlippageMock = jest.mocked(getSlippage);
-  const isEIP7702ChainMock = jest.mocked(isEIP7702Chain);
-  const calculateGasCostMock = jest.mocked(calculateGasCost);
-  const calculateGasFeeTokenCostMock = jest.mocked(calculateGasFeeTokenCost);
-  const getTokenBalanceMock = jest.mocked(getTokenBalance);
+  const successfulFetchMock = vi.mocked(successfulFetch);
+  const getTokenFiatRateMock = vi.mocked(getTokenFiatRate);
+  const getGasBufferMock = vi.mocked(getGasBuffer);
+  const getSlippageMock = vi.mocked(getSlippage);
+  const isEIP7702ChainMock = vi.mocked(isEIP7702Chain);
+  const calculateGasCostMock = vi.mocked(calculateGasCost);
+  const calculateGasFeeTokenCostMock = vi.mocked(calculateGasFeeTokenCost);
+  const getTokenBalanceMock = vi.mocked(getTokenBalance);
 
   const {
     messenger,
@@ -203,7 +204,7 @@ describe('Across Quotes', () => {
   };
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     getRemoteFeatureFlagControllerStateMock.mockReturnValue({
       ...getDefaultRemoteFeatureFlagControllerState(),
@@ -321,12 +322,14 @@ describe('Across Quotes', () => {
         json: async () => QUOTE_MOCK,
       } as Response);
 
-      await getAcrossQuotes({
+      const result = await getAcrossQuotes({
         accountSupports7702: true,
         messenger,
         requests: [{ ...QUOTE_REQUEST_MOCK, isMaxAmount: true }],
         transaction: TRANSACTION_META_MOCK,
       });
+
+      expect(result[0].isInputBased).toBe(true);
 
       const [url] = successfulFetchMock.mock.calls[0];
       const params = new URL(url as string).searchParams;
@@ -356,11 +359,11 @@ describe('Across Quotes', () => {
           ...PREDICT_WITHDRAW_TRANSACTION_MOCK,
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
-            authorizationList: [{ address: '0xabc' as Hex }],
-            data: '0x12345678' as Hex,
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            authorizationList: [{ address: '0xabc' }],
+            data: '0x12345678',
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       const [url] = successfulFetchMock.mock.calls[0];
@@ -392,9 +395,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x0',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(result[0].original.metamask.gasLimits).toStrictEqual([
@@ -438,9 +441,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(result[0].original.metamask.gasLimits).toStrictEqual([
@@ -525,9 +528,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(result[0].original.metamask.gasLimits).toStrictEqual([
@@ -576,24 +579,23 @@ describe('Across Quotes', () => {
       });
 
       successfulFetchMock.mockResolvedValue({
-        json: async () =>
-          ({
-            ...QUOTE_MOCK,
-            approvalTxns: [
-              {
-                chainId: 1,
-                data: '0xaaaa' as Hex,
-                maxFeePerGas: '0x2',
-                maxPriorityFeePerGas: '0x1',
-                to: '0xapprove1' as Hex,
-              },
-            ],
-            swapTx: {
-              ...QUOTE_MOCK.swapTx,
-              maxFeePerGas: '0x3',
+        json: async () => ({
+          ...QUOTE_MOCK,
+          approvalTxns: [
+            {
+              chainId: 1,
+              data: '0xaaaa' as Hex,
+              maxFeePerGas: '0x2',
               maxPriorityFeePerGas: '0x1',
+              to: '0xapprove1' as Hex,
             },
-          }) as unknown as AcrossSwapApprovalResponse,
+          ],
+          swapTx: {
+            ...QUOTE_MOCK.swapTx,
+            maxFeePerGas: '0x3',
+            maxPriorityFeePerGas: '0x1',
+          },
+        }),
       } as Response);
 
       const result = await getAcrossQuotes({
@@ -614,9 +616,9 @@ describe('Across Quotes', () => {
             gas: '0x5208',
             maxFeePerGas: '0x5',
             maxPriorityFeePerGas: '0x1',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(result[0].fees.sourceNetwork.estimate.raw).toBe('100');
@@ -722,9 +724,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(successfulFetchMock).toHaveBeenCalledTimes(2);
@@ -779,9 +781,9 @@ describe('Across Quotes', () => {
             txParams: {
               ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
               gas: '0x5208',
-              to: '0x000000000000000000000000000000000000dEaD' as Hex,
+              to: '0x000000000000000000000000000000000000dEaD',
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/cannot cover source gas fee token/u);
 
@@ -825,9 +827,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(getGasFeeTokensMock).toHaveBeenCalledWith(
@@ -889,9 +891,9 @@ describe('Across Quotes', () => {
             txParams: {
               ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
               gas: '0x5208',
-              to: '0x000000000000000000000000000000000000dEaD' as Hex,
+              to: '0x000000000000000000000000000000000000dEaD',
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/lost source gas fee token eligibility/u);
 
@@ -949,9 +951,9 @@ describe('Across Quotes', () => {
             txParams: {
               ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
               gas: '0x5208',
-              to: '0x000000000000000000000000000000000000dEaD' as Hex,
+              to: '0x000000000000000000000000000000000000dEaD',
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/exceeds source amount/u);
 
@@ -985,9 +987,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(getGasFeeTokensMock).not.toHaveBeenCalled();
@@ -1038,9 +1040,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(getGasFeeTokensMock).toHaveBeenCalledWith(
@@ -1101,9 +1103,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(result[0].fees.isSourceGasFeeToken).toBeUndefined();
@@ -1157,9 +1159,9 @@ describe('Across Quotes', () => {
           txParams: {
             ...PREDICT_WITHDRAW_TRANSACTION_MOCK.txParams,
             gas: '0x5208',
-            to: '0x000000000000000000000000000000000000dEaD' as Hex,
+            to: '0x000000000000000000000000000000000000dEaD',
           },
-        } as TransactionMeta,
+        },
       });
 
       expect(result[0].fees.isSourceGasFeeToken).toBeUndefined();
@@ -1196,7 +1198,7 @@ describe('Across Quotes', () => {
       );
     });
 
-    it('uses relaxed per-transaction gas estimates for prefunded post-quote predict withdraws', async () => {
+    it('uses relaxed separate gas estimates for prefunded post-quote predict withdraws', async () => {
       const refundTo = '0x5afe000000000000000000000000000000000001' as Hex;
 
       estimateGasBatchMock.mockRejectedValueOnce(
@@ -1539,7 +1541,7 @@ describe('Across Quotes', () => {
             to: ARBITRUM_USDC_ADDRESS,
             data: buildTransferData(TRANSFER_RECIPIENT, 1),
           },
-        } as TransactionMeta,
+        },
       });
 
       const [url] = successfulFetchMock.mock.calls[0];
@@ -1597,7 +1599,7 @@ describe('Across Quotes', () => {
         transaction: {
           ...TRANSACTION_META_MOCK,
           nestedTransactions: [{ data: transferData }],
-        } as TransactionMeta,
+        },
       });
 
       const [url] = successfulFetchMock.mock.calls[0];
@@ -1650,7 +1652,7 @@ describe('Across Quotes', () => {
           ...TRANSACTION_META_MOCK,
           type: TransactionType.predictDeposit,
           nestedTransactions: [{ data: transferData }],
-        } as TransactionMeta,
+        },
       });
 
       const [url] = successfulFetchMock.mock.calls[0];
@@ -1680,7 +1682,7 @@ describe('Across Quotes', () => {
             { to: SAFE_ADDRESS, data: execTransactionData },
             { to: QUOTE_REQUEST_MOCK.targetTokenAddress, data: transferData },
           ],
-        } as TransactionMeta,
+        },
       });
 
       const [url] = successfulFetchMock.mock.calls[0];
@@ -1783,7 +1785,7 @@ describe('Across Quotes', () => {
             { to: FACTORY_ADDRESS, data: createProxyData },
             { data: transferData },
           ],
-        } as TransactionMeta,
+        },
       });
 
       const body = getRequestBody();
@@ -1827,7 +1829,7 @@ describe('Across Quotes', () => {
               data: secondTransferData,
             },
           ],
-        } as TransactionMeta,
+        },
       });
 
       const [url] = successfulFetchMock.mock.calls[0];
@@ -1945,10 +1947,10 @@ describe('Across Quotes', () => {
             nestedTransactions: [
               {
                 to: FACTORY_ADDRESS,
-                data: '0xdeadbeef' as Hex,
+                data: '0xdeadbeef',
               },
             ],
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Destination selector: 0xdeadbeef/u);
     });
@@ -1968,7 +1970,7 @@ describe('Across Quotes', () => {
           transaction: {
             ...TRANSACTION_META_MOCK,
             nestedTransactions: [{ data: createProxyData }],
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Across only supports direct token transfers/u);
     });
@@ -1988,7 +1990,7 @@ describe('Across Quotes', () => {
           transaction: {
             ...TRANSACTION_META_MOCK,
             nestedTransactions: [{ data: execTransactionData }],
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Across only supports direct token transfers/u);
     });
@@ -2003,7 +2005,7 @@ describe('Across Quotes', () => {
             ...TRANSACTION_META_MOCK,
             txParams: {
               from: FROM_MOCK,
-              data: '0xabc' as Hex,
+              data: '0xabc',
             },
           },
         }),
@@ -2020,10 +2022,10 @@ describe('Across Quotes', () => {
             ...TRANSACTION_META_MOCK,
             txParams: {
               from: FROM_MOCK,
-              data: '0xabc' as Hex,
-              authorizationList: [{ address: '0xabc' as Hex }],
+              data: '0xabc',
+              authorizationList: [{ address: '0xabc' }],
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Across does not support type-4\/EIP-7702/u);
 
@@ -2560,7 +2562,7 @@ describe('Across Quotes', () => {
       ).toBeUndefined();
     });
 
-    it('returns per-transaction gas limits when account does not support 7702', async () => {
+    it('returns separate gas limits when account does not support 7702', async () => {
       estimateGasBatchMock.mockResolvedValue({
         totalGasLimit: 42000,
         gasLimits: [21000, 21000],
@@ -2592,7 +2594,7 @@ describe('Across Quotes', () => {
     });
 
     it('throws when the shared gas estimator marks a quote as 7702 without a combined gas limit', async () => {
-      const estimateQuoteGasLimitsSpy = jest.spyOn(
+      const estimateQuoteGasLimitsSpy = vi.spyOn(
         quoteGasUtils,
         'estimateQuoteGasLimits',
       );
@@ -2727,11 +2729,11 @@ describe('Across Quotes', () => {
     });
 
     it('falls back to the swap chain id when an approval transaction chain id is missing during cost calculation', async () => {
-      const estimateQuoteGasLimitsSpy = jest.spyOn(
+      const estimateQuoteGasLimitsSpy = vi.spyOn(
         quoteGasUtils,
         'estimateQuoteGasLimits',
       );
-      const orderedTransactionsSpy = jest.spyOn(
+      const orderedTransactionsSpy = vi.spyOn(
         acrossTransactions,
         'getAcrossOrderedTransactions',
       );
@@ -2755,9 +2757,9 @@ describe('Across Quotes', () => {
       orderedTransactionsSpy.mockReturnValueOnce([
         {
           chainId: 1,
-          data: '0xaaaa' as Hex,
+          data: '0xaaaa',
           kind: 'approval',
-          to: '0xapprove1' as Hex,
+          to: '0xapprove1',
         },
         {
           ...QUOTE_MOCK.swapTx,
@@ -2993,15 +2995,12 @@ describe('Across Quotes', () => {
           requests: [QUOTE_REQUEST_MOCK],
           transaction: {
             ...TRANSACTION_META_MOCK,
-            nestedTransactions: [
-              { data: transferData },
-              { data: '0xbeef' as Hex },
-            ],
+            nestedTransactions: [{ data: transferData }, { data: '0xbeef' }],
             txParams: {
               from: FROM_MOCK,
-              data: '0xabc' as Hex,
+              data: '0xabc',
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Across only supports direct token transfers/u);
     });
@@ -3018,12 +3017,12 @@ describe('Across Quotes', () => {
           requests: [QUOTE_REQUEST_MOCK],
           transaction: {
             ...TRANSACTION_META_MOCK,
-            nestedTransactions: [{ to: '0xabc' as Hex }],
+            nestedTransactions: [{ to: '0xabc' }],
             txParams: {
               from: FROM_MOCK,
-              data: '0xdeadbeef' as Hex,
+              data: '0xdeadbeef',
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Destination selector: 0xdeadbeef/u);
     });
@@ -3049,7 +3048,7 @@ describe('Across Quotes', () => {
     });
 
     it('throws when source token fiat rate not found', async () => {
-      getTokenFiatRateMock.mockReturnValue(undefined as never);
+      getTokenFiatRateMock.mockReturnValue(undefined);
 
       successfulFetchMock.mockResolvedValue({
         json: async () => QUOTE_MOCK,
@@ -3071,7 +3070,7 @@ describe('Across Quotes', () => {
           usdRate: '2.0',
           fiatRate: '4.0',
         })
-        .mockReturnValueOnce(undefined as never);
+        .mockReturnValueOnce(undefined);
 
       successfulFetchMock.mockResolvedValue({
         json: async () => QUOTE_MOCK,
@@ -3101,15 +3100,12 @@ describe('Across Quotes', () => {
           requests: [QUOTE_REQUEST_MOCK],
           transaction: {
             ...TRANSACTION_META_MOCK,
-            nestedTransactions: [
-              { data: '0xother' as Hex },
-              { data: transferData },
-            ],
+            nestedTransactions: [{ data: '0xother' }, { data: transferData }],
             txParams: {
               from: FROM_MOCK,
-              data: '0xnonTransferData' as Hex,
+              data: '0xnonTransferData',
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Across only supports direct token transfers/u);
     });
@@ -3127,12 +3123,12 @@ describe('Across Quotes', () => {
         requests: [QUOTE_REQUEST_MOCK],
         transaction: {
           ...TRANSACTION_META_MOCK,
-          nestedTransactions: [{ to: '0xabc' as Hex }, { data: transferData }],
+          nestedTransactions: [{ to: '0xabc' }, { data: transferData }],
           txParams: {
             from: FROM_MOCK,
-            data: '0xnonTransferData' as Hex,
+            data: '0xnonTransferData',
           },
-        } as TransactionMeta,
+        },
       });
 
       const [url] = successfulFetchMock.mock.calls[0];
@@ -3154,14 +3150,14 @@ describe('Across Quotes', () => {
           transaction: {
             ...TRANSACTION_META_MOCK,
             nestedTransactions: [
-              { data: '0xdeadbeef' as Hex },
-              { data: '0xcafebabe' as Hex },
+              { data: '0xdeadbeef' },
+              { data: '0xcafebabe' },
             ],
             txParams: {
               from: FROM_MOCK,
               data: undefined,
             },
-          } as TransactionMeta,
+          },
         }),
       ).rejects.toThrow(/Destination selector: 0xdeadbeef/u);
     });

@@ -1,3 +1,5 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import {
   convertListToTrie,
   deepCopyPathTrie,
@@ -357,7 +359,7 @@ describe('convertListToTrie', () => {
 
   it('handles undefined input gracefully', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = convertListToTrie(undefined as any);
+    const result = convertListToTrie(undefined);
     expect(result).toStrictEqual({});
   });
 

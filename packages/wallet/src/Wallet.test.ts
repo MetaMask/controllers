@@ -1,13 +1,30 @@
 import { getDefaultAddressBookControllerState } from '@metamask/address-book-controller';
+import { getDefaultClaimsControllerState } from '@metamask/claims-controller';
+import {
+  ClientController,
+  getDefaultClientControllerState,
+} from '@metamask/client-controller';
 import { CONNECTIVITY_STATUSES } from '@metamask/connectivity-controller';
+import { LoggingController, LogType } from '@metamask/logging-controller';
 import { Messenger } from '@metamask/messenger';
+import {
+  PermissionController,
+  SubjectMetadataController,
+  SubjectType,
+} from '@metamask/permission-controller';
+import { SelectedNetworkController } from '@metamask/selected-network-controller';
+import {
+  getDefaultShieldControllerState,
+  ShieldController,
+} from '@metamask/shield-controller';
 import { InMemoryStorageAdapter } from '@metamask/storage-service';
 import { Json } from '@metamask/utils';
-import { webcrypto } from 'crypto';
+import { describe, expect, it, vi } from 'vitest';
 
 import MockEncryptor from '../../keyring-controller/tests/mocks/mockEncryptor.js';
 import * as initializationModule from './initialization/initialization.js';
 import { AlwaysOnlineAdapter } from './initialization/instances/connectivity-controller/always-online-adapter.js';
+import type { WalletOptions } from './types.js';
 import { importSecretRecoveryPhrase } from './utilities.js';
 import { Wallet } from './Wallet.js';
 
@@ -23,23 +40,41 @@ const REMOTE_FEATURE_FLAG_OPTIONS = {
   },
 };
 
+const TEST_ANALYTICS_ID = '11111111-1111-4111-8111-111111111111';
+
+function getInstanceOptions(): WalletOptions['instanceOptions'] {
+  return {
+    analyticsController: {
+      platformAdapter: {
+        track: vi.fn(),
+        identify: vi.fn(),
+        view: vi.fn(),
+        onSetupCompleted: vi.fn(),
+      },
+      analyticsId: TEST_ANALYTICS_ID,
+    },
+    connectivityController: {
+      connectivityAdapter: new AlwaysOnlineAdapter(),
+    },
+    gasFeeController: {
+      clientId: 'test',
+    },
+    networkController: {
+      infuraProjectId: 'fake-infura-project-id',
+    },
+    selectedNetworkController: {
+      domainProxyMap: new Map(),
+    },
+    storageService: {
+      storage: new InMemoryStorageAdapter(),
+    },
+    remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
+  };
+}
+
 async function setupWallet(): Promise<Wallet> {
   const wallet = new Wallet({
-    instanceOptions: {
-      connectivityController: {
-        connectivityAdapter: new AlwaysOnlineAdapter(),
-      },
-      gasFeeController: {
-        clientId: 'test',
-      },
-      networkController: {
-        infuraProjectId: 'fake-infura-project-id',
-      },
-      storageService: {
-        storage: new InMemoryStorageAdapter(),
-      },
-      remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
-    },
+    instanceOptions: getInstanceOptions(),
   });
 
   await importSecretRecoveryPhrase(wallet, TEST_PASSWORD, TEST_SRP);
@@ -48,19 +83,6 @@ async function setupWallet(): Promise<Wallet> {
 }
 
 describe('Wallet', () => {
-  beforeAll(() => {
-    // We can remove this once we drop Node 18
-    // eslint-disable-next-line n/no-unsupported-features/node-builtins
-    globalThis.crypto ??= webcrypto as typeof globalThis.crypto;
-
-    // eslint-disable-next-line no-restricted-syntax
-    if (!('CryptoKey' in globalThis)) {
-      Object.defineProperty(globalThis, 'CryptoKey', {
-        value: webcrypto.CryptoKey,
-      });
-    }
-  });
-
   it('exposes state', async () => {
     const wallet = await setupWallet();
     const { state } = wallet;
@@ -89,22 +111,10 @@ describe('Wallet', () => {
   it('supports passing instance options', async () => {
     const wallet = new Wallet({
       instanceOptions: {
-        connectivityController: {
-          connectivityAdapter: new AlwaysOnlineAdapter(),
-        },
-        gasFeeController: {
-          clientId: 'test',
-        },
+        ...getInstanceOptions(),
         keyringController: {
           encryptor: new MockEncryptor(),
         },
-        networkController: {
-          infuraProjectId: 'fake-infura-project-id',
-        },
-        storageService: {
-          storage: new InMemoryStorageAdapter(),
-        },
-        remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
       },
     });
 
@@ -143,21 +153,7 @@ describe('Wallet', () => {
           init: (): DummyService => new DummyService(),
         },
       ],
-      instanceOptions: {
-        connectivityController: {
-          connectivityAdapter: new AlwaysOnlineAdapter(),
-        },
-        gasFeeController: {
-          clientId: 'test',
-        },
-        networkController: {
-          infuraProjectId: 'fake-infura-project-id',
-        },
-        storageService: {
-          storage: new InMemoryStorageAdapter(),
-        },
-        remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
-      },
+      instanceOptions: getInstanceOptions(),
     });
     const { state } = wallet;
 
@@ -182,28 +178,14 @@ describe('Wallet', () => {
     const fakeMetadata = {
       foo: { persist: true, includeInDebugSnapshot: false },
     };
-    jest.spyOn(initializationModule, 'initialize').mockReturnValueOnce({
+    vi.spyOn(initializationModule, 'initialize').mockReturnValueOnce({
       // @ts-expect-error Mock data.
       WithMeta: { state: {}, metadata: fakeMetadata },
       NoMeta: { state: {} },
     });
 
     const wallet = new Wallet({
-      instanceOptions: {
-        connectivityController: {
-          connectivityAdapter: new AlwaysOnlineAdapter(),
-        },
-        gasFeeController: {
-          clientId: 'test',
-        },
-        networkController: {
-          infuraProjectId: 'fake-infura-project-id',
-        },
-        storageService: {
-          storage: new InMemoryStorageAdapter(),
-        },
-        remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
-      },
+      instanceOptions: getInstanceOptions(),
     });
 
     expect(wallet.controllerMetadata).toStrictEqual({
@@ -217,7 +199,7 @@ describe('Wallet', () => {
 
     const results = await wallet.init();
 
-    expect(results).toHaveLength(2);
+    expect(results).toHaveLength(8);
   });
 
   it('disallows modifying the messenger', async () => {
@@ -249,12 +231,36 @@ describe('Wallet', () => {
 
     const keyringController = wallet.getInstance('KeyringController');
 
-    const spy = jest.spyOn(keyringController, 'destroy');
+    const spy = vi.spyOn(keyringController, 'destroy');
 
     await wallet.destroy();
     await wallet.destroy();
 
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs controller state validation errors and continues', async () => {
+    const captureException = vi.fn();
+    const messenger = new Messenger({ namespace: 'Root', captureException });
+    const wallet = new Wallet({
+      messenger,
+      state: {
+        NetworkController: {
+          foo: 'bar',
+        },
+      },
+      instanceOptions: getInstanceOptions(),
+    });
+
+    expect(wallet.state.NetworkController).toStrictEqual(
+      expect.objectContaining({ foo: 'bar' }),
+    );
+    expect(captureException).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message:
+          'Validation of "NetworkController" state failed. Not throwing because strict mode is not enabled. The reported error is: At path: selectedNetworkClientId -- Expected a string, but received: undefined',
+      }),
+    );
   });
 
   describe('AccountsController', () => {
@@ -302,21 +308,7 @@ describe('Wallet', () => {
             addressBook: { '0x1': { [ADDRESS]: entry } },
           },
         },
-        instanceOptions: {
-          connectivityController: {
-            connectivityAdapter: new AlwaysOnlineAdapter(),
-          },
-          gasFeeController: {
-            clientId: 'test',
-          },
-          networkController: {
-            infuraProjectId: 'fake-infura-project-id',
-          },
-          storageService: {
-            storage: new InMemoryStorageAdapter(),
-          },
-          remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
-        },
+        instanceOptions: getInstanceOptions(),
       });
 
       expect(
@@ -337,21 +329,7 @@ describe('Wallet', () => {
   describe('ConnectivityController', () => {
     it('reports online connectivity status', () => {
       const wallet = new Wallet({
-        instanceOptions: {
-          connectivityController: {
-            connectivityAdapter: new AlwaysOnlineAdapter(),
-          },
-          gasFeeController: {
-            clientId: 'test',
-          },
-          networkController: {
-            infuraProjectId: 'fake-infura-project-id',
-          },
-          storageService: {
-            storage: new InMemoryStorageAdapter(),
-          },
-          remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
-        },
+        instanceOptions: getInstanceOptions(),
       });
 
       expect(wallet.state.ConnectivityController.connectivityStatus).toBe(
@@ -380,21 +358,7 @@ describe('Wallet', () => {
             vault,
           },
         },
-        instanceOptions: {
-          connectivityController: {
-            connectivityAdapter: new AlwaysOnlineAdapter(),
-          },
-          gasFeeController: {
-            clientId: 'test',
-          },
-          networkController: {
-            infuraProjectId: 'fake-infura-project-id',
-          },
-          storageService: {
-            storage: new InMemoryStorageAdapter(),
-          },
-          remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
-        },
+        instanceOptions: getInstanceOptions(),
       });
 
       await wallet.messenger.call(
@@ -454,6 +418,19 @@ describe('Wallet', () => {
     });
   });
 
+  describe('ShieldController', () => {
+    it('is wired and exposes its state on the wallet messenger', async () => {
+      const wallet = await setupWallet();
+
+      expect(wallet.getInstance('ShieldController')).toBeInstanceOf(
+        ShieldController,
+      );
+      expect(wallet.messenger.call('ShieldController:getState')).toStrictEqual(
+        getDefaultShieldControllerState(),
+      );
+    });
+  });
+
   describe('RemoteFeatureFlagController', () => {
     it('is wired and exposes its state on the wallet messenger', async () => {
       const wallet = await setupWallet();
@@ -472,17 +449,8 @@ describe('Wallet', () => {
     it('routes injected instanceOptions through to the controller', async () => {
       const wallet = new Wallet({
         instanceOptions: {
-          connectivityController: {
-            connectivityAdapter: new AlwaysOnlineAdapter(),
-          },
-          gasFeeController: {
-            clientId: 'test',
-          },
-          networkController: {
-            infuraProjectId: 'fake-infura-project-id',
-          },
+          ...getInstanceOptions(),
           keyringController: { encryptor: new MockEncryptor() },
-          storageService: { storage: new InMemoryStorageAdapter() },
           remoteFeatureFlagController: {
             clientConfigApiService: {
               fetchRemoteFeatureFlags: async (): Promise<{
@@ -506,6 +474,160 @@ describe('Wallet', () => {
         messenger.call('RemoteFeatureFlagController:getState')
           .remoteFeatureFlags,
       ).toStrictEqual({ testFlag: true });
+    });
+  });
+
+  describe('PermissionController', () => {
+    it('is wired and exposes its state on the wallet messenger', async () => {
+      const wallet = await setupWallet();
+
+      expect(wallet.getInstance('PermissionController')).toBeInstanceOf(
+        PermissionController,
+      );
+      expect(
+        wallet.messenger.call('PermissionController:getState'),
+      ).toStrictEqual({ subjects: {} });
+    });
+
+    it('routes its method actions through the wallet messenger', async () => {
+      const wallet = await setupWallet();
+
+      expect(
+        wallet.messenger.call(
+          'PermissionController:hasPermissions',
+          'https://example.com',
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('SubjectMetadataController', () => {
+    it('is wired and exposes its state on the wallet messenger', async () => {
+      const wallet = await setupWallet();
+
+      expect(wallet.getInstance('SubjectMetadataController')).toBeInstanceOf(
+        SubjectMetadataController,
+      );
+      expect(
+        wallet.messenger.call('SubjectMetadataController:getState'),
+      ).toStrictEqual({ subjectMetadata: {} });
+    });
+
+    it('stores and returns subject metadata', async () => {
+      const wallet = await setupWallet();
+      const { messenger } = wallet;
+      const metadata = {
+        origin: 'https://example.com',
+        name: 'Example',
+        subjectType: SubjectType.Website,
+        iconUrl: null,
+        extensionId: null,
+      };
+
+      messenger.call('SubjectMetadataController:addSubjectMetadata', metadata);
+
+      expect(
+        messenger.call(
+          'SubjectMetadataController:getSubjectMetadata',
+          metadata.origin,
+        ),
+      ).toStrictEqual(metadata);
+    });
+  });
+
+  describe('SelectedNetworkController', () => {
+    it('is wired and exposes its state on the wallet messenger', async () => {
+      const wallet = await setupWallet();
+
+      expect(wallet.getInstance('SelectedNetworkController')).toBeInstanceOf(
+        SelectedNetworkController,
+      );
+      expect(
+        wallet.messenger.call('SelectedNetworkController:getState'),
+      ).toStrictEqual({ domains: {} });
+    });
+
+    it('routes its method actions through the wallet messenger', async () => {
+      const wallet = await setupWallet();
+      const { messenger } = wallet;
+      const { selectedNetworkClientId } = messenger.call(
+        'NetworkController:getState',
+      );
+
+      expect(
+        messenger.call(
+          'SelectedNetworkController:getNetworkClientIdForDomain',
+          'https://example.com',
+        ),
+      ).toBe(selectedNetworkClientId);
+    });
+  });
+
+  describe('ClientController', () => {
+    it('is wired and exposes its state on the wallet messenger', async () => {
+      const wallet = await setupWallet();
+
+      expect(wallet.getInstance('ClientController')).toBeInstanceOf(
+        ClientController,
+      );
+      expect(wallet.messenger.call('ClientController:getState')).toStrictEqual(
+        getDefaultClientControllerState(),
+      );
+    });
+
+    it('routes its method actions through the wallet messenger', async () => {
+      const wallet = await setupWallet();
+      const { messenger } = wallet;
+
+      messenger.call('ClientController:setUiOpen', true);
+
+      expect(messenger.call('ClientController:getState')).toStrictEqual({
+        isUiOpen: true,
+      });
+    });
+  });
+
+  describe('LoggingController', () => {
+    it('is wired and exposes its state on the wallet messenger', async () => {
+      const wallet = await setupWallet();
+
+      expect(wallet.getInstance('LoggingController')).toBeInstanceOf(
+        LoggingController,
+      );
+      expect(wallet.messenger.call('LoggingController:getState')).toStrictEqual(
+        { logs: {} },
+      );
+    });
+
+    it('routes its method actions through the wallet messenger', async () => {
+      const wallet = await setupWallet();
+      const { messenger } = wallet;
+
+      messenger.call('LoggingController:add', {
+        type: LogType.GenericLog,
+        data: 'test',
+      });
+
+      expect(
+        Object.values(messenger.call('LoggingController:getState').logs),
+      ).toHaveLength(1);
+
+      messenger.call('LoggingController:clear');
+
+      expect(messenger.call('LoggingController:getState').logs).toStrictEqual(
+        {},
+      );
+    });
+  });
+
+  describe('ClaimsController', () => {
+    it('is wired and exposes its state on the wallet messenger', async () => {
+      const wallet = await setupWallet();
+      const { messenger } = wallet;
+
+      expect(messenger.call('ClaimsController:getState')).toStrictEqual(
+        getDefaultClaimsControllerState(),
+      );
     });
   });
 });

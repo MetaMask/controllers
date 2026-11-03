@@ -1,4 +1,5 @@
 import type { Hex } from '@metamask/utils';
+import { describe, expect, it } from 'vitest';
 
 import { TransactionPayStrategy } from '../constants.js';
 import type { TransactionPaymentToken } from '../types.js';
@@ -20,6 +21,7 @@ describe('No-Op Quote Utils', () => {
       const quote = buildNoOpQuote(FROM_MOCK, PAYMENT_TOKEN_MOCK);
 
       expect(quote.strategy).toBe(TransactionPayStrategy.None);
+      expect(quote.isInputBased).toBe(false);
     });
 
     it('builds quote with zero fees and amounts', () => {

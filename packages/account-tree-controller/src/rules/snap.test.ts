@@ -10,6 +10,7 @@ import { KeyringTypes } from '@metamask/keyring-controller';
 import type { InternalAccount } from '@metamask/keyring-internal-api';
 import type { SnapId } from '@metamask/snaps-sdk';
 import type { Snap } from '@metamask/snaps-utils';
+import { describe, expect, it } from 'vitest';
 
 import {
   getAccountTreeControllerMessenger,
@@ -267,7 +268,7 @@ describe('SnapRule', () => {
         groups: {},
         metadata: {
           name: '',
-          snap: { id: MOCK_SNAP_1.id as unknown as SnapId },
+          snap: { id: MOCK_SNAP_1.id },
         },
       };
 
@@ -307,7 +308,7 @@ describe('SnapRule', () => {
         groups: {},
         metadata: {
           name: '',
-          snap: { id: snapWithoutProposedName.id as unknown as SnapId },
+          snap: { id: snapWithoutProposedName.id },
         },
       };
 

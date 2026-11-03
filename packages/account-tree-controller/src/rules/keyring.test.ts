@@ -8,6 +8,7 @@ import { EthAccountType, EthMethod, EthScope } from '@metamask/keyring-api';
 import { KeyringType } from '@metamask/keyring-api/v2';
 import { KeyringTypes } from '@metamask/keyring-controller';
 import type { InternalAccount } from '@metamask/keyring-internal-api';
+import { describe, expect, it } from 'vitest';
 
 import {
   getAccountTreeControllerMessenger,
@@ -25,9 +26,7 @@ describe('keyring', () => {
     it.each([...Object.values(KeyringTypes), ...Object.values(KeyringType)])(
       'computes wallet name from: %s',
       (type) => {
-        const name = getAccountWalletNameFromKeyringType(
-          type as KeyringTypes | KeyringType,
-        );
+        const name = getAccountWalletNameFromKeyringType(type);
 
         expect(name).toBeDefined();
         expect(name.length).toBeGreaterThan(0);
@@ -41,6 +40,12 @@ describe('keyring', () => {
 
       expect(name).toBe('Unknown');
       expect(name.length).toBeGreaterThan(0);
+    });
+
+    it('returns "Watch-only accounts" for the watch-only keyring type', () => {
+      const name = getAccountWalletNameFromKeyringType(KeyringType.WatchOnly);
+
+      expect(name).toBe('Watch-only accounts');
     });
   });
 
@@ -145,6 +150,7 @@ describe('keyring', () => {
         [KeyringType.PrivateKey, 'Imported Account'],
         [KeyringType.Hd, 'Account'],
         [KeyringType.Snap, 'Snap Account'],
+        [KeyringType.WatchOnly, 'Watch-only Account'],
         ['unknown', 'Unknown Account'],
       ])(
         'returns default name prefix for "$0" to be "$1"',

@@ -1,4 +1,6 @@
 /* eslint-disable */
+import { describe, expect, it } from 'vitest';
+
 import {
   formatFundingRate,
   formatPercentage,
@@ -281,6 +283,22 @@ describe('formatFundingRate', () => {
 
   it('returns zero display for effectively-zero value', () => {
     expect(formatFundingRate(0)).toBe('0.0000%');
+  });
+
+  it('shows a threshold for positive rates below display precision', () => {
+    const value = 0.000000059;
+
+    const result = formatFundingRate(value);
+
+    expect(result).toBe('<0.0001%');
+  });
+
+  it('shows a threshold for negative rates below display precision', () => {
+    const value = -0.000000059;
+
+    const result = formatFundingRate(value);
+
+    expect(result).toBe('-<0.0001%');
   });
 
   it('returns empty string for undefined when showZero is false', () => {

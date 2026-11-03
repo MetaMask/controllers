@@ -1,4 +1,5 @@
 import { createMethodMiddleware } from '@metamask/json-rpc-engine';
+import { describe, expect, it } from 'vitest';
 
 import { methodHandlers } from './index.js';
 import type { WalletCreateSessionHooks } from './wallet-createSession.js';
@@ -29,8 +30,7 @@ const makeMockHooks = () =>
         },
       },
     ],
-    findNetworkClientIdByChainId: (() =>
-      '1') as Hooks['findNetworkClientIdByChainId'],
+    findNetworkClientIdByChainId: () => '1',
     requestPermissionsForOrigin: () =>
       Promise.resolve([{}, { id: '1', origin: 'test' }]),
     getNonEvmSupportedMethods: () => [],

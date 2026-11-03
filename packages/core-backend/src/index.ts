@@ -137,6 +137,7 @@ export {
 export type {
   // Client options
   ApiPlatformClientOptions,
+  ApiUrls,
   FetchOptions,
   // Shared types
   PageInfo,
@@ -151,9 +152,9 @@ export type {
   V6VsCurrency,
   V6DeFiPositionType,
   V6BalanceMetadata,
-  V6TokenMetadata,
+  V6StellarTokenBalanceMetadata,
+  V6TokenBalanceMetadata,
   V6BalanceItem,
-  V6AccountBalancesEntry,
   V6BalancesResponse,
   V1SupportedNetworksResponse,
   V2SupportedNetworksResponse,
@@ -173,10 +174,14 @@ export type {
   ExchangeRateInfo,
   V1ExchangeRatesResponse,
   PriceSupportedNetworksResponse,
+  PriceV1SupportedNetworksResponse,
+  PriceV2SupportedNetworksResponse,
   V1HistoricalPricesResponse,
   V3HistoricalPricesResponse,
   // Token API types
   TokenMetadata,
+  TokenListQueryOptions,
+  TokenV2SupportedNetworksResponse,
   V1TokenDescriptionResponse,
   NetworkInfo,
   TopAsset,

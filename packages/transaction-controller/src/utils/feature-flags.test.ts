@@ -6,6 +6,8 @@ import type {
 } from '@metamask/messenger';
 import type { RemoteFeatureFlagControllerGetStateAction } from '@metamask/remote-feature-flag-controller';
 import type { Hex } from '@metamask/utils';
+import type { MockedFunction } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TransactionControllerMessenger } from '../index.js';
 import type { TransactionControllerFeatureFlags } from './feature-flags.js';
@@ -22,10 +24,12 @@ import {
   getTransactionHistoryLimit,
   FeatureFlag,
   getTimeoutAttempts,
+  getReplaceUnderpricedDappGasFeesEnabled,
+  getReplaceUnderpricedSavedGasFeesEnabled,
 } from './feature-flags.js';
 import { isValidSignature } from './signature.js';
 
-jest.mock('./signature');
+vi.mock('./signature');
 
 const CHAIN_ID_MOCK = '0x123' as Hex;
 const CHAIN_ID_2_MOCK = '0xabc' as Hex;
@@ -59,11 +63,11 @@ describe('Feature Flags Utils', () => {
     typeof rootMessenger
   >;
 
-  let getFeatureFlagsMock: jest.MockedFn<
+  let getFeatureFlagsMock: MockedFunction<
     RemoteFeatureFlagControllerGetStateAction['handler']
   >;
 
-  const isValidSignatureMock = jest.mocked(isValidSignature);
+  const isValidSignatureMock = vi.mocked(isValidSignature);
 
   /**
    * Mocks the feature flags returned by the remote feature flag controller.
@@ -82,9 +86,9 @@ describe('Feature Flags Utils', () => {
   }
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
-    getFeatureFlagsMock = jest.fn();
+    getFeatureFlagsMock = vi.fn();
 
     rootMessenger = new Messenger({ namespace: MOCK_ANY_NAMESPACE });
 
@@ -331,6 +335,27 @@ describe('Feature Flags Utils', () => {
           PUBLIC_KEY_MOCK,
         ),
       ).toStrictEqual(ADDRESS_2_MOCK);
+    });
+
+    it('does not validate remaining contracts once an authentic contract is found', () => {
+      mockFeatureFlags({
+        [FeatureFlag.EIP7702]: {
+          contracts: {
+            [CHAIN_ID_MOCK]: [
+              { address: ADDRESS_MOCK, signature: SIGNATURE_MOCK },
+              { address: ADDRESS_2_MOCK, signature: SIGNATURE_MOCK },
+            ],
+          },
+        },
+      });
+
+      getEIP7702UpgradeContractAddress(
+        CHAIN_ID_MOCK,
+        controllerMessenger,
+        PUBLIC_KEY_MOCK,
+      );
+
+      expect(isValidSignatureMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -819,6 +844,52 @@ describe('Feature Flags Utils', () => {
           messenger: controllerMessenger,
         }),
       ).toBe(GAS_BUFFER_5_MOCK);
+    });
+  });
+
+  describe.each([
+    [
+      'getReplaceUnderpricedDappGasFeesEnabled',
+      getReplaceUnderpricedDappGasFeesEnabled,
+      'replaceUnderpricedDappGasFees' as const,
+    ],
+    [
+      'getReplaceUnderpricedSavedGasFeesEnabled',
+      getReplaceUnderpricedSavedGasFeesEnabled,
+      'replaceUnderpricedSavedGasFees' as const,
+    ],
+  ])('%s', (_name, getter, flagKey) => {
+    it('returns false if no feature flags set', () => {
+      mockFeatureFlags({});
+
+      expect(getter(CHAIN_ID_MOCK, controllerMessenger)).toBe(false);
+    });
+
+    it('returns default value if no chain-specific config', () => {
+      mockFeatureFlags({
+        [FeatureFlag.Transactions]: {
+          [flagKey]: {
+            default: true,
+          },
+        },
+      });
+
+      expect(getter(CHAIN_ID_MOCK, controllerMessenger)).toBe(true);
+    });
+
+    it('returns chain-specific value when available', () => {
+      mockFeatureFlags({
+        [FeatureFlag.Transactions]: {
+          [flagKey]: {
+            default: true,
+            perChainConfig: {
+              [CHAIN_ID_MOCK]: false,
+            },
+          },
+        },
+      });
+
+      expect(getter(CHAIN_ID_MOCK, controllerMessenger)).toBe(false);
     });
   });
 

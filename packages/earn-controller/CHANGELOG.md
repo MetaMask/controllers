@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
+
+### Changed
+
+- Bump `@ethersproject/bignumber` from `^5.7.0` to `^5.8.0` ([#10479](https://github.com/MetaMask/core/pull/10479))
+- Bump `@ethersproject/providers` from `^5.7.0` to `^5.8.0` ([#10482](https://github.com/MetaMask/core/pull/10482))
+- Bump `@metamask/network-controller` from `^37.0.0` to `^37.1.1` ([#10658](https://github.com/MetaMask/core/pull/10658), [#10864](https://github.com/MetaMask/core/pull/10864), [#10982](https://github.com/MetaMask/core/pull/10982))
+- Bump `@metamask/account-tree-controller` from `^11.0.0` to `^11.2.0` ([#10662](https://github.com/MetaMask/core/pull/10662), [#10891](https://github.com/MetaMask/core/pull/10891), [#10925](https://github.com/MetaMask/core/pull/10925), [#11092](https://github.com/MetaMask/core/pull/11092))
+- Bump `reselect` from `^5.1.1` to `^5.3.0` ([#10532](https://github.com/MetaMask/core/pull/10532))
+- Bump `@metamask/stake-sdk` from `^3.2.1` to `^3.4.0` ([#10739](https://github.com/MetaMask/core/pull/10739))
+- Bump `@metamask/keyring-api` from `^24.0.0` to `^24.3.0` ([#10717](https://github.com/MetaMask/core/pull/10717), [#10792](https://github.com/MetaMask/core/pull/10792), [#10844](https://github.com/MetaMask/core/pull/10844))
+- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
+
+## [13.0.2]
+
+### Changed
+
+- Bump `@metamask/account-tree-controller` from `^10.0.1` to `^11.0.0` ([#10459](https://github.com/MetaMask/core/pull/10459))
+
+## [13.0.1]
+
+### Changed
+
+- Bump `@metamask/account-tree-controller` from `^10.0.0` to `^10.0.1` ([#10166](https://github.com/MetaMask/core/pull/10166))
+
+## [13.0.0]
+
+### Changed
+
+- **BREAKING:** Drop CommonJS support ([#9536](https://github.com/MetaMask/core/pull/9536))
+  - This package is now ESM-only, but can still be used in CommonJS projects via `require(esm)` in modern Node.js versions (22+), or dynamic imports in older Node.js versions.
+- **BREAKING:** Bump minimum Node.js version to 22 ([#9976](https://github.com/MetaMask/core/pull/9976))
+- **BREAKING:** Bump TypeScript target to ES2022 ([#10019](https://github.com/MetaMask/core/pull/10019))
+  - This package now ships ES2022 code, requiring a compatible modern environment or bundler configuration to consume.
+- Bump `@metamask/account-tree-controller` from `^9.0.0` to `^10.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/base-controller` from `^9.1.0` to `^10.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/controller-utils` from `^12.3.0` to `^13.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/messenger` from `^2.0.0` to `^3.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/network-controller` from `^36.0.0` to `^37.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+
+## [12.2.7]
+
+### Changed
+
+- Bump `@metamask/transaction-controller` from `^69.7.0` to `^69.8.0` ([#10080](https://github.com/MetaMask/core/pull/10080))
+- Bump `@metamask/account-tree-controller` from `^8.0.0` to `^9.0.0` ([#10088](https://github.com/MetaMask/core/pull/10088), [#10139](https://github.com/MetaMask/core/pull/10139))
+
+## [12.2.6]
+
+### Changed
+
+- Bump `@metamask/transaction-controller` from `^69.5.2` to `^69.6.0` ([#9960](https://github.com/MetaMask/core/pull/9960))
+- Bump `@metamask/network-controller` from `^35.0.1` to `^36.0.0` ([#9969](https://github.com/MetaMask/core/pull/9969))
+
+## [12.2.5]
+
+### Changed
+
+- Bump `@metamask/account-tree-controller` from `^7.6.1` to `^8.0.0` ([#9886](https://github.com/MetaMask/core/pull/9886))
+
+### Fixed
+
+- Avoid duplicate `refreshEarnEligibility`/`refreshPooledStakes`/`refreshLendingPositions` calls when `AccountTreeController:selectedAccountGroupChange` fires with an address that was already just refreshed (e.g. immediately after `init()` during startup hydration) ([#9804](https://github.com/MetaMask/core/pull/9804))
+- Only eagerly prefetch pooled staking data for Ethereum Mainnet on startup/network change, no longer also prefetching the Hoodi testnet by default; Hoodi remains fully supported via explicit `chainId` calls ([#9804](https://github.com/MetaMask/core/pull/9804))
+
+## [12.2.4]
+
+### Changed
+
+- Bump `@metamask/keyring-api` from `^23.7.0` to `^24.0.0` ([#9754](https://github.com/MetaMask/core/pull/9754))
+- Bump `@metamask/account-tree-controller` from `^7.5.5` to `^7.6.1` ([#9779](https://github.com/MetaMask/core/pull/9779), [#9791](https://github.com/MetaMask/core/pull/9791))
+- Bump `@metamask/network-controller` from `^35.0.0` to `^35.0.1` ([#9758](https://github.com/MetaMask/core/pull/9758))
+
 ## [12.2.3]
 
 ### Changed
@@ -484,7 +559,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#5271](https://github.com/MetaMask/core/pull/5271))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.3...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@13.0.2...HEAD
+[13.0.2]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@13.0.1...@metamask/earn-controller@13.0.2
+[13.0.1]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@13.0.0...@metamask/earn-controller@13.0.1
+[13.0.0]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.7...@metamask/earn-controller@13.0.0
+[12.2.7]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.6...@metamask/earn-controller@12.2.7
+[12.2.6]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.5...@metamask/earn-controller@12.2.6
+[12.2.5]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.4...@metamask/earn-controller@12.2.5
+[12.2.4]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.3...@metamask/earn-controller@12.2.4
 [12.2.3]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.2...@metamask/earn-controller@12.2.3
 [12.2.2]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.1...@metamask/earn-controller@12.2.2
 [12.2.1]: https://github.com/MetaMask/core/compare/@metamask/earn-controller@12.2.0...@metamask/earn-controller@12.2.1

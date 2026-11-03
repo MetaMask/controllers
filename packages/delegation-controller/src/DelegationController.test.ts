@@ -7,6 +7,7 @@ import type {
   MockAnyNamespace,
 } from '@metamask/messenger';
 import { hexToNumber } from '@metamask/utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ROOT_AUTHORITY } from './constants.js';
 import {
@@ -44,7 +45,7 @@ const VERIFYING_CONTRACT_MOCK: Address =
   '0x00000000000000000000000000000000000321fde';
 
 const DELEGATION_MOCK: Delegation = {
-  delegator: '0x1234567890123456789012345678901234567890' as Address,
+  delegator: '0x1234567890123456789012345678901234567890',
   delegate: FROM_MOCK,
   authority: ROOT_AUTHORITY,
   caveats: [
@@ -54,7 +55,7 @@ const DELEGATION_MOCK: Delegation = {
       args: '0x',
     },
   ],
-  salt: '0x' as Hex,
+  salt: '0x',
   signature: '0x',
 };
 
@@ -74,7 +75,7 @@ function createMessengerMock() {
     namespace: MOCK_ANY_NAMESPACE,
   });
 
-  const keyringControllerSignTypedMessageMock = jest.fn();
+  const keyringControllerSignTypedMessageMock = vi.fn();
 
   keyringControllerSignTypedMessageMock.mockResolvedValue(SIGNATURE_HASH_MOCK);
 
@@ -143,7 +144,7 @@ function createController(state?: DelegationControllerState) {
 
 describe(`${controllerName}`, () => {
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('constructor', () => {
@@ -197,7 +198,7 @@ describe(`${controllerName}`, () => {
         rootMessenger.call('DelegationController:signDelegation', {
           delegation: {
             ...DELEGATION_MOCK,
-            salt: '0x1' as Hex,
+            salt: '0x1',
           },
           chainId: CHAIN_ID_MOCK,
         }),

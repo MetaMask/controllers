@@ -1,4 +1,5 @@
 import { is } from '@metamask/superstruct';
+import { describe, expect, it } from 'vitest';
 
 import { mockBridgeQuotesNativeErc20EthV1 } from '../../tests/mock-quotes-native-erc20-eth.js';
 import { validateFeatureFlagsResponse } from './feature-flags.js';
@@ -503,6 +504,7 @@ describe('validators', () => {
       ['vip', DiscountType.VIP],
       ['promo', DiscountType.PROMO],
       ['dao', DiscountType.DAO],
+      ['subscription', DiscountType.SUBSCRIPTION],
       ['future value', 'seasonal'],
     ])('accepts %s discountType', (_label, discountType) => {
       expect(
@@ -513,6 +515,10 @@ describe('validators', () => {
           FeeDataSchema,
         ),
       ).toBe(true);
+    });
+
+    it('defines the subscription discount type value', () => {
+      expect(DiscountType.SUBSCRIPTION).toBe('subscription');
     });
 
     it('rejects non-string discountType values', () => {

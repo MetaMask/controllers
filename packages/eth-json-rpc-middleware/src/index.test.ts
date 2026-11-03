@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import * as indexModule from './index.js';
 
 describe('index module', () => {
@@ -296,6 +298,7 @@ describe('index module', () => {
         "createWalletMiddleware": [Function],
         "providerAsMiddleware": [Function],
         "providerAsMiddlewareV2": [Function],
+        "validateTransactionParams": [Function],
       }
     `);
   });

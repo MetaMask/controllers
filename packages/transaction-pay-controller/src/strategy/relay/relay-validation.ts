@@ -18,11 +18,16 @@ import {
   isRelayValidationEnabled,
 } from '../../utils/feature-flags.js';
 import {
+  buildPolymarketDepositWalletSimulation,
+  isPredictWithdraw,
+} from '../../utils/polymarket/withdraw.js';
+import {
   validateQuoteExecution,
   QuoteError,
   isQuoteError,
 } from '../../utils/validation.js';
 import type { QuoteSimulation } from '../../utils/validation.js';
+import { getRelayDepositData } from './deposit-step.js';
 import { getRelayExecuteRequest } from './relay-submit-execute.js';
 import { getRelaySubmitCalls } from './relay-submit.js';
 import type { RelayExecuteRequest, RelayQuote } from './types.js';
@@ -39,42 +44,23 @@ export type ValidateRelayQuotesRequest = {
 export async function validateRelayQuotes(
   request: ValidateRelayQuotesRequest,
 ): Promise<void> {
-  if (!isRelayValidationEnabled(request.messenger)) {
+  if (!isRelayValidationEnabled(request.messenger, request.transaction)) {
     return;
   }
 
   for (const quote of request.quotes) {
-    if (shouldSkipValidation(quote)) {
+    if (shouldSkipValidation(quote, request.transaction)) {
       continue;
     }
 
     try {
-      const { calls } = await getRelaySubmitCalls({
-        messenger: request.messenger,
-        quote,
-        transaction: request.transaction,
-      });
-
-      const executeRequest = quote.original.metamask.isExecute
-        ? await getRelayExecuteRequest({
-            allParams: calls,
-            messenger: request.messenger,
-            quote,
-            requestId: quote.original.steps[0].requestId,
-            transaction: request.transaction,
-          })
-        : undefined;
+      const simulation = await buildValidationSimulation(request, quote);
 
       await validateQuoteExecution({
         messenger: request.messenger,
         quote,
         signal: request.signal,
-        simulation: buildRelayValidationSimulation(
-          request.messenger,
-          quote,
-          calls,
-          executeRequest,
-        ),
+        simulation,
       });
     } catch (error) {
       if (request.signal?.aborted) {
@@ -85,20 +71,75 @@ export async function validateRelayQuotes(
         // Backwards compatibility: keep the entire quote batch (including
         // quotes that may have passed or not yet been validated) so that
         // clients can still show quote details alongside the balance error.
-        throw new QuoteError(
-          quoteError.info,
-          request.quotes as TransactionPayQuote<unknown>[],
-        );
+        throw new QuoteError(quoteError.info, request.quotes);
       }
       throw quoteError;
     }
   }
 }
 
-function shouldSkipValidation(quote: TransactionPayQuote<RelayQuote>): boolean {
+function shouldSkipValidation(
+  quote: TransactionPayQuote<RelayQuote>,
+  transaction: TransactionMeta,
+): boolean {
   const { request } = quote;
-  return Boolean(
-    request.isHyperliquidSource ?? request.isPolymarketDepositWallet ?? false,
+
+  if (request.isHyperliquidSource) {
+    log('Skipping quote validation: Hyperliquid source', {
+      from: request.from,
+    });
+    return true;
+  }
+
+  // Legacy Safe Predict withdraws convert USDC.e to pUSD outside the calls the
+  // controller can see, so they cannot be faithfully simulated and are skipped.
+  if (
+    isPredictWithdraw(request, transaction) &&
+    !request.isPolymarketDepositWallet
+  ) {
+    log('Skipping quote validation: legacy Safe Predict withdraw', {
+      from: request.from,
+    });
+    return true;
+  }
+
+  return false;
+}
+
+async function buildValidationSimulation(
+  request: ValidateRelayQuotesRequest,
+  quote: TransactionPayQuote<RelayQuote>,
+): Promise<QuoteSimulation> {
+  if (quote.request.isPolymarketDepositWallet) {
+    return await buildPolymarketDepositWalletSimulation({
+      depositData: getRelayDepositData(quote.original),
+      from: quote.request.from,
+      messenger: request.messenger,
+      sourceAmountRaw: quote.sourceAmount.raw,
+    });
+  }
+
+  const { calls } = await getRelaySubmitCalls({
+    messenger: request.messenger,
+    quote,
+    transaction: request.transaction,
+  });
+
+  const executeRequest = quote.original.metamask.isExecute
+    ? await getRelayExecuteRequest({
+        allParams: calls,
+        messenger: request.messenger,
+        quote,
+        requestId: quote.original.steps[0].requestId,
+        transaction: request.transaction,
+      })
+    : undefined;
+
+  return buildRelayValidationSimulation(
+    request.messenger,
+    quote,
+    calls,
+    executeRequest,
   );
 }
 
@@ -195,7 +236,7 @@ function buildRelay7702BatchSimulation(
         data: batchTx.data,
         from,
         ...(gas === undefined || gas === 0 ? {} : { gas: toHex(gas) }),
-        to: batchTx.to as Hex,
+        to: batchTx.to,
         value: '0x0',
       },
     ],

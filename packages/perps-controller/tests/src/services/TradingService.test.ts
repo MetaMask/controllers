@@ -1,4 +1,8 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
+
 import { PERPS_EVENT_VALUE } from '../../../src/constants/eventNames.js';
+import { PERPS_ERROR_CODES } from '../../../src/perpsErrorCodes.js';
 import type { ServiceContext } from '../../../src/services/ServiceContext.js';
 import { TradingService } from '../../../src/services/TradingService.js';
 import { PerpsAnalyticsEvent } from '../../../src/types/index.js';
@@ -15,35 +19,52 @@ import type {
   Order,
   UpdatePositionTPSLParams,
   PerpsPlatformDependencies,
+  PerpsFeeResolution,
 } from '../../../src/types/index.js';
+import { resolveSubscriptionWaiverRate } from '../../../src/utils/subscriptionFeeWaiver.js';
 /* eslint-disable */
 import { createMockHyperLiquidProvider } from '../../helpers/providerMocks.js';
 import {
+  createDeferred,
   createMockServiceContext,
   createMockPerpsControllerState,
   createMockInfrastructure,
 } from '../../helpers/serviceMocks.js';
 
-jest.mock('uuid', () => ({ v4: () => 'mock-trace-id' }));
+vi.mock('uuid', () => ({ v4: () => 'mock-trace-id' }));
 
 describe('TradingService', () => {
-  let mockProvider: jest.Mocked<PerpsProvider>;
+  let mockProvider: Mocked<PerpsProvider>;
   let mockContext: ServiceContext;
-  let mockDeps: jest.Mocked<PerpsPlatformDependencies>;
+  let mockDeps: Mocked<PerpsPlatformDependencies>;
   let tradingService: TradingService;
-  let mockReportOrderToDataLake: jest.Mock;
-  let mockWithStreamPause: jest.Mock;
-  let mockGetPositions: jest.Mock;
-  let mockGetOpenOrders: jest.Mock;
-  let mockSaveTradeConfiguration: jest.Mock;
-  let mockRewardsIntegrationService: { calculateUserFeeDiscount: jest.Mock };
+  let mockReportOrderToDataLake: Mock;
+  let mockWithStreamPause: Mock;
+  let mockGetPositions: Mock;
+  let mockGetOpenOrders: Mock;
+  let mockSaveTradeConfiguration: Mock;
+  let mockRewardsIntegrationService: {
+    calculateUserFeeDiscount: Mock;
+    resolveFee: Mock;
+  };
+
+  const defaultFeeResolution: PerpsFeeResolution = {
+    feeBips: 10,
+    discountBips: undefined,
+    source: 'default',
+    subscription: { eligible: false, reason: 'no-source' },
+  };
+  const hyperliquidMainnetScope = {
+    providerId: 'hyperliquid',
+    isTestnet: false,
+  } as const;
 
   const createContextWithRewards = (): ServiceContext =>
     createMockServiceContext({
       errorContext: { controller: 'TradingService', method: 'test' },
       stateManager: {
-        update: jest.fn(),
-        getState: jest.fn(() => createMockPerpsControllerState()),
+        update: vi.fn(),
+        getState: vi.fn(() => createMockPerpsControllerState()),
       },
     });
 
@@ -51,36 +72,561 @@ describe('TradingService', () => {
     mockDeps = createMockInfrastructure();
     tradingService = new TradingService(mockDeps);
     mockRewardsIntegrationService = {
-      calculateUserFeeDiscount: jest.fn().mockResolvedValue(undefined),
+      calculateUserFeeDiscount: vi.fn().mockResolvedValue(undefined),
+      resolveFee: vi.fn(async () => {
+        const discountBips =
+          await mockRewardsIntegrationService.calculateUserFeeDiscount();
+        return discountBips === undefined
+          ? defaultFeeResolution
+          : {
+              ...defaultFeeResolution,
+              discountBips,
+              source: 'rewards' as const,
+            };
+      }),
     };
     // Set controller dependencies for fee discount calculation
     tradingService.setControllerDependencies({
       rewardsIntegrationService: mockRewardsIntegrationService as never,
     });
     mockProvider =
-      createMockHyperLiquidProvider() as unknown as jest.Mocked<PerpsProvider>;
-    mockSaveTradeConfiguration = jest.fn();
+      createMockHyperLiquidProvider() as unknown as Mocked<PerpsProvider>;
+    mockSaveTradeConfiguration = vi.fn();
     mockContext = createMockServiceContext({
       errorContext: { controller: 'TradingService', method: 'test' },
       stateManager: {
-        update: jest.fn(),
-        getState: jest.fn(() => createMockPerpsControllerState()),
+        update: vi.fn(),
+        getState: vi.fn(() => createMockPerpsControllerState()),
       },
       saveTradeConfiguration: mockSaveTradeConfiguration,
     });
-    mockReportOrderToDataLake = jest.fn().mockResolvedValue(undefined);
-    mockWithStreamPause = jest.fn(async (callback) => await callback());
-    mockGetPositions = jest.fn().mockResolvedValue([]);
-    mockGetOpenOrders = jest.fn().mockResolvedValue([]);
+    mockReportOrderToDataLake = vi.fn().mockResolvedValue(undefined);
+    mockWithStreamPause = vi.fn(async (callback) => await callback());
+    mockGetPositions = vi.fn().mockResolvedValue([]);
+    mockGetOpenOrders = vi.fn().mockResolvedValue([]);
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('placeOrder', () => {
+    it('owns bound Scale intent across a held fee resolution', async () => {
+      const release = createDeferred<PerpsFeeResolution>();
+      mockRewardsIntegrationService.resolveFee.mockReturnValue(release.promise);
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+      const expectation = {
+        prices: ['100', '200'],
+        sizes: ['1', '1'],
+        totalSize: '2',
+        totalNotional: '300',
+        minimumBaseSize: '0.1',
+        minimumQuoteAmount: '1',
+        sizeDecimals: 1,
+      };
+      const request: OrderParams = {
+        symbol: 'BTC',
+        orderType: 'scale',
+        isBuy: true,
+        size: '2',
+        expectedScaleLadder: expectation,
+      };
+      const original = JSON.parse(JSON.stringify(request)) as OrderParams;
+      const pending = tradingService.placeOrder({
+        provider: mockProvider,
+        params: request,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+      request.size = '200';
+      expectation.prices[0] = '1';
+      expectation.sizes[0] = '100';
+      request.expectedScaleLadder = { ...expectation, totalSize: '200' };
+      delete request.expectedScaleLadder;
+      release.resolve(defaultFeeResolution);
+      await pending;
+      expect(mockProvider.placeOrder).toHaveBeenCalledWith(
+        expect.objectContaining(original),
+      );
+    });
+
+    it('resolves a grant for the aggregated provider write route, passes it, then clears it', async () => {
+      const resolution: PerpsFeeResolution = {
+        feeBips: 2,
+        discountBips: 8000,
+        source: 'grant',
+        subscription: { eligible: false, reason: 'no-source' },
+      };
+      const params: OrderParams = {
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+        providerId: 'hyperliquid',
+      };
+      const aggregatedProvider = {
+        ...mockProvider,
+        protocolId: 'aggregated',
+        getWriteProviderId: vi.fn(() => 'hyperliquid' as const),
+        setUserFeeResolution: vi.fn(),
+      } as unknown as Mocked<PerpsProvider>;
+      mockRewardsIntegrationService.resolveFee.mockResolvedValue(resolution);
+      aggregatedProvider.placeOrder.mockImplementation(async () => {
+        expect(
+          aggregatedProvider.setUserFeeResolution,
+        ).toHaveBeenLastCalledWith(resolution);
+        expect(aggregatedProvider.setUserFeeDiscount).not.toHaveBeenCalled();
+        return { success: true };
+      });
+
+      await tradingService.placeOrder({
+        provider: aggregatedProvider,
+        params,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledTimes(1);
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        undefined,
+        { providerId: 'hyperliquid', isTestnet: false },
+      );
+      expect(aggregatedProvider.getWriteProviderId).toHaveBeenCalledWith(
+        'hyperliquid',
+      );
+      expect(aggregatedProvider.placeOrder).toHaveBeenCalledWith(params);
+      expect(aggregatedProvider.setUserFeeResolution).toHaveBeenLastCalledWith(
+        undefined,
+      );
+      expect(aggregatedProvider.setUserFeeDiscount).not.toHaveBeenCalled();
+    });
+
+    it('preserves the subscription source through order construction', async () => {
+      mockProvider.setUserFeeResolution = vi.fn();
+      const subscriptionResolution: PerpsFeeResolution = {
+        feeBips: 0,
+        discountBips: 10000,
+        source: 'subscription',
+        subscription: {
+          eligible: true,
+          reason: 'eligible',
+          remainingNotionalUsd: 1500,
+        },
+      };
+      const orderParams: OrderParams = {
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+      };
+      mockRewardsIntegrationService.resolveFee.mockResolvedValue(
+        subscriptionResolution,
+      );
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: orderParams,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockProvider.setUserFeeResolution).toHaveBeenCalledWith(
+        subscriptionResolution,
+      );
+      expect(mockProvider.setUserFeeResolution).toHaveBeenLastCalledWith(
+        undefined,
+      );
+    });
+
+    it('resolves the submit fee against the order notional, not a bare rate', async () => {
+      const orderParams: OrderParams = {
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.02',
+        orderType: 'limit',
+        price: '50000',
+      };
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: orderParams,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      // 0.02 BTC at 50000 = 1000 USD. Without this the resolver would take its
+      // "no notional to blend against" branch and charge a full waiver.
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        1000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prefers the caller-supplied USD amount over size times price', async () => {
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.02',
+          orderType: 'limit',
+          price: '50000',
+          // usdAmount is the hybrid model's source of truth; the provider
+          // recalculates size from it, so the fee must follow the same number.
+          usdAmount: '900',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        900,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('charges a partial blend at submit when the allowance is bounded', async () => {
+      // The real resolver, so this proves the submit path produces the same
+      // blend the preview quotes rather than re-asserting a mock.
+      mockRewardsIntegrationService.resolveFee.mockImplementation(
+        async (orderNotionalUsd?: number) => {
+          const waiver = resolveSubscriptionWaiverRate({
+            status: {
+              eligible: true,
+              reason: 'eligible',
+              remainingNotionalUsd: 250,
+            },
+            maxFeeBips: 10,
+            orderNotionalUsd,
+          });
+          return {
+            feeBips: waiver.feeBips,
+            discountBips: Math.round((1 - waiver.feeBips / 10) * 10000),
+            source: 'subscription' as const,
+            subscription: {
+              eligible: true,
+              reason: 'eligible' as const,
+              remainingNotionalUsd: 250,
+            },
+            subscriptionWaiverKind:
+              waiver.kind === 'partial'
+                ? ('partial' as const)
+                : ('full' as const),
+            subscriptionCoveredNotionalUsd: waiver.coveredNotionalUsd,
+          };
+        },
+      );
+      mockProvider.setUserFeeResolution = vi.fn();
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.02',
+          orderType: 'limit',
+          price: '50000',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      // A 250 USD allowance against a 1000 USD order: 10 * (1 - 250/1000) = 7.5
+      // bips, the same rate calculateFees quotes for this order.
+      expect(mockProvider.setUserFeeResolution).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feeBips: 7.5,
+          subscriptionWaiverKind: 'partial',
+          subscriptionCoveredNotionalUsd: 250,
+        }),
+      );
+    });
+
+    it('prices a trigger placement from its trigger price', async () => {
+      // A stop/take-profit placement carries no limit price; the level it
+      // activates at is the only price it states, and without it a bounded
+      // waiver is withheld on an order the provider can price later.
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.02',
+          orderType: 'stop_market',
+          triggerPrice: '50000',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        1000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a Scale ladder from the midpoint of its bounds', async () => {
+      // A Scale placement states no single price — its rungs span
+      // scaleMinPrice to scaleMaxPrice. Without pricing from those bounds a
+      // bounded waiver is withheld at submit after a preview quoted one.
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.02',
+          orderType: 'scale',
+          scaleMinPrice: '40000',
+          scaleMaxPrice: '60000',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      // 0.02 BTC at the 50000 midpoint of the ladder.
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        1000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a skewed Scale ladder from its weighted rung prices', async () => {
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.02',
+          orderType: 'scale',
+          scaleMinPrice: '40000',
+          scaleMaxPrice: '60000',
+          scaleNumOrders: 3,
+          scaleSkew: 2,
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      // The provider's sizes are weighted 1 : 1.5 : 2 across 40000, 50000,
+      // and 60000. The resulting weighted average is 51111.11 USD.
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledTimes(1);
+      expect(
+        mockRewardsIntegrationService.resolveFee.mock.calls[0][0],
+      ).toBeCloseTo((40000 + 50000 * 1.5 + 60000 * 2) * (0.02 / 4.5), 10);
+    });
+
+    it('prefers a stated USD amount over the Scale ladder bounds', async () => {
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.02',
+          usdAmount: '2500',
+          orderType: 'scale',
+          scaleMinPrice: '40000',
+          scaleMaxPrice: '60000',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        2500,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('still resolves a fee when the order cannot be priced', async () => {
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.02',
+          orderType: 'market',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      // No price anywhere, so the notional is undefined rather than guessed —
+      // the resolver's pre-existing "no notional" behavior.
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        undefined,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('isolates fee resolutions between concurrent orders', async () => {
+      const subscriptionResolution: PerpsFeeResolution = {
+        feeBips: 0,
+        discountBips: 10000,
+        source: 'subscription',
+        subscription: { eligible: true, reason: 'eligible' },
+      };
+      const rewardsResolution: PerpsFeeResolution = {
+        feeBips: 5,
+        discountBips: 5000,
+        source: 'rewards',
+        subscription: { eligible: false, reason: 'not-entitled' },
+      };
+      mockRewardsIntegrationService.resolveFee
+        .mockResolvedValueOnce(subscriptionResolution)
+        .mockResolvedValueOnce(rewardsResolution);
+
+      let activeResolution: PerpsFeeResolution | undefined;
+      mockProvider.setUserFeeResolution = vi.fn((resolution) => {
+        activeResolution = resolution;
+      });
+      let releaseFirst: () => void = () => undefined;
+      const firstPending = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let markFirstStarted: () => void = () => undefined;
+      const firstStarted = new Promise<void>((resolve) => {
+        markFirstStarted = resolve;
+      });
+      const observed: Array<PerpsFeeResolution | undefined> = [];
+      mockProvider.placeOrder.mockImplementation(async (params) => {
+        observed.push(activeResolution);
+        if (params.symbol === 'BTC') {
+          markFirstStarted();
+          await firstPending;
+        }
+        return { success: true };
+      });
+
+      const first = tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.1',
+          orderType: 'market',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+      const second = tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'ETH',
+          isBuy: true,
+          size: '1',
+          orderType: 'market',
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      await firstStarted;
+      expect(mockProvider.placeOrder).toHaveBeenCalledTimes(1);
+      releaseFirst();
+      await Promise.all([first, second]);
+
+      expect(observed).toStrictEqual([
+        subscriptionResolution,
+        rewardsResolution,
+      ]);
+    });
+
+    it('resolves a queued order fee only after an earlier order releases the fee context', async () => {
+      vi.useFakeTimers();
+      const now = new Date('2026-10-21T12:00:00.000Z');
+      vi.setSystemTime(now);
+      const grantExpiresAt = now.getTime() + 1_000;
+      const defaultResolution = defaultFeeResolution;
+      const grantResolution: PerpsFeeResolution = {
+        feeBips: 0,
+        discountBips: 10000,
+        source: 'grant',
+        subscription: { eligible: false, reason: 'not-entitled' },
+      };
+      const rewardsResolution: PerpsFeeResolution = {
+        feeBips: 5,
+        discountBips: 5000,
+        source: 'rewards',
+        subscription: { eligible: false, reason: 'not-entitled' },
+      };
+      mockRewardsIntegrationService.resolveFee
+        .mockResolvedValueOnce(defaultResolution)
+        .mockImplementation(async () =>
+          Date.now() < grantExpiresAt ? grantResolution : rewardsResolution,
+        );
+
+      let activeResolution: PerpsFeeResolution | undefined;
+      mockProvider.setUserFeeResolution = vi.fn((resolution) => {
+        activeResolution = resolution;
+      });
+      const releaseFirst = createDeferred<void>();
+      const firstStarted = createDeferred<void>();
+      const observed: Array<PerpsFeeResolution | undefined> = [];
+      mockProvider.placeOrder.mockImplementation(async (params) => {
+        observed.push(activeResolution);
+        if (params.symbol === 'BTC') {
+          firstStarted.resolve();
+          await releaseFirst.promise;
+        }
+        return { success: true };
+      });
+
+      try {
+        const first = tradingService.placeOrder({
+          provider: mockProvider,
+          params: {
+            symbol: 'BTC',
+            isBuy: true,
+            size: '0.1',
+            orderType: 'market',
+          },
+          context: mockContext,
+          reportOrderToDataLake: mockReportOrderToDataLake,
+        });
+        await firstStarted.promise;
+
+        const second = tradingService.placeOrder({
+          provider: mockProvider,
+          params: {
+            symbol: 'ETH',
+            isBuy: true,
+            size: '1',
+            orderType: 'market',
+          },
+          context: mockContext,
+          reportOrderToDataLake: mockReportOrderToDataLake,
+        });
+
+        vi.setSystemTime(grantExpiresAt);
+        releaseFirst.resolve();
+        await Promise.all([first, second]);
+
+        expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledTimes(
+          2,
+        );
+        expect(observed).toStrictEqual([defaultResolution, rewardsResolution]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('places order successfully without fee discount', async () => {
       const orderParams: OrderParams = {
         symbol: 'BTC',
@@ -278,6 +824,182 @@ describe('TradingService', () => {
       );
     });
 
+    it('includes environment_type when trackingData.environmentType is set', async () => {
+      const orderParams: OrderParams = {
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+        leverage: 10,
+        trackingData: {
+          totalFee: 5,
+          marketPrice: 50000,
+          environmentType: 'sidepanel',
+        },
+      };
+      mockProvider.placeOrder.mockResolvedValue({
+        success: true,
+        orderId: 'order-123',
+        filledSize: '0.1',
+        averagePrice: '50000',
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: orderParams,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      const tradeCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.TradeTransaction,
+      );
+      expect(tradeCalls.length).toBeGreaterThan(0);
+      for (const call of tradeCalls) {
+        expect(call[1]).toEqual(
+          expect.objectContaining({ environment_type: 'sidepanel' }),
+        );
+      }
+    });
+
+    it('omits environment_type when trackingData has no environmentType', async () => {
+      const orderParams: OrderParams = {
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+        leverage: 10,
+        trackingData: {
+          totalFee: 5,
+          marketPrice: 50000,
+        },
+      };
+      mockProvider.placeOrder.mockResolvedValue({
+        success: true,
+        orderId: 'order-123',
+        filledSize: '0.1',
+        averagePrice: '50000',
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: orderParams,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      const tradeCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.TradeTransaction,
+      );
+      expect(tradeCalls.length).toBeGreaterThan(0);
+      for (const call of tradeCalls) {
+        expect(call[1]).not.toHaveProperty('environment_type');
+      }
+    });
+
+    it('tracks accepted Scale size and weighted limit price separately from execution price', async () => {
+      const orderParams: OrderParams = {
+        symbol: 'ETH',
+        isBuy: true,
+        size: '1',
+        orderType: 'scale',
+        scaleMinPrice: '2000',
+        scaleMaxPrice: '3000',
+        scaleNumOrders: 3,
+        trackingData: { marketPrice: 3000 },
+      };
+      mockProvider.placeOrder.mockResolvedValue({
+        success: true,
+        orderId: 'scale:group',
+        submittedSize: '1',
+        acceptedSize: '0.6667',
+        weightedAverageLimitPrice: '2499.9250037498123',
+      });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: orderParams,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockDeps.metrics.trackPerpsEvent).toHaveBeenCalledWith(
+        PerpsAnalyticsEvent.TradeTransaction,
+        expect.objectContaining({
+          order_size: 0.6667,
+          asset_price: 3000,
+          limit_price: 2499.9250037498123,
+        }),
+      );
+      const resultProperties =
+        mockDeps.metrics.trackPerpsEvent.mock.calls[1][1];
+      expect(resultProperties.order_value).toBeCloseTo(1666.7);
+    });
+
+    it('keeps mixed Scale executed and partial analytics on separate size and notional meanings', async () => {
+      mockProvider.placeOrder.mockResolvedValue({
+        success: true,
+        orderId: 'scale:group',
+        submittedSize: '1',
+        acceptedSize: '0.8334',
+        filledSize: '0.15',
+        averagePrice: '2533.33333333333333333333',
+        weightedAverageLimitPrice: '2399.80801535877129829614',
+      });
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: {
+          symbol: 'ETH',
+          isBuy: true,
+          size: '1',
+          orderType: 'scale',
+          scaleMinPrice: '2000',
+          scaleMaxPrice: '3000',
+          scaleNumOrders: 6,
+          trackingData: { marketPrice: 3000 },
+        },
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      const resultProperties =
+        mockDeps.metrics.trackPerpsEvent.mock.calls[2][1];
+      expect(resultProperties).toEqual(
+        expect.objectContaining({
+          order_size: 0.15,
+          asset_price: 2533.3333333333335,
+        }),
+      );
+      expect(resultProperties.limit_price).toBeCloseTo(2399.8080153587714);
+      expect(resultProperties.order_value).toBeCloseTo(380);
+
+      const partialProperties =
+        mockDeps.metrics.trackPerpsEvent.mock.calls[1][1];
+      expect(partialProperties).toEqual(
+        expect.objectContaining({
+          order_size: 0.8334,
+          amount_filled: 0.15,
+          remaining_amount: 0.6834,
+        }),
+      );
+      expect(partialProperties.order_value).toBeCloseTo(2000);
+    });
+
     it('includes trade_with_token and mm_pay fields when trackingData has tradeWithToken and pay token/network', async () => {
       const orderParams: OrderParams = {
         symbol: 'BTC',
@@ -434,6 +1156,59 @@ describe('TradingService', () => {
         PerpsAnalyticsEvent.TradeTransaction,
         expect.objectContaining({
           status: 'failed',
+          reduce_only: false,
+        }),
+      );
+    });
+
+    it('preserves raw errors and adds normalized slippage analytics', async () => {
+      const orderParams: OrderParams = {
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+        trackingData: {
+          totalFee: 0,
+          marketPrice: 50_000,
+          maxSlippageBps: 300,
+          maxSlippageSource: 'user_configured',
+          estimatedSlippageBps: 125,
+        },
+      };
+      const mockOrderResult: OrderResult = {
+        success: false,
+        error: 'Price moved too much: 336 bps (max: 300 bps)',
+        errorCode: PERPS_ERROR_CODES.PRICE_MOVED,
+        errorDetails: {
+          code: PERPS_ERROR_CODES.PRICE_MOVED,
+          priceDeltaBps: 336,
+          maxSlippageBps: 300,
+          expectedPrice: 50_000,
+          currentPrice: 51_680,
+        },
+      };
+
+      mockProvider.placeOrder.mockResolvedValue(mockOrderResult);
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.placeOrder({
+        provider: mockProvider,
+        params: orderParams,
+        context: mockContext,
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockDeps.metrics.trackPerpsEvent).toHaveBeenCalledWith(
+        PerpsAnalyticsEvent.TradeTransaction,
+        expect.objectContaining({
+          error_message: mockOrderResult.error,
+          failure_reason: PERPS_ERROR_CODES.PRICE_MOVED,
+          max_slippage_pct: 3,
+          max_slippage_source: 'user_configured',
+          estimated_slippage_pct: 1.25,
+          price_delta_bps: 336,
         }),
       );
     });
@@ -529,14 +1304,19 @@ describe('TradingService', () => {
           name: expect.any(String),
           id: 'mock-trace-id',
           tags: expect.objectContaining({
-            payment_token: 'perps_balance',
+            pay_token_symbol: 'perps_balance',
           }),
         }),
       );
-      expect(mockDeps.tracer.endTrace).toHaveBeenCalled();
+      expect(mockDeps.tracer.endTrace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'ok',
+          data: expect.objectContaining({ success: true }),
+        }),
+      );
     });
 
-    it('adds payment_token tag for order trace (perps_balance when not tradeWithToken)', async () => {
+    it('adds pay_token_symbol tag for order trace (perps_balance when not tradeWithToken)', async () => {
       const orderParams: OrderParams = {
         symbol: 'BTC',
         isBuy: true,
@@ -563,13 +1343,13 @@ describe('TradingService', () => {
       expect(mockDeps.tracer.trace).toHaveBeenCalledWith(
         expect.objectContaining({
           tags: expect.objectContaining({
-            payment_token: 'perps_balance',
+            pay_token_symbol: 'perps_balance',
           }),
         }),
       );
     });
 
-    it('adds payment_token tag for order trace (token symbol when tradeWithToken)', async () => {
+    it('adds pay_token_symbol tag for order trace (token symbol when tradeWithToken)', async () => {
       const orderParams: OrderParams = {
         symbol: 'BTC',
         isBuy: true,
@@ -603,7 +1383,7 @@ describe('TradingService', () => {
       expect(mockDeps.tracer.trace).toHaveBeenCalledWith(
         expect.objectContaining({
           tags: expect.objectContaining({
-            payment_token: 'ETH',
+            pay_token_symbol: 'ETH',
           }),
         }),
       );
@@ -634,6 +1414,12 @@ describe('TradingService', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('Insufficient margin');
       expect(mockDeps.metrics.trackPerpsEvent).toHaveBeenCalled();
+      expect(mockDeps.tracer.endTrace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'error',
+          data: expect.objectContaining({ success: false }),
+        }),
+      );
     });
 
     it('handles provider exception during order placement', async () => {
@@ -780,6 +1566,7 @@ describe('TradingService', () => {
           size: '0.2',
           orderType: 'limit',
           price: '51000',
+          reduceOnly: true,
         },
       };
       const mockOrderResult: OrderResult = {
@@ -802,6 +1589,7 @@ describe('TradingService', () => {
         PerpsAnalyticsEvent.TradeTransaction,
         expect.objectContaining({
           status: 'executed',
+          reduce_only: true,
         }),
       );
     });
@@ -837,6 +1625,195 @@ describe('TradingService', () => {
         PerpsAnalyticsEvent.TradeTransaction,
         expect.objectContaining({
           status: 'failed',
+          reduce_only: false,
+        }),
+      );
+    });
+
+    it('includes environment_type when an edit sets newOrder.trackingData.environmentType', async () => {
+      const editParams: EditOrderParams = {
+        orderId: 'order-123',
+        newOrder: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.2',
+          orderType: 'limit',
+          price: '51000',
+          trackingData: {
+            totalFee: 5,
+            marketPrice: 50000,
+            environmentType: 'sidepanel',
+            entryPoint: 'trending',
+            discoverySource: 'home',
+            perpDiscoverySource: 'search',
+            hlFeeRate: 0.00045,
+          },
+        },
+      };
+      mockProvider.editOrder.mockResolvedValue({
+        success: true,
+        orderId: 'order-123',
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.editOrder({
+        provider: mockProvider,
+        params: editParams,
+        context: mockContext,
+      });
+
+      const tradeCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.TradeTransaction,
+      );
+      expect(tradeCalls).toHaveLength(1);
+      expect(tradeCalls[0][1]).toEqual(
+        expect.objectContaining({
+          status: 'executed',
+          environment_type: 'sidepanel',
+        }),
+      );
+      expect(tradeCalls[0][1]).not.toHaveProperty('entry_point');
+      expect(tradeCalls[0][1]).not.toHaveProperty('discovery_source');
+      expect(tradeCalls[0][1]).not.toHaveProperty('perp_discovery_source');
+      expect(tradeCalls[0][1]).not.toHaveProperty('hl_fee_rate');
+    });
+
+    it('omits environment_type when an edit has no environmentType', async () => {
+      const editParams: EditOrderParams = {
+        orderId: 'order-123',
+        newOrder: {
+          symbol: 'BTC',
+          isBuy: false,
+          size: '0.2',
+          orderType: 'limit',
+          price: '51000',
+          trackingData: {
+            totalFee: 5,
+            marketPrice: 50000,
+            entryPoint: 'trending',
+            hlFeeRate: 0.00045,
+          },
+        },
+      };
+      mockProvider.editOrder.mockResolvedValue({
+        success: true,
+        orderId: 'order-123',
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.editOrder({
+        provider: mockProvider,
+        params: editParams,
+        context: mockContext,
+      });
+
+      const tradeCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.TradeTransaction,
+      );
+      expect(tradeCalls).toHaveLength(1);
+      expect(tradeCalls[0][1]).not.toHaveProperty('environment_type');
+      expect(tradeCalls[0][1]).not.toHaveProperty('entry_point');
+      expect(tradeCalls[0][1]).not.toHaveProperty('hl_fee_rate');
+    });
+
+    it('includes environment_type when a failed edit result carries it', async () => {
+      const editParams: EditOrderParams = {
+        orderId: 'order-123',
+        newOrder: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.2',
+          orderType: 'limit',
+          price: '51000',
+          trackingData: {
+            totalFee: 5,
+            marketPrice: 50000,
+            environmentType: 'popup',
+          },
+        },
+      };
+      mockProvider.editOrder.mockResolvedValue({
+        success: false,
+        error: 'Order not found',
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.editOrder({
+        provider: mockProvider,
+        params: editParams,
+        context: mockContext,
+      });
+
+      const tradeCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.TradeTransaction,
+      );
+      expect(tradeCalls).toHaveLength(1);
+      expect(tradeCalls[0][1]).toEqual(
+        expect.objectContaining({
+          status: 'failed',
+          environment_type: 'popup',
+        }),
+      );
+    });
+
+    it('includes environment_type when an edit throws', async () => {
+      const editParams: EditOrderParams = {
+        orderId: 'order-123',
+        newOrder: {
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.2',
+          orderType: 'market',
+          trackingData: {
+            totalFee: 5,
+            marketPrice: 50000,
+            environmentType: 'notification',
+          },
+        },
+      };
+      mockProvider.editOrder.mockRejectedValue(new Error('Edit failed'));
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await expect(
+        tradingService.editOrder({
+          provider: mockProvider,
+          params: editParams,
+          context: mockContext,
+        }),
+      ).rejects.toThrow('Edit failed');
+
+      const tradeCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.TradeTransaction,
+      );
+      expect(tradeCalls).toHaveLength(1);
+      expect(tradeCalls[0][1]).toEqual(
+        expect.objectContaining({
+          status: 'failed',
+          environment_type: 'notification',
         }),
       );
     });
@@ -1063,11 +2040,39 @@ describe('TradingService', () => {
       expect(mockDeps.logger.error).toHaveBeenCalledWith(
         expect.objectContaining({ message: 'Order already filled' }),
         expect.objectContaining({
-          controller: 'TradingService',
-          method: 'cancelOrder',
-          symbol: 'BTC',
+          tags: expect.objectContaining({
+            feature: 'perps',
+            operation: 'order_management',
+            action: 'cancel_order',
+          }),
+          context: {
+            name: 'TradingService',
+            data: expect.objectContaining({
+              method: 'cancelOrder',
+              symbol: 'BTC',
+            }),
+          },
         }),
       );
+    });
+
+    it('does not log a cancel the signer could not sign', async () => {
+      mockProvider.cancelOrder.mockResolvedValue({
+        success: false,
+        error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+      });
+
+      const result = await tradingService.cancelOrder({
+        provider: mockProvider,
+        params: { orderId: 'order-123', symbol: 'BTC' },
+        context: mockContext,
+      });
+
+      expect(result).toStrictEqual({
+        success: false,
+        error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+      });
+      expect(mockDeps.logger.error).not.toHaveBeenCalled();
     });
 
     it('handles provider exception during order cancel', async () => {
@@ -1149,7 +2154,7 @@ describe('TradingService', () => {
       };
 
       mockGetOpenOrders.mockResolvedValue(mockOrders);
-      (mockProvider.cancelOrders as jest.Mock).mockResolvedValue({
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
         success: true,
         results: [{ success: true, orderId: 'order-1' }],
       });
@@ -1173,7 +2178,7 @@ describe('TradingService', () => {
       };
 
       mockGetOpenOrders.mockResolvedValue(mockOrders);
-      (mockProvider.cancelOrders as jest.Mock).mockResolvedValue({
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
         success: true,
         results: [
           { success: true, orderId: 'order-2' },
@@ -1198,7 +2203,7 @@ describe('TradingService', () => {
       };
 
       mockGetOpenOrders.mockResolvedValue(mockOrders);
-      (mockProvider.cancelOrders as jest.Mock).mockResolvedValue({
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
         success: true,
         results: [{ success: true, orderId: 'order-1' }],
       });
@@ -1242,7 +2247,7 @@ describe('TradingService', () => {
       };
 
       mockGetOpenOrders.mockResolvedValue(mockOrders);
-      (mockProvider.cancelOrders as jest.Mock).mockResolvedValue({
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
         success: false,
         results: [
           { success: true, orderId: 'order-1' },
@@ -1267,7 +2272,7 @@ describe('TradingService', () => {
       };
 
       mockGetOpenOrders.mockResolvedValue(mockOrders);
-      (mockProvider.cancelOrders as jest.Mock).mockResolvedValue({
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
         success: true,
         results: [{ success: true, orderId: 'order-1' }],
       });
@@ -1291,7 +2296,7 @@ describe('TradingService', () => {
       mockWithStreamPause.mockImplementation(
         async (callback) => await callback(),
       );
-      (mockProvider.cancelOrders as jest.Mock).mockRejectedValue(
+      (mockProvider.cancelOrders as Mock).mockRejectedValue(
         new Error('Cancel failed'),
       );
 
@@ -1333,7 +2338,7 @@ describe('TradingService', () => {
       mockWithStreamPause.mockImplementation(
         async (callback) => await callback(),
       );
-      (mockProvider.cancelOrders as jest.Mock).mockResolvedValue({
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
         success: false,
         successCount: 0,
         failureCount: 2,
@@ -1361,17 +2366,140 @@ describe('TradingService', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(mockDeps.logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.stringContaining(
-            'cancelOrders batch failure: 2/2 failed',
+      expect((mockDeps.logger.error as Mock).mock.calls).toStrictEqual([
+        [
+          new Error(
+            'cancelOrders batch failure: 2/2 failed (2 reported) - BTC/order-1: rate limit; ETH/order-2: not found',
           ),
-        }),
-        expect.objectContaining({
-          controller: 'TradingService',
-          method: 'cancelOrders',
-        }),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              operation: 'order_management',
+              action: 'cancel_order',
+            }),
+            context: {
+              name: 'TradingService',
+              data: expect.objectContaining({
+                method: 'cancelOrders',
+                successCount: 0,
+                failureCount: 2,
+                reportedFailureCount: 2,
+                cancelAll: true,
+              }),
+            },
+          }),
+        ],
+      ]);
+    });
+
+    it('does not log a batch cancel that failed only because the signer could not sign', async () => {
+      mockGetOpenOrders.mockResolvedValue(mockOrders);
+      mockWithStreamPause.mockImplementation(
+        async (callback) => await callback(),
       );
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
+        success: false,
+        successCount: 0,
+        failureCount: 2,
+        results: [
+          {
+            orderId: 'order-1',
+            symbol: 'BTC',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+          {
+            orderId: 'order-2',
+            symbol: 'ETH',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+        ],
+      });
+
+      const result = await tradingService.cancelOrders({
+        provider: mockProvider,
+        params: { cancelAll: true },
+        context: { ...mockContext, getOpenOrders: mockGetOpenOrders },
+        withStreamPause: mockWithStreamPause,
+      });
+
+      expect(result).toStrictEqual({
+        success: false,
+        successCount: 0,
+        failureCount: 2,
+        results: [
+          {
+            orderId: 'order-1',
+            symbol: 'BTC',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+          {
+            orderId: 'order-2',
+            symbol: 'ETH',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+        ],
+      });
+      expect(mockDeps.logger.error).not.toHaveBeenCalled();
+    });
+
+    it('counts and lists only the reported failures of a batch cancel', async () => {
+      mockGetOpenOrders.mockResolvedValue(mockOrders);
+      mockWithStreamPause.mockImplementation(
+        async (callback) => await callback(),
+      );
+      (mockProvider.cancelOrders as Mock).mockResolvedValue({
+        success: false,
+        successCount: 0,
+        failureCount: 2,
+        results: [
+          {
+            orderId: 'order-1',
+            symbol: 'BTC',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+          {
+            orderId: 'order-2',
+            symbol: 'ETH',
+            success: false,
+            error: 'rate limit',
+          },
+        ],
+      });
+
+      await tradingService.cancelOrders({
+        provider: mockProvider,
+        params: { cancelAll: true },
+        context: { ...mockContext, getOpenOrders: mockGetOpenOrders },
+        withStreamPause: mockWithStreamPause,
+      });
+
+      expect((mockDeps.logger.error as Mock).mock.calls).toStrictEqual([
+        [
+          new Error(
+            'cancelOrders batch failure: 2/2 failed (1 reported) - ETH/order-2: rate limit',
+          ),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              operation: 'order_management',
+              action: 'cancel_order',
+            }),
+            context: {
+              name: 'TradingService',
+              data: expect.objectContaining({
+                method: 'cancelOrders',
+                successCount: 0,
+                failureCount: 2,
+                reportedFailureCount: 1,
+                cancelAll: true,
+              }),
+            },
+          }),
+        ],
+      ]);
     });
 
     it('does NOT log batch error when using fallback path (provider.cancelOrders undefined)', async () => {
@@ -1391,10 +2519,8 @@ describe('TradingService', () => {
       });
 
       // Batch-level log must not fire; individual leaf logs cover per-order failures
-      const batchErrorCalls = (
-        mockDeps.logger.error as jest.Mock
-      ).mock.calls.filter(
-        ([err]: [Error]) =>
+      const batchErrorCalls = (mockDeps.logger.error as Mock).mock.calls.filter(
+        ([err]: Error[]) =>
           err instanceof Error &&
           err.message.includes('cancelOrders batch failure'),
       );
@@ -1418,6 +2544,88 @@ describe('TradingService', () => {
       takeProfitCount: 0,
       stopLossCount: 0,
     };
+
+    it('prices a full close from the loaded position notional', async () => {
+      // A full close carries only a symbol, so `params` alone prices it as
+      // undefined and the resolver would quote a full waiver on an order the
+      // preview blended. The loaded position is the authoritative notional.
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.closePosition.mockResolvedValue({ success: true });
+
+      await tradingService.closePosition({
+        provider: mockProvider,
+        params: { symbol: 'BTC' },
+        context: { ...mockContext, getPositions: mockGetPositions },
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        25000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a partial close from the position unit price', async () => {
+      // A partial close names a size but usually no price. 25000 USD over 0.5
+      // BTC is 50000 per unit, so closing 0.1 is a 5000 USD notional.
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.closePosition.mockResolvedValue({ success: true });
+
+      await tradingService.closePosition({
+        provider: mockProvider,
+        params: { symbol: 'BTC', size: '0.1' },
+        context: { ...mockContext, getPositions: mockGetPositions },
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        5000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a routed close from the routed provider position', async () => {
+      // Two providers list BTC. Matching on symbol alone would price the close
+      // from whichever appears first, which can be the provider the write does
+      // not reach.
+      mockGetPositions.mockResolvedValue([
+        { ...mockPosition, positionValue: '99000', providerId: 'lighter' },
+        { ...mockPosition, positionValue: '25000', providerId: 'hyperliquid' },
+      ]);
+      mockProvider.getWriteProviderId = vi.fn(
+        (providerId?: string) => providerId ?? 'hyperliquid',
+      ) as never;
+      mockProvider.closePosition.mockResolvedValue({ success: true });
+
+      await tradingService.closePosition({
+        provider: mockProvider,
+        params: { symbol: 'BTC', providerId: 'hyperliquid' as never },
+        context: { ...mockContext, getPositions: mockGetPositions },
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        25000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prefers an explicit close USD amount over the position value', async () => {
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.closePosition.mockResolvedValue({ success: true });
+
+      await tradingService.closePosition({
+        provider: mockProvider,
+        params: { symbol: 'BTC', size: '0.1', usdAmount: '4800' },
+        context: { ...mockContext, getPositions: mockGetPositions },
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        4800,
+        hyperliquidMainnetScope,
+      );
+    });
 
     it('closes position successfully without fee discount', async () => {
       const params: ClosePositionParams = {
@@ -1605,6 +2813,34 @@ describe('TradingService', () => {
       );
     });
 
+    it('classifies a thrown partial close from the requested size', async () => {
+      // A thrown close has no OrderResult, so close_type must come from the
+      // requested size. Closing 0.25 of a 1-unit position is 25%, not a full close.
+      mockGetPositions.mockResolvedValue([{ ...mockPosition, size: '1' }]);
+      mockProvider.closePosition.mockRejectedValue(new Error('route removed'));
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await expect(
+        tradingService.closePosition({
+          provider: mockProvider,
+          params: { symbol: 'BTC', size: '0.25' },
+          context: { ...mockContext, getPositions: mockGetPositions },
+          reportOrderToDataLake: mockReportOrderToDataLake,
+        }),
+      ).rejects.toThrow('route removed');
+
+      expect(mockDeps.metrics.trackPerpsEvent).toHaveBeenCalledWith(
+        PerpsAnalyticsEvent.PositionCloseTransaction,
+        expect.objectContaining({
+          status: 'failed',
+          close_type: 'partial',
+          percentage_closed: 25,
+        }),
+      );
+    });
+
     it('logs error when provider returns a failure result without throwing', async () => {
       const params: ClosePositionParams = { symbol: 'BTC' };
       const mockFailureResult: OrderResult = {
@@ -1626,18 +2862,172 @@ describe('TradingService', () => {
       });
 
       expect(result).toEqual(mockFailureResult);
+      expect(mockDeps.logger.error).toHaveBeenCalledTimes(1);
       expect(mockDeps.logger.error).toHaveBeenCalledWith(
         expect.objectContaining({ message: 'Insufficient liquidity' }),
         expect.objectContaining({
-          controller: 'TradingService',
-          method: 'closePosition',
-          symbol: 'BTC',
+          tags: expect.objectContaining({
+            operation: 'position_management',
+            action: 'close_position',
+          }),
+          context: {
+            name: 'TradingService',
+            data: expect.objectContaining({
+              method: 'closePosition',
+              symbol: 'BTC',
+            }),
+          },
         }),
       );
+    });
+
+    it('does not log a close the signer could not sign', async () => {
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.closePosition.mockResolvedValue({
+        success: false,
+        error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      const result = await tradingService.closePosition({
+        provider: mockProvider,
+        params: { symbol: 'BTC' },
+        context: { ...mockContext, getPositions: mockGetPositions },
+        reportOrderToDataLake: mockReportOrderToDataLake,
+      });
+
+      expect(result).toStrictEqual({
+        success: false,
+        error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+      });
+      expect(mockDeps.logger.error).not.toHaveBeenCalled();
     });
   });
 
   describe('closePositions', () => {
+    it('prices a batch close only from positions the route can close', async () => {
+      // An aggregating provider reads every active provider's positions while
+      // the batch submits through one. Summing the rest inflates the notional
+      // and shrinks the waiver for positions this call never touches.
+      const batchProvider = {
+        ...mockProvider,
+        getWriteProviderId: vi.fn(() => 'hyperliquid'),
+        getPositions: vi.fn().mockResolvedValue([
+          {
+            symbol: 'BTC',
+            size: '0.5',
+            positionValue: '25000',
+            providerId: 'hyperliquid',
+          },
+          {
+            symbol: 'ETH',
+            size: '2',
+            positionValue: '99000',
+            providerId: 'lighter',
+          },
+        ]),
+        closePositions: vi.fn().mockResolvedValue({
+          success: true,
+          successCount: 1,
+          failureCount: 0,
+          results: [],
+        }),
+      } as unknown as Mocked<PerpsProvider>;
+
+      await tradingService.closePositions({
+        provider: batchProvider,
+        params: { closeAll: true },
+        context: mockContext,
+      });
+
+      // 25000 only — the lighter position is not reachable by this write.
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        25000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a batch close from every position when closeAll overrides a symbol list', async () => {
+      // The provider gives `closeAll` precedence over `symbols`, so pricing the
+      // filtered subset would resolve the fee against $1,000 while the batch
+      // actually closes $10,000 — over-granting the waiver.
+      const batchProvider = {
+        ...mockProvider,
+        getWriteProviderId: vi.fn(() => 'hyperliquid'),
+        getPositions: vi.fn().mockResolvedValue([
+          {
+            symbol: 'BTC',
+            size: '0.02',
+            positionValue: '1000',
+            providerId: 'hyperliquid',
+          },
+          {
+            symbol: 'ETH',
+            size: '3',
+            positionValue: '9000',
+            providerId: 'hyperliquid',
+          },
+        ]),
+        closePositions: vi.fn().mockResolvedValue({
+          success: true,
+          successCount: 2,
+          failureCount: 0,
+          results: [],
+        }),
+      } as unknown as Mocked<PerpsProvider>;
+
+      await tradingService.closePositions({
+        provider: batchProvider,
+        params: { closeAll: true, symbols: ['BTC'] },
+        context: mockContext,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        10000,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a batch close from the named symbols when closeAll is not set', async () => {
+      const batchProvider = {
+        ...mockProvider,
+        getWriteProviderId: vi.fn(() => 'hyperliquid'),
+        getPositions: vi.fn().mockResolvedValue([
+          {
+            symbol: 'BTC',
+            size: '0.02',
+            positionValue: '1000',
+            providerId: 'hyperliquid',
+          },
+          {
+            symbol: 'ETH',
+            size: '3',
+            positionValue: '9000',
+            providerId: 'hyperliquid',
+          },
+        ]),
+        closePositions: vi.fn().mockResolvedValue({
+          success: true,
+          successCount: 1,
+          failureCount: 0,
+          results: [],
+        }),
+      } as unknown as Mocked<PerpsProvider>;
+
+      await tradingService.closePositions({
+        provider: batchProvider,
+        params: { symbols: ['BTC'] },
+        context: mockContext,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        1000,
+        hyperliquidMainnetScope,
+      );
+    });
+
     const mockPositions: Position[] = [
       {
         symbol: 'BTC',
@@ -1677,7 +3067,7 @@ describe('TradingService', () => {
       };
 
       mockGetPositions.mockResolvedValue(mockPositions);
-      (mockProvider.closePositions as jest.Mock).mockResolvedValue({
+      (mockProvider.closePositions as Mock).mockResolvedValue({
         success: true,
         results: [
           { success: true, orderId: 'close-1', symbol: 'BTC' },
@@ -1704,7 +3094,7 @@ describe('TradingService', () => {
       };
 
       mockGetPositions.mockResolvedValue(mockPositions);
-      (mockProvider.closePositions as jest.Mock).mockResolvedValue({
+      (mockProvider.closePositions as Mock).mockResolvedValue({
         success: true,
         results: [{ success: true, orderId: 'close-1', symbol: 'BTC' }],
       });
@@ -1728,7 +3118,7 @@ describe('TradingService', () => {
       };
 
       mockGetPositions.mockResolvedValue(mockPositions);
-      (mockProvider.closePositions as jest.Mock).mockResolvedValue({
+      (mockProvider.closePositions as Mock).mockResolvedValue({
         success: false,
         successCount: 0,
         failureCount: 0,
@@ -1751,7 +3141,7 @@ describe('TradingService', () => {
       };
 
       mockGetPositions.mockResolvedValue(mockPositions);
-      (mockProvider.closePositions as jest.Mock).mockResolvedValue({
+      (mockProvider.closePositions as Mock).mockResolvedValue({
         success: false,
         results: [
           { success: true, orderId: 'close-1', symbol: 'BTC' },
@@ -1799,7 +3189,7 @@ describe('TradingService', () => {
 
     it('logs batch error when provider.closePositions returns partial/full failure', async () => {
       const params: ClosePositionsParams = { closeAll: true };
-      (mockProvider.closePositions as jest.Mock).mockResolvedValue({
+      (mockProvider.closePositions as Mock).mockResolvedValue({
         success: false,
         successCount: 0,
         failureCount: 2,
@@ -1819,17 +3209,118 @@ describe('TradingService', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(mockDeps.logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.stringContaining(
-            'closePositions batch failure: 2/2 failed',
+      expect((mockDeps.logger.error as Mock).mock.calls).toStrictEqual([
+        [
+          new Error(
+            'closePositions batch failure: 2/2 failed (2 reported) - BTC: insufficient liquidity; ETH: min size',
           ),
-        }),
-        expect.objectContaining({
-          controller: 'TradingService',
-          method: 'closePositions',
-        }),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              operation: 'position_management',
+              action: 'close_position',
+            }),
+            context: {
+              name: 'TradingService',
+              data: expect.objectContaining({
+                method: 'closePositions',
+                successCount: 0,
+                failureCount: 2,
+                reportedFailureCount: 2,
+                symbols: 0,
+                closeAll: true,
+              }),
+            },
+          }),
+        ],
+      ]);
+    });
+
+    it('does not log a batch close that failed only because the signer could not sign', async () => {
+      (mockProvider.closePositions as Mock).mockResolvedValue({
+        success: false,
+        successCount: 0,
+        failureCount: 1,
+        results: [
+          {
+            symbol: 'BTC',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+        ],
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
       );
+
+      const result = await tradingService.closePositions({
+        provider: mockProvider,
+        params: { closeAll: true },
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      expect(result).toStrictEqual({
+        success: false,
+        successCount: 0,
+        failureCount: 1,
+        results: [
+          {
+            symbol: 'BTC',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+        ],
+      });
+      expect(mockDeps.logger.error).not.toHaveBeenCalled();
+    });
+
+    it('counts and lists only the reported failures of a batch close', async () => {
+      (mockProvider.closePositions as Mock).mockResolvedValue({
+        success: false,
+        successCount: 0,
+        failureCount: 2,
+        results: [
+          {
+            symbol: 'BTC',
+            success: false,
+            error: PERPS_ERROR_CODES.KEYRING_LOCKED,
+          },
+          { symbol: 'ETH', success: false, error: 'min size' },
+        ],
+      });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.closePositions({
+        provider: mockProvider,
+        params: { closeAll: true },
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      expect((mockDeps.logger.error as Mock).mock.calls).toStrictEqual([
+        [
+          new Error(
+            'closePositions batch failure: 2/2 failed (1 reported) - ETH: min size',
+          ),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              operation: 'position_management',
+              action: 'close_position',
+            }),
+            context: {
+              name: 'TradingService',
+              data: expect.objectContaining({
+                method: 'closePositions',
+                successCount: 0,
+                failureCount: 2,
+                reportedFailureCount: 1,
+                symbols: 0,
+                closeAll: true,
+              }),
+            },
+          }),
+        ],
+      ]);
     });
 
     it('does NOT log batch error when using fallback path (provider.closePositions undefined)', async () => {
@@ -1851,10 +3342,8 @@ describe('TradingService', () => {
       });
 
       // Batch-level log must not fire; individual leaf logs cover per-position failures
-      const batchErrorCalls = (
-        mockDeps.logger.error as jest.Mock
-      ).mock.calls.filter(
-        ([err]: [Error]) =>
+      const batchErrorCalls = (mockDeps.logger.error as Mock).mock.calls.filter(
+        ([err]: Error[]) =>
           err instanceof Error &&
           err.message.includes('closePositions batch failure'),
       );
@@ -1878,6 +3367,150 @@ describe('TradingService', () => {
       takeProfitCount: 0,
       stopLossCount: 0,
     };
+
+    it('prices a partial TP/SL update from the submitted trigger size', async () => {
+      // The provider submits exactly `takeProfitSize` (`resolveTpslSize`), so
+      // pricing this from the whole $25,000 position would resolve the fee
+      // against ten times what is submitted and blend away a waiver that
+      // should have been full.
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+
+      await tradingService.updatePositionTPSL({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          takeProfitPrice: '55000',
+          takeProfitSize: '0.05',
+          position: mockPosition,
+        },
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      // 0.05 BTC at the 55000 trigger, not the position's 25000.
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        2750,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a partial TP/SL update from the larger of the two trigger sizes', async () => {
+      // Both triggers go up under one builder context, so the action is priced
+      // by whichever covers more of the position.
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+
+      await tradingService.updatePositionTPSL({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          takeProfitPrice: '55000',
+          stopLossPrice: '45000',
+          takeProfitSize: '0.05',
+          stopLossSize: '0.1',
+          position: mockPosition,
+        },
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      // 0.1 BTC at the 45000 stop-loss trigger.
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        4500,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a mixed TP/SL update from the full-size trigger', async () => {
+      // An omitted trigger size covers the whole position. The provider submits
+      // that trigger alongside the explicit partial trigger, so the fee must be
+      // resolved against the larger full-position notional.
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+
+      await tradingService.updatePositionTPSL({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          takeProfitPrice: '55000',
+          stopLossPrice: '45000',
+          takeProfitSize: '0.05',
+          position: mockPosition,
+        },
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        22500,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it('prices a whole-position TP/SL update from its trigger price', async () => {
+      // The whole position is valued at the trigger price, not the mark price.
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+
+      await tradingService.updatePositionTPSL({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          takeProfitPrice: '55000',
+          position: mockPosition,
+        },
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        27500,
+        hyperliquidMainnetScope,
+      );
+    });
+
+    it.each(['0.5', '-0.5'])(
+      'prices an omitted TP size from absolute position size %s',
+      async (size) => {
+        mockGetPositions.mockResolvedValue([{ ...mockPosition, size }]);
+        mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+
+        await tradingService.updatePositionTPSL({
+          provider: mockProvider,
+          params: {
+            symbol: 'BTC',
+            takeProfitPrice: '60000',
+            stopLossPrice: '45000',
+            stopLossSize: '0.05',
+          },
+          context: { ...mockContext, getPositions: mockGetPositions },
+        });
+
+        expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+          30000,
+          hyperliquidMainnetScope,
+        );
+        expect(mockGetPositions).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('withholds a bounded waiver when an omitted trigger size cannot be priced', async () => {
+      mockGetPositions.mockResolvedValue([]);
+      mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+
+      await tradingService.updatePositionTPSL({
+        provider: mockProvider,
+        params: {
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          stopLossPrice: '45000',
+          stopLossSize: '0.05',
+        },
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        undefined,
+        hyperliquidMainnetScope,
+      );
+    });
 
     it('updates TP/SL successfully without fee discount', async () => {
       const params: UpdatePositionTPSLParams = {
@@ -2031,6 +3664,79 @@ describe('TradingService', () => {
       );
     });
 
+    it('includes environment_type when TP/SL trackingData sets it', async () => {
+      const params: UpdatePositionTPSLParams = {
+        symbol: 'BTC',
+        stopLossPrice: '45000',
+        trackingData: {
+          direction: 'long',
+          positionSize: 0.5,
+          source: 'tp_sl_view',
+          environmentType: 'fullscreen',
+        },
+      };
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.updatePositionTPSL({
+        provider: mockProvider,
+        params,
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      const riskCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.RiskManagement,
+      );
+      expect(riskCalls.length).toBeGreaterThan(0);
+      for (const call of riskCalls) {
+        expect(call[1]).toEqual(
+          expect.objectContaining({ environment_type: 'fullscreen' }),
+        );
+      }
+    });
+
+    it('omits environment_type when TP/SL trackingData omits it', async () => {
+      const params: UpdatePositionTPSLParams = {
+        symbol: 'BTC',
+        stopLossPrice: '45000',
+        trackingData: {
+          direction: 'long',
+          positionSize: 0.5,
+          source: 'tp_sl_view',
+        },
+      };
+      mockGetPositions.mockResolvedValue([mockPosition]);
+      mockProvider.updatePositionTPSL.mockResolvedValue({ success: true });
+      mockRewardsIntegrationService.calculateUserFeeDiscount.mockResolvedValue(
+        undefined,
+      );
+
+      await tradingService.updatePositionTPSL({
+        provider: mockProvider,
+        params,
+        context: { ...mockContext, getPositions: mockGetPositions },
+      });
+
+      const riskCalls = (
+        mockDeps.metrics.trackPerpsEvent as Mock<
+          (...args: [PerpsAnalyticsEvent, Record<string, unknown>]) => void
+        >
+      ).mock.calls.filter(
+        (call) => call[0] === PerpsAnalyticsEvent.RiskManagement,
+      );
+      expect(riskCalls.length).toBeGreaterThan(0);
+      for (const call of riskCalls) {
+        expect(call[1]).not.toHaveProperty('environment_type');
+      }
+    });
+
     it('clears fee discount when update throws exception', async () => {
       const params: UpdatePositionTPSLParams = {
         symbol: 'BTC',
@@ -2086,9 +3792,17 @@ describe('TradingService', () => {
       expect(mockDeps.logger.error).toHaveBeenCalledWith(
         expect.objectContaining({ message: 'TPSL provider failure' }),
         expect.objectContaining({
-          controller: 'TradingService',
-          method: 'updatePositionTPSL',
-          symbol: 'BTC',
+          tags: expect.objectContaining({
+            operation: 'position_management',
+            action: 'position_tpsl_update',
+          }),
+          context: {
+            name: 'TradingService',
+            data: expect.objectContaining({
+              method: 'updatePositionTPSL',
+              symbol: 'BTC',
+            }),
+          },
         }),
       );
     });
@@ -2097,7 +3811,7 @@ describe('TradingService', () => {
   describe('updateMargin', () => {
     it('updates margin successfully when adding margin', async () => {
       const mockResult = { success: true };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       const result = await tradingService.updateMargin({
         provider: mockProvider,
@@ -2115,7 +3829,7 @@ describe('TradingService', () => {
 
     it('updates margin successfully when removing margin', async () => {
       const mockResult = { success: true };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       const result = await tradingService.updateMargin({
         provider: mockProvider,
@@ -2146,7 +3860,7 @@ describe('TradingService', () => {
 
     it('returns error when margin update fails', async () => {
       const mockResult = { success: false, error: 'Insufficient balance' };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       const result = await tradingService.updateMargin({
         provider: mockProvider,
@@ -2161,7 +3875,7 @@ describe('TradingService', () => {
 
     it('tracks analytics on success', async () => {
       const mockResult = { success: true };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       await tradingService.updateMargin({
         provider: mockProvider,
@@ -2179,7 +3893,7 @@ describe('TradingService', () => {
     });
 
     it('tracks analytics on failure with error message', async () => {
-      mockProvider.updateMargin = jest
+      mockProvider.updateMargin = vi
         .fn()
         .mockRejectedValue(new Error('Network error'));
 
@@ -2202,7 +3916,7 @@ describe('TradingService', () => {
 
     it('emits a failed Risk Management event on a non-throwing { success: false } result', async () => {
       const mockResult = { success: false, error: 'Insufficient balance' };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       const result = await tradingService.updateMargin({
         provider: mockProvider,
@@ -2214,7 +3928,7 @@ describe('TradingService', () => {
       expect(result.success).toBe(false);
 
       const riskCalls = (
-        mockDeps.metrics.trackPerpsEvent as jest.Mock
+        mockDeps.metrics.trackPerpsEvent as Mock
       ).mock.calls.filter(
         ([event]) => event === PerpsAnalyticsEvent.RiskManagement,
       );
@@ -2232,7 +3946,7 @@ describe('TradingService', () => {
     });
 
     it('emits the failed Risk Management event exactly once on a thrown error', async () => {
-      mockProvider.updateMargin = jest
+      mockProvider.updateMargin = vi
         .fn()
         .mockRejectedValue(new Error('Network error'));
 
@@ -2246,7 +3960,7 @@ describe('TradingService', () => {
       ).rejects.toThrow('Network error');
 
       const riskCalls = (
-        mockDeps.metrics.trackPerpsEvent as jest.Mock
+        mockDeps.metrics.trackPerpsEvent as Mock
       ).mock.calls.filter(
         ([event]) => event === PerpsAnalyticsEvent.RiskManagement,
       );
@@ -2258,7 +3972,7 @@ describe('TradingService', () => {
 
     it('emits the Risk Management event exactly once on success', async () => {
       const mockResult = { success: true };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       await tradingService.updateMargin({
         provider: mockProvider,
@@ -2268,7 +3982,7 @@ describe('TradingService', () => {
       });
 
       const riskCalls = (
-        mockDeps.metrics.trackPerpsEvent as jest.Mock
+        mockDeps.metrics.trackPerpsEvent as Mock
       ).mock.calls.filter(
         ([event]) => event === PerpsAnalyticsEvent.RiskManagement,
       );
@@ -2280,7 +3994,7 @@ describe('TradingService', () => {
 
     it('updates state on success', async () => {
       const mockResult = { success: true };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       await tradingService.updateMargin({
         provider: mockProvider,
@@ -2294,7 +4008,7 @@ describe('TradingService', () => {
 
     it('creates trace for margin update', async () => {
       const mockResult = { success: true };
-      mockProvider.updateMargin = jest.fn().mockResolvedValue(mockResult);
+      mockProvider.updateMargin = vi.fn().mockResolvedValue(mockResult);
 
       await tradingService.updateMargin({
         provider: mockProvider,
@@ -2329,6 +4043,31 @@ describe('TradingService', () => {
       takeProfitCount: 0,
       stopLossCount: 0,
     };
+
+    it('preserves the subscription source for flip orders', async () => {
+      const resolution: PerpsFeeResolution = {
+        feeBips: 0,
+        discountBips: 10000,
+        source: 'subscription',
+        subscription: { eligible: true, reason: 'eligible' },
+      };
+      mockProvider.setUserFeeResolution = vi.fn();
+      mockRewardsIntegrationService.resolveFee.mockResolvedValue(resolution);
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.flipPosition({
+        provider: mockProvider,
+        position: mockPosition,
+        context: mockContext,
+      });
+
+      expect(mockProvider.setUserFeeResolution).toHaveBeenCalledWith(
+        resolution,
+      );
+      expect(mockProvider.setUserFeeResolution).toHaveBeenLastCalledWith(
+        undefined,
+      );
+    });
 
     it('places order with 2x position size to flip position', async () => {
       const mockResult: OrderResult = {
@@ -2411,6 +4150,7 @@ describe('TradingService', () => {
         size: '1',
         orderType: 'market',
         leverage: 10,
+        deferProviderErrorReport: true,
       });
       expect(mockProvider.placeOrder).not.toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2434,6 +4174,53 @@ describe('TradingService', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Order rejected');
+      expect(mockDeps.logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Order rejected' }),
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            feature: 'perps',
+            operation: 'position_management',
+            action: 'flip_position',
+          }),
+          context: {
+            name: 'TradingService',
+            data: expect.objectContaining({
+              method: 'flipPosition',
+              symbol: 'BTC',
+              providerError: 'Order rejected',
+            }),
+          },
+        }),
+      );
+    });
+
+    it.each([
+      PERPS_ERROR_CODES.KEYRING_LOCKED,
+      PERPS_ERROR_CODES.EXCHANGE_ACCOUNT_NOT_FOUND,
+    ])('does not log a resolved flip failure for %s', async (errorCode) => {
+      mockProvider.placeOrder.mockResolvedValue({
+        success: false,
+        error: errorCode,
+      });
+
+      const result = await tradingService.flipPosition({
+        provider: mockProvider,
+        position: mockPosition,
+        context: mockContext,
+      });
+
+      expect(result).toStrictEqual({
+        success: false,
+        error: errorCode,
+      });
+      expect(mockDeps.logger.error).not.toHaveBeenCalled();
+      expect(mockDeps.metrics.trackPerpsEvent).toHaveBeenCalledWith(
+        PerpsAnalyticsEvent.TradeTransaction,
+        expect.objectContaining({
+          status: 'failed',
+          error_message: errorCode,
+        }),
+      );
     });
 
     it('tracks analytics on success', async () => {
@@ -2555,11 +4342,44 @@ describe('TradingService', () => {
         size: '1',
         orderType: 'market',
         leverage: 10,
+        deferProviderErrorReport: true,
       });
+    });
+
+    it('places the flip on the same provider the fee grant is scoped to', async () => {
+      // Aggregated writes fall back to the default provider when placeOrder
+      // omits providerId. The grant is already scoped to the position venue,
+      // so a non-default flip must carry that same route.
+      mockProvider.getWriteProviderId = vi.fn(
+        (providerId?: string) => providerId ?? 'hyperliquid',
+      ) as never;
+      mockProvider.placeOrder.mockResolvedValue({ success: true });
+
+      await tradingService.flipPosition({
+        provider: mockProvider,
+        position: { ...mockPosition, providerId: 'lighter' },
+        context: mockContext,
+      });
+
+      expect(mockRewardsIntegrationService.resolveFee).toHaveBeenCalledWith(
+        50000,
+        { providerId: 'lighter', isTestnet: false },
+      );
+      expect(mockProvider.placeOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol: 'BTC',
+          isBuy: false,
+          size: '1',
+          orderType: 'market',
+          leverage: 10,
+          providerId: 'lighter',
+          deferProviderErrorReport: true,
+        }),
+      );
     });
   });
 
-  describe('consolidated analytics pipeline (TAT-3463)', () => {
+  describe('consolidated analytics pipeline', () => {
     const mockClosePosition: Position = {
       symbol: 'BTC',
       size: '0.5',
@@ -2577,12 +4397,12 @@ describe('TradingService', () => {
     };
 
     const findCall = (event: PerpsAnalyticsEvent, status: string) =>
-      (mockDeps.metrics.trackPerpsEvent as jest.Mock).mock.calls.find(
+      (mockDeps.metrics.trackPerpsEvent as Mock).mock.calls.find(
         ([calledEvent, props]) =>
           calledEvent === event && props.status === status,
       );
 
-    describe('status=submitted before provider round-trip (TAT-3134)', () => {
+    describe('status=submitted before provider round-trip', () => {
       it('emits a submitted trade event before placeOrder', async () => {
         mockProvider.placeOrder.mockResolvedValue({
           success: true,
@@ -2595,7 +4415,8 @@ describe('TradingService', () => {
             symbol: 'BTC',
             isBuy: true,
             size: '0.1',
-            orderType: 'market',
+            orderType: 'stop_market',
+            reduceOnly: true,
           },
           context: mockContext,
           reportOrderToDataLake: mockReportOrderToDataLake,
@@ -2603,7 +4424,20 @@ describe('TradingService', () => {
 
         expect(mockDeps.metrics.trackPerpsEvent).toHaveBeenCalledWith(
           PerpsAnalyticsEvent.TradeTransaction,
-          expect.objectContaining({ status: 'submitted', asset: 'BTC' }),
+          expect.objectContaining({
+            status: 'submitted',
+            asset: 'BTC',
+            order_type: 'stop_market',
+            reduce_only: true,
+          }),
+        );
+        expect(
+          findCall(PerpsAnalyticsEvent.TradeTransaction, 'executed')?.[1],
+        ).toEqual(
+          expect.objectContaining({
+            order_type: 'stop_market',
+            reduce_only: true,
+          }),
         );
       });
 
@@ -2679,7 +4513,12 @@ describe('TradingService', () => {
 
         expect(mockDeps.metrics.trackPerpsEvent).toHaveBeenCalledWith(
           PerpsAnalyticsEvent.TradeTransaction,
-          expect.objectContaining({ status: 'submitted', asset: 'BTC' }),
+          expect.objectContaining({
+            status: 'submitted',
+            asset: 'BTC',
+            order_type: 'market',
+            reduce_only: false,
+          }),
         );
       });
 
@@ -2702,6 +4541,24 @@ describe('TradingService', () => {
             status: 'failed',
             asset: 'BTC',
             error_message: 'insufficient margin',
+            reduce_only: false,
+          }),
+        );
+        expect(mockDeps.logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'insufficient margin' }),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              feature: 'perps',
+              operation: 'position_management',
+              action: 'flip_position',
+            }),
+            context: {
+              name: 'TradingService',
+              data: expect.objectContaining({
+                method: 'flipPosition',
+                symbol: 'BTC',
+              }),
+            },
           }),
         );
       });
@@ -2732,7 +4589,7 @@ describe('TradingService', () => {
       ).toEqual(expect.objectContaining({ asset: 'BTC', status: 'executed' }));
     });
 
-    it('populates metamask_fee on flip success from trackingData (TAT-3146)', async () => {
+    it('populates metamask_fee on flip success from trackingData', async () => {
       mockProvider.placeOrder.mockResolvedValue({
         success: true,
         orderId: 'flip-1',
@@ -2834,7 +4691,7 @@ describe('TradingService', () => {
       expect(closeProps?.leverage).toBeUndefined();
     });
 
-    describe('hl_fee_rate on trade + close (TAT-3149)', () => {
+    describe('hl_fee_rate on trade + close', () => {
       it('includes hl_fee_rate when present in trackingData', async () => {
         mockProvider.placeOrder.mockResolvedValue({
           success: true,
@@ -2893,7 +4750,7 @@ describe('TradingService', () => {
     });
 
     describe('partial fill on open trade', () => {
-      it('emits an additional partially_filled trade event with order_size, amount_filled, and remaining_amount from the submitted size', async () => {
+      it('emits an additional partially_filled trade event with order_size, amount_filled, and remaining_amount from the accepted size', async () => {
         mockProvider.placeOrder.mockResolvedValue({
           success: true,
           orderId: 'order-1',
@@ -2909,6 +4766,7 @@ describe('TradingService', () => {
             isBuy: true,
             size: '10',
             orderType: 'market',
+            reduceOnly: true,
           },
           context: mockContext,
           reportOrderToDataLake: mockReportOrderToDataLake,
@@ -2926,12 +4784,52 @@ describe('TradingService', () => {
             order_size: 10,
             amount_filled: 4,
             remaining_amount: 6,
+            reduce_only: true,
           }),
         );
         // The terminal executed event still fires alongside it.
         expect(
-          findCall(PerpsAnalyticsEvent.TradeTransaction, 'executed'),
-        ).toBeDefined();
+          findCall(PerpsAnalyticsEvent.TradeTransaction, 'executed')?.[1],
+        ).toEqual(expect.objectContaining({ reduce_only: true }));
+      });
+
+      it('does not count rejected Scale rungs as remaining fill exposure', async () => {
+        mockProvider.placeOrder.mockResolvedValue({
+          success: true,
+          orderId: 'scale:group',
+          filledSize: '4',
+          submittedSize: '10',
+          acceptedSize: '6',
+          averagePrice: '50000',
+        });
+
+        await tradingService.placeOrder({
+          provider: mockProvider,
+          params: {
+            symbol: 'BTC',
+            isBuy: true,
+            size: '10',
+            orderType: 'scale',
+            scaleMinPrice: '49000',
+            scaleMaxPrice: '51000',
+            scaleNumOrders: 3,
+          },
+          context: mockContext,
+          reportOrderToDataLake: mockReportOrderToDataLake,
+        });
+
+        expect(
+          findCall(
+            PerpsAnalyticsEvent.TradeTransaction,
+            'partially_filled',
+          )?.[1],
+        ).toEqual(
+          expect.objectContaining({
+            order_size: 6,
+            amount_filled: 4,
+            remaining_amount: 2,
+          }),
+        );
       });
 
       it('does not emit a partially_filled event on a complete fill of the normalized submitted size', async () => {
@@ -3144,7 +5042,7 @@ describe('TradingService', () => {
         ).toBeUndefined();
         // No emitted trade event carries a NaN size property.
         const tradeCalls = (
-          mockDeps.metrics.trackPerpsEvent as jest.Mock
+          mockDeps.metrics.trackPerpsEvent as Mock
         ).mock.calls.filter(
           ([event]) => event === PerpsAnalyticsEvent.TradeTransaction,
         );
@@ -3189,7 +5087,7 @@ describe('TradingService', () => {
     describe('number_positions_closed on batch close', () => {
       it('carries the successful-close count on the batch close summary event', async () => {
         mockGetPositions.mockResolvedValue([mockClosePosition]);
-        (mockProvider.closePositions as jest.Mock).mockResolvedValue({
+        (mockProvider.closePositions as Mock).mockResolvedValue({
           success: true,
           successCount: 2,
           failureCount: 1,
@@ -3237,10 +5135,96 @@ describe('TradingService', () => {
       });
     });
 
-    describe('bulk_action_id on batch close/cancel (TAT-3150)', () => {
+    describe('order_type on batch close', () => {
+      const closeEventOrderTypes = (): unknown[] =>
+        vi
+          .mocked(mockDeps.metrics.trackPerpsEvent)
+          .mock.calls.filter(
+            ([event]) => event === PerpsAnalyticsEvent.PositionCloseTransaction,
+          )
+          .map(([, props]) => props.order_type);
+
+      it('tags the batch close summary event as a market close', async () => {
+        mockProvider.closePositions = vi.fn().mockResolvedValue({
+          success: true,
+          successCount: 1,
+          failureCount: 0,
+          results: [{ success: true, orderId: 'close-1', symbol: 'BTC' }],
+        });
+
+        await tradingService.closePositions({
+          provider: mockProvider,
+          params: { closeAll: true },
+          context: { ...mockContext, getPositions: mockGetPositions },
+        });
+
+        expect(
+          findCall(
+            PerpsAnalyticsEvent.PositionCloseTransaction,
+            'executed',
+          )?.[1],
+        ).toStrictEqual(
+          expect.objectContaining({
+            order_type: 'market',
+            number_positions_closed: 1,
+          }),
+        );
+        expect(closeEventOrderTypes()).toStrictEqual(['market']);
+      });
+
+      it('tags the summary event as a market close when the batch close throws', async () => {
+        mockProvider.closePositions = vi
+          .fn()
+          .mockRejectedValue(new Error('Network error'));
+
+        await expect(
+          tradingService.closePositions({
+            provider: mockProvider,
+            params: { symbols: ['BTC'] },
+            context: { ...mockContext, getPositions: mockGetPositions },
+          }),
+        ).rejects.toThrow('Network error');
+
+        expect(
+          findCall(PerpsAnalyticsEvent.PositionCloseTransaction, 'failed')?.[1],
+        ).toStrictEqual(
+          expect.objectContaining({
+            order_type: 'market',
+            error_message: 'Network error',
+          }),
+        );
+        expect(closeEventOrderTypes()).toStrictEqual(['market']);
+      });
+
+      it('tags every per-item and summary event as a market close in the fallback path', async () => {
+        delete mockProvider.closePositions;
+        mockGetPositions.mockResolvedValue([mockClosePosition]);
+        mockProvider.closePosition.mockResolvedValue({
+          success: true,
+          orderId: 'close-1',
+          filledSize: '0.5',
+          averagePrice: '55000',
+        });
+
+        await tradingService.closePositions({
+          provider: mockProvider,
+          params: { closeAll: true },
+          context: { ...mockContext, getPositions: mockGetPositions },
+        });
+
+        // Per-item submitted and executed, then the batch summary.
+        expect(closeEventOrderTypes()).toStrictEqual([
+          'market',
+          'market',
+          'market',
+        ]);
+      });
+    });
+
+    describe('bulk_action_id on batch close/cancel', () => {
       it('attaches bulk_action_id to the batch close summary event', async () => {
         mockGetPositions.mockResolvedValue([mockClosePosition]);
-        (mockProvider.closePositions as jest.Mock).mockResolvedValue({
+        (mockProvider.closePositions as Mock).mockResolvedValue({
           success: true,
           successCount: 1,
           failureCount: 0,
@@ -3301,7 +5285,7 @@ describe('TradingService', () => {
             timestamp: 1,
           } as Order,
         ]);
-        (mockProvider.cancelOrders as jest.Mock).mockResolvedValue({
+        (mockProvider.cancelOrders as Mock).mockResolvedValue({
           success: true,
           successCount: 1,
           failureCount: 0,
@@ -3322,7 +5306,7 @@ describe('TradingService', () => {
       });
     });
 
-    it('propagates entry_point/discovery_source/perp_discovery_source on trade events (TAT-3080)', async () => {
+    it('propagates entry_point/discovery_source/perp_discovery_source on trade events', async () => {
       mockProvider.placeOrder.mockResolvedValue({
         success: true,
         orderId: 'order-1',

@@ -1,6 +1,8 @@
 import { defaultAbiCoder, Interface } from '@ethersproject/abi';
 import * as controllerUtils from '@metamask/controller-utils';
 import type { Hex } from '@metamask/utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 
 import type {
   Address,
@@ -18,28 +20,24 @@ import {
 // MOCK PROVIDER
 // =============================================================================
 
-const createMockProvider = (): jest.Mocked<Provider> => ({
-  call: jest.fn(),
-  getBalance: jest.fn(),
+const createMockProvider = (): Mocked<Provider> => ({
+  call: vi.fn(),
+  getBalance: vi.fn(),
 });
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
-const ZERO_ADDRESS: Address =
-  '0x0000000000000000000000000000000000000000' as Address;
-const TEST_ACCOUNT: Address =
-  '0x1234567890123456789012345678901234567890' as Address;
-const TEST_TOKEN_1: Address =
-  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as Address; // USDC
-const TEST_TOKEN_2: Address =
-  '0xdAC17F958D2ee523a2206206994597C13D831ec7' as Address; // USDT
+const ZERO_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
+const TEST_ACCOUNT: Address = '0x1234567890123456789012345678901234567890';
+const TEST_TOKEN_1: Address = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'; // USDC
+const TEST_TOKEN_2: Address = '0xdAC17F958D2ee523a2206206994597C13D831ec7'; // USDT
 
 // Chain with Multicall3 support
-const MAINNET_CHAIN_ID: ChainId = '0x1' as ChainId;
+const MAINNET_CHAIN_ID: ChainId = '0x1';
 // Chain without Multicall3 support (made up)
-const UNSUPPORTED_CHAIN_ID: ChainId = '0xfffff' as ChainId;
+const UNSUPPORTED_CHAIN_ID: ChainId = '0xfffff';
 
 // =============================================================================
 // ABI ENCODING HELPERS FOR TESTS
@@ -80,14 +78,14 @@ function buildMockAggregate3Response(
 // =============================================================================
 
 describe('MulticallClient', () => {
-  let mockProvider: jest.Mocked<Provider>;
-  let getProviderMock: jest.Mock;
-  const getMulticall3AddressForChainMock = jest.fn().mockReturnValue(undefined);
+  let mockProvider: Mocked<Provider>;
+  let getProviderMock: Mock;
+  const getMulticall3AddressForChainMock = vi.fn().mockReturnValue(undefined);
   let client: MulticallClient;
 
   beforeEach(() => {
     mockProvider = createMockProvider();
-    getProviderMock = jest.fn().mockReturnValue(mockProvider);
+    getProviderMock = vi.fn().mockReturnValue(mockProvider);
     client = new MulticallClient({
       getProvider: getProviderMock,
       getMulticall3AddressForChain: getMulticall3AddressForChainMock,
@@ -95,7 +93,7 @@ describe('MulticallClient', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('constructor', () => {
@@ -268,7 +266,7 @@ describe('MulticallClient', () => {
       });
 
       it('encodes balance call data once per account address in a batch', async () => {
-        const encodeSpy = jest.spyOn(controllerUtils, 'encodeFunctionData');
+        const encodeSpy = vi.spyOn(controllerUtils, 'encodeFunctionData');
         const countBalanceOf = (): number =>
           encodeSpy.mock.calls.filter(([, method]) => method === 'balanceOf')
             .length;
@@ -276,10 +274,8 @@ describe('MulticallClient', () => {
           encodeSpy.mock.calls.filter(
             ([, method]) => method === 'getEthBalance',
           ).length;
-        const accountA: Address =
-          '0x1111111111111111111111111111111111111111' as Address;
-        const accountB: Address =
-          '0x2222222222222222222222222222222222222222' as Address;
+        const accountA: Address = '0x1111111111111111111111111111111111111111';
+        const accountB: Address = '0x2222222222222222222222222222222222222222';
 
         const requests: BalanceOfRequest[] = [
           { tokenAddress: TEST_TOKEN_1, accountAddress: accountA },
@@ -413,10 +409,10 @@ describe('MulticallClient', () => {
           .mockResolvedValueOnce(malformedResponse)
           .mockResolvedValueOnce(malformedResponse)
           .mockResolvedValueOnce(
-            '0x0000000000000000000000000000000000000000000000000000000000000064' as Hex,
+            '0x0000000000000000000000000000000000000000000000000000000000000064',
           )
           .mockResolvedValueOnce(
-            '0x00000000000000000000000000000000000000000000000000000000000000c8' as Hex,
+            '0x00000000000000000000000000000000000000000000000000000000000000c8',
           );
 
         const result = await client.batchBalanceOf(MAINNET_CHAIN_ID, requests, {
@@ -455,8 +451,7 @@ describe('MulticallClient', () => {
           { tokenAddress: TEST_TOKEN_1, accountAddress: TEST_ACCOUNT },
           { tokenAddress: TEST_TOKEN_2, accountAddress: TEST_ACCOUNT },
           {
-            tokenAddress:
-              '0x0000000000000000000000000000000000000003' as Address,
+            tokenAddress: '0x0000000000000000000000000000000000000003',
             accountAddress: TEST_ACCOUNT,
           },
         ];
@@ -479,7 +474,7 @@ describe('MulticallClient', () => {
           success: false,
         });
         expect(result[2]).toStrictEqual({
-          tokenAddress: '0x0000000000000000000000000000000000000003' as Address,
+          tokenAddress: '0x0000000000000000000000000000000000000003',
           accountAddress: TEST_ACCOUNT,
           success: false,
         });
@@ -495,7 +490,7 @@ describe('MulticallClient', () => {
           .mockRejectedValueOnce(new Error('RPC error'))
           .mockRejectedValueOnce(new Error('RPC error'))
           .mockResolvedValueOnce(
-            '0x0000000000000000000000000000000000000000000000000000000000000064' as Hex,
+            '0x0000000000000000000000000000000000000000000000000000000000000064',
           );
 
         const result = await client.batchBalanceOf(MAINNET_CHAIN_ID, requests, {
@@ -512,8 +507,7 @@ describe('MulticallClient', () => {
           { tokenAddress: TEST_TOKEN_1, accountAddress: TEST_ACCOUNT },
           { tokenAddress: TEST_TOKEN_2, accountAddress: TEST_ACCOUNT },
           {
-            tokenAddress:
-              '0x0000000000000000000000000000000000000003' as Address,
+            tokenAddress: '0x0000000000000000000000000000000000000003',
             accountAddress: TEST_ACCOUNT,
           },
         ];
@@ -523,11 +517,11 @@ describe('MulticallClient', () => {
           .mockRejectedValueOnce(new Error('aggregate3 RPC error'))
           .mockRejectedValueOnce(new Error('aggregate3 RPC error'))
           .mockResolvedValueOnce(
-            '0x0000000000000000000000000000000000000000000000000000000000000064' as Hex,
+            '0x0000000000000000000000000000000000000000000000000000000000000064',
           )
           .mockRejectedValueOnce(new Error('individual call failed'))
           .mockResolvedValueOnce(
-            '0x00000000000000000000000000000000000000000000000000000000000000c8' as Hex,
+            '0x00000000000000000000000000000000000000000000000000000000000000c8',
           );
 
         const result = await client.batchBalanceOf(MAINNET_CHAIN_ID, requests, {
@@ -547,7 +541,7 @@ describe('MulticallClient', () => {
           success: false,
         });
         expect(result[2]).toStrictEqual({
-          tokenAddress: '0x0000000000000000000000000000000000000003' as Address,
+          tokenAddress: '0x0000000000000000000000000000000000000003',
           accountAddress: TEST_ACCOUNT,
           success: true,
           balance: '200',
@@ -663,7 +657,7 @@ describe('MulticallClient', () => {
         ];
 
         mockProvider.call.mockResolvedValue(
-          '0x0000000000000000000000000000000000000000000000000000000000000064' as Hex, // 100
+          '0x0000000000000000000000000000000000000000000000000000000000000064', // 100
         );
 
         const result = await client.batchBalanceOf(
@@ -712,7 +706,7 @@ describe('MulticallClient', () => {
         ];
 
         // Provider returns empty data "0x" - some contracts may do this
-        mockProvider.call.mockResolvedValue('0x' as Hex);
+        mockProvider.call.mockResolvedValue('0x');
 
         const result = await client.batchBalanceOf(
           UNSUPPORTED_CHAIN_ID,
@@ -786,10 +780,10 @@ describe('MulticallClient', () => {
 
         mockProvider.call
           .mockResolvedValueOnce(
-            '0x0000000000000000000000000000000000000000000000000000000000000064' as Hex,
+            '0x0000000000000000000000000000000000000000000000000000000000000064',
           )
           .mockResolvedValueOnce(
-            '0x00000000000000000000000000000000000000000000000000000000000000c8' as Hex,
+            '0x00000000000000000000000000000000000000000000000000000000000000c8',
           );
         mockProvider.getBalance.mockResolvedValue(
           BigInt('1000000000000000000'),
@@ -812,8 +806,7 @@ describe('MulticallClient', () => {
           { tokenAddress: TEST_TOKEN_1, accountAddress: TEST_ACCOUNT },
           { tokenAddress: TEST_TOKEN_2, accountAddress: TEST_ACCOUNT },
           {
-            tokenAddress:
-              '0x0000000000000000000000000000000000000003' as Address,
+            tokenAddress: '0x0000000000000000000000000000000000000003',
             accountAddress: TEST_ACCOUNT,
           },
         ];
@@ -821,11 +814,11 @@ describe('MulticallClient', () => {
         // First call succeeds, second fails, third succeeds
         mockProvider.call
           .mockResolvedValueOnce(
-            '0x0000000000000000000000000000000000000000000000000000000000000064' as Hex,
+            '0x0000000000000000000000000000000000000000000000000000000000000064',
           )
           .mockRejectedValueOnce(new Error('RPC error for second token'))
           .mockResolvedValueOnce(
-            '0x00000000000000000000000000000000000000000000000000000000000000c8' as Hex,
+            '0x00000000000000000000000000000000000000000000000000000000000000c8',
           );
 
         const result = await client.batchBalanceOf(
@@ -848,7 +841,7 @@ describe('MulticallClient', () => {
           success: false,
         });
         expect(result[2]).toStrictEqual({
-          tokenAddress: '0x0000000000000000000000000000000000000003' as Address,
+          tokenAddress: '0x0000000000000000000000000000000000000003',
           accountAddress: TEST_ACCOUNT,
           success: true,
           balance: '200',
@@ -870,8 +863,7 @@ describe('MulticallClient', () => {
           { tokenAddress: TEST_TOKEN_1, accountAddress: TEST_ACCOUNT },
           { tokenAddress: TEST_TOKEN_2, accountAddress: TEST_ACCOUNT },
           {
-            tokenAddress:
-              '0x0000000000000000000000000000000000000001' as Address,
+            tokenAddress: '0x0000000000000000000000000000000000000001',
             accountAddress: TEST_ACCOUNT,
           },
         ];

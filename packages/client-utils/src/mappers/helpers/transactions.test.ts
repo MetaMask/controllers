@@ -1,3 +1,7 @@
+import { TransactionStatus } from '@metamask/transaction-controller';
+import type { TransactionMeta } from '@metamask/transaction-controller';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import * as tokenMetadata from './token-metadata.js';
 import {
   getFees,
@@ -8,12 +12,24 @@ import {
   getTokenMetadataFromKnownToken,
   isNftStandard,
   parseValueTransfers,
-  withFallbackTokenAssetId,
 } from './transactions.js';
+
+const MANTLE_TRANSACTION: TransactionMeta = {
+  chainId: '0x1388',
+  id: 'mantle-tx',
+  networkClientId: 'mantle',
+  status: TransactionStatus.confirmed,
+  time: 0,
+  txParams: { from: '0x0000000000000000000000000000000000000001' },
+  txReceipt: {
+    gasUsed: '0x5208',
+    effectiveGasPrice: '0x3b9aca00',
+  },
+};
 
 describe('transaction helpers', () => {
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('isNftStandard', () => {
@@ -103,21 +119,24 @@ describe('transaction helpers', () => {
   });
 
   describe('getTokenAmountFromTransfer', () => {
-    it('returns token metadata without a symbol when only the amount is present', () => {
+    it('omits amount when decimals are missing so hosts cannot format base units as human amounts', () => {
       expect(
         getTokenAmountFromTransfer(
           {
             from: '0x1',
             to: '0x2',
             transferType: 'erc20',
-            amount: 1,
+            amount: 167121100,
+            contractAddress: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
           },
           'out',
-          'eip155:1',
+          'eip155:42161',
         ),
-      ).toMatchObject({
+      ).toStrictEqual({
         direction: 'out',
-        amount: '1',
+        assetType: 'erc20',
+        assetId:
+          'eip155:42161/erc20:0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
       });
     });
 
@@ -129,7 +148,7 @@ describe('transaction helpers', () => {
             to: '0x2',
             transferType: 'erc20',
             symbol: 'USDC',
-            amount: 1,
+            amount: 167121100,
             decimal: 6,
           },
           'out',
@@ -137,10 +156,60 @@ describe('transaction helpers', () => {
         ),
       ).toStrictEqual({
         direction: 'out',
-        amount: '1',
+        amount: '167121100',
         symbol: 'USDC',
         decimals: 6,
         assetType: 'erc20',
+      });
+    });
+
+    it('keeps amount when the host hook supplies missing decimals', () => {
+      expect(
+        getTokenAmountFromTransfer(
+          {
+            from: '0x1',
+            to: '0x2',
+            transferType: 'erc20',
+            amount: 167121100,
+            contractAddress: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
+          },
+          'out',
+          'eip155:42161',
+          () => ({ decimals: 6, symbol: 'USDT' }),
+        ),
+      ).toStrictEqual({
+        direction: 'out',
+        amount: '167121100',
+        decimals: 6,
+        symbol: 'USDT',
+        assetType: 'erc20',
+        assetId:
+          'eip155:42161/erc20:0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+      });
+    });
+
+    it('trusts an explicit decimal of 0 and keeps the amount', () => {
+      expect(
+        getTokenAmountFromTransfer(
+          {
+            from: '0x1',
+            to: '0x2',
+            transferType: 'erc20',
+            symbol: 'TOKEN',
+            amount: 100,
+            decimal: 0,
+            contractAddress: '0x1111111111111111111111111111111111111111',
+          },
+          'out',
+          'eip155:1',
+        ),
+      ).toStrictEqual({
+        direction: 'out',
+        amount: '100',
+        decimals: 0,
+        symbol: 'TOKEN',
+        assetType: 'erc20',
+        assetId: 'eip155:1/erc20:0x1111111111111111111111111111111111111111',
       });
     });
 
@@ -168,7 +237,52 @@ describe('transaction helpers', () => {
       });
     });
 
-    it('returns token metadata without decimals when they are omitted', () => {
+    it('defaults native transfers without decimal to 18 decimals', () => {
+      expect(
+        getTokenAmountFromTransfer(
+          {
+            from: '0x1',
+            to: '0x2',
+            transferType: 'normal',
+            symbol: 'ETH',
+            amount: '1000000000000000000',
+          },
+          'out',
+          'eip155:1',
+        ),
+      ).toStrictEqual({
+        direction: 'out',
+        amount: '1000000000000000000',
+        symbol: 'ETH',
+        decimals: 18,
+        assetType: 'native',
+        assetId: 'eip155:1/slip44:60',
+      });
+    });
+
+    it('does not fail-closed NFT transfer amounts', () => {
+      expect(
+        getTokenAmountFromTransfer(
+          {
+            from: '0x1',
+            to: '0x2',
+            transferType: 'erc721',
+            name: 'Cool NFT',
+            amount: 1,
+            contractAddress: '0x1111111111111111111111111111111111111111',
+          },
+          'in',
+          'eip155:1',
+        ),
+      ).toStrictEqual({
+        direction: 'in',
+        amount: '1',
+        symbol: 'Cool NFT',
+        assetType: 'erc721',
+      });
+    });
+
+    it('omits amount when decimals are omitted even if a symbol is present', () => {
       expect(
         getTokenAmountFromTransfer(
           {
@@ -181,14 +295,14 @@ describe('transaction helpers', () => {
           'out',
           'eip155:1',
         ),
-      ).toMatchObject({
+      ).toStrictEqual({
         direction: 'out',
-        amount: '1',
         symbol: 'USDC',
+        assetType: 'erc20',
       });
     });
 
-    it('returns undefined when the transfer has no symbol or amount', () => {
+    it('returns undefined when the transfer has no symbol, amount, or asset id', () => {
       expect(
         getTokenAmountFromTransfer(
           {
@@ -205,7 +319,7 @@ describe('transaction helpers', () => {
 
   describe('getTokenMetadataFromKnownToken', () => {
     it('returns metadata without a symbol when it is missing', () => {
-      jest.spyOn(tokenMetadata, 'getKnownTokenMetadata').mockReturnValue({
+      vi.spyOn(tokenMetadata, 'getKnownTokenMetadata').mockReturnValue({
         decimals: 18,
         assetId: 'eip155:1/erc20:0x1111111111111111111111111111111111111111',
       });
@@ -225,7 +339,7 @@ describe('transaction helpers', () => {
     });
 
     it('returns partial metadata when some fields are missing', () => {
-      jest.spyOn(tokenMetadata, 'getKnownTokenMetadata').mockReturnValue({
+      vi.spyOn(tokenMetadata, 'getKnownTokenMetadata').mockReturnValue({
         symbol: 'TKN',
       });
 
@@ -252,18 +366,9 @@ describe('transaction helpers', () => {
     });
   });
 
-  describe('withFallbackTokenAssetId', () => {
-    it('returns the token unchanged when the fallback address cannot be encoded', () => {
-      const token = { direction: 'out' as const, symbol: 'USDC' };
-
-      expect(
-        withFallbackTokenAssetId(token, 'not-an-address', 'erc20', 'eip155:1'),
-      ).toBe(token);
-    });
-  });
-
   describe('getLocalTransactionFees', () => {
-    it('returns fallback native fee metadata for unsupported chains', () => {
+    it('resolves fee assetId via ETH symbol when chainlist only has testnet slip44:1', () => {
+      // 0x539 = Geth Testnet (1337); chainlist slip44 is 1, which we skip.
       expect(
         getLocalTransactionFees({
           primaryTransaction: {
@@ -281,6 +386,8 @@ describe('transaction helpers', () => {
           amount: '2',
           decimals: 18,
           assetType: 'native',
+          symbol: 'ETH',
+          assetId: 'eip155:1337/slip44:60',
         },
       ]);
     });
@@ -335,10 +442,122 @@ describe('transaction helpers', () => {
         } as Parameters<typeof getLocalTransactionFees>[0]),
       ).toBeUndefined();
     });
+
+    it('resolves fee assetId from nativeAssetSymbol when the chain is unknown', () => {
+      expect(
+        getLocalTransactionFees({
+          nativeAssetSymbol: 'ETH',
+          primaryTransaction: {
+            chainId: '0x3b9ac9f7',
+            txParams: {},
+            txReceipt: {
+              gasUsed: '0x1',
+              effectiveGasPrice: '0x2',
+            },
+          },
+        } as Parameters<typeof getLocalTransactionFees>[0]),
+      ).toStrictEqual([
+        {
+          type: 'base',
+          amount: '2',
+          decimals: 18,
+          assetType: 'native',
+          symbol: 'ETH',
+          assetId: 'eip155:999999991/slip44:60',
+        },
+      ]);
+    });
+
+    it('falls back to the zero-address native assetId when the chain is unknown and the symbol has no slip44', () => {
+      expect(
+        getLocalTransactionFees({
+          nativeAssetSymbol: 'NOTACOIN',
+          primaryTransaction: {
+            chainId: '0x3b9ac9f7',
+            txParams: {},
+            txReceipt: {
+              gasUsed: '0x1',
+              effectiveGasPrice: '0x2',
+            },
+          },
+        } as Parameters<typeof getLocalTransactionFees>[0]),
+      ).toStrictEqual([
+        {
+          type: 'base',
+          amount: '2',
+          decimals: 18,
+          assetType: 'native',
+          symbol: 'NOTACOIN',
+          assetId:
+            'eip155:999999991/erc20:0x0000000000000000000000000000000000000000',
+        },
+      ]);
+    });
+
+    it.each([
+      {
+        name: 'adds the receipt L1 fee',
+        receipt: { l1Fee: '0x64' },
+        // 21_000_000_000_000 + 100
+        amount: '21000000000100',
+      },
+      {
+        name: 'adds the Jovian operator fee when daFootprintGasScalar is present',
+        receipt: {
+          daFootprintGasScalar: '0x190',
+          l1Fee: '0x64',
+          operatorFeeConstant: '0xa',
+          operatorFeeScalar: '0x1',
+        },
+        // 21_000_000_000_000 + 100 + (21_000 * 1 * 100 + 10)
+        amount: '21000002100110',
+      },
+      {
+        name: 'adds the Isthmus operator fee when daFootprintGasScalar is absent',
+        receipt: { operatorFeeConstant: '0xa', operatorFeeScalar: '0x64' },
+        // 21_000_000_000_000 + floor(21_000 * 100 / 1_000_000) + 10
+        amount: '21000000000012',
+      },
+      {
+        name: 'skips the operator fee when operatorFeeConstant is missing',
+        receipt: { l1Fee: '0x64', operatorFeeScalar: '0x1' },
+        amount: '21000000000100',
+      },
+      {
+        name: 'ignores the layer1GasFee estimate',
+        receipt: {},
+        amount: '21000000000000',
+      },
+      {
+        name: 'keeps the L2 fee when the receipt L1 fee is invalid',
+        receipt: { l1Fee: 'not-a-hex' },
+        amount: '21000000000000',
+      },
+    ])('$name', ({ receipt, amount }) => {
+      expect(
+        getLocalTransactionFees({
+          primaryTransaction: {
+            ...MANTLE_TRANSACTION,
+            layer1GasFee: '0x5f5e100',
+            txReceipt: { ...MANTLE_TRANSACTION.txReceipt, ...receipt },
+          },
+        }),
+      ).toStrictEqual([
+        {
+          type: 'base',
+          amount,
+          decimals: 18,
+          assetType: 'native',
+          symbol: 'MNT',
+          assetId:
+            'eip155:5000/erc20:0x0000000000000000000000000000000000000000',
+        },
+      ]);
+    });
   });
 
   describe('getFees', () => {
-    it('returns network fees with amount and decimals only', () => {
+    it('returns network fees with native symbol and assetId from the chain id', () => {
       expect(
         getFees({
           chainId: 1,
@@ -351,6 +570,8 @@ describe('transaction helpers', () => {
           amount: '6',
           decimals: 18,
           assetType: 'native',
+          symbol: 'ETH',
+          assetId: 'eip155:1/slip44:60',
         },
       ]);
     });
@@ -394,6 +615,77 @@ describe('transaction helpers', () => {
           effectiveGasPrice: '0x3',
         } as Parameters<typeof getFees>[0]),
       ).toBeUndefined();
+    });
+
+    it('returns fee amount without symbol or assetId when the chain is unknown', () => {
+      expect(
+        getFees({
+          chainId: 999999991,
+          gasUsed: '0x2',
+          effectiveGasPrice: '0x3',
+        } as Parameters<typeof getFees>[0]),
+      ).toStrictEqual([
+        {
+          type: 'base',
+          amount: '6',
+          decimals: 18,
+          assetType: 'native',
+        },
+      ]);
+    });
+
+    it('uses ETH slip44:60 for Sepolia fees instead of chainlist testnet coin type 1', () => {
+      expect(
+        getFees({
+          chainId: 11155111,
+          gasUsed: '0x2',
+          effectiveGasPrice: '0x3',
+        } as Parameters<typeof getFees>[0]),
+      ).toStrictEqual([
+        {
+          type: 'base',
+          amount: '6',
+          decimals: 18,
+          assetType: 'native',
+          symbol: 'ETH',
+          assetId: 'eip155:11155111/slip44:60',
+        },
+      ]);
+    });
+
+    it('uses chainlist Avalanche slip44:9005 for fees instead of registry AVAX 9000', () => {
+      expect(
+        getFees({
+          chainId: 43114,
+          gasUsed: '0x2',
+          effectiveGasPrice: '0x3',
+        } as Parameters<typeof getFees>[0]),
+      ).toStrictEqual([
+        {
+          type: 'base',
+          amount: '6',
+          decimals: 18,
+          assetType: 'native',
+          symbol: 'AVAX',
+          assetId: 'eip155:43114/slip44:9005',
+        },
+      ]);
+    });
+
+    it('keeps wei decimals for fees when chainlist nativeCurrency.decimals is not 18', () => {
+      expect(
+        getFees({
+          chainId: 4160,
+          gasUsed: '21000',
+          effectiveGasPrice: '1000000000',
+        } as Parameters<typeof getFees>[0]),
+      ).toMatchObject({
+        0: {
+          amount: '21000000000000',
+          decimals: 18,
+          symbol: 'ALGO',
+        },
+      });
     });
   });
 

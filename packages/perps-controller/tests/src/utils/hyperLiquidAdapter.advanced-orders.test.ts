@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import { ORDER_SLIPPAGE_CONFIG } from '../../../src/constants/perpsConfig.js';
 import { PERPS_ERROR_CODES } from '../../../src/perpsErrorCodes.js';
 import type { FrontendOrder } from '../../../src/types/hyperliquid-types.js';
@@ -115,6 +117,23 @@ describe('hyperLiquidAdapter - advanced order types', () => {
     it('leaves triggerOrderType unset for plain orders', () => {
       const result = adaptOrderFromSDK(buildFrontendOrder());
 
+      expect(result.triggerOrderType).toBeUndefined();
+    });
+
+    it('tolerates runtime orders without an id or detailed type', () => {
+      const malformedOrder = buildFrontendOrder({
+        oid: undefined,
+        orderType: undefined,
+        limitPx: '',
+      });
+
+      const result = adaptOrderFromSDK(malformedOrder);
+
+      expect(result).toMatchObject({
+        orderId: '',
+        orderType: 'market',
+      });
+      expect(result.detailedOrderType).toBeUndefined();
       expect(result.triggerOrderType).toBeUndefined();
     });
   });

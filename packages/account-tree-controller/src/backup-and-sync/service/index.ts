@@ -302,7 +302,7 @@ export class BackupAndSyncService {
     );
 
     // Encapsulate the sync logic in a function to allow tracing
-    const bigSyncFn = async () => {
+    const bigSyncFn = async (): Promise<void> => {
       try {
         // 1. Identifies all local entropy wallets that can be synchronized
         const localSyncableWallets = getLocalEntropyWallets(this.#context);
@@ -332,10 +332,7 @@ export class BackupAndSyncService {
             ]);
 
             // 2.1 Decide if we need to perform legacy account syncing
-            if (
-              !walletFromUserStorage ||
-              !walletFromUserStorage.isLegacyAccountSyncingDisabled
-            ) {
+            if (!walletFromUserStorage?.isLegacyAccountSyncingDisabled) {
               // 2.2 Perform legacy account syncing
               // This will migrate legacy account data to the new structure.
               // This operation will only be performed once.

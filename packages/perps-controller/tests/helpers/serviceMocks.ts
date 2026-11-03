@@ -4,6 +4,12 @@
  * Provides reusable mock implementations for ServiceContext and related types
  */
 
+import { Messenger, MOCK_ANY_NAMESPACE } from '@metamask/messenger';
+import type {
+  MessengerActions,
+  MessengerEvents,
+  MockAnyNamespace,
+} from '@metamask/messenger';
 import {
   type ServiceContext,
   type PerpsControllerState,
@@ -11,6 +17,32 @@ import {
   type PerpsControllerMessenger,
   type PerpsPlatformDependencies,
 } from '@metamask/perps-controller';
+import { vi } from 'vitest';
+import type { Mock, MockInstance, Mocked } from 'vitest';
+
+/** A fixed clock, in milliseconds, for tests that pin `Date.now()`. */
+export const NOW = 1_700_000_000_000;
+
+export type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+};
+
+/**
+ * Create a promise whose settlement is controlled by the test.
+ *
+ * @returns The promise and its resolve and reject callbacks.
+ */
+export const createDeferred = <T>(): Deferred<T> => {
+  let resolve!: Deferred<T>['resolve'];
+  let reject!: Deferred<T>['reject'];
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+};
 
 /**
  * Create a mock EVM account (KeyringAccount)
@@ -31,8 +63,8 @@ export const createMockEvmAccount = () => ({
 
 /**
  * Create a mock PerpsPlatformDependencies instance.
- * Returns a type-safe mock with jest.Mock functions for all methods.
- * Uses `as unknown as jest.Mocked<PerpsPlatformDependencies>` pattern
+ * Returns a type-safe mock with Mock functions for all methods.
+ * Uses `as unknown as Mocked<PerpsPlatformDependencies>` pattern
  * to ensure compatibility with both the interface contract and Jest mock APIs.
  *
  * Architecture:
@@ -40,73 +72,89 @@ export const createMockEvmAccount = () => ({
  * - Platform: streamManager (mobile/extension specific capabilities)
  * - Controllers: consolidated access to all external controllers
  */
-export const createMockInfrastructure =
-  (): jest.Mocked<PerpsPlatformDependencies> =>
-    ({
-      // === Observability (stateless utilities) ===
-      logger: {
-        error: jest.fn(),
-      },
-      debugLogger: {
-        log: jest.fn(),
-      },
-      metrics: {
-        trackEvent: jest.fn(),
-        isEnabled: jest.fn(() => true),
-        trackPerpsEvent: jest.fn(),
-      },
-      performance: {
-        now: jest.fn(() => Date.now()),
-      },
-      tracer: {
-        trace: jest.fn(() => undefined),
-        endTrace: jest.fn(),
-        setMeasurement: jest.fn(),
-        addBreadcrumb: jest.fn(),
-      },
+export const createMockInfrastructure = (): Mocked<PerpsPlatformDependencies> =>
+  ({
+    // === Observability (stateless utilities) ===
+    logger: {
+      error: vi.fn(),
+    },
+    debugLogger: {
+      log: vi.fn(),
+    },
+    metrics: {
+      trackEvent: vi.fn(),
+      isEnabled: vi.fn(() => true),
+      trackPerpsEvent: vi.fn(),
+    },
+    performance: {
+      now: vi.fn(() => Date.now()),
+    },
+    tracer: {
+      trace: vi.fn(() => undefined),
+      endTrace: vi.fn(),
+      setMeasurement: vi.fn(),
+      addBreadcrumb: vi.fn(),
+    },
 
-      // === Platform Services ===
-      streamManager: {
-        pauseChannel: jest.fn(),
-        resumeChannel: jest.fn(),
-        clearAllChannels: jest.fn(),
-      },
+    // === Platform Services ===
+    streamManager: {
+      pauseChannel: vi.fn(),
+      resumeChannel: vi.fn(),
+      clearAllChannels: vi.fn(),
+    },
 
-      // === Feature Flags (platform-specific version gating) ===
-      featureFlags: {
-        validateVersionGated: jest.fn().mockReturnValue(undefined),
-      },
+    // === Feature Flags (platform-specific version gating) ===
+    featureFlags: {
+      validateVersionGated: vi.fn().mockReturnValue(undefined),
+    },
 
-      // === Market Data Formatting ===
-      marketDataFormatters: {
-        formatVolume: jest.fn((v: number) => `$${v.toFixed(0)}`),
-        formatPerpsFiat: jest.fn((v: number) => `$${v.toFixed(2)}`),
-        formatPercentage: jest.fn((p: number) => `${p.toFixed(2)}%`),
-        priceRangesUniversal: [],
-      },
+    // === Market Data Formatting ===
+    marketDataFormatters: {
+      formatVolume: vi.fn((v: number) => `$${v.toFixed(0)}`),
+      formatPerpsFiat: vi.fn((v: number) => `$${v.toFixed(2)}`),
+      formatPercentage: vi.fn((p: number) => `${p.toFixed(2)}%`),
+      priceRangesUniversal: [],
+    },
 
-      // === Cache Invalidation ===
-      cacheInvalidator: {
-        invalidate: jest.fn(),
-        invalidateAll: jest.fn(),
-      },
+    // === Cache Invalidation ===
+    cacheInvalidator: {
+      invalidate: vi.fn(),
+      invalidateAll: vi.fn(),
+    },
 
-      // === Terminal API ===
-      terminalApiUrl: 'https://terminal.test-api.cx.metamask.io/v1/perpetuals',
+    // === Terminal API ===
+    terminalApiUrl: 'https://terminal.test-api.cx.metamask.io/v1/perpetuals',
 
-      // === Rewards (DI — no RewardsController in Core yet) ===
-      rewards: {
-        getPerpsDiscountForAccount: jest.fn().mockResolvedValue(0),
-      },
+    // === Rewards (DI — no RewardsController in Core yet) ===
+    rewards: {
+      getPerpsDiscountForAccount: vi.fn().mockResolvedValue(0),
+      getPerpsTradingFeeGrant: vi.fn().mockResolvedValue(null),
+    },
 
-      // === Disk Cache (cold-start persistence) ===
-      diskCache: {
-        getItem: jest.fn().mockResolvedValue(null),
-        getItemSync: jest.fn().mockReturnValue(null),
-        setItem: jest.fn().mockResolvedValue(undefined),
-        removeItem: jest.fn().mockResolvedValue(undefined),
-      },
-    }) as unknown as jest.Mocked<PerpsPlatformDependencies>;
+    // === Disk Cache (cold-start persistence) ===
+    // FUNCTIONAL in-memory disk cache: durable-state code treats disk
+    // absence as authoritative, so the default mock must actually
+    // store — a null-only stub would silently erase obligations.
+    diskCache: (() => {
+      const store = new Map<string, string>();
+      return {
+        getItem: vi
+          .fn()
+          .mockImplementation(async (key: string) => store.get(key) ?? null),
+        getItemSync: vi
+          .fn()
+          .mockImplementation((key: string) => store.get(key) ?? null),
+        setItem: vi
+          .fn()
+          .mockImplementation(async (key: string, value: string) => {
+            store.set(key, value);
+          }),
+        removeItem: vi.fn().mockImplementation(async (key: string) => {
+          store.delete(key);
+        }),
+      };
+    })(),
+  }) as unknown as Mocked<PerpsPlatformDependencies>;
 
 /**
  * Create a mock PerpsControllerState
@@ -182,8 +230,8 @@ export const createMockServiceContext = (
     method: 'testMethod',
   },
   stateManager: {
-    update: jest.fn(),
-    getState: jest.fn(() => createMockPerpsControllerState()),
+    update: vi.fn(),
+    getState: vi.fn(() => createMockPerpsControllerState()),
   },
   ...overrides,
 });
@@ -203,10 +251,10 @@ export const createMockServiceContext = (
  */
 export const createMockMessenger = (
   overrides?: Partial<PerpsControllerMessenger>,
-): jest.Mocked<PerpsControllerMessenger> => {
+): Mocked<PerpsControllerMessenger> => {
   const mockEvmAccount = createMockEvmAccount();
   const base = {
-    call: jest.fn().mockImplementation((action: string) => {
+    call: vi.fn().mockImplementation((action: string) => {
       // Default implementations for common actions
       if (
         action === 'AccountTreeController:getAccountsFromSelectedAccountGroup'
@@ -230,20 +278,199 @@ export const createMockMessenger = (
       }
       return undefined;
     }),
-    publish: jest.fn(),
-    subscribe: jest.fn(),
-    unsubscribe: jest.fn(),
-    registerActionHandler: jest.fn(),
-    registerMethodActionHandlers: jest.fn(),
-    unregisterActionHandler: jest.fn(),
+    publish: vi.fn(),
+    subscribe: vi.fn(),
+    unsubscribe: vi.fn(),
+    registerActionHandler: vi.fn(),
+    registerMethodActionHandlers: vi.fn(),
+    unregisterActionHandler: vi.fn(),
     // Additional methods used by PerpsController
-    registerEventHandler: jest.fn(),
-    registerInitialEventPayload: jest.fn(),
-    unregisterEventHandler: jest.fn(),
-    clearEventSubscriptions: jest.fn(),
+    registerEventHandler: vi.fn(),
+    registerInitialEventPayload: vi.fn(),
+    unregisterEventHandler: vi.fn(),
+    clearEventSubscriptions: vi.fn(),
   };
   return {
     ...base,
     ...overrides,
-  } as unknown as jest.Mocked<PerpsControllerMessenger>;
+  } as unknown as Mocked<PerpsControllerMessenger>;
+};
+
+// The keyring type of a software (non-hardware) account.
+const HD_KEYRING_TYPE = 'HD Key Tree';
+
+type RootMessenger = Messenger<
+  MockAnyNamespace,
+  MessengerActions<PerpsControllerMessenger>,
+  MessengerEvents<PerpsControllerMessenger>
+>;
+
+type AccountMessenger = {
+  messenger: PerpsControllerMessenger;
+  // The host side, to answer and delegate more of the host's actions.
+  rootMessenger: RootMessenger;
+  call: MockInstance;
+  selectAccount: (address: `0x${string}`) => void;
+  // Leave no account selected.
+  deselectAccount: () => void;
+};
+
+/**
+ * Create a real PerpsController messenger that delegates
+ * `AccountsController:getSelectedAccount`, and the unlocked
+ * `KeyringController` actions when a keyring signature is given.
+ *
+ * @param keyringType - Keyring type reported in the selected account metadata.
+ * @param keyringSignature - Signature the keyring returns; omit for a host
+ * without a KeyringController.
+ * @param isUnlocked - Whether the keyring reports it is unlocked.
+ * @returns The messenger, its host root messenger, a spy on its `call`, and
+ * ways to switch or clear the selected account.
+ */
+const createAccountMessenger = (
+  keyringType: string,
+  keyringSignature?: string,
+  isUnlocked = true,
+): AccountMessenger => {
+  const account = createMockEvmAccount();
+  // Empty when no account is selected.
+  let selectedAddress: string = account.address;
+  const root: RootMessenger = new Messenger<
+    MockAnyNamespace,
+    MessengerActions<PerpsControllerMessenger>,
+    MessengerEvents<PerpsControllerMessenger>
+  >({ namespace: MOCK_ANY_NAMESPACE });
+  const messenger: PerpsControllerMessenger = new Messenger({
+    namespace: 'PerpsController',
+    parent: root,
+  });
+  root.registerActionHandler('AccountsController:getSelectedAccount', () => ({
+    ...account,
+    address: selectedAddress,
+    scopes: ['eip155:0'],
+    metadata: { ...account.metadata, keyring: { type: keyringType } },
+  }));
+  if (keyringSignature === undefined) {
+    root.delegate({
+      actions: ['AccountsController:getSelectedAccount'],
+      messenger,
+    });
+  } else {
+    root.registerActionHandler('KeyringController:getState', () => ({
+      isUnlocked,
+      keyrings: [],
+    }));
+    root.registerActionHandler(
+      'KeyringController:signTypedMessage',
+      async () => keyringSignature,
+    );
+    root.registerActionHandler(
+      'KeyringController:signPersonalMessage',
+      async () => keyringSignature,
+    );
+    root.delegate({
+      actions: [
+        'AccountsController:getSelectedAccount',
+        'KeyringController:getState',
+        'KeyringController:signTypedMessage',
+        'KeyringController:signPersonalMessage',
+      ],
+      messenger,
+    });
+  }
+  return {
+    messenger,
+    rootMessenger: root,
+    call: vi.spyOn(messenger, 'call'),
+    selectAccount: (address): void => {
+      selectedAddress = address;
+    },
+    deselectAccount: (): void => {
+      selectedAddress = '';
+    },
+  };
+};
+
+/**
+ * Create a real PerpsController messenger for a host without a
+ * KeyringController: only `AccountsController:getSelectedAccount` is
+ * delegated, so any `KeyringController:*` call throws.
+ *
+ * @param keyringType - Keyring type reported in the selected account metadata.
+ * @returns The messenger, its host root messenger, a spy on its `call`, and
+ * ways to switch or clear the selected account.
+ */
+export const createKeyringlessMessenger = (
+  keyringType = HD_KEYRING_TYPE,
+): AccountMessenger => createAccountMessenger(keyringType);
+
+/**
+ * Create a real PerpsController messenger for a host with a KeyringController
+ * that returns `signature` for typed data and personal messages.
+ *
+ * @param signature - Signature the keyring returns.
+ * @param isUnlocked - Whether the keyring reports it is unlocked.
+ * @returns The messenger, its host root messenger, a spy on its `call`, and
+ * ways to switch or clear the selected account.
+ */
+export const createKeyringMessenger = (
+  signature: string,
+  isUnlocked = true,
+): AccountMessenger =>
+  createAccountMessenger(HD_KEYRING_TYPE, signature, isUnlocked);
+
+/**
+ * Names of the `KeyringController:*` actions a messenger spy saw.
+ *
+ * @param call - Spy on a messenger's `call`.
+ * @returns The KeyringController action names, in call order.
+ */
+export const keyringCalls = (call: MockInstance): string[] =>
+  call.mock.calls
+    .map(([action]: unknown[]) => String(action))
+    .filter((action) => action.startsWith('KeyringController:'));
+
+/**
+ * Create a real PerpsController messenger whose host registers and delegates
+ * only the given actions, like a host that does not provide every optional
+ * controller. Any other action throws the real `Messenger` error
+ * (`A handler for <Action> has not been delegated to PerpsController`).
+ *
+ * @param handlers - Action handlers the host registers and delegates.
+ * @returns The PerpsController messenger.
+ */
+export const createPartiallyDelegatedMessenger = (
+  handlers: Record<string, (...args: any[]) => unknown> = {},
+): PerpsControllerMessenger => {
+  const root: RootMessenger = new Messenger({ namespace: MOCK_ANY_NAMESPACE });
+  const messenger: PerpsControllerMessenger = new Messenger({
+    namespace: 'PerpsController',
+    parent: root,
+  });
+  const actions = Object.keys(handlers) as any[];
+  for (const action of actions) {
+    root.registerActionHandler(action, handlers[action] as any);
+  }
+  root.delegate({ actions, messenger });
+  return messenger;
+};
+
+/**
+ * Call `action` from a real messenger in `namespace` whose host provides no
+ * handlers, so it throws the real nested `Messenger` error — as a delegated
+ * handler does when its own dependency is missing.
+ *
+ * @param namespace - Namespace of the messenger making the nested call.
+ * @param action - The action it calls.
+ * @returns Never; always throws.
+ */
+export const callMissingFrom = (namespace: string, action: string): never => {
+  const root = new Messenger<MockAnyNamespace, any>({
+    namespace: MOCK_ANY_NAMESPACE,
+  });
+  const messenger = new Messenger<string, any, never, typeof root>({
+    namespace,
+    parent: root,
+  });
+  return messenger.call(action as never) as never;
 };

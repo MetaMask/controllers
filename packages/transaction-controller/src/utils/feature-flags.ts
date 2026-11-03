@@ -44,6 +44,15 @@ type GasEstimateFallback = {
   maxGasLimit?: number;
 };
 
+/** A smart contract that supports EIP-7702 batch transactions. */
+type EIP7702Contract = {
+  /** Address of the smart contract. */
+  address: Hex;
+
+  /** Signature to verify the contract is authentic. */
+  signature: Hex;
+};
+
 export type TransactionControllerFeatureFlags = {
   /** Feature flags to support EIP-7702 / type-4 transactions. */
   [FeatureFlag.EIP7702]?: {
@@ -52,16 +61,7 @@ export type TransactionControllerFeatureFlags = {
      * Keyed by chain ID.
      * First entry in each array is the contract that standard EOAs will be upgraded to.
      */
-    contracts?: Record<
-      Hex,
-      {
-        /** Address of the smart contract. */
-        address: Hex;
-
-        /** Signature to verify the contract is authentic. */
-        signature: Hex;
-      }[]
-    >;
+    contracts?: Record<Hex, EIP7702Contract[]>;
 
     /** Chains enabled for EIP-7702 batch transactions. */
     supportedChains?: Hex[];
@@ -186,6 +186,46 @@ export type TransactionControllerFeatureFlags = {
        */
       default?: number;
     };
+
+    /**
+     * Replacement of underpriced dapp-suggested gas fees.
+     * If enabled, dapp-suggested EIP-1559 fees with a `maxFeePerGas` below the
+     * current low estimate are replaced with the wallet's suggested fees, as
+     * they are unlikely to be included in a block before fee values change.
+     */
+    replaceUnderpricedDappGasFees?: {
+      /** Enablement on a per-chain basis. */
+      perChainConfig?: {
+        [chainId: Hex]: boolean;
+      };
+
+      /**
+       * Default enablement.
+       * This value is used when no specific value is found for a chain ID.
+       */
+      default?: boolean;
+    };
+
+    /**
+     * Replacement of underpriced saved (advanced) gas fee preferences.
+     * If enabled, saved custom fees with a `maxBaseFee` below the current low
+     * estimate are ignored in favour of the wallet's suggested fees, as they
+     * are unlikely to be included in a block before fee values change.
+     * Level-based saved preferences track current estimates and are never
+     * ignored.
+     */
+    replaceUnderpricedSavedGasFees?: {
+      /** Enablement on a per-chain basis. */
+      perChainConfig?: {
+        [chainId: Hex]: boolean;
+      };
+
+      /**
+       * Default enablement.
+       * This value is used when no specific value is found for a chain ID.
+       */
+      default?: boolean;
+    };
   };
 };
 
@@ -217,26 +257,17 @@ export function getEIP7702ContractAddresses(
   messenger: TransactionControllerMessenger,
   publicKey: Hex,
 ): Hex[] {
-  const featureFlags = getFeatureFlags(messenger);
-
-  const contracts =
-    featureFlags?.[FeatureFlag.EIP7702]?.contracts?.[
-      chainId.toLowerCase() as Hex
-    ] ?? [];
-
-  return contracts
-    .filter((contract) =>
-      isValidSignature(
-        [contract.address, padHexToEvenLength(chainId) as Hex],
-        contract.signature,
-        publicKey,
-      ),
-    )
+  return getEIP7702Contracts(chainId, messenger)
+    .filter((contract) => isContractAuthentic(contract, chainId, publicKey))
     .map((contract) => contract.address);
 }
 
 /**
  * Retrieves the EIP-7702 upgrade contract address.
+ *
+ * Equivalent to the first entry of `getEIP7702ContractAddresses`, but stops
+ * validating once an authentic contract is found rather than validating every
+ * contract for the chain.
  *
  * @param chainId - The chain ID.
  * @param messenger - The controller messenger instance.
@@ -248,7 +279,9 @@ export function getEIP7702UpgradeContractAddress(
   messenger: TransactionControllerMessenger,
   publicKey: Hex,
 ): Hex | undefined {
-  return getEIP7702ContractAddresses(chainId, messenger, publicKey)?.[0];
+  return getEIP7702Contracts(chainId, messenger).find((contract) =>
+    isContractAuthentic(contract, chainId, publicKey),
+  )?.address;
 }
 
 /**
@@ -466,6 +499,96 @@ export function getTimeoutAttempts(
 }
 
 /**
+ * Retrieves whether underpriced dapp-suggested gas fees should be replaced
+ * with the wallet's suggested fees.
+ *
+ * @param chainId - The chain ID.
+ * @param messenger - The controller messenger instance.
+ * @returns Whether the replacement is enabled.
+ */
+export function getReplaceUnderpricedDappGasFeesEnabled(
+  chainId: Hex,
+  messenger: TransactionControllerMessenger,
+): boolean {
+  const featureFlags = getFeatureFlags(messenger);
+
+  const replaceUnderpricedDappGasFeesFlags =
+    featureFlags?.[FeatureFlag.Transactions]?.replaceUnderpricedDappGasFees;
+
+  return (
+    replaceUnderpricedDappGasFeesFlags?.perChainConfig?.[chainId] ??
+    replaceUnderpricedDappGasFeesFlags?.default ??
+    false
+  );
+}
+
+/**
+ * Retrieves whether underpriced saved (advanced) gas fee preferences should be
+ * ignored in favour of the wallet's suggested fees.
+ *
+ * @param chainId - The chain ID.
+ * @param messenger - The controller messenger instance.
+ * @returns Whether the replacement is enabled.
+ */
+export function getReplaceUnderpricedSavedGasFeesEnabled(
+  chainId: Hex,
+  messenger: TransactionControllerMessenger,
+): boolean {
+  const featureFlags = getFeatureFlags(messenger);
+
+  const replaceUnderpricedSavedGasFeesFlags =
+    featureFlags?.[FeatureFlag.Transactions]?.replaceUnderpricedSavedGasFees;
+
+  return (
+    replaceUnderpricedSavedGasFeesFlags?.perChainConfig?.[chainId] ??
+    replaceUnderpricedSavedGasFeesFlags?.default ??
+    false
+  );
+}
+
+/**
+ * Retrieves the configured EIP-7702 contracts for a given chain ID, without
+ * validating their authenticity.
+ *
+ * @param chainId - The chain ID.
+ * @param messenger - The controller messenger instance.
+ * @returns The configured contracts.
+ */
+function getEIP7702Contracts(
+  chainId: Hex,
+  messenger: TransactionControllerMessenger,
+): EIP7702Contract[] {
+  const featureFlags = getFeatureFlags(messenger);
+
+  return (
+    featureFlags?.[FeatureFlag.EIP7702]?.contracts?.[
+      chainId.toLowerCase() as Hex
+    ] ?? []
+  );
+}
+
+/**
+ * Determines whether an EIP-7702 contract is authentic by verifying its
+ * signature against the given public key.
+ *
+ * @param contract - The contract to validate.
+ * @param chainId - The chain ID the contract is configured for.
+ * @param publicKey - The public key used to validate the contract authenticity.
+ * @returns True if the contract signature is valid, false otherwise.
+ */
+function isContractAuthentic(
+  contract: EIP7702Contract,
+  chainId: Hex,
+  publicKey: Hex,
+): boolean {
+  return isValidSignature(
+    [contract.address, padHexToEvenLength(chainId) as Hex],
+    contract.signature,
+    publicKey,
+  );
+}
+
+/**
  * Retrieves the relevant feature flags from the remote feature flag controller.
  *
  * @param messenger - The messenger instance.
@@ -481,7 +604,7 @@ function getFeatureFlags(
 
     log('Retrieved feature flags', featureFlags);
 
-    return featureFlags as TransactionControllerFeatureFlags;
+    return featureFlags;
   } catch {
     log('RemoteFeatureFlagController not available');
     return undefined;

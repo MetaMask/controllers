@@ -1,4 +1,7 @@
 /* eslint-disable */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
+
 import { PERPS_CONSTANTS } from '../../../src/constants/perpsConfig.js';
 import { TradingService } from '../../../src/services/TradingService.js';
 import type {
@@ -14,15 +17,18 @@ import {
   createMockPerpsControllerState,
 } from '../../helpers/serviceMocks.js';
 
-jest.mock('uuid', () => ({ v4: () => 'mock-trace-id' }));
+vi.mock('uuid', () => ({ v4: () => 'mock-trace-id' }));
 
 describe('TradingService.placeOrder — order submission timeout', () => {
   let tradingService: TradingService;
-  let mockDeps: jest.Mocked<PerpsPlatformDependencies>;
-  let mockProvider: jest.Mocked<PerpsProvider>;
-  let mockRewardsService: { calculateUserFeeDiscount: jest.Mock };
+  let mockDeps: Mocked<PerpsPlatformDependencies>;
+  let mockProvider: Mocked<PerpsProvider>;
+  let mockRewardsService: {
+    calculateUserFeeDiscount: Mock;
+    resolveFee: Mock;
+  };
   let mockContext: ReturnType<typeof createMockServiceContext>;
-  let mockReportOrderToDataLake: jest.Mock;
+  let mockReportOrderToDataLake: Mock;
 
   const baseOrderParams: OrderParams = {
     symbol: 'BTC',
@@ -32,30 +38,36 @@ describe('TradingService.placeOrder — order submission timeout', () => {
   };
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     mockDeps = createMockInfrastructure();
     tradingService = new TradingService(mockDeps);
     mockRewardsService = {
-      calculateUserFeeDiscount: jest.fn().mockResolvedValue(undefined),
+      calculateUserFeeDiscount: vi.fn().mockResolvedValue(undefined),
+      resolveFee: vi.fn().mockResolvedValue({
+        feeBips: 10,
+        discountBips: undefined,
+        source: 'default',
+        subscription: { eligible: false, reason: 'no-source' },
+      }),
     };
     tradingService.setControllerDependencies({
       rewardsIntegrationService: mockRewardsService as never,
     });
     mockProvider =
-      createMockHyperLiquidProvider() as unknown as jest.Mocked<PerpsProvider>;
+      createMockHyperLiquidProvider() as unknown as Mocked<PerpsProvider>;
     mockContext = createMockServiceContext({
       errorContext: { controller: 'TradingService', method: 'test' },
       stateManager: {
-        update: jest.fn(),
-        getState: jest.fn(() => createMockPerpsControllerState()),
+        update: vi.fn(),
+        getState: vi.fn(() => createMockPerpsControllerState()),
       },
     });
-    mockReportOrderToDataLake = jest.fn().mockResolvedValue({ success: true });
+    mockReportOrderToDataLake = vi.fn().mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
-    jest.useRealTimers();
-    jest.clearAllMocks();
+    vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   it('emits no threshold breadcrumb and leaves reason undefined when provider resolves before threshold', async () => {
@@ -80,10 +92,9 @@ describe('TradingService.placeOrder — order submission timeout', () => {
       }),
     );
 
-    const endTraceArgs = (mockDeps.tracer.endTrace as jest.Mock).mock
-      .calls[0][0];
+    const endTraceArgs = (mockDeps.tracer.endTrace as Mock).mock.calls[0][0];
     expect(endTraceArgs.data?.reason).toBeUndefined();
-    expect(jest.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('emits breadcrumb exactly once and sets reason: late_success when provider resolves after threshold', async () => {
@@ -99,11 +110,8 @@ describe('TradingService.placeOrder — order submission timeout', () => {
       context: mockContext,
       reportOrderToDataLake: mockReportOrderToDataLake,
     });
-
     // Advance past the threshold, allowing microtasks (fee discount await) to run first
-    await jest.advanceTimersByTimeAsync(
-      PERPS_CONSTANTS.PlaceOrderTimeoutMs + 1,
-    );
+    await vi.advanceTimersByTimeAsync(PERPS_CONSTANTS.PlaceOrderTimeoutMs + 1);
 
     expect(mockDeps.tracer.addBreadcrumb).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -117,9 +125,9 @@ describe('TradingService.placeOrder — order submission timeout', () => {
     );
     // Exactly one threshold breadcrumb (plus the 'Order execution started' breadcrumb = 2 total)
     const thresholdCalls = (
-      mockDeps.tracer.addBreadcrumb as jest.Mock
+      mockDeps.tracer.addBreadcrumb as Mock
     ).mock.calls.filter(
-      ([args]: [{ message: string }]) =>
+      ([args]: { message: string }[]) =>
         args.message === 'Order submission exceeded threshold (still pending)',
     );
     expect(thresholdCalls).toHaveLength(1);
@@ -133,10 +141,9 @@ describe('TradingService.placeOrder — order submission timeout', () => {
     });
     await placeOrderPromise;
 
-    const endTraceArgs = (mockDeps.tracer.endTrace as jest.Mock).mock
-      .calls[0][0];
+    const endTraceArgs = (mockDeps.tracer.endTrace as Mock).mock.calls[0][0];
     expect(endTraceArgs.data?.reason).toBe('late_success');
-    expect(jest.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('sets reason: late_error and rethrows the original error when provider rejects after threshold', async () => {
@@ -152,23 +159,22 @@ describe('TradingService.placeOrder — order submission timeout', () => {
       context: mockContext,
       reportOrderToDataLake: mockReportOrderToDataLake,
     });
-
-    await jest.advanceTimersByTimeAsync(
-      PERPS_CONSTANTS.PlaceOrderTimeoutMs + 1,
+    const rejection = expect(placeOrderPromise).rejects.toThrow(
+      'Provider connection timed out',
     );
+
+    await vi.advanceTimersByTimeAsync(PERPS_CONSTANTS.PlaceOrderTimeoutMs + 1);
 
     const originalError = new Error('Provider connection timed out');
     rejectOrder(originalError);
 
-    await expect(placeOrderPromise).rejects.toThrow(
-      'Provider connection timed out',
-    );
+    await rejection;
 
-    const endTraceArgs = (mockDeps.tracer.endTrace as jest.Mock).mock
-      .calls[0][0];
+    const endTraceArgs = (mockDeps.tracer.endTrace as Mock).mock.calls[0][0];
     expect(endTraceArgs.data?.reason).toBe('late_error');
     expect(endTraceArgs.data?.success).toBe(false);
-    expect(jest.getTimerCount()).toBe(0);
+    expect(endTraceArgs.status).toBe('error');
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('leaves no pending timers when the provider rejects before the threshold', async () => {
@@ -183,10 +189,9 @@ describe('TradingService.placeOrder — order submission timeout', () => {
       }),
     ).rejects.toThrow('immediate failure');
 
-    expect(jest.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
 
-    const endTraceArgs = (mockDeps.tracer.endTrace as jest.Mock).mock
-      .calls[0][0];
+    const endTraceArgs = (mockDeps.tracer.endTrace as Mock).mock.calls[0][0];
     expect(endTraceArgs.data?.reason).toBe('error');
   });
 });

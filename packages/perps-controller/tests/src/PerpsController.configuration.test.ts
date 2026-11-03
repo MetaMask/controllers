@@ -10,6 +10,8 @@ import {
   GasFeeEstimateLevel,
   GasFeeEstimateType,
 } from '@metamask/transaction-controller';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock, Mocked, MockedClass } from 'vitest';
 
 import {
   createMockHyperLiquidProvider,
@@ -20,11 +22,7 @@ import {
   createMockMessenger,
 } from '../helpers/serviceMocks.js';
 
-jest.mock('@nktkas/hyperliquid', () => ({}));
-jest.mock('@myx-trade/sdk', () => ({
-  MyxClient: jest.fn(),
-  OrderStatusEnum: { Successful: 9 },
-}));
+vi.mock('@nktkas/hyperliquid', () => ({}));
 
 import {
   PERPS_EVENT_PROPERTY,
@@ -40,90 +38,90 @@ import {
   getDefaultPerpsControllerState,
   InitializationState,
   PerpsMode,
-  firstNonEmpty,
-  resolveMyxAuthConfig,
 } from '../../src/PerpsController.js';
 import type { PerpsControllerState } from '../../src/PerpsController.js';
 import { PERPS_ERROR_CODES } from '../../src/perpsErrorCodes.js';
 import { HyperLiquidProvider } from '../../src/providers/HyperLiquidProvider.js';
+import * as accountServiceModule from '../../src/services/AccountService.js';
+import * as dataLakeServiceModule from '../../src/services/DataLakeService.js';
+import * as depositServiceModule from '../../src/services/DepositService.js';
+import * as eligibilityServiceModule from '../../src/services/EligibilityService.js';
+import * as featureFlagConfigurationServiceModule from '../../src/services/FeatureFlagConfigurationService.js';
+import * as marketDataServiceModule from '../../src/services/MarketDataService.js';
+import * as tradingServiceModule from '../../src/services/TradingService.js';
 import type {
   AccountState,
   GetAvailableDexsParams,
+  MarginMode,
   PerpsProvider,
   PerpsPlatformDependencies,
   PerpsProviderType,
   SubscribeAccountParams,
 } from '../../src/types/index.js';
-import { PerpsAnalyticsEvent } from '../../src/types/index.js';
+import {
+  PerpsAnalyticsEvent,
+  WebSocketConnectionState,
+} from '../../src/types/index.js';
 
-jest.mock('../../src/providers/HyperLiquidProvider');
-jest.mock('../../src/providers/MYXProvider');
+vi.mock('../../src/providers/HyperLiquidProvider');
 
 // Mock transaction controller utility
-const mockAddTransaction = jest.fn();
-jest.mock(
-  '../../../util/transaction-controller',
-  () => ({
-    addTransaction: (...args: unknown[]) => mockAddTransaction(...args),
-  }),
-  { virtual: true },
-);
+const mockAddTransaction = vi.fn();
+vi.mock('../../../util/transaction-controller', () => ({
+  addTransaction: (...args: unknown[]) => mockAddTransaction(...args),
+}));
 
 // Mock wait utility to speed up retry tests
-jest.mock('../../src/utils/wait', () => ({
-  wait: jest.fn().mockResolvedValue(undefined),
+vi.mock('../../src/utils/wait', () => ({
+  wait: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock stream manager
 const mockStreamManager = {
-  positions: { pause: jest.fn(), resume: jest.fn() },
-  account: { pause: jest.fn(), resume: jest.fn() },
-  orders: { pause: jest.fn(), resume: jest.fn() },
-  prices: { pause: jest.fn(), resume: jest.fn() },
-  orderFills: { pause: jest.fn(), resume: jest.fn() },
+  positions: { pause: vi.fn(), resume: vi.fn() },
+  account: { pause: vi.fn(), resume: vi.fn() },
+  orders: { pause: vi.fn(), resume: vi.fn() },
+  prices: { pause: vi.fn(), resume: vi.fn() },
+  orderFills: { pause: vi.fn(), resume: vi.fn() },
 };
 
-jest.mock(
-  '../../../components/UI/Perps/providers/PerpsStreamManager',
-  () => ({
-    getStreamManagerInstance: jest.fn(() => mockStreamManager),
-  }),
-  { virtual: true },
-);
+vi.mock('../../../components/UI/Perps/providers/PerpsStreamManager', () => ({
+  getStreamManagerInstance: vi.fn(() => mockStreamManager),
+}));
 
-jest.mock('@metamask/utils', () => ({
-  ...jest.requireActual('@metamask/utils'),
-  formatAccountToCaipAccountId: jest
+vi.mock(import('@metamask/utils'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  formatAccountToCaipAccountId: vi
     .fn()
     .mockReturnValue('eip155:1:0x1234567890123456789012345678901234567890'),
 }));
 
 // Mock EligibilityService as a class with instance methods
 const mockEligibilityServiceInstance = {
-  checkEligibility: jest.fn().mockResolvedValue(true),
+  checkEligibility: vi.fn().mockResolvedValue(true),
 };
-jest.mock('../../src/services/EligibilityService', () => ({
-  EligibilityService: jest
-    .fn()
-    .mockImplementation(() => mockEligibilityServiceInstance),
+vi.mock('../../src/services/EligibilityService', () => ({
+  EligibilityService: vi.fn().mockImplementation(function () {
+    return mockEligibilityServiceInstance;
+  }),
 }));
 
 // Mock DepositService as a class with instance methods
 const mockDepositServiceInstance = {
-  prepareTransaction: jest.fn(),
+  prepareTransaction: vi.fn(),
 };
-jest.mock('../../src/services/DepositService', () => ({
-  DepositService: jest
-    .fn()
-    .mockImplementation(() => mockDepositServiceInstance),
+vi.mock('../../src/services/DepositService', () => ({
+  DepositService: vi.fn().mockImplementation(function () {
+    return mockDepositServiceInstance;
+  }),
 }));
 
 // Mock MarketDataService as a class with instance methods
 const mockMarketDataServiceInstance = {
-  getPositions: jest.fn(),
-  getAccountState: jest.fn(),
-  getMarkets: jest.fn(),
-  getMarketDataWithPrices: jest
+  getPositions: vi.fn(),
+  getAccountState: vi.fn(),
+  getMarkets: vi.fn(),
+  getMarketDataWithPrices: vi
     .fn()
     .mockImplementation(
       ({
@@ -132,68 +130,69 @@ const mockMarketDataServiceInstance = {
         provider: { getMarketDataWithPrices: () => Promise<unknown[]> };
       }) => provider.getMarketDataWithPrices(),
     ),
-  getWithdrawalRoutes: jest.fn().mockReturnValue([]),
-  validateClosePosition: jest.fn().mockResolvedValue({ isValid: true }),
-  validateOrder: jest.fn(),
-  calculateMaintenanceMargin: jest.fn().mockResolvedValue(0),
-  calculateLiquidationPrice: jest.fn(),
-  getMaxLeverage: jest.fn(),
-  calculateFees: jest.fn().mockResolvedValue({ totalFee: 0 }),
-  getAvailableDexs: jest.fn().mockResolvedValue([]),
-  getBlockExplorerUrl: jest.fn(),
-  getOrderFills: jest.fn(),
-  getOrders: jest.fn(),
-  getFunding: jest.fn(),
+  getWithdrawalRoutes: vi.fn().mockReturnValue([]),
+  validateClosePosition: vi.fn().mockResolvedValue({ isValid: true }),
+  validateOrder: vi.fn(),
+  calculateMaintenanceMargin: vi.fn().mockResolvedValue(0),
+  calculateLiquidationPrice: vi.fn(),
+  getMaxLeverage: vi.fn(),
+  calculateFees: vi.fn().mockResolvedValue({ totalFee: 0 }),
+  previewPositionModify: vi.fn(),
+  getAvailableDexs: vi.fn().mockResolvedValue([]),
+  getBlockExplorerUrl: vi.fn(),
+  getOrderFills: vi.fn(),
+  getOrders: vi.fn(),
+  getFunding: vi.fn(),
 };
-jest.mock('../../src/services/MarketDataService', () => ({
-  MarketDataService: jest
-    .fn()
-    .mockImplementation(() => mockMarketDataServiceInstance),
+vi.mock('../../src/services/MarketDataService', () => ({
+  MarketDataService: vi.fn().mockImplementation(function () {
+    return mockMarketDataServiceInstance;
+  }),
 }));
 
 // Mock TradingService as a class with instance methods
 const mockTradingServiceInstance = {
-  placeOrder: jest.fn(),
-  editOrder: jest.fn(),
-  cancelOrder: jest.fn(),
-  cancelOrders: jest.fn(),
-  closePosition: jest.fn(),
-  closePositions: jest.fn(),
-  updatePositionTPSL: jest.fn(),
-  updateMargin: jest.fn(),
-  flipPosition: jest.fn(),
-  setControllerDependencies: jest.fn(),
+  placeOrder: vi.fn(),
+  editOrder: vi.fn(),
+  cancelOrder: vi.fn(),
+  cancelOrders: vi.fn(),
+  closePosition: vi.fn(),
+  closePositions: vi.fn(),
+  updatePositionTPSL: vi.fn(),
+  updateMargin: vi.fn(),
+  flipPosition: vi.fn(),
+  setControllerDependencies: vi.fn(),
 };
-jest.mock('../../src/services/TradingService', () => ({
-  TradingService: jest
-    .fn()
-    .mockImplementation(() => mockTradingServiceInstance),
+vi.mock('../../src/services/TradingService', () => ({
+  TradingService: vi.fn().mockImplementation(function () {
+    return mockTradingServiceInstance;
+  }),
 }));
 
 // Mock AccountService as a class with instance methods
 const mockAccountServiceInstance = {
-  withdraw: jest.fn(),
-  validateWithdrawal: jest.fn(),
+  withdraw: vi.fn(),
+  validateWithdrawal: vi.fn(),
 };
-jest.mock('../../src/services/AccountService', () => ({
-  AccountService: jest
-    .fn()
-    .mockImplementation(() => mockAccountServiceInstance),
+vi.mock('../../src/services/AccountService', () => ({
+  AccountService: vi.fn().mockImplementation(function () {
+    return mockAccountServiceInstance;
+  }),
 }));
 
 // Mock DataLakeService as a class with instance methods
 const mockDataLakeServiceInstance = {
-  reportOrder: jest.fn(),
+  reportOrder: vi.fn(),
 };
-jest.mock('../../src/services/DataLakeService', () => ({
-  DataLakeService: jest
-    .fn()
-    .mockImplementation(() => mockDataLakeServiceInstance),
+vi.mock('../../src/services/DataLakeService', () => ({
+  DataLakeService: vi.fn().mockImplementation(function () {
+    return mockDataLakeServiceInstance;
+  }),
 }));
 
 // Mock FeatureFlagConfigurationService as a class with instance methods
 const mockFeatureFlagConfigurationServiceInstance = {
-  refreshEligibility: jest.fn((options: any) => {
+  refreshEligibility: vi.fn((options: any) => {
     // Simulate the service's behavior: extract blocked regions from remote flags
     const remoteFlags =
       options.remoteFeatureFlagControllerState.remoteFeatureFlags;
@@ -225,8 +224,8 @@ const mockFeatureFlagConfigurationServiceInstance = {
       mockFeatureFlagConfigurationServiceInstance.refreshHip3Config(options);
     }
   }),
-  refreshHip3Config: jest.fn(),
-  setBlockedRegions: jest.fn((options: any) => {
+  refreshHip3Config: vi.fn(),
+  setBlockedRegions: vi.fn((options: any) => {
     // Simulate setBlockedRegions behavior
     const { list, source, context } = options;
     if (context.setBlockedRegionList && context.getBlockedRegionList) {
@@ -248,10 +247,10 @@ const mockFeatureFlagConfigurationServiceInstance = {
     }
   }),
 };
-jest.mock('../../src/services/FeatureFlagConfigurationService', () => ({
-  FeatureFlagConfigurationService: jest
-    .fn()
-    .mockImplementation(() => mockFeatureFlagConfigurationServiceInstance),
+vi.mock('../../src/services/FeatureFlagConfigurationService', () => ({
+  FeatureFlagConfigurationService: vi.fn().mockImplementation(function () {
+    return mockFeatureFlagConfigurationServiceInstance;
+  }),
 }));
 
 /**
@@ -374,22 +373,12 @@ class TestablePerpsController extends PerpsController {
   public testHasStandaloneProvider(): boolean {
     return this.hasStandaloneProvider();
   }
-
-  public testRegisterMYXProvider(
-    MYXProvider: new (opts: Record<string, unknown>) => PerpsProvider,
-  ) {
-    this.registerMYXProvider(MYXProvider as never);
-  }
-
-  public testHandleMYXImportError(error: unknown) {
-    this.handleMYXImportError(error);
-  }
 }
 
 describe('PerpsController', () => {
   let controller: TestablePerpsController;
-  let mockProvider: jest.Mocked<HyperLiquidProvider>;
-  let mockInfrastructure: jest.Mocked<PerpsPlatformDependencies>;
+  let mockProvider: Mocked<HyperLiquidProvider>;
+  let mockInfrastructure: Mocked<PerpsPlatformDependencies>;
 
   // Helper to mark controller as initialized for tests
   const markControllerAsInitialized = () => {
@@ -397,36 +386,50 @@ describe('PerpsController', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     (
-      jest.requireMock('../../src/services/EligibilityService')
-        .EligibilityService as jest.Mock
-    ).mockImplementation(() => mockEligibilityServiceInstance);
+      (eligibilityServiceModule as unknown as Record<string, Mock>)
+        .EligibilityService as Mock
+    ).mockImplementation(function () {
+      return mockEligibilityServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/DepositService')
-        .DepositService as jest.Mock
-    ).mockImplementation(() => mockDepositServiceInstance);
+      (depositServiceModule as unknown as Record<string, Mock>)
+        .DepositService as Mock
+    ).mockImplementation(function () {
+      return mockDepositServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/MarketDataService')
-        .MarketDataService as jest.Mock
-    ).mockImplementation(() => mockMarketDataServiceInstance);
+      (marketDataServiceModule as unknown as Record<string, Mock>)
+        .MarketDataService as Mock
+    ).mockImplementation(function () {
+      return mockMarketDataServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/TradingService')
-        .TradingService as jest.Mock
-    ).mockImplementation(() => mockTradingServiceInstance);
+      (tradingServiceModule as unknown as Record<string, Mock>)
+        .TradingService as Mock
+    ).mockImplementation(function () {
+      return mockTradingServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/AccountService')
-        .AccountService as jest.Mock
-    ).mockImplementation(() => mockAccountServiceInstance);
+      (accountServiceModule as unknown as Record<string, Mock>)
+        .AccountService as Mock
+    ).mockImplementation(function () {
+      return mockAccountServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/DataLakeService')
-        .DataLakeService as jest.Mock
-    ).mockImplementation(() => mockDataLakeServiceInstance);
+      (dataLakeServiceModule as unknown as Record<string, Mock>)
+        .DataLakeService as Mock
+    ).mockImplementation(function () {
+      return mockDataLakeServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/FeatureFlagConfigurationService')
-        .FeatureFlagConfigurationService as jest.Mock
-    ).mockImplementation(() => mockFeatureFlagConfigurationServiceInstance);
+      (featureFlagConfigurationServiceModule as unknown as Record<string, Mock>)
+        .FeatureFlagConfigurationService as Mock
+    ).mockImplementation(function () {
+      return mockFeatureFlagConfigurationServiceInstance;
+    });
 
     mockEligibilityServiceInstance.checkEligibility.mockResolvedValue(true);
     mockMarketDataServiceInstance.getPositions.mockResolvedValue([]);
@@ -545,10 +548,12 @@ describe('PerpsController', () => {
     mockProvider.getWithdrawalRoutes.mockReturnValue([]);
 
     (
-      HyperLiquidProvider as jest.MockedClass<typeof HyperLiquidProvider>
-    ).mockImplementation(() => mockProvider);
+      HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+    ).mockImplementation(function () {
+      return mockProvider;
+    });
 
-    const mockCall = jest.fn().mockImplementation((action: string) => {
+    const mockCall = vi.fn().mockImplementation((action: string) => {
       if (action === 'RemoteFeatureFlagController:getState') {
         return {
           remoteFeatureFlags: {
@@ -598,18 +603,18 @@ describe('PerpsController', () => {
           value !== null &&
           'mockClear' in value
         ) {
-          (value as jest.Mock).mockClear();
+          (value as Mock).mockClear();
         }
       });
     }
-    (mockInfrastructure.metrics.trackPerpsEvent as jest.Mock).mockClear();
-    (mockInfrastructure.logger.error as jest.Mock).mockClear();
-    (mockInfrastructure.debugLogger.log as jest.Mock).mockClear();
+    (mockInfrastructure.metrics.trackPerpsEvent as Mock).mockClear();
+    (mockInfrastructure.logger.error as Mock).mockClear();
+    (mockInfrastructure.debugLogger.log as Mock).mockClear();
   });
   describe('toggleTestnet', () => {
     it('returns error when already reinitializing', async () => {
       await controller.init();
-      jest.spyOn(controller, 'isCurrentlyReinitializing').mockReturnValue(true);
+      vi.spyOn(controller, 'isCurrentlyReinitializing').mockReturnValue(true);
 
       const result = await controller.toggleTestnet();
 
@@ -633,13 +638,9 @@ describe('PerpsController', () => {
       await controller.init();
       const initialTestnetState = controller.state.isTestnet;
 
-      // Make init set state to Failed (mimics performInitialization catching an error)
-      jest.spyOn(controller, 'init').mockImplementationOnce(async () => {
-        controller.testUpdate((state) => {
-          state.initializationState = InitializationState.Failed;
-          state.initializationError = 'Network toggle init failed';
-        });
-      });
+      mockProvider.disconnect.mockRejectedValue(
+        new Error('Network toggle init failed'),
+      );
 
       const result = await controller.toggleTestnet();
 
@@ -648,24 +649,16 @@ describe('PerpsController', () => {
       // isTestnet should be rolled back to its original value
       expect(result.isTestnet).toBe(initialTestnetState);
       expect(controller.state.isTestnet).toBe(initialTestnetState);
-
-      jest.restoreAllMocks();
     });
 
     it('clears isReinitializing flag after init failure', async () => {
       await controller.init();
 
-      jest.spyOn(controller, 'init').mockImplementationOnce(async () => {
-        controller.testUpdate((state) => {
-          state.initializationState = InitializationState.Failed;
-        });
-      });
+      mockProvider.disconnect.mockRejectedValue(new Error('Init failed'));
 
       await controller.toggleTestnet();
 
       expect(controller.isCurrentlyReinitializing()).toBe(false);
-
-      jest.restoreAllMocks();
     });
   });
 
@@ -694,12 +687,18 @@ describe('PerpsController', () => {
   });
 
   describe('pro layout preferences', () => {
-    it('defaults to collapsed order book, collapsed chart, and reserved positions', () => {
+    it('defaults to collapsed order book, expanded chart, reserved positions, and positions/orders sort/filter defaults', () => {
       expect(controller.getProLayoutPreferences()).toEqual({
         orderBookExpanded: false,
-        chartExpanded: false,
+        chartExpanded: true,
         orderBookPosition: 'left',
         orderFormPosition: 'right',
+        positionsSideFilter: 'all',
+        positionsSortField: 'positionValue',
+        positionsSortDirection: 'desc',
+        ordersSideFilter: 'all',
+        ordersSortField: 'time',
+        ordersSortDirection: 'desc',
       });
     });
 
@@ -708,9 +707,15 @@ describe('PerpsController', () => {
 
       expect(controller.getProLayoutPreferences()).toEqual({
         orderBookExpanded: true,
-        chartExpanded: false,
+        chartExpanded: true,
         orderBookPosition: 'left',
         orderFormPosition: 'right',
+        positionsSideFilter: 'all',
+        positionsSortField: 'positionValue',
+        positionsSortDirection: 'desc',
+        ordersSideFilter: 'all',
+        ordersSortField: 'time',
+        ordersSortDirection: 'desc',
       });
     });
 
@@ -718,19 +723,99 @@ describe('PerpsController', () => {
       controller.setProLayoutPreferences({ orderBookExpanded: true });
       controller.setProLayoutPreferences({ orderBookPosition: 'right' });
       controller.setProLayoutPreferences({ orderFormPosition: 'left' });
+      controller.setProLayoutPreferences({ positionsSideFilter: 'long' });
+      controller.setProLayoutPreferences({
+        positionsSortField: 'unrealizedPnl',
+        positionsSortDirection: 'asc',
+      });
+      controller.setProLayoutPreferences({
+        ordersSideFilter: 'short',
+        ordersSortField: 'orderValue',
+        ordersSortDirection: 'asc',
+      });
 
       expect(controller.getProLayoutPreferences()).toEqual({
         orderBookExpanded: true,
-        chartExpanded: false,
+        chartExpanded: true,
         orderBookPosition: 'right',
         orderFormPosition: 'left',
+        positionsSideFilter: 'long',
+        positionsSortField: 'unrealizedPnl',
+        positionsSortDirection: 'asc',
+        ordersSideFilter: 'short',
+        ordersSortField: 'orderValue',
+        ordersSortDirection: 'asc',
+      });
+    });
+
+    it('updates sort field without clobbering sort direction', () => {
+      controller.setProLayoutPreferences({
+        positionsSortField: 'fundingRate',
+        positionsSortDirection: 'asc',
+      });
+      controller.setProLayoutPreferences({
+        positionsSortField: 'unrealizedPnl',
+      });
+
+      expect(controller.getProLayoutPreferences()).toEqual({
+        orderBookExpanded: false,
+        chartExpanded: true,
+        orderBookPosition: 'left',
+        orderFormPosition: 'right',
+        positionsSideFilter: 'all',
+        positionsSortField: 'unrealizedPnl',
+        positionsSortDirection: 'asc',
+        ordersSideFilter: 'all',
+        ordersSortField: 'time',
+        ordersSortDirection: 'desc',
+      });
+    });
+
+    it('updates orders sort field without clobbering orders sort direction or positions sort', () => {
+      controller.setProLayoutPreferences({
+        ordersSortField: 'size',
+        ordersSortDirection: 'asc',
+      });
+      controller.setProLayoutPreferences({
+        ordersSortField: 'price',
+      });
+
+      expect(controller.getProLayoutPreferences()).toEqual({
+        orderBookExpanded: false,
+        chartExpanded: true,
+        orderBookPosition: 'left',
+        orderFormPosition: 'right',
+        positionsSideFilter: 'all',
+        positionsSortField: 'positionValue',
+        positionsSortDirection: 'desc',
+        ordersSideFilter: 'all',
+        ordersSortField: 'price',
+        ordersSortDirection: 'asc',
+      });
+    });
+
+    it('updates orders side filter without clobbering positions side filter', () => {
+      controller.setProLayoutPreferences({ positionsSideFilter: 'long' });
+      controller.setProLayoutPreferences({ ordersSideFilter: 'short' });
+
+      expect(controller.getProLayoutPreferences()).toEqual({
+        orderBookExpanded: false,
+        chartExpanded: true,
+        orderBookPosition: 'left',
+        orderFormPosition: 'right',
+        positionsSideFilter: 'long',
+        positionsSortField: 'positionValue',
+        positionsSortDirection: 'desc',
+        ordersSideFilter: 'short',
+        ordersSortField: 'time',
+        ordersSortDirection: 'desc',
       });
     });
 
     it('persists the update to controller state', () => {
-      controller.setProLayoutPreferences({ chartExpanded: true });
+      controller.setProLayoutPreferences({ chartExpanded: false });
 
-      expect(controller.state.proLayoutPreferences.chartExpanded).toBe(true);
+      expect(controller.state.proLayoutPreferences.chartExpanded).toBe(false);
     });
 
     it('fills in defaults for fields missing from persisted state', () => {
@@ -743,10 +828,91 @@ describe('PerpsController', () => {
 
       expect(controller.getProLayoutPreferences()).toEqual({
         orderBookExpanded: true,
-        chartExpanded: false,
+        chartExpanded: true,
         orderBookPosition: 'left',
         orderFormPosition: 'right',
+        positionsSideFilter: 'all',
+        positionsSortField: 'positionValue',
+        positionsSortDirection: 'desc',
+        ordersSideFilter: 'all',
+        ordersSortField: 'time',
+        ordersSortDirection: 'desc',
       });
+    });
+  });
+
+  describe('order book preferences', () => {
+    it('defaults to USD totals', () => {
+      expect(controller.getOrderBookPreferences()).toEqual({
+        currency: 'usd',
+        metric: 'total',
+      });
+    });
+
+    it('updates a single preference without clobbering the other', () => {
+      controller.setOrderBookPreferences({ currency: 'base' });
+
+      expect(controller.getOrderBookPreferences()).toEqual({
+        currency: 'base',
+        metric: 'total',
+      });
+    });
+
+    it('fills in defaults for fields missing from persisted state', () => {
+      controller.testUpdate((state) => {
+        state.orderBookPreferences = {
+          metric: 'size',
+        } as PerpsControllerState['orderBookPreferences'];
+      });
+
+      expect(controller.getOrderBookPreferences()).toEqual({
+        currency: 'usd',
+        metric: 'size',
+      });
+    });
+  });
+
+  describe('selected order type', () => {
+    it('defaults to market and persists independently of market', () => {
+      expect(controller.getSelectedOrderType()).toBe('market');
+
+      controller.setSelectedOrderType('limit');
+
+      expect(controller.getSelectedOrderType()).toBe('limit');
+      controller.saveTradeConfiguration('ETH', 5);
+      expect(controller.getSelectedOrderType()).toBe('limit');
+      controller.testUpdate((state) => {
+        state.isTestnet = true;
+      });
+      expect(controller.getSelectedOrderType()).toBe('limit');
+    });
+  });
+
+  describe('visible candle count', () => {
+    it('defaults to 30 and persists a valid count', () => {
+      expect(controller.getVisibleCandleCount()).toBe(30);
+
+      controller.setVisibleCandleCount(45);
+
+      expect(controller.getVisibleCandleCount()).toBe(45);
+    });
+
+    it('clamps to the supported range and rounds to a whole candle', () => {
+      controller.setVisibleCandleCount(9);
+      expect(controller.getVisibleCandleCount()).toBe(10);
+
+      controller.setVisibleCandleCount(251);
+      expect(controller.getVisibleCandleCount()).toBe(250);
+
+      controller.setVisibleCandleCount(42.6);
+      expect(controller.getVisibleCandleCount()).toBe(43);
+    });
+
+    it('ignores non-finite values', () => {
+      controller.setVisibleCandleCount(45);
+      controller.setVisibleCandleCount(Number.NaN);
+
+      expect(controller.getVisibleCandleCount()).toBe(45);
     });
   });
 
@@ -941,11 +1107,11 @@ describe('PerpsController', () => {
 
   describe('pending trade configuration', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('saves pending trade configuration', () => {
@@ -956,12 +1122,29 @@ describe('PerpsController', () => {
         stopLossPrice: '40000',
         limitPrice: '45000',
         orderType: 'limit' as const,
+        reduceOnly: true,
+        direction: 'short' as const,
       };
 
       controller.savePendingTradeConfiguration('BTC', config);
 
       const result = controller.getPendingTradeConfiguration('BTC');
       expect(result).toEqual(config);
+      expect(controller.getSelectedOrderType()).toBe('limit');
+    });
+
+    it('restores a short direction from a pending trade configuration', () => {
+      controller.savePendingTradeConfiguration('BTC', {
+        amount: '100',
+        direction: 'short',
+      });
+
+      const result = controller.getPendingTradeConfiguration('BTC');
+
+      expect(result).toEqual({
+        amount: '100',
+        direction: 'short',
+      });
     });
 
     it('returns undefined for non-existent pending configuration', () => {
@@ -970,7 +1153,7 @@ describe('PerpsController', () => {
       expect(result).toBeUndefined();
     });
 
-    it('returns undefined for expired pending configuration (more than 5 minutes)', () => {
+    it('returns undefined for expired pending configuration (more than 30 seconds)', () => {
       const config = {
         amount: '100',
         leverage: 5,
@@ -978,15 +1161,14 @@ describe('PerpsController', () => {
 
       controller.savePendingTradeConfiguration('BTC', config);
 
-      // Fast-forward 6 minutes (more than 5 minutes)
-      jest.advanceTimersByTime(6 * 60 * 1000);
+      vi.advanceTimersByTime(30_001);
 
       const result = controller.getPendingTradeConfiguration('BTC');
 
       expect(result).toBeUndefined();
     });
 
-    it('returns configuration for valid pending configuration (less than 5 minutes)', () => {
+    it('returns configuration for valid pending configuration (less than 30 seconds)', () => {
       const config = {
         amount: '100',
         leverage: 5,
@@ -996,8 +1178,7 @@ describe('PerpsController', () => {
 
       controller.savePendingTradeConfiguration('BTC', config);
 
-      // Fast-forward 4 minutes (less than 5 minutes)
-      jest.advanceTimersByTime(4 * 60 * 1000);
+      vi.advanceTimersByTime(29_999);
 
       const result = controller.getPendingTradeConfiguration('BTC');
 
@@ -1012,8 +1193,7 @@ describe('PerpsController', () => {
 
       controller.savePendingTradeConfiguration('BTC', config);
 
-      // Fast-forward 6 minutes
-      jest.advanceTimersByTime(6 * 60 * 1000);
+      vi.advanceTimersByTime(30_001);
 
       // First call should clear expired config
       controller.getPendingTradeConfiguration('BTC');
@@ -1042,6 +1222,70 @@ describe('PerpsController', () => {
 
       const result = controller.getPendingTradeConfiguration('BTC');
       expect(result).toBeUndefined();
+    });
+
+    it('clears only the draft while retaining leverage and selected order type', () => {
+      controller.saveTradeConfiguration('BTC', 10);
+      controller.setSelectedOrderType('limit');
+      controller.savePendingTradeConfiguration('BTC', {
+        amount: '100',
+        leverage: 5,
+        orderType: 'limit',
+        reduceOnly: true,
+      });
+
+      controller.clearPendingTradeConfiguration('BTC');
+
+      expect(controller.getPendingTradeConfiguration('BTC')).toBeUndefined();
+      expect(controller.getTradeConfiguration('BTC')).toEqual({
+        leverage: 10,
+      });
+      expect(controller.getSelectedOrderType()).toBe('limit');
+    });
+
+    it('clears the draft after a successful order', async () => {
+      controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
+      markControllerAsInitialized();
+      mockTradingServiceInstance.placeOrder.mockResolvedValue({
+        success: true,
+        orderId: 'order-1',
+      });
+      controller.savePendingTradeConfiguration('BTC', {
+        amount: '100',
+        reduceOnly: true,
+      });
+
+      await controller.placeOrder({
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+      });
+
+      expect(controller.getPendingTradeConfiguration('BTC')).toBeUndefined();
+    });
+
+    it('retains the draft after an unsuccessful order', async () => {
+      controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
+      markControllerAsInitialized();
+      mockTradingServiceInstance.placeOrder.mockResolvedValue({
+        success: false,
+        error: 'Order failed',
+      });
+      const config = {
+        amount: '100',
+        reduceOnly: true,
+      };
+      controller.savePendingTradeConfiguration('BTC', config);
+
+      await controller.placeOrder({
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+      });
+
+      expect(controller.getPendingTradeConfiguration('BTC')).toEqual(config);
     });
 
     it('saves pending config per network (testnet vs mainnet)', () => {
@@ -1100,9 +1344,6 @@ describe('PerpsController', () => {
   });
 
   describe('WebSocket connection state', () => {
-    // Import actual enum to ensure type compatibility
-    const { WebSocketConnectionState } = jest.requireActual('../../src/types');
-
     it('getWebSocketConnectionState returns state from active provider', () => {
       // Arrange
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
@@ -1147,9 +1388,9 @@ describe('PerpsController', () => {
       // Arrange
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
       markControllerAsInitialized();
-      const mockUnsubscribe = jest.fn();
+      const mockUnsubscribe = vi.fn();
       mockProvider.subscribeToConnectionState.mockReturnValue(mockUnsubscribe);
-      const listener = jest.fn();
+      const listener = vi.fn();
 
       // Act
       const unsubscribe = controller.subscribeToConnectionState(listener);
@@ -1170,7 +1411,7 @@ describe('PerpsController', () => {
         WebSocketConnectionState.Disconnected,
       );
       mockProvider.subscribeToConnectionState = undefined as never;
-      const listener = jest.fn();
+      const listener = vi.fn();
 
       // Act
       const unsubscribe = controller.subscribeToConnectionState(listener);
@@ -1185,7 +1426,7 @@ describe('PerpsController', () => {
 
     it('subscribeToConnectionState returns no-op when no provider is active', () => {
       // Arrange - don't set up any provider
-      const listener = jest.fn();
+      const listener = vi.fn();
 
       // Act
       const unsubscribe = controller.subscribeToConnectionState(listener);
@@ -1211,6 +1452,34 @@ describe('PerpsController', () => {
 
       // Assert
       expect(mockProvider.reconnect).toHaveBeenCalled();
+    });
+
+    it('tags reconnect errors for the existing connection widgets', async () => {
+      const error = new Error('Reconnect failed');
+      controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
+      markControllerAsInitialized();
+      mockProvider.reconnect.mockRejectedValue(error);
+
+      await controller.reconnect();
+
+      expect(mockInfrastructure.logger.error).toHaveBeenCalledWith(
+        error,
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            feature: 'perps',
+            operation: 'connection_management',
+            component: 'PerpsConnectionManager',
+            action: 'connection_connection',
+          }),
+          context: {
+            name: 'PerpsController',
+            data: expect.objectContaining({
+              method: 'reconnect',
+              operation: 'websocket_reconnect',
+            }),
+          },
+        }),
+      );
     });
 
     it('reconnect does nothing when provider does not support method', async () => {
@@ -1280,9 +1549,84 @@ describe('PerpsController', () => {
     });
   });
 
+  describe('margin mode', () => {
+    it('saves margin mode for mainnet', () => {
+      controller.testUpdate((state) => {
+        state.isTestnet = false;
+      });
+
+      controller.saveMarginMode('BTC', 'cross');
+
+      expect(controller.getMarginMode('BTC')).toBe('cross');
+      expect(controller.state.tradeConfigurations.mainnet.BTC).toStrictEqual({
+        marginMode: 'cross',
+      });
+    });
+
+    it('saves margin mode for testnet without touching mainnet', () => {
+      controller.testUpdate((state) => {
+        state.isTestnet = true;
+      });
+
+      controller.saveMarginMode('ETH', 'isolated');
+
+      expect(controller.getMarginMode('ETH')).toBe('isolated');
+      expect(controller.state.tradeConfigurations.mainnet.ETH).toBeUndefined();
+    });
+
+    it('returns undefined when no margin mode is saved', () => {
+      expect(controller.getMarginMode('SOL')).toBeUndefined();
+    });
+
+    it('overwrites the previous margin mode for the same market', () => {
+      controller.saveMarginMode('BTC', 'cross');
+      controller.saveMarginMode('BTC', 'isolated');
+
+      expect(controller.getMarginMode('BTC')).toBe('isolated');
+    });
+
+    it('preserves existing config when saving margin mode', () => {
+      controller.testUpdate((state) => {
+        state.isTestnet = false;
+      });
+      controller.saveTradeConfiguration('BTC', 5);
+      controller.saveOrderBookGrouping('BTC', 100);
+
+      controller.saveMarginMode('BTC', 'cross');
+
+      expect(controller.getTradeConfiguration('BTC')?.leverage).toBe(5);
+      expect(controller.getOrderBookGrouping('BTC')).toBe(100);
+      expect(controller.getMarginMode('BTC')).toBe('cross');
+    });
+
+    it('ignores values that are not a margin mode', () => {
+      controller.saveMarginMode('BTC', 'cross');
+
+      controller.saveMarginMode('BTC', 'portfolio' as MarginMode);
+
+      expect(controller.getMarginMode('BTC')).toBe('cross');
+    });
+
+    it('exposes margin mode methods as messenger actions', async () => {
+      const messenger = createMockMessenger();
+      const localController = new TestablePerpsController({
+        messenger,
+        state: getDefaultPerpsControllerState(),
+        infrastructure: mockInfrastructure,
+      });
+
+      await localController.init();
+
+      expect(messenger.registerMethodActionHandlers).toHaveBeenCalledWith(
+        localController,
+        expect.arrayContaining(['getMarginMode', 'saveMarginMode']),
+      );
+    });
+  });
+
   describe('standalone mode', () => {
     const mockUserAddress = '0xabcdef1234567890abcdef1234567890abcdef12';
-    const MockedHyperLiquidProvider = HyperLiquidProvider as jest.MockedClass<
+    const MockedHyperLiquidProvider = HyperLiquidProvider as MockedClass<
       typeof HyperLiquidProvider
     >;
 
@@ -1330,7 +1674,9 @@ describe('PerpsController', () => {
         ];
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getPositions.mockResolvedValue(mockPositions);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         controller.testUpdate((state) => {
           state.activeProvider = 'aggregated';
@@ -1359,7 +1705,9 @@ describe('PerpsController', () => {
         ];
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getPositions.mockResolvedValue(mockPositions);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         controller.testUpdate((state) => {
           state.initializationState = InitializationState.Initializing;
@@ -1428,7 +1776,9 @@ describe('PerpsController', () => {
         });
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getAccountState.mockResolvedValue(mockAccountState);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         controller.testUpdate((state) => {
           state.activeProvider = 'aggregated';
@@ -1457,7 +1807,9 @@ describe('PerpsController', () => {
         });
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getAccountState.mockResolvedValue(mockAccountState);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         controller.testUpdate((state) => {
           state.initializationState = InitializationState.Initializing;
@@ -1480,7 +1832,9 @@ describe('PerpsController', () => {
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getPositions.mockResolvedValue([]);
         tempMockProvider.getOpenOrders.mockResolvedValue([]);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         // Two standalone calls — should only create one provider
         await controller.getPositions({
@@ -1499,7 +1853,9 @@ describe('PerpsController', () => {
       it('cleans up standalone provider on init()', async () => {
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getPositions.mockResolvedValue([]);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         // Create a cached standalone provider
         await controller.getPositions({
@@ -1520,9 +1876,11 @@ describe('PerpsController', () => {
         firstProvider.getPositions.mockResolvedValue([]);
         const secondProvider = createMockHyperLiquidProvider();
         secondProvider.getPositions.mockResolvedValue([]);
-        MockedHyperLiquidProvider.mockImplementationOnce(
-          () => firstProvider,
-        ).mockImplementationOnce(() => secondProvider);
+        MockedHyperLiquidProvider.mockImplementationOnce(function () {
+          return firstProvider;
+        }).mockImplementationOnce(function () {
+          return secondProvider;
+        });
 
         // First standalone call on mainnet
         await controller.getPositions({
@@ -1549,7 +1907,9 @@ describe('PerpsController', () => {
       it('cleans up standalone provider on disconnect()', async () => {
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getMarketDataWithPrices.mockResolvedValue([]);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         await controller.getMarketDataWithPrices({ standalone: true });
         expect(controller.testHasStandaloneProvider()).toBe(true);
@@ -1563,7 +1923,9 @@ describe('PerpsController', () => {
       it('cleans up standalone provider on stopMarketDataPreload()', async () => {
         const tempMockProvider = createMockHyperLiquidProvider();
         tempMockProvider.getMarkets.mockResolvedValue([]);
-        MockedHyperLiquidProvider.mockImplementation(() => tempMockProvider);
+        MockedHyperLiquidProvider.mockImplementation(function () {
+          return tempMockProvider;
+        });
 
         await controller.getMarkets({ standalone: true });
         expect(controller.testHasStandaloneProvider()).toBe(true);

@@ -1,4 +1,5 @@
 import type { TransactionMeta } from '@metamask/transaction-controller';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TransactionPayControllerMessenger } from '../../index.js';
 import type { TransactionPayQuote } from '../../types.js';
@@ -7,23 +8,23 @@ import { submitFiatQuotes } from './fiat-submit.js';
 import { FiatStrategy } from './FiatStrategy.js';
 import type { FiatQuote } from './types.js';
 
-jest.mock('./fiat-quotes');
-jest.mock('./fiat-submit');
+vi.mock(import('./fiat-quotes.js'));
+vi.mock(import('./fiat-submit.js'));
 
 const QUOTE_MOCK = {
   estimatedDuration: 5,
 } as TransactionPayQuote<FiatQuote>;
 
 const MESSENGER_MOCK = {
-  call: jest.fn().mockReturnValue({ remoteFeatureFlags: {} }),
+  call: vi.fn().mockReturnValue({ remoteFeatureFlags: {} }),
 } as unknown as TransactionPayControllerMessenger;
 
 describe('FiatStrategy', () => {
-  const getFiatQuotesMock = jest.mocked(getFiatQuotes);
-  const submitFiatQuotesMock = jest.mocked(submitFiatQuotes);
+  const getFiatQuotesMock = vi.mocked(getFiatQuotes);
+  const submitFiatQuotesMock = vi.mocked(submitFiatQuotes);
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     getFiatQuotesMock.mockResolvedValue([QUOTE_MOCK]);
   });
 
@@ -91,7 +92,9 @@ describe('FiatStrategy', () => {
 
     it('preserves nested Post-Ramp and Vault prefixes', async () => {
       submitFiatQuotesMock.mockRejectedValue(
-        new Error('Post-Ramp: Direct mUSD: Vault: Missing transaction hash'),
+        new Error(
+          'Post-Ramp: Direct mUSD: Second leg: Vault: Missing transaction hash',
+        ),
       );
 
       await expect(
@@ -102,7 +105,7 @@ describe('FiatStrategy', () => {
           transaction: { txParams: { from: '0x1' } } as TransactionMeta,
         }),
       ).rejects.toThrow(
-        'Fiat: Post-Ramp: Direct mUSD: Vault: Missing transaction hash',
+        'Fiat: Post-Ramp: Direct mUSD: Second leg: Vault: Missing transaction hash',
       );
     });
   });

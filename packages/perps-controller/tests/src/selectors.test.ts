@@ -1,5 +1,10 @@
 /* eslint-disable */
-import { MARKET_SORTING_CONFIG } from '../../src/constants/perpsConfig.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  MARKET_SORTING_CONFIG,
+  PERPS_CONSTANTS,
+} from '../../src/constants/perpsConfig.js';
 import type { PerpsControllerState } from '../../src/PerpsController.js';
 import {
   selectIsFirstTimeUser,
@@ -10,8 +15,12 @@ import {
   selectHasPlacedFirstOrder,
   selectMarketFilterPreferences,
   selectOrderBookGrouping,
+  selectMarginMode,
   selectRecentlyViewedMarkets,
   selectProLayoutPreferences,
+  selectOrderBookPreferences,
+  selectSelectedOrderType,
+  selectVisibleCandleCount,
   selectPerpsMode,
 } from '../../src/selectors.js';
 
@@ -318,11 +327,11 @@ describe('PerpsController selectors', () => {
 
   describe('selectPendingTradeConfiguration', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('returns pending config for mainnet when not testnet and not expired', () => {
@@ -340,6 +349,8 @@ describe('PerpsController selectors', () => {
                 stopLossPrice: '40000',
                 limitPrice: '45000',
                 orderType: 'limit',
+                reduceOnly: true,
+                direction: 'short',
                 timestamp: now,
               },
             },
@@ -357,11 +368,13 @@ describe('PerpsController selectors', () => {
         stopLossPrice: '40000',
         limitPrice: '45000',
         orderType: 'limit',
+        reduceOnly: true,
+        direction: 'short',
       });
     });
 
-    it('returns undefined for expired pending config (more than 5 minutes)', () => {
-      const fiveMinutesAgo = Date.now() - 6 * 60 * 1000; // 6 minutes ago
+    it('returns undefined for expired pending config (more than 30 seconds)', () => {
+      const expiredAt = Date.now() - 30_001;
       const state = {
         isTestnet: false,
         tradeConfigurations: {
@@ -371,7 +384,7 @@ describe('PerpsController selectors', () => {
               pendingConfig: {
                 amount: '100',
                 leverage: 5,
-                timestamp: fiveMinutesAgo,
+                timestamp: expiredAt,
               },
             },
           },
@@ -384,8 +397,8 @@ describe('PerpsController selectors', () => {
       expect(result).toBeUndefined();
     });
 
-    it('returns pending config for valid config (less than 5 minutes)', () => {
-      const twoMinutesAgo = Date.now() - 2 * 60 * 1000; // 2 minutes ago
+    it('returns pending config for valid config (less than 30 seconds)', () => {
+      const validAt = Date.now() - 29_999;
       const state = {
         isTestnet: false,
         tradeConfigurations: {
@@ -396,7 +409,7 @@ describe('PerpsController selectors', () => {
                 amount: '100',
                 leverage: 5,
                 orderType: 'market',
-                timestamp: twoMinutesAgo,
+                timestamp: validAt,
               },
             },
           },
@@ -475,6 +488,67 @@ describe('PerpsController selectors', () => {
 
       expect(result).toBeUndefined();
     });
+
+    it('applies the TTL on every call even when the memoized inputs are unchanged', () => {
+      const now = Date.now();
+      const state = {
+        isTestnet: false,
+        tradeConfigurations: {
+          mainnet: {
+            BTC: {
+              leverage: 10,
+              pendingConfig: {
+                amount: '100',
+                leverage: 5,
+                timestamp: now,
+              },
+            },
+          },
+          testnet: {},
+        },
+      } as unknown as PerpsControllerState;
+
+      // First read while the draft is valid populates the memoized cache.
+      expect(selectPendingTradeConfiguration(state, 'BTC')).toEqual({
+        amount: '100',
+        leverage: 5,
+      });
+
+      // Time passes beyond the TTL without any change to isTestnet,
+      // tradeConfigurations, or coin (same state reference).
+      vi.advanceTimersByTime(
+        PERPS_CONSTANTS.PendingTradeConfigurationTtlMs + 1,
+      );
+
+      // Re-reading with the identical inputs must still reflect expiry rather
+      // than returning the stale memoized draft.
+      expect(selectPendingTradeConfiguration(state, 'BTC')).toBeUndefined();
+    });
+
+    it('returns a stable reference across re-selection while the draft is valid', () => {
+      const now = Date.now();
+      const state = {
+        isTestnet: false,
+        tradeConfigurations: {
+          mainnet: {
+            BTC: {
+              leverage: 10,
+              pendingConfig: {
+                amount: '100',
+                leverage: 5,
+                timestamp: now,
+              },
+            },
+          },
+          testnet: {},
+        },
+      } as unknown as PerpsControllerState;
+
+      const first = selectPendingTradeConfiguration(state, 'BTC');
+      const second = selectPendingTradeConfiguration(state, 'BTC');
+
+      expect(second).toBe(first);
+    });
   });
 
   describe('selectOrderBookGrouping', () => {
@@ -541,17 +615,56 @@ describe('PerpsController selectors', () => {
     });
   });
 
+  describe('selectMarginMode', () => {
+    it('returns the mainnet margin mode when not on testnet', () => {
+      const state = {
+        isTestnet: false,
+        tradeConfigurations: {
+          mainnet: { BTC: { marginMode: 'cross' } },
+          testnet: { BTC: { marginMode: 'isolated' } },
+        },
+      } as unknown as PerpsControllerState;
+
+      expect(selectMarginMode(state, 'BTC')).toBe('cross');
+    });
+
+    it('returns the testnet margin mode when on testnet', () => {
+      const state = {
+        isTestnet: true,
+        tradeConfigurations: {
+          mainnet: { BTC: { marginMode: 'cross' } },
+          testnet: { BTC: { marginMode: 'isolated' } },
+        },
+      } as unknown as PerpsControllerState;
+
+      expect(selectMarginMode(state, 'BTC')).toBe('isolated');
+    });
+
+    it('returns undefined when margin mode is not set', () => {
+      const state = {
+        isTestnet: false,
+        tradeConfigurations: {
+          mainnet: { BTC: { leverage: 10 } },
+          testnet: {},
+        },
+      } as unknown as PerpsControllerState;
+
+      expect(selectMarginMode(state, 'BTC')).toBeUndefined();
+      expect(selectMarginMode(state, 'SOL')).toBeUndefined();
+    });
+  });
+
   describe('selectRecentlyViewedMarkets', () => {
     const now = Date.now();
     const withinTtl = now - 60 * 60 * 1000; // 1 hour ago — within 24h TTL
     const expired = now - 25 * 60 * 60 * 1000; // 25 hours ago — outside 24h TTL
 
     beforeEach(() => {
-      jest.spyOn(Date, 'now').mockReturnValue(now);
+      vi.spyOn(Date, 'now').mockReturnValue(now);
     });
 
     afterEach(() => {
-      jest.restoreAllMocks();
+      vi.restoreAllMocks();
     });
 
     it('returns mainnet symbols when not on testnet, ordered newest-first', () => {
@@ -633,17 +746,29 @@ describe('PerpsController selectors', () => {
   describe('selectProLayoutPreferences', () => {
     const defaults = {
       orderBookExpanded: false,
-      chartExpanded: false,
+      chartExpanded: true,
       orderBookPosition: 'left',
       orderFormPosition: 'right',
+      positionsSideFilter: 'all',
+      positionsSortField: 'positionValue',
+      positionsSortDirection: 'desc',
+      ordersSideFilter: 'all',
+      ordersSortField: 'time',
+      ordersSortDirection: 'desc',
     };
 
     it('returns the pro-mode layout preferences', () => {
       const proLayoutPreferences = {
         orderBookExpanded: true,
-        chartExpanded: true,
+        chartExpanded: false,
         orderBookPosition: 'right' as const,
         orderFormPosition: 'left' as const,
+        positionsSideFilter: 'long' as const,
+        positionsSortField: 'unrealizedPnl' as const,
+        positionsSortDirection: 'asc' as const,
+        ordersSideFilter: 'short' as const,
+        ordersSortField: 'orderValue' as const,
+        ordersSortDirection: 'asc' as const,
       };
       const state = {
         proLayoutPreferences,
@@ -677,6 +802,58 @@ describe('PerpsController selectors', () => {
           undefined as unknown as PerpsControllerState,
         ),
       ).toStrictEqual(defaults);
+    });
+  });
+
+  describe('selectOrderBookPreferences', () => {
+    it('merges persisted fields over defaults', () => {
+      const state = {
+        orderBookPreferences: { currency: 'base' },
+      } as unknown as PerpsControllerState;
+
+      expect(selectOrderBookPreferences(state)).toStrictEqual({
+        currency: 'base',
+        metric: 'total',
+      });
+    });
+
+    it('returns defaults when the state slice is missing', () => {
+      expect(
+        selectOrderBookPreferences({} as PerpsControllerState),
+      ).toStrictEqual({
+        currency: 'usd',
+        metric: 'total',
+      });
+    });
+  });
+
+  describe('selectSelectedOrderType', () => {
+    it('returns the persisted market-agnostic order type', () => {
+      const state = {
+        selectedOrderType: 'limit',
+      } as unknown as PerpsControllerState;
+
+      expect(selectSelectedOrderType(state)).toBe('limit');
+    });
+
+    it('defaults to market', () => {
+      expect(selectSelectedOrderType({} as PerpsControllerState)).toBe(
+        'market',
+      );
+    });
+  });
+
+  describe('selectVisibleCandleCount', () => {
+    it('returns the persisted count', () => {
+      const state = {
+        visibleCandleCount: 45,
+      } as unknown as PerpsControllerState;
+
+      expect(selectVisibleCandleCount(state)).toBe(45);
+    });
+
+    it('defaults to 30', () => {
+      expect(selectVisibleCandleCount({} as PerpsControllerState)).toBe(30);
     });
   });
 

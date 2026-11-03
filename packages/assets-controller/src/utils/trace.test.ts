@@ -1,4 +1,5 @@
 import type { TraceCallback, TraceRequest } from '@metamask/controller-utils';
+import { describe, expect, it, vi } from 'vitest';
 
 import { emitTrace, withTrace } from './trace.js';
 
@@ -13,11 +14,11 @@ describe('emitTrace', () => {
   });
 
   it('invokes trace with duration tags and backdated startTime', () => {
-    const trace = jest.fn().mockResolvedValue(undefined);
+    const trace = vi.fn().mockResolvedValue(undefined);
 
     emitTrace({
       name: 'TestSpan',
-      trace: trace as unknown as TraceCallback,
+      trace,
       data: { duration_ms: 25, chain_count: 2 },
       parentContext: { id: 'parent' },
     });
@@ -39,12 +40,12 @@ describe('emitTrace', () => {
   });
 
   it('swallows rejected trace promises', () => {
-    const trace = jest.fn().mockRejectedValue(new Error('telemetry failed'));
+    const trace = vi.fn().mockRejectedValue(new Error('telemetry failed'));
 
     expect(() =>
       emitTrace({
         name: 'TestSpan',
-        trace: trace as unknown as TraceCallback,
+        trace,
         data: { ok: true },
       }),
     ).not.toThrow();
@@ -67,7 +68,7 @@ describe('withTrace', () => {
 
   it('passes parent context from trace into fn', async () => {
     const parentSpan = { id: 'parent' };
-    const trace = jest
+    const trace = vi
       .fn()
       .mockImplementation(
         async (_request: TraceRequest, fn?: (context?: unknown) => unknown) =>
@@ -76,7 +77,7 @@ describe('withTrace', () => {
 
     const result = await withTrace({
       name: 'Parent',
-      trace: trace as unknown as TraceCallback,
+      trace,
       data: { chain_count: 1 },
       fn: async (parentContext) => {
         expect(parentContext).toBe(parentSpan);
@@ -88,7 +89,7 @@ describe('withTrace', () => {
   });
 
   it('does not fail when trace rejects after work completes', async () => {
-    const trace = jest
+    const trace = vi
       .fn()
       .mockImplementation(
         async (_request: TraceRequest, fn?: (context?: unknown) => unknown) => {
@@ -100,7 +101,7 @@ describe('withTrace', () => {
     expect(
       await withTrace({
         name: 'Parent',
-        trace: trace as unknown as TraceCallback,
+        trace,
         data: {},
         fn: async () => 'ok',
       }),
@@ -108,12 +109,12 @@ describe('withTrace', () => {
   });
 
   it('still runs work when trace rejects before invoking fn', async () => {
-    const trace = jest.fn().mockRejectedValue(new Error('telemetry failed'));
+    const trace = vi.fn().mockRejectedValue(new Error('telemetry failed'));
 
     expect(
       await withTrace({
         name: 'Parent',
-        trace: trace as unknown as TraceCallback,
+        trace,
         data: {},
         fn: async () => 'fallback',
       }),
@@ -121,7 +122,7 @@ describe('withTrace', () => {
   });
 
   it('propagates errors thrown by fn', async () => {
-    const trace = jest
+    const trace = vi
       .fn()
       .mockImplementation(
         async (_request: TraceRequest, fn?: (context?: unknown) => unknown) =>
@@ -131,7 +132,7 @@ describe('withTrace', () => {
     await expect(
       withTrace({
         name: 'Parent',
-        trace: trace as unknown as TraceCallback,
+        trace,
         data: {},
         fn: async () => {
           throw new Error('pipeline failed');

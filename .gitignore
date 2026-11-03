@@ -17,10 +17,10 @@ preview-build-message.txt
 
 examples/*/coverage
 examples/*/dist
-examples/*/docs
+examples/*/api-docs
 packages/*/coverage
 packages/*/dist
-packages/*/docs
+packages/*/api-docs
 scripts/coverage
 
 # yarn v3 (w/o zero-install)
@@ -58,7 +58,3 @@ packages/*/*.tsbuildinfo
 # Docusaurus
 **/.docusaurus
 packages/wallet-framework-docs/site/build
-
-# Foundry (anvil) binaries cached by @metamask/foundryup for the wallet-cli
-# real-chain e2e (enableGlobalCache is off, so the cache lands in-repo).
-.metamask/

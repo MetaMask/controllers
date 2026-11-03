@@ -5,18 +5,18 @@ import type {
 } from '@metamask/core-backend';
 import type { InternalAccount } from '@metamask/keyring-internal-api';
 import { isCaipChainId } from '@metamask/utils';
-import BigNumberJS from 'bignumber.js';
+import { BigNumber as BigNumberJS } from 'bignumber.js';
 
 import type { AssetsControllerMessenger } from '../AssetsController.js';
 import { projectLogger, createModuleLogger } from '../logger.js';
 import type {
   AssetBalance,
-  AssetMetadata,
   ChainId,
   Caip19AssetId,
   DataRequest,
   DataResponse,
 } from '../types.js';
+import { safeNormalizeAssetId } from '../utils/index.js';
 import { AbstractDataSource } from './AbstractDataSource.js';
 import type { DataSourceState } from './AbstractDataSource.js';
 
@@ -38,13 +38,11 @@ const log = createModuleLogger(projectLogger, CONTROLLER_NAME);
  *
  * @param updates - Balance updates from account-activity websocket payload.
  * @param accountId - Internal account UUID.
- * @param getAssetType - Resolver for asset metadata type.
  * @returns DataResponse with merge mode when balances are present.
  */
 function processAccountActivityBalanceUpdates(
   updates: BalanceUpdate[],
   accountId: string,
-  getAssetType: (assetId: Caip19AssetId) => 'native' | 'erc20' | 'spl',
 ): DataResponse {
   const assetsBalance = Object.create(null) as Record<
     string,
@@ -54,10 +52,6 @@ function processAccountActivityBalanceUpdates(
     Caip19AssetId,
     AssetBalance
   >;
-  const assetsMetadata = Object.create(null) as Record<
-    Caip19AssetId,
-    AssetMetadata
-  >;
 
   for (const update of updates) {
     const { asset, postBalance } = update;
@@ -66,7 +60,11 @@ function processAccountActivityBalanceUpdates(
       continue;
     }
 
-    const assetId = asset.type as Caip19AssetId;
+    // The websocket sends lower-case ERC-20 addresses, while state and the
+    // rest of the pipeline key assets by their checksummed ID. Normalizing
+    // here keeps middleware comparisons (detection, custom-asset graduation,
+    // occurrence filtering) from treating an existing holding as brand new.
+    const assetId = safeNormalizeAssetId(asset.type as Caip19AssetId);
 
     if (asset.decimals === undefined) {
       continue;
@@ -82,20 +80,13 @@ function processAccountActivityBalanceUpdates(
 
     assetsBalance[accountId][assetId] = {
       amount: humanReadableAmount,
-    };
-
-    assetsMetadata[assetId] = {
-      type: getAssetType(assetId),
-      symbol: asset.unit,
-      name: asset.unit,
-      decimals: asset.decimals,
+      ...(postBalance.metadata ? { metadata: postBalance.metadata } : {}),
     };
   }
 
   const response: DataResponse = { updateMode: 'merge' };
   if (Object.keys(assetsBalance[accountId]).length > 0) {
     response.assetsBalance = assetsBalance;
-    response.assetsInfo = assetsMetadata;
   }
 
   return response;
@@ -133,8 +124,6 @@ export type AccountActivityDataSourceOptions = {
     chains: ChainId[],
     previousChains: ChainId[],
   ) => void;
-  /** Returns the asset type ('native' | 'erc20' | 'spl') for a given CAIP-19 asset ID. */
-  getAssetType: (assetId: Caip19AssetId) => 'native' | 'erc20' | 'spl';
   /**
    * Pushes decoded balance updates to the controller (bound to
    * `AssetsController.handleAssetsUpdate`). AADS is event-driven and never
@@ -196,10 +185,6 @@ export class AccountActivityDataSource extends AbstractDataSource<
     previousChains: ChainId[],
   ) => void;
 
-  readonly #getAssetType: (
-    assetId: Caip19AssetId,
-  ) => 'native' | 'erc20' | 'spl';
-
   readonly #onAssetsUpdate: (
     response: DataResponse,
     request?: DataRequest,
@@ -219,7 +204,6 @@ export class AccountActivityDataSource extends AbstractDataSource<
 
     this.#messenger = options.messenger;
     this.#onActiveChainsUpdated = options.onActiveChainsUpdated;
-    this.#getAssetType = options.getAssetType;
     this.#onAssetsUpdate = options.onAssetsUpdate;
     this.#onBalanceUpdatedBound = this.#onBalanceUpdated.bind(this);
 
@@ -285,7 +269,6 @@ export class AccountActivityDataSource extends AbstractDataSource<
       const response = processAccountActivityBalanceUpdates(
         updates,
         account.id,
-        (assetId) => this.#getAssetType(assetId),
       );
 
       if (!response.assetsBalance) {
@@ -295,7 +278,7 @@ export class AccountActivityDataSource extends AbstractDataSource<
       const request: DataRequest = {
         accountsWithSupportedChains: [{ account, supportedChains: [chainId] }],
         chainIds: [chainId],
-        dataTypes: ['balance', 'metadata'],
+        dataTypes: ['balance', 'metadata', 'price'],
       };
 
       Promise.resolve(this.#onAssetsUpdate(response, request)).catch(
@@ -377,9 +360,7 @@ export class AccountActivityDataSource extends AbstractDataSource<
     try {
       // Act on every namespace (eip155, solana, etc.); AssetsController is
       // multichain. Only skip identifiers that are not valid CAIP-2 chain IDs.
-      const validChains = chainIds.filter((chainId) =>
-        isCaipChainId(chainId),
-      ) as ChainId[];
+      const validChains = chainIds.filter((chainId) => isCaipChainId(chainId));
 
       if (validChains.length === 0) {
         return;

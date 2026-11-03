@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import { generateActionTypesContent } from './generate-content.js';
 import type { SourceInfo } from './parse-source.js';
 
@@ -71,8 +73,7 @@ describe('generateActionTypesContent', () => {
        * Union of all BarController action types.
        */
       export type BarControllerMethodActions =
-        | BarControllerMethodAAction
-        | BarControllerMethodBAction;
+        BarControllerMethodAAction | BarControllerMethodBAction;
       "
     `);
   });

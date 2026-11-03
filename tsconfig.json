@@ -5,7 +5,13 @@
    */
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@metamask/error-utils": ["./packages/error-utils/src/index.ts"],
+      "@metamask/node-utils": ["./packages/node-utils/src/index.ts"],
+      "@metamask/type-utils": ["./packages/type-utils/src/index.ts"]
+    }
   },
   "references": [
     {
@@ -16,6 +22,9 @@
     },
     {
       "path": "./packages/address-book-controller"
+    },
+    {
+      "path": "./packages/advanced-chart-core"
     },
     {
       "path": "./packages/ai-controllers"
@@ -63,6 +72,9 @@
       "path": "./packages/build-utils"
     },
     {
+      "path": "./packages/byte-utils"
+    },
+    {
       "path": "./packages/chain-agnostic-permission"
     },
     {
@@ -96,16 +108,25 @@
       "path": "./packages/core-backend"
     },
     {
+      "path": "./packages/cryptography"
+    },
+    {
       "path": "./packages/delegation-controller"
     },
     {
       "path": "./packages/earn-controller"
     },
     {
+      "path": "./packages/eip-5792-middleware"
+    },
+    {
+      "path": "./packages/eip-7702-internal-rpc-middleware"
+    },
+    {
       "path": "./packages/eip1193-permission-middleware"
     },
     {
-      "path": "./packages/ens-controller"
+      "path": "./packages/error-utils"
     },
     {
       "path": "./packages/eth-block-tracker"
@@ -141,7 +162,16 @@
       "path": "./packages/keyring-controller"
     },
     {
+      "path": "./packages/kyc-controller"
+    },
+    {
       "path": "./packages/local-node-utils"
+    },
+    {
+      "path": "./packages/logging-controller"
+    },
+    {
+      "path": "./packages/marketing-consent-controller"
     },
     {
       "path": "./packages/message-manager"
@@ -153,16 +183,22 @@
       "path": "./packages/messenger-cli"
     },
     {
+      "path": "./packages/mfa-recovery-controller"
+    },
+    {
+      "path": "./packages/money-account-api-data-service"
+    },
+    {
       "path": "./packages/money-account-api-data-service"
     },
     {
       "path": "./packages/money-account-balance-service"
     },
     {
-      "path": "./packages/money-account-api-data-service"
+      "path": "./packages/money-account-controller"
     },
     {
-      "path": "./packages/money-account-controller"
+      "path": "./packages/money-account-mfa-whitelist"
     },
     {
       "path": "./packages/money-account-upgrade-controller"
@@ -195,7 +231,13 @@
       "path": "./packages/network-enablement-controller"
     },
     {
+      "path": "./packages/node-utils"
+    },
+    {
       "path": "./packages/notification-services-controller"
+    },
+    {
+      "path": "./packages/package-template"
     },
     {
       "path": "./packages/passkey-controller"
@@ -220,6 +262,9 @@
     },
     {
       "path": "./packages/preferences-controller"
+    },
+    {
+      "path": "./packages/profile-controller"
     },
     {
       "path": "./packages/profile-metrics-controller"
@@ -273,6 +318,9 @@
       "path": "./packages/stellar-quickstart-up"
     },
     {
+      "path": "./packages/storage-service"
+    },
+    {
       "path": "./packages/subscription-controller"
     },
     {
@@ -282,28 +330,25 @@
       "path": "./packages/transaction-pay-controller"
     },
     {
+      "path": "./packages/transaction-pay-middleware"
+    },
+    {
+      "path": "./packages/type-utils"
+    },
+    {
       "path": "./packages/user-operation-controller"
     },
     {
-      "path": "./packages/eip-5792-middleware"
-    },
-    {
-      "path": "./packages/eip-7702-internal-rpc-middleware"
-    },
-    {
-      "path": "./packages/logging-controller"
-    },
-    {
-      "path": "./packages/storage-service"
+      "path": "./packages/utils"
     },
     {
       "path": "./packages/wallet"
     },
     {
-      "path": "./packages/wallet-cli"
+      "path": "./packages/wallet-framework-docs"
     },
     {
-      "path": "./packages/wallet-framework-docs"
+      "path": "./packages/watch-only-account-service"
     }
   ],
   "files": [],
@@ -312,6 +357,10 @@
     "./types",
     "./scripts",
     "./codeowners.ts",
-    "./knip.config.mts"
+    "./knip.config.mts",
+    "./vitest.config.packages.ts",
+    "./vitest.config.scripts.ts",
+    "./packages/*/vitest.config.ts",
+    "./packages/*/vitest.config.mts"
   ]
 }

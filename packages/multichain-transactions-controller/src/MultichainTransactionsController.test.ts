@@ -23,6 +23,8 @@ import type {
 } from '@metamask/messenger';
 import type { CaipChainId } from '@metamask/utils';
 import { v4 as uuidv4 } from 'uuid';
+import { describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 
 import { MultichainNetwork } from './constants.js';
 import {
@@ -171,9 +173,9 @@ const setupController = ({
   controller: MultichainTransactionsController;
   rootMessenger: RootMessenger;
   messenger: MultichainTransactionsControllerMessenger;
-  mockSnapHandleRequest: jest.Mock;
-  mockListMultichainAccounts: jest.Mock;
-  mockGetKeyringState: jest.Mock;
+  mockSnapHandleRequest: Mock;
+  mockListMultichainAccounts: Mock;
+  mockGetKeyringState: Mock;
 } => {
   const rootMessenger = getRootMessenger();
 
@@ -200,7 +202,7 @@ const setupController = ({
     ],
   });
 
-  const mockSnapHandleRequest = jest.fn();
+  const mockSnapHandleRequest = vi.fn();
   rootMessenger.registerActionHandler(
     'SnapController:handleRequest',
     mockSnapHandleRequest.mockReturnValue(
@@ -208,7 +210,7 @@ const setupController = ({
     ),
   );
 
-  const mockListMultichainAccounts = jest.fn();
+  const mockListMultichainAccounts = vi.fn();
   rootMessenger.registerActionHandler(
     'AccountsController:listMultichainAccounts',
     mockListMultichainAccounts.mockReturnValue(
@@ -216,7 +218,7 @@ const setupController = ({
     ),
   );
 
-  const mockGetKeyringState = jest.fn().mockReturnValue({
+  const mockGetKeyringState = vi.fn().mockReturnValue({
     isUnlocked: true,
   });
   rootMessenger.registerActionHandler(
@@ -508,7 +510,7 @@ describe('MultichainTransactionsController', () => {
 
   it('handles errors gracefully when constructing the controller', async () => {
     // This method will be used in the constructor of that controller.
-    const updateTransactionsForAccountSpy = jest.spyOn(
+    const updateTransactionsForAccountSpy = vi.spyOn(
       MultichainTransactionsController.prototype,
       'updateTransactionsForAccount',
     );
@@ -891,7 +893,7 @@ describe('MultichainTransactionsController', () => {
       status: 'confirmed' as const,
     };
 
-    const publishSpy = jest.spyOn(messenger, 'publish');
+    const publishSpy = vi.spyOn(messenger, 'publish');
 
     rootMessenger.publish('AccountsController:accountTransactionsUpdated', {
       transactions: {
@@ -916,7 +918,7 @@ describe('MultichainTransactionsController', () => {
       status: 'submitted' as const,
     };
 
-    const publishSpy = jest.spyOn(messenger, 'publish');
+    const publishSpy = vi.spyOn(messenger, 'publish');
 
     rootMessenger.publish('AccountsController:accountTransactionsUpdated', {
       transactions: {
@@ -932,6 +934,31 @@ describe('MultichainTransactionsController', () => {
     );
   });
 
+  it('publishes transactionFailed event when transaction fails', async () => {
+    const { rootMessenger, messenger } = setupController();
+
+    const failedTransaction = {
+      ...mockTransactionResult.data[0],
+      id: '123',
+      status: 'failed' as const,
+    };
+
+    const publishSpy = vi.spyOn(messenger, 'publish');
+
+    rootMessenger.publish('AccountsController:accountTransactionsUpdated', {
+      transactions: {
+        [mockBtcAccount.id]: [failedTransaction],
+      },
+    });
+
+    await waitForAllPromises();
+
+    expect(publishSpy).toHaveBeenCalledWith(
+      'MultichainTransactionsController:transactionFailed',
+      failedTransaction,
+    );
+  });
+
   it('does not publish events for other transaction statuses', async () => {
     const { rootMessenger } = setupController();
 
@@ -941,7 +968,7 @@ describe('MultichainTransactionsController', () => {
       status: 'unconfirmed' as const,
     };
 
-    const publishSpy = jest.spyOn(rootMessenger, 'publish');
+    const publishSpy = vi.spyOn(rootMessenger, 'publish');
 
     rootMessenger.publish('AccountsController:accountTransactionsUpdated', {
       transactions: {
@@ -957,6 +984,10 @@ describe('MultichainTransactionsController', () => {
     );
     expect(publishSpy).not.toHaveBeenCalledWith(
       'MultichainTransactionsController:transactionSubmitted',
+      expect.anything(),
+    );
+    expect(publishSpy).not.toHaveBeenCalledWith(
+      'MultichainTransactionsController:transactionFailed',
       expect.anything(),
     );
   });
@@ -980,9 +1011,14 @@ describe('MultichainTransactionsController', () => {
         id: '789',
         status: 'unconfirmed' as const,
       },
+      {
+        ...mockTransactionResult.data[0],
+        id: 'abc',
+        status: 'failed' as const,
+      },
     ];
 
-    const publishSpy = jest.spyOn(messenger, 'publish');
+    const publishSpy = vi.spyOn(messenger, 'publish');
 
     rootMessenger.publish('AccountsController:accountTransactionsUpdated', {
       transactions: {
@@ -999,6 +1035,10 @@ describe('MultichainTransactionsController', () => {
     expect(publishSpy).toHaveBeenCalledWith(
       'MultichainTransactionsController:transactionSubmitted',
       transactions[1],
+    );
+    expect(publishSpy).toHaveBeenCalledWith(
+      'MultichainTransactionsController:transactionFailed',
+      transactions[3],
     );
   });
 

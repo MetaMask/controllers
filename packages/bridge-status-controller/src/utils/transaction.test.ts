@@ -8,7 +8,7 @@ import {
 } from '@metamask/bridge-controller';
 import type {
   QuoteMetadata,
-  QuoteResponse,
+  QuoteResponseV1,
   TxData,
 } from '@metamask/bridge-controller';
 import {
@@ -17,6 +17,7 @@ import {
   TransactionType,
 } from '@metamask/transaction-controller';
 import type { TransactionMeta } from '@metamask/transaction-controller';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { APPROVAL_DELAY_MS } from '../constants.js';
 import type {
@@ -41,7 +42,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
   describe('waitForTxConfirmation', () => {
     it('resolves when confirmed', async () => {
       const messenger = {
-        call: jest.fn(() => ({
+        call: vi.fn(() => ({
           transactions: [
             {
               id: 'tx1',
@@ -62,7 +63,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
 
     it('throws when rejected', async () => {
       const messenger = {
-        call: jest.fn(() => ({
+        call: vi.fn(() => ({
           transactions: [
             {
               id: 'tx1',
@@ -84,9 +85,9 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('times out when status never changes', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       const messenger = {
-        call: jest.fn(() => ({
+        call: vi.fn(() => ({
           transactions: [
             {
               id: 'tx1',
@@ -95,7 +96,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
           ],
         })),
       } as unknown as BridgeStatusControllerMessenger;
-      const nowSpy = jest.spyOn(Date, 'now');
+      const nowSpy = vi.spyOn(Date, 'now');
       let now = 0;
       nowSpy.mockImplementation(() => now);
 
@@ -105,7 +106,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       });
 
       now = 10;
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
       await Promise.resolve();
 
       expect(await promise.catch((error) => error)).toStrictEqual(
@@ -115,13 +116,13 @@ describe('Bridge Status Controller Transaction Utils', () => {
       );
 
       nowSpy.mockRestore();
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 
   describe('getStatusRequestParams', () => {
     it('should extract status request parameters from a quote response', () => {
-      const mockQuoteResponse: QuoteResponse = {
+      const mockQuoteResponse: QuoteResponseV1 = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -167,7 +168,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle quote with refuel flag set to true', () => {
-      const mockQuoteResponse: QuoteResponse = {
+      const mockQuoteResponse: QuoteResponseV1 = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -209,7 +210,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle quote with multiple bridges', () => {
-      const mockQuoteResponse: QuoteResponse = {
+      const mockQuoteResponse: QuoteResponseV1 = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1', 'bridge2'],
@@ -253,7 +254,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
 
   describe('getTxMetaFields', () => {
     it('should extract transaction meta fields from a quote response', () => {
-      const mockQuoteResponse: QuoteResponse & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1 & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -346,7 +347,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should include approvalTxId when provided', () => {
-      const mockQuoteResponse: QuoteResponse & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1 & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -522,7 +523,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
 
   describe('handleNonEvmTxResponse', () => {
     it('should handle string response format', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -633,7 +634,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle object response format with signature', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -721,7 +722,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle onClientRequest response format with signature', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -808,7 +809,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle object response format with txid', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -896,7 +897,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle object response format with hash', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -984,7 +985,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle object response format with txHash', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -1072,7 +1073,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle new unified interface response with transactionId', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -1168,7 +1169,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
     });
 
     it('should handle empty or invalid response', () => {
-      const mockQuoteResponse: QuoteResponse<string> & QuoteMetadata = {
+      const mockQuoteResponse: QuoteResponseV1<string> & QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
           bridges: ['bridge1'],
@@ -1239,7 +1240,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
         },
       } as never;
 
-      const snapResponse = { result: {} } as { result: Record<string, string> };
+      const snapResponse = { result: {} };
 
       const result = snaps.handleNonEvmTxResponse(
         snapResponse,
@@ -1346,12 +1347,12 @@ describe('Bridge Status Controller Transaction Utils', () => {
 
   describe('handleApprovalDelay', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
-      jest.clearAllMocks();
+      vi.useFakeTimers();
+      vi.clearAllMocks();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should delay when source chain is Linea', async () => {
@@ -1371,10 +1372,10 @@ describe('Bridge Status Controller Transaction Utils', () => {
           steps: [],
           feeData: {},
         },
-        // Required properties for QuoteResponse
+        // Required properties for QuoteResponseV1
         trade: {} as TxData,
         estimatedProcessingTimeInSeconds: 60,
-      } as unknown as QuoteResponse;
+      } as unknown as QuoteResponseV1;
 
       // Create a promise that will resolve after the delay
       const delayPromise = handleApprovalDelay(
@@ -1382,16 +1383,16 @@ describe('Bridge Status Controller Transaction Utils', () => {
       );
 
       // Verify that the timer was set with the correct delay
-      expect(jest.getTimerCount()).toBe(1);
+      expect(vi.getTimerCount()).toBe(1);
 
       // Fast-forward the timer
-      jest.advanceTimersByTime(APPROVAL_DELAY_MS);
+      vi.advanceTimersByTime(APPROVAL_DELAY_MS);
 
       // Wait for the promise to resolve
       await delayPromise;
 
       // Verify that the timer was cleared
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     });
 
     it('should delay when source chain is Base', async () => {
@@ -1411,10 +1412,10 @@ describe('Bridge Status Controller Transaction Utils', () => {
           steps: [],
           feeData: {},
         },
-        // Required properties for QuoteResponse
+        // Required properties for QuoteResponseV1
         trade: {} as TxData,
         estimatedProcessingTimeInSeconds: 60,
-      } as unknown as QuoteResponse;
+      } as unknown as QuoteResponseV1;
 
       // Create a promise that will resolve after the delay
       const delayPromise = handleApprovalDelay(
@@ -1422,16 +1423,16 @@ describe('Bridge Status Controller Transaction Utils', () => {
       );
 
       // Verify that the timer was set with the correct delay
-      expect(jest.getTimerCount()).toBe(1);
+      expect(vi.getTimerCount()).toBe(1);
 
       // Fast-forward the timer
-      jest.advanceTimersByTime(APPROVAL_DELAY_MS);
+      vi.advanceTimersByTime(APPROVAL_DELAY_MS);
 
       // Wait for the promise to resolve
       await delayPromise;
 
       // Verify that the timer was cleared
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     });
 
     it('should not delay when source chain is not Linea or Base', async () => {
@@ -1451,10 +1452,10 @@ describe('Bridge Status Controller Transaction Utils', () => {
           steps: [],
           feeData: {},
         },
-        // Required properties for QuoteResponse
+        // Required properties for QuoteResponseV1
         trade: {} as TxData,
         estimatedProcessingTimeInSeconds: 60,
-      } as unknown as QuoteResponse;
+      } as unknown as QuoteResponseV1;
 
       // Create a promise that will resolve after the delay
       const delayPromise = handleApprovalDelay(
@@ -1462,24 +1463,24 @@ describe('Bridge Status Controller Transaction Utils', () => {
       );
 
       // Verify that no timer was set
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
 
       // Wait for the promise to resolve
       await delayPromise;
 
       // Verify that no timer was set
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     });
   });
 
   describe('handleMobileHardwareWalletDelay', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
-      jest.clearAllMocks();
+      vi.useFakeTimers();
+      vi.clearAllMocks();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should delay when requireApproval is true', async () => {
@@ -1487,16 +1488,16 @@ describe('Bridge Status Controller Transaction Utils', () => {
       const delayPromise = handleMobileHardwareWalletDelay(true);
 
       // Verify that the timer was set with the correct delay (1000ms)
-      expect(jest.getTimerCount()).toBe(1);
+      expect(vi.getTimerCount()).toBe(1);
 
       // Fast-forward the timer by 1000ms
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
 
       // Wait for the promise to resolve
       await delayPromise;
 
       // Verify that the timer was cleared
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     });
 
     it('should not delay when requireApproval is false', async () => {
@@ -1504,19 +1505,19 @@ describe('Bridge Status Controller Transaction Utils', () => {
       const delayPromise = handleMobileHardwareWalletDelay(false);
 
       // Verify that no timer was set
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
 
       // Wait for the promise to resolve
       await delayPromise;
 
       // Verify that no timer was set
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     });
   });
 
   describe('getClientRequest', () => {
     it('should generate a valid client request', () => {
-      const mockQuoteResponse: Omit<QuoteResponse<string>, 'approval'> &
+      const mockQuoteResponse: Omit<QuoteResponseV1<string>, 'approval'> &
         QuoteMetadata = {
         quote: {
           bridgeId: 'bridge1',
@@ -1619,11 +1620,60 @@ describe('Bridge Status Controller Transaction Utils', () => {
       });
     });
 
-    it('should include Tron options when trade is Tron', () => {
-      const createClientRequestSpy = jest
-        .spyOn(snaps, 'getClientRequest')
-        .mockReturnValue({ mocked: true } as never);
+    it('should include Tron options, including swap asset IDs, when trade is Tron', () => {
+      const tronTrade = {
+        raw_data_hex: 'abcdef',
+        raw_data: {
+          contract: [{ type: 'TransferContract' }],
+        },
+        visible: true,
+      } as never;
 
+      const mockAccount = {
+        id: 'test-account-id',
+        metadata: {
+          snap: { id: 'test-snap-id' },
+        },
+      };
+
+      const sourceAssetId =
+        'tron:728126428/trc20:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+      const destAssetId =
+        'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+
+      const result = snaps.getClientRequest(
+        tronTrade,
+        ChainId.TRON,
+        mockAccount.id,
+        mockAccount.metadata.snap.id,
+        sourceAssetId,
+        destAssetId,
+      );
+
+      expect(result).toMatchObject({
+        origin: 'metamask',
+        snapId: 'test-snap-id',
+        handler: 'onClientRequest',
+        request: {
+          id: expect.any(String),
+          jsonrpc: '2.0',
+          method: 'signAndSendTransaction',
+          params: {
+            transaction: 'q83v',
+            scope: formatChainIdToCaip(ChainId.TRON),
+            accountId: 'test-account-id',
+            options: {
+              visible: true,
+              type: 'TransferContract',
+              sourceAssetId,
+              destAssetId,
+            },
+          },
+        },
+      });
+    });
+
+    it('should omit Tron asset ID options when source and destination asset IDs are not provided', () => {
       const tronTrade = {
         raw_data_hex: 'abcdef',
         raw_data: {
@@ -1646,29 +1696,31 @@ describe('Bridge Status Controller Transaction Utils', () => {
         mockAccount.metadata.snap.id,
       );
 
-      expect(result).toStrictEqual({ mocked: true });
-      expect(createClientRequestSpy.mock.calls).toMatchInlineSnapshot(`
-        [
-          [
-            {
-              "raw_data": {
-                "contract": [
-                  {
-                    "type": "TransferContract",
-                  },
-                ],
-              },
-              "raw_data_hex": "abcdef",
-              "visible": true,
+      expect(result).toMatchObject({
+        origin: 'metamask',
+        snapId: 'test-snap-id',
+        handler: 'onClientRequest',
+        request: {
+          id: expect.any(String),
+          jsonrpc: '2.0',
+          method: 'signAndSendTransaction',
+          params: {
+            transaction: 'q83v',
+            scope: formatChainIdToCaip(ChainId.TRON),
+            accountId: 'test-account-id',
+            options: {
+              visible: true,
+              type: 'TransferContract',
             },
-            728126428,
-            "test-account-id",
-            "test-snap-id",
-          ],
-        ]
-      `);
-
-      createClientRequestSpy.mockRestore();
+          },
+        },
+      });
+      expect(
+        (result.request.params as { options: Record<string, unknown> }).options,
+      ).not.toHaveProperty('sourceAssetId');
+      expect(
+        (result.request.params as { options: Record<string, unknown> }).options,
+      ).not.toHaveProperty('destAssetId');
     });
 
     it('should include Stellar source and destination asset IDs as options when trade is Stellar', () => {
@@ -1752,7 +1804,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       ).not.toHaveProperty('destAssetId');
     });
 
-    it('should not include asset ID options for Bitcoin trades even when asset IDs are provided', () => {
+    it('should include Bitcoin asset ID options when asset IDs are provided', () => {
       const bitcoinTrade = {
         unsignedPsbtBase64: 'AAAABg==',
       } as never;
@@ -1776,10 +1828,50 @@ describe('Bridge Status Controller Transaction Utils', () => {
         destAssetId,
       );
 
+      expect(result).toMatchObject({
+        origin: 'metamask',
+        snapId: 'test-snap-id',
+        handler: 'onClientRequest',
+        request: {
+          id: expect.any(String),
+          jsonrpc: '2.0',
+          method: 'signAndSendTransaction',
+          params: {
+            transaction: 'AAAABg==',
+            scope: formatChainIdToCaip(ChainId.BTC),
+            accountId: 'test-account-id',
+            options: {
+              sourceAssetId,
+              destAssetId,
+            },
+          },
+        },
+      });
+    });
+
+    it('should omit Bitcoin asset ID options when source and destination asset IDs are not provided', () => {
+      const bitcoinTrade = {
+        unsignedPsbtBase64: 'AAAABg==',
+      } as never;
+
+      const mockAccount = {
+        id: 'test-account-id',
+        metadata: {
+          snap: { id: 'test-snap-id' },
+        },
+      };
+
+      const result = snaps.getClientRequest(
+        bitcoinTrade,
+        ChainId.BTC,
+        mockAccount.id,
+        mockAccount.metadata.snap.id,
+      );
+
       expect(result.request.params).not.toHaveProperty('options');
     });
 
-    it('should not include asset ID options for Solana trades even when asset IDs are provided', () => {
+    it('should include Solana asset ID options when asset IDs are provided', () => {
       const solanaTrade = 'ABCD' as never;
 
       const mockAccount = {
@@ -1799,6 +1891,44 @@ describe('Bridge Status Controller Transaction Utils', () => {
         mockAccount.metadata.snap.id,
         sourceAssetId,
         destAssetId,
+      );
+
+      expect(result).toMatchObject({
+        origin: 'metamask',
+        snapId: 'test-snap-id',
+        handler: 'onClientRequest',
+        request: {
+          id: expect.any(String),
+          jsonrpc: '2.0',
+          method: 'signAndSendTransaction',
+          params: {
+            transaction: 'ABCD',
+            scope: formatChainIdToCaip(ChainId.SOLANA),
+            accountId: 'test-account-id',
+            options: {
+              sourceAssetId,
+              destAssetId,
+            },
+          },
+        },
+      });
+    });
+
+    it('should omit Solana asset ID options when source and destination asset IDs are not provided', () => {
+      const solanaTrade = 'ABCD' as never;
+
+      const mockAccount = {
+        id: 'test-account-id',
+        metadata: {
+          snap: { id: 'test-snap-id' },
+        },
+      };
+
+      const result = snaps.getClientRequest(
+        solanaTrade,
+        ChainId.SOLANA,
+        mockAccount.id,
+        mockAccount.metadata.snap.id,
       );
 
       expect(result.request.params).not.toHaveProperty('options');
@@ -1822,7 +1952,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
         includeApproval?: boolean;
         includeResetApproval?: boolean;
       } = {},
-    ): QuoteResponse<TxData, TxData> & QuoteMetadata =>
+    ): QuoteResponseV1<TxData, TxData> & QuoteMetadata =>
       ({
         quote: {
           bridgeId: 'bridge1',
@@ -1899,7 +2029,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       estimateGasFeeOverrides: Record<string, unknown> = { estimates: {} },
     ) =>
       ({
-        call: jest.fn().mockImplementation((method: string) => {
+        call: vi.fn().mockImplementation((method: string) => {
           if (method === 'AccountsController:getAccountByAddress') {
             return mockAccount;
           }
@@ -1912,12 +2042,12 @@ describe('Bridge Status Controller Transaction Utils', () => {
           if (method === 'TransactionController:estimateGasFee') {
             return estimateGasFeeOverrides;
           }
-          return undefined;
+          return;
         }),
       }) as unknown as BridgeStatusControllerMessenger;
 
     beforeEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
       mockMessagingSystem = createMockMessagingSystem();
     });
 
@@ -2262,7 +2392,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
           },
         },
       });
-      const callSpy = jest.spyOn(mockMessenger, 'call');
+      const callSpy = vi.spyOn(mockMessenger, 'call');
 
       const tradeData = toQuoteAndTxMetadata({
         quoteResponse: mockQuoteResponse,
@@ -2328,7 +2458,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
         gasIncluded7702: true,
       });
 
-      const callSpy = jest.spyOn(mockMessagingSystem, 'call');
+      const callSpy = vi.spyOn(mockMessagingSystem, 'call');
 
       const tradeData = toQuoteAndTxMetadata({
         quoteResponse: mockQuoteResponse,
@@ -2430,7 +2560,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       txs: ReturnType<typeof createMockTransaction>[],
     ) => {
       return {
-        call: jest.fn((method: string, ..._args: unknown[]) => {
+        call: vi.fn((method: string, ..._args: unknown[]) => {
           if (method === 'TransactionController:getState') {
             return { transactions: txs };
           }
@@ -2439,13 +2569,13 @@ describe('Bridge Status Controller Transaction Utils', () => {
               transactionMeta: { id: 'tx1', type: TransactionType.swap },
             };
           }
-          return undefined;
+          return;
         }),
       } as unknown as BridgeStatusControllerMessenger;
     };
 
     beforeEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it('should update transaction types for 7702 swap transactions', () => {
@@ -2462,7 +2592,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
         }),
       ];
       const mockMessagingSystem = createMockMessagingSystemWithTxs(txs);
-      const callSpy = jest.spyOn(mockMessagingSystem, 'call');
+      const callSpy = vi.spyOn(mockMessagingSystem, 'call');
 
       const tradeData = [
         {
@@ -2529,7 +2659,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       ];
 
       const mockMessenger = createMockMessagingSystemWithTxs(txs);
-      const callSpy = jest.spyOn(mockMessenger, 'call');
+      const callSpy = vi.spyOn(mockMessenger, 'call');
       const tradeData = [
         {
           tx: { data: '0xswapData' },
@@ -2538,7 +2668,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       ] as unknown as QuoteAndTxMetadata[];
 
       findAndUpdateTransactionsInBatch({
-        messenger: mockMessenger as unknown as BridgeStatusControllerMessenger,
+        messenger: mockMessenger,
         batchId,
         tradeData,
       });
@@ -2575,7 +2705,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       ];
 
       const mockMessenger = createMockMessagingSystemWithTxs(txs);
-      const callSpy = jest.spyOn(mockMessenger, 'call');
+      const callSpy = vi.spyOn(mockMessenger, 'call');
 
       const tradeData = [
         {
@@ -2584,7 +2714,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
         },
       ] as unknown as QuoteAndTxMetadata[];
       findAndUpdateTransactionsInBatch({
-        messenger: mockMessenger as unknown as BridgeStatusControllerMessenger,
+        messenger: mockMessenger,
         batchId,
         tradeData,
       });
@@ -2628,7 +2758,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       ];
 
       const mockMessenger = createMockMessagingSystemWithTxs(txs);
-      const callSpy = jest.spyOn(mockMessenger, 'call');
+      const callSpy = vi.spyOn(mockMessenger, 'call');
       const tradeData = [
         {
           tx: { data: '0xswapData' },
@@ -2641,7 +2771,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       ] as unknown as QuoteAndTxMetadata[];
 
       findAndUpdateTransactionsInBatch({
-        messenger: mockMessenger as unknown as BridgeStatusControllerMessenger,
+        messenger: mockMessenger,
         batchId,
         tradeData,
       });
@@ -2691,7 +2821,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
       ];
 
       const mockMessagingSystem = createMockMessagingSystemWithTxs(txs);
-      const callSpy = jest.spyOn(mockMessagingSystem, 'call');
+      const callSpy = vi.spyOn(mockMessagingSystem, 'call');
       const tradeData = [
         {
           tx: { data: '0xswapData' },
@@ -2768,9 +2898,7 @@ describe('Bridge Status Controller Transaction Utils', () => {
         }),
       ];
 
-      const mockMessagingSystem = createMockMessagingSystemWithTxs(
-        txs,
-      ) as unknown as BridgeStatusControllerMessenger;
+      const mockMessagingSystem = createMockMessagingSystemWithTxs(txs);
 
       const tradeData = [
         {

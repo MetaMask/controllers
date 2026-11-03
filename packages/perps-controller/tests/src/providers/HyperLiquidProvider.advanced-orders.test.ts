@@ -1,5 +1,9 @@
 /* eslint-disable */
-jest.mock('@nktkas/hyperliquid', () => ({}));
+vi.mock('@nktkas/hyperliquid', () => ({}));
+
+import type { MetaResponse } from '@nktkas/hyperliquid';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock, Mocked, MockedClass, MockedFunction } from 'vitest';
 
 import { ORDER_SLIPPAGE_CONFIG } from '../../../src/constants/perpsConfig.js';
 import { PERPS_ERROR_CODES } from '../../../src/perpsErrorCodes.js';
@@ -12,6 +16,7 @@ import type {
   PerpsPlatformDependencies,
   OrderParams,
 } from '../../../src/types/index.js';
+import * as hyperLiquidAdapterModule from '../../../src/utils/hyperLiquidAdapter.js';
 import {
   validateAssetSupport,
   validateBalance,
@@ -20,43 +25,41 @@ import {
   validateOrderParams,
   validateWithdrawalParams,
 } from '../../../src/utils/hyperLiquidValidation.js';
+import * as hyperLiquidValidationModule from '../../../src/utils/hyperLiquidValidation.js';
+import { createMockPosition } from '../../helpers/providerMocks.js';
 import {
   createMockInfrastructure,
   createMockMessenger,
 } from '../../helpers/serviceMocks.js';
 
-jest.mock('../../../src/services/HyperLiquidClientService');
-jest.mock('../../../src/services/HyperLiquidWalletService');
-jest.mock('../../../src/services/HyperLiquidSubscriptionService');
+vi.mock('../../../src/services/HyperLiquidClientService');
+vi.mock('../../../src/services/HyperLiquidWalletService');
+vi.mock('../../../src/services/HyperLiquidSubscriptionService');
 // Mock stream manager - will be set up in test
 let mockStreamManagerInstance: any;
-const mockGetStreamManagerInstance = jest.fn(() => mockStreamManagerInstance);
-jest.mock(
-  '../../../../components/UI/Perps/providers/PerpsStreamManager',
-  () => ({
-    getStreamManagerInstance: mockGetStreamManagerInstance,
-  }),
-  { virtual: true },
-);
+const mockGetStreamManagerInstance = vi.fn(() => mockStreamManagerInstance);
+vi.mock('../../../../components/UI/Perps/providers/PerpsStreamManager', () => ({
+  getStreamManagerInstance: mockGetStreamManagerInstance,
+}));
 
-jest.mock('../../../src/utils/hyperLiquidValidation', () => ({
-  validateOrderParams: jest.fn(),
-  validateWithdrawalParams: jest.fn(),
-  validateDepositParams: jest.fn(),
-  validateCoinExists: jest.fn(),
-  validateAssetSupport: jest.fn(),
-  validateBalance: jest.fn(),
-  getSupportedPaths: jest
+vi.mock('../../../src/utils/hyperLiquidValidation', () => ({
+  validateOrderParams: vi.fn(),
+  validateWithdrawalParams: vi.fn(),
+  validateDepositParams: vi.fn(),
+  validateCoinExists: vi.fn(),
+  validateAssetSupport: vi.fn(),
+  validateBalance: vi.fn(),
+  getSupportedPaths: vi
     .fn()
     .mockReturnValue([
       'eip155:42161/erc20:0xa0b86a33e6776e681a06e0e1622c5e5e3e6a8b13/default',
       'eip155:1/erc20:0xa0b86a33e6776e681a06e0e1622c5e5e3e6a8b13/default',
     ]),
-  getBridgeInfo: jest.fn().mockReturnValue({
+  getBridgeInfo: vi.fn().mockReturnValue({
     chainId: 'eip155:42161',
     contractAddress: '0x1234567890123456789012345678901234567890',
   }),
-  createErrorResult: jest.fn((error, defaultResponse) => ({
+  createErrorResult: vi.fn((error, defaultResponse) => ({
     ...defaultResponse,
     success: false,
     error: error instanceof Error ? error.message : String(error),
@@ -64,11 +67,14 @@ jest.mock('../../../src/utils/hyperLiquidValidation', () => ({
 }));
 
 // Mock adapter functions
-jest.mock('../../../src/utils/hyperLiquidAdapter', () => {
-  const actual = jest.requireActual('../../../src/utils/hyperLiquidAdapter');
+vi.mock('../../../src/utils/hyperLiquidAdapter', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('../../../src/utils/hyperLiquidAdapter.js')
+    >();
   return {
     ...actual,
-    adaptHyperLiquidLedgerUpdateToUserHistoryItem: jest.fn((updates) => {
+    adaptHyperLiquidLedgerUpdateToUserHistoryItem: vi.fn((updates) => {
       // Return mock history items based on input
       if (!updates || !Array.isArray(updates) || updates.length === 0) {
         return [];
@@ -84,41 +90,42 @@ jest.mock('../../../src/utils/hyperLiquidAdapter', () => {
 });
 
 // Mock TradingReadinessCache - global singleton for signing operation caching
-// Use jest.createMockFromModule for proper mock creation
-jest.mock('../../../src/services/TradingReadinessCache');
+vi.mock('../../../src/services/TradingReadinessCache');
 
-const MockedHyperLiquidClientService =
-  HyperLiquidClientService as jest.MockedClass<typeof HyperLiquidClientService>;
-const MockedHyperLiquidWalletService =
-  HyperLiquidWalletService as jest.MockedClass<typeof HyperLiquidWalletService>;
+const MockedHyperLiquidClientService = HyperLiquidClientService as MockedClass<
+  typeof HyperLiquidClientService
+>;
+const MockedHyperLiquidWalletService = HyperLiquidWalletService as MockedClass<
+  typeof HyperLiquidWalletService
+>;
 const MockedHyperLiquidSubscriptionService =
-  HyperLiquidSubscriptionService as jest.MockedClass<
+  HyperLiquidSubscriptionService as MockedClass<
     typeof HyperLiquidSubscriptionService
   >;
-const mockValidateOrderParams = validateOrderParams as jest.MockedFunction<
+const mockValidateOrderParams = validateOrderParams as MockedFunction<
   typeof validateOrderParams
 >;
-const mockValidateWithdrawalParams =
-  validateWithdrawalParams as jest.MockedFunction<
-    typeof validateWithdrawalParams
-  >;
-const mockValidateDepositParams = validateDepositParams as jest.MockedFunction<
+const mockValidateWithdrawalParams = validateWithdrawalParams as MockedFunction<
+  typeof validateWithdrawalParams
+>;
+const mockValidateDepositParams = validateDepositParams as MockedFunction<
   typeof validateDepositParams
 >;
-const mockValidateCoinExists = validateCoinExists as jest.MockedFunction<
+const mockValidateCoinExists = validateCoinExists as MockedFunction<
   typeof validateCoinExists
 >;
-const mockValidateAssetSupport = validateAssetSupport as jest.MockedFunction<
+const mockValidateAssetSupport = validateAssetSupport as MockedFunction<
   typeof validateAssetSupport
 >;
-const mockValidateBalance = validateBalance as jest.MockedFunction<
+const mockValidateBalance = validateBalance as MockedFunction<
   typeof validateBalance
 >;
 
 // Mock factory functions - defined once, reused everywhere
 // These reduce duplication and make tests more maintainable
 const createMockInfoClient = (overrides: Record<string, unknown> = {}) => ({
-  clearinghouseState: jest.fn().mockResolvedValue({
+  twapHistory: vi.fn().mockResolvedValue([]),
+  clearinghouseState: vi.fn().mockResolvedValue({
     marginSummary: {
       totalMarginUsed: '500',
       accountValue: '10500',
@@ -163,19 +170,19 @@ const createMockInfoClient = (overrides: Record<string, unknown> = {}) => ({
       totalMarginUsed: '5000',
     },
   }),
-  spotClearinghouseState: jest.fn().mockResolvedValue({
+  spotClearinghouseState: vi.fn().mockResolvedValue({
     balances: [{ coin: 'USDC', hold: '1000', total: '10000' }],
   }),
   // Mode-aware fold gate reads userAbstraction; default to unifiedAccount
   // so tests that predated the gate still see spot folded into spendable/withdrawable.
-  userAbstraction: jest.fn().mockResolvedValue('unifiedAccount'),
-  meta: jest.fn().mockResolvedValue({
+  userAbstraction: vi.fn().mockResolvedValue('unifiedAccount'),
+  meta: vi.fn().mockResolvedValue({
     universe: [
       { name: 'BTC', szDecimals: 3, maxLeverage: 50 },
       { name: 'ETH', szDecimals: 4, maxLeverage: 50 },
     ],
   }),
-  metaAndAssetCtxs: jest.fn().mockResolvedValue([
+  metaAndAssetCtxs: vi.fn().mockResolvedValue([
     {
       universe: [
         { name: 'BTC', szDecimals: 3, maxLeverage: 50 },
@@ -203,11 +210,11 @@ const createMockInfoClient = (overrides: Record<string, unknown> = {}) => ({
       },
     ],
   ]),
-  perpDexs: jest.fn().mockResolvedValue([null]),
-  allMids: jest.fn().mockResolvedValue({ BTC: '50000', ETH: '3000' }),
+  perpDexs: vi.fn().mockResolvedValue([null]),
+  allMids: vi.fn().mockResolvedValue({ BTC: '50000', ETH: '3000' }),
   // editOrder verifies the resting order's placement type before modifying it,
   // so the account lists the plain limit order the edit tests target.
-  frontendOpenOrders: jest.fn().mockResolvedValue([
+  frontendOpenOrders: vi.fn().mockResolvedValue([
     {
       coin: 'BTC',
       side: 'B',
@@ -225,14 +232,14 @@ const createMockInfoClient = (overrides: Record<string, unknown> = {}) => ({
       orderType: 'Limit',
     },
   ]),
-  referral: jest.fn().mockResolvedValue({
+  referral: vi.fn().mockResolvedValue({
     referrerState: {
       stage: 'ready',
       data: { code: 'MMCSI' },
     },
   }),
-  maxBuilderFee: jest.fn().mockResolvedValue(1),
-  userFees: jest.fn().mockResolvedValue({
+  maxBuilderFee: vi.fn().mockResolvedValue(1),
+  userFees: vi.fn().mockResolvedValue({
     feeSchedule: {
       cross: '0.00030',
       add: '0.00010',
@@ -241,7 +248,7 @@ const createMockInfoClient = (overrides: Record<string, unknown> = {}) => ({
     },
     dailyUserVlm: [],
   }),
-  userNonFundingLedgerUpdates: jest.fn().mockResolvedValue([
+  userNonFundingLedgerUpdates: vi.fn().mockResolvedValue([
     {
       delta: { type: 'deposit', usdc: '100' },
       time: Date.now(),
@@ -253,7 +260,7 @@ const createMockInfoClient = (overrides: Record<string, unknown> = {}) => ({
       hash: '0x456def',
     },
   ]),
-  portfolio: jest.fn().mockResolvedValue([
+  portfolio: vi.fn().mockResolvedValue([
     null,
     [
       null,
@@ -266,52 +273,57 @@ const createMockInfoClient = (overrides: Record<string, unknown> = {}) => ({
       },
     ],
   ]),
-  spotMeta: jest.fn().mockResolvedValue({
+  spotMeta: vi.fn().mockResolvedValue({
     tokens: [
       { name: 'USDC', tokenId: '0xdef456', index: 0 },
       { name: 'USDT', tokenId: '0x789abc', index: 1 },
     ],
     universe: [],
   }),
-  historicalOrders: jest.fn().mockResolvedValue([]),
-  userFills: jest.fn().mockResolvedValue([]),
-  userFillsByTime: jest.fn().mockResolvedValue([]),
-  userFunding: jest.fn().mockResolvedValue([]),
+  historicalOrders: vi.fn().mockResolvedValue([]),
+  userFills: vi.fn().mockResolvedValue([]),
+  userFillsByTime: vi.fn().mockResolvedValue([]),
+  userFunding: vi.fn().mockResolvedValue([]),
   ...overrides,
 });
 
 const createMockExchangeClient = (overrides: Record<string, unknown> = {}) => ({
-  order: jest.fn().mockResolvedValue({
-    status: 'ok',
-    response: { data: { statuses: [{ resting: { oid: 123 } }] } },
-  }),
-  modify: jest.fn().mockResolvedValue({
+  order: vi.fn().mockImplementation((request: { orders: unknown[] }) =>
+    Promise.resolve({
+      status: 'ok',
+      response: {
+        data: {
+          statuses: request.orders.map((_order, index) => ({
+            resting: { oid: 123 + index },
+          })),
+        },
+      },
+    }),
+  ),
+  modify: vi.fn().mockResolvedValue({
     status: 'ok',
     response: { data: { statuses: [{ resting: { oid: '123' } }] } },
   }),
-  cancel: jest.fn().mockResolvedValue({
+  cancel: vi.fn().mockResolvedValue({
     status: 'ok',
     response: { data: { statuses: ['success'] } },
   }),
-  withdraw3: jest.fn().mockResolvedValue({
+  withdraw3: vi.fn().mockResolvedValue({
     status: 'ok',
   }),
-  updateLeverage: jest.fn().mockResolvedValue({
+  updateLeverage: vi.fn().mockResolvedValue({
     status: 'ok',
   }),
-  approveBuilderFee: jest.fn().mockResolvedValue({
+  approveBuilderFee: vi.fn().mockResolvedValue({
     status: 'ok',
   }),
-  setReferrer: jest.fn().mockResolvedValue({
+  setReferrer: vi.fn().mockResolvedValue({
     status: 'ok',
   }),
-  sendAsset: jest.fn().mockResolvedValue({
+  sendAsset: vi.fn().mockResolvedValue({
     status: 'ok',
   }),
-  agentSetAbstraction: jest.fn().mockResolvedValue({
-    status: 'ok',
-  }),
-  userSetAbstraction: jest.fn().mockResolvedValue({
+  agentSetAbstraction: vi.fn().mockResolvedValue({
     status: 'ok',
   }),
   ...overrides,
@@ -348,122 +360,132 @@ const createTestProvider = (
     messenger: mockMessenger,
   });
 
+// Tests that need the real validation rules share one copy loaded while the
+// file is collected. A vi.importActual inside a test waits on the module
+// loader, which on a busy machine with coverage can outlast the 5 s timeout.
+const actualValidation = await vi.importActual<
+  typeof import('../../../src/utils/hyperLiquidValidation.js')
+>('../../../src/utils/hyperLiquidValidation.js');
+
 describe('HyperLiquidProvider', () => {
   let provider: HyperLiquidProvider;
-  let mockClientService: jest.Mocked<HyperLiquidClientService>;
-  let mockWalletService: jest.Mocked<HyperLiquidWalletService>;
-  let mockSubscriptionService: jest.Mocked<HyperLiquidSubscriptionService>;
+  let mockClientService: Mocked<HyperLiquidClientService>;
+  let mockWalletService: Mocked<HyperLiquidWalletService>;
+  let mockSubscriptionService: Mocked<HyperLiquidSubscriptionService>;
 
   beforeEach(() => {
     // Reset all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     (
-      mockPlatformDependencies.marketDataFormatters.formatVolume as jest.Mock
+      mockPlatformDependencies.marketDataFormatters.formatVolume as Mock
     ).mockImplementation((value: number) => '$' + value.toFixed(0));
     (
-      mockPlatformDependencies.marketDataFormatters.formatPerpsFiat as jest.Mock
+      mockPlatformDependencies.marketDataFormatters.formatPerpsFiat as Mock
     ).mockImplementation((value: number) => '$' + value.toFixed(2));
     (
-      mockPlatformDependencies.marketDataFormatters
-        .formatPercentage as jest.Mock
+      mockPlatformDependencies.marketDataFormatters.formatPercentage as Mock
     ).mockImplementation((value: number) => `${value.toFixed(2)}%`);
     (
-      mockPlatformDependencies.featureFlags.validateVersionGated as jest.Mock
+      mockPlatformDependencies.featureFlags.validateVersionGated as Mock
     ).mockReturnValue(undefined);
-    (mockPlatformDependencies.metrics.isEnabled as jest.Mock).mockReturnValue(
-      true,
-    );
+    (mockPlatformDependencies.metrics.isEnabled as Mock).mockReturnValue(true);
 
     // Reset TradingReadinessCache mock state (using imported mocked module)
-    const mockedCache = TradingReadinessCache as jest.Mocked<
+    const mockedCache = TradingReadinessCache as Mocked<
       typeof TradingReadinessCache
     >;
     mockedCache.get.mockReturnValue(undefined);
     mockedCache.getBuilderFee.mockReturnValue(undefined);
     mockedCache.getReferral.mockReturnValue(undefined);
     mockedCache.isInFlight.mockReturnValue(undefined);
-    mockedCache.setInFlight.mockReturnValue(jest.fn());
+    mockedCache.setInFlight.mockReturnValue(vi.fn());
 
     // Initialize mock stream manager instance
     mockStreamManagerInstance = {
-      clearAllChannels: jest.fn(),
+      clearAllChannels: vi.fn(),
     };
 
     // Create mocked service instances using factory functions
     mockClientService = {
-      initialize: jest.fn(),
-      isInitialized: jest.fn().mockReturnValue(true),
-      isTestnetMode: jest.fn().mockReturnValue(false),
-      ensureInitialized: jest.fn(),
-      getExchangeClient: jest.fn().mockReturnValue(createMockExchangeClient()),
-      getInfoClient: jest.fn().mockReturnValue(createMockInfoClient()),
-      fetchHistoricalOrders: jest.fn().mockResolvedValue([]),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-      toggleTestnet: jest.fn(),
-      setTestnetMode: jest.fn(),
-      getNetwork: jest.fn().mockReturnValue('mainnet'),
-      ensureSubscriptionClient: jest.fn().mockResolvedValue(undefined),
-      getSubscriptionClient: jest.fn(),
-      setOnReconnectCallback: jest.fn(),
-      setOnTerminateCallback: jest.fn(),
-      getConnectionState: jest.fn().mockReturnValue('connected'),
-    } as Partial<HyperLiquidClientService> as jest.Mocked<HyperLiquidClientService>;
+      initialize: vi.fn(),
+      isInitialized: vi.fn().mockReturnValue(true),
+      isTestnetMode: vi.fn().mockReturnValue(false),
+      ensureInitialized: vi.fn(),
+      getExchangeClient: vi.fn().mockReturnValue(createMockExchangeClient()),
+      getInfoClient: vi.fn().mockReturnValue(createMockInfoClient()),
+      fetchHistoricalOrders: vi.fn().mockResolvedValue([]),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+      toggleTestnet: vi.fn(),
+      setTestnetMode: vi.fn(),
+      getNetwork: vi.fn().mockReturnValue('mainnet'),
+      ensureSubscriptionClient: vi.fn().mockResolvedValue(undefined),
+      getSubscriptionClient: vi.fn(),
+      setOnReconnectCallback: vi.fn(),
+      setOnTerminateCallback: vi.fn(),
+      getConnectionState: vi.fn().mockReturnValue('connected'),
+    } as Partial<HyperLiquidClientService> as Mocked<HyperLiquidClientService>;
 
     mockWalletService = {
-      setTestnetMode: jest.fn(),
-      getCurrentAccountId: jest
+      setTestnetMode: vi.fn(),
+      getCurrentAccountId: vi
         .fn()
         .mockReturnValue(
           'eip155:42161:0x1234567890123456789012345678901234567890',
         ),
-      createWalletAdapter: jest.fn().mockReturnValue({
-        request: jest
+      createWalletAdapter: vi.fn().mockReturnValue({
+        request: vi
           .fn()
           .mockResolvedValue(['0x1234567890123456789012345678901234567890']),
       }),
-      getUserAddress: jest
+      getUserAddress: vi
         .fn()
         .mockReturnValue('0x1234567890123456789012345678901234567890'),
-      getUserAddressWithDefault: jest
+      getUserAddressWithDefault: vi
         .fn()
         .mockResolvedValue('0x1234567890123456789012345678901234567890'),
-      isKeyringUnlocked: jest.fn().mockReturnValue(true),
-      isSelectedHardwareWallet: jest.fn().mockReturnValue(false),
-    } as Partial<HyperLiquidWalletService> as jest.Mocked<HyperLiquidWalletService>;
+      isMainAccountSignerReady: vi.fn().mockReturnValue(true),
+      requiresSignatureConfirmation: vi.fn().mockReturnValue(false),
+    } as Partial<HyperLiquidWalletService> as Mocked<HyperLiquidWalletService>;
 
     mockSubscriptionService = {
-      subscribeToPrices: jest.fn().mockResolvedValue(jest.fn()), // Returns Promise
-      subscribeToPositions: jest.fn().mockReturnValue(jest.fn()), // Returns function directly
-      subscribeToOrderFills: jest.fn().mockReturnValue(jest.fn()), // Returns function directly
-      clearAll: jest.fn(),
-      isPositionsCacheInitialized: jest.fn().mockReturnValue(false),
-      getCachedPositions: jest.fn().mockReturnValue([]),
-      updateFeatureFlags: jest.fn().mockResolvedValue(undefined),
+      subscribeToPrices: vi.fn().mockResolvedValue(vi.fn()), // Returns Promise
+      subscribeToPositions: vi.fn().mockReturnValue(vi.fn()), // Returns function directly
+      subscribeToOrderFills: vi.fn().mockReturnValue(vi.fn()), // Returns function directly
+      clearAll: vi.fn(),
+      isPositionsCacheInitialized: vi.fn().mockReturnValue(false),
+      getCachedPositions: vi.fn().mockReturnValue([]),
+      getFreshPositionsForAllDexs: vi.fn().mockReturnValue(null),
+      getCachedPositionsForDex: vi.fn().mockReturnValue(null),
+      updateFeatureFlags: vi.fn().mockResolvedValue(undefined),
       // Cache methods used by buildAssetMapping optimization
-      setDexMetaCache: jest.fn(),
-      setDexAssetCtxsCache: jest.fn(),
-      getDexAssetCtxsCache: jest.fn().mockReturnValue(undefined),
+      setDexMetaCache: vi.fn(),
+      setDexAssetCtxsCache: vi.fn(),
+      getDexAssetCtxsCache: vi.fn().mockReturnValue(undefined),
       // Price cache used by placeOrder, editOrder, closePosition optimizations
-      getCachedPrice: jest.fn().mockImplementation((symbol: string) => {
+      getCachedPrice: vi.fn().mockImplementation((symbol: string) => {
         const prices: Record<string, string> = { BTC: '50000', ETH: '3000' };
         return prices[symbol];
       }),
-      getLastAllMidsSnapshot: jest.fn().mockReturnValue(null),
+      getLastAllMidsSnapshot: vi.fn().mockReturnValue(null),
       // Orders cache used by updatePositionTPSL and getOpenOrders
-      isOrdersCacheInitialized: jest.fn().mockReturnValue(false),
-      getCachedOrders: jest.fn().mockReturnValue([]),
+      isOrdersCacheInitialized: vi.fn().mockReturnValue(false),
+      getCachedOrders: vi.fn().mockReturnValue([]),
       // Atomic getter - returns null when cache not initialized (prevents race condition)
-      getOrdersCacheIfInitialized: jest.fn().mockReturnValue(null),
+      getOrdersCacheIfInitialized: vi.fn().mockReturnValue(null),
       // Abstraction-mode resolved-mode setter (unified account migration)
-      setUserAbstractionMode: jest.fn(),
-    } as Partial<HyperLiquidSubscriptionService> as jest.Mocked<HyperLiquidSubscriptionService>;
+      setUserAbstractionMode: vi.fn(),
+    } as Partial<HyperLiquidSubscriptionService> as Mocked<HyperLiquidSubscriptionService>;
 
     // Mock constructors
-    MockedHyperLiquidClientService.mockImplementation(() => mockClientService);
-    MockedHyperLiquidWalletService.mockImplementation(() => mockWalletService);
-    MockedHyperLiquidSubscriptionService.mockImplementation(
-      () => mockSubscriptionService,
-    );
+    MockedHyperLiquidClientService.mockImplementation(function () {
+      return mockClientService;
+    });
+    MockedHyperLiquidWalletService.mockImplementation(function () {
+      return mockWalletService;
+    });
+    MockedHyperLiquidSubscriptionService.mockImplementation(function () {
+      return mockSubscriptionService;
+    });
 
     // Mock validation
     mockValidateOrderParams.mockReturnValue({ isValid: true });
@@ -472,9 +494,8 @@ describe('HyperLiquidProvider', () => {
     mockValidateCoinExists.mockReturnValue({ isValid: true });
     mockValidateAssetSupport.mockReturnValue({ isValid: true });
     mockValidateBalance.mockReturnValue({ isValid: true });
-    const hyperLiquidValidation = jest.requireMock(
-      '../../../src/utils/hyperLiquidValidation',
-    );
+    const hyperLiquidValidation =
+      hyperLiquidValidationModule as unknown as Record<string, Mock>;
     hyperLiquidValidation.getSupportedPaths.mockReturnValue([
       'eip155:42161/erc20:0xa0b86a33e6776e681a06e0e1622c5e5e3e6a8b13/default',
       'eip155:1/erc20:0xa0b86a33e6776e681a06e0e1622c5e5e3e6a8b13/default',
@@ -490,9 +511,10 @@ describe('HyperLiquidProvider', () => {
         error: error instanceof Error ? error.message : String(error),
       }),
     );
-    const hyperLiquidAdapter = jest.requireMock(
-      '../../../src/utils/hyperLiquidAdapter',
-    );
+    const hyperLiquidAdapter = hyperLiquidAdapterModule as unknown as Record<
+      string,
+      Mock
+    >;
     hyperLiquidAdapter.adaptHyperLiquidLedgerUpdateToUserHistoryItem.mockImplementation(
       (updates: unknown[]) => {
         if (!updates || !Array.isArray(updates) || updates.length === 0) {
@@ -515,6 +537,586 @@ describe('HyperLiquidProvider', () => {
     });
   });
 
+  describe('explicit margin mode', () => {
+    const order: OrderParams = {
+      symbol: 'BTC',
+      isBuy: true,
+      size: '0.1',
+      orderType: 'market',
+      currentPrice: 50000,
+      leverage: 5,
+    };
+
+    it.each(['cross', 'isolated', undefined] as const)(
+      'submits %s through updateLeverage',
+      async (marginMode) => {
+        const info = createMockInfoClient({
+          clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+          frontendOpenOrders: vi.fn().mockResolvedValue([]),
+        });
+        mockClientService.getInfoClient.mockReturnValue(
+          info as unknown as ReturnType<
+            HyperLiquidClientService['getInfoClient']
+          >,
+        );
+
+        const result = await provider.placeOrder({ ...order, marginMode });
+
+        expect(result).toMatchObject({ success: true });
+        expect(
+          mockClientService.getExchangeClient().updateLeverage,
+        ).toHaveBeenCalledWith({
+          asset: 0,
+          isCross: marginMode === 'cross',
+          leverage: 5,
+        });
+      },
+    );
+
+    it('rejects an invalid runtime mode before signing', async () => {
+      const result = await provider.placeOrder({
+        ...order,
+        marginMode: 'invalid' as OrderParams['marginMode'],
+      });
+
+      expect(result.error).toBe(PERPS_ERROR_CODES.ORDER_MARGIN_MODE_INVALID);
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).not.toHaveBeenCalled();
+      expect(
+        mockClientService.getExchangeClient().order,
+      ).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, 0, 1.5])(
+      'rejects explicit mode with leverage %s',
+      async (leverage) => {
+        const result = await provider.validateOrder({
+          ...order,
+          marginMode: 'cross',
+          leverage,
+        });
+
+        expect(result).toEqual({
+          isValid: false,
+          error: PERPS_ERROR_CODES.ORDER_LEVERAGE_INVALID,
+        });
+      },
+    );
+
+    it.each([
+      { onlyIsolated: true },
+      { marginMode: 'strictIsolated' },
+      { marginMode: 'noCross' },
+    ] satisfies Partial<MetaResponse['universe'][number]>[])(
+      'rejects unsupported Cross capability %j',
+      async (capability) => {
+        const info = createMockInfoClient({
+          meta: vi.fn().mockResolvedValue({
+            universe: [
+              {
+                name: 'BTC',
+                szDecimals: 3,
+                maxLeverage: 50,
+                marginTableId: 1,
+                ...capability,
+              } satisfies MetaResponse['universe'][number],
+            ],
+          }),
+        });
+        mockClientService.getInfoClient.mockReturnValue(
+          info as unknown as ReturnType<
+            HyperLiquidClientService['getInfoClient']
+          >,
+        );
+
+        const result = await provider.placeOrder({
+          ...order,
+          marginMode: 'cross',
+        });
+
+        expect(result.error).toBe(
+          PERPS_ERROR_CODES.ORDER_MARGIN_MODE_UNSUPPORTED,
+        );
+        expect(
+          mockClientService.getExchangeClient().updateLeverage,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps HIP-3 Cross unavailable while its transfers assume isolated', async () => {
+      const info = createMockInfoClient({
+        meta: vi.fn().mockResolvedValue({
+          universe: [
+            {
+              name: 'xyz:XYZ100',
+              szDecimals: 3,
+              maxLeverage: 20,
+              marginTableId: 1,
+            } satisfies MetaResponse['universe'][number],
+          ],
+        }),
+      });
+      mockClientService.getInfoClient.mockReturnValue(
+        info as unknown as ReturnType<
+          HyperLiquidClientService['getInfoClient']
+        >,
+      );
+
+      const result = await provider.validateOrder({
+        ...order,
+        symbol: 'xyz:XYZ100',
+        marginMode: 'cross',
+      });
+
+      expect(result).toEqual({
+        isValid: false,
+        error: PERPS_ERROR_CODES.ORDER_MARGIN_MODE_UNSUPPORTED,
+      });
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('rejects a mode change with an open position', async () => {
+      const result = await provider.placeOrder({
+        ...order,
+        marginMode: 'isolated',
+      });
+
+      expect(result.error).toBe(
+        PERPS_ERROR_CODES.ORDER_MARGIN_MODE_POSITION_OPEN,
+      );
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('allows an order in the existing position mode', async () => {
+      const result = await provider.placeOrder({
+        ...order,
+        marginMode: 'cross',
+      });
+
+      expect(result.success).toBe(true);
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).toHaveBeenCalledWith({ asset: 0, isCross: true, leverage: 5 });
+    });
+
+    it('fails closed when fresh positions cannot be read', async () => {
+      const info = createMockInfoClient({
+        clearinghouseState: vi.fn().mockRejectedValue(new Error('offline')),
+      });
+      mockClientService.getInfoClient.mockReturnValue(
+        info as unknown as ReturnType<
+          HyperLiquidClientService['getInfoClient']
+        >,
+      );
+
+      const result = await provider.placeOrder({
+        ...order,
+        marginMode: 'cross',
+      });
+
+      expect(result.error).toBe(PERPS_ERROR_CODES.PROVIDER_NOT_AVAILABLE);
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).not.toHaveBeenCalled();
+    });
+
+    it.each(['cross', 'isolated'])(
+      'checks %s mode for a resting order',
+      async (existingMode) => {
+        const activeAssetData = vi
+          .fn()
+          .mockResolvedValue({ leverage: { type: existingMode, value: 5 } });
+        const info = createMockInfoClient({
+          clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+          frontendOpenOrders: vi.fn().mockResolvedValue([{ coin: 'BTC' }]),
+          activeAssetData,
+        });
+        mockClientService.getInfoClient.mockReturnValue(
+          info as unknown as ReturnType<
+            HyperLiquidClientService['getInfoClient']
+          >,
+        );
+
+        const result = await provider.validateOrder({
+          ...order,
+          marginMode: 'cross',
+        });
+
+        expect(result.isValid).toBe(existingMode === 'cross');
+        if (existingMode === 'isolated')
+          expect(result.error).toBe(
+            PERPS_ERROR_CODES.ORDER_MARGIN_MODE_ORDER_OPEN,
+          );
+        expect(activeAssetData).toHaveBeenCalled();
+      },
+    );
+
+    it('fails closed when the resting-order asset mode cannot be read', async () => {
+      const activeAssetData = vi
+        .fn()
+        .mockRejectedValue(new Error('asset mode offline'));
+      const info = createMockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+        frontendOpenOrders: vi.fn().mockResolvedValue([{ coin: 'BTC' }]),
+        activeAssetData,
+      });
+      mockClientService.getInfoClient.mockReturnValue(
+        info as unknown as ReturnType<
+          HyperLiquidClientService['getInfoClient']
+        >,
+      );
+
+      const result = await provider.placeOrder({
+        ...order,
+        marginMode: 'cross',
+      });
+
+      expect(result.success).toBe(false);
+      expect(activeAssetData).toHaveBeenCalled();
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).not.toHaveBeenCalled();
+      expect(
+        mockClientService.getExchangeClient().order,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('rechecks the venue book at placement after a successful preview', async () => {
+      const clearinghouseState = vi
+        .fn()
+        .mockResolvedValue({ assetPositions: [] });
+      const info = createMockInfoClient({
+        clearinghouseState,
+        frontendOpenOrders: vi.fn().mockResolvedValue([]),
+      });
+      mockClientService.getInfoClient.mockReturnValue(
+        info as unknown as ReturnType<
+          HyperLiquidClientService['getInfoClient']
+        >,
+      );
+      const preview = await provider.validateOrder({
+        ...order,
+        marginMode: 'isolated',
+      });
+      expect(preview.isValid).toBe(true);
+      clearinghouseState.mockResolvedValue(
+        await createMockInfoClient().clearinghouseState(),
+      );
+
+      const placed = await provider.placeOrder({
+        ...order,
+        marginMode: 'isolated',
+      });
+
+      expect(placed.error).toBe(
+        PERPS_ERROR_CODES.ORDER_MARGIN_MODE_POSITION_OPEN,
+      );
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).not.toHaveBeenCalled();
+      expect(
+        mockClientService.getExchangeClient().order,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when fresh orders cannot be read', async () => {
+      const info = createMockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+        frontendOpenOrders: vi
+          .fn()
+          .mockRejectedValue(new Error('orders offline')),
+      });
+      mockClientService.getInfoClient.mockReturnValue(
+        info as unknown as ReturnType<
+          HyperLiquidClientService['getInfoClient']
+        >,
+      );
+
+      const result = await provider.placeOrder({
+        ...order,
+        marginMode: 'cross',
+      });
+
+      expect(result.success).toBe(false);
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('omitted margin mode', () => {
+    // Mirrors TradingService.flipPosition, which sends leverage without a mode.
+    const order: OrderParams = {
+      symbol: 'BTC',
+      isBuy: false,
+      size: '0.2',
+      orderType: 'market',
+      currentPrice: 50000,
+      leverage: 10,
+    };
+
+    const mockInfoClient = (overrides: Record<string, unknown>): void => {
+      mockClientService.getInfoClient.mockReturnValue(
+        createMockInfoClient(overrides) as unknown as ReturnType<
+          HyperLiquidClientService['getInfoClient']
+        >,
+      );
+    };
+
+    it.each(['cross', 'isolated'] as const)(
+      'keeps the open %s position mode when updating leverage',
+      async (positionMode) => {
+        mockInfoClient({
+          clearinghouseState: vi.fn().mockResolvedValue({
+            assetPositions: [
+              {
+                position: {
+                  coin: 'BTC',
+                  szi: '0.1',
+                  entryPx: '50000',
+                  positionValue: '5000',
+                  unrealizedPnl: '0',
+                  marginUsed: '500',
+                  leverage: { type: positionMode, value: 10 },
+                  liquidationPx: '45000',
+                  maxLeverage: 50,
+                  returnOnEquity: '0',
+                  cumFunding: {
+                    allTime: '0',
+                    sinceOpen: '0',
+                    sinceChange: '0',
+                  },
+                },
+                type: 'oneWay',
+              },
+            ],
+          }),
+        });
+
+        const result = await provider.placeOrder(order);
+
+        expect(result.success).toBe(true);
+        expect(
+          mockClientService.getExchangeClient().updateLeverage,
+        ).toHaveBeenCalledWith({
+          asset: 0,
+          isCross: positionMode === 'cross',
+          leverage: 10,
+        });
+      },
+    );
+
+    it('reads the open position mode from fresh cached positions', async () => {
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+      });
+      mockSubscriptionService.getCachedPositionsForDex.mockReturnValue([
+        createMockPosition({ leverage: { type: 'cross', value: 10 } }),
+      ]);
+
+      const result = await provider.placeOrder(order);
+
+      expect(result.success).toBe(true);
+      expect(
+        mockSubscriptionService.getCachedPositionsForDex,
+      ).toHaveBeenCalledWith('');
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).toHaveBeenCalledWith({ asset: 0, isCross: true, leverage: 10 });
+    });
+
+    it('defaults to isolated without an open position in the market', async () => {
+      mockSubscriptionService.getCachedPositionsForDex.mockReturnValue([
+        createMockPosition({ symbol: 'ETH' }),
+      ]);
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+      });
+
+      const result = await provider.placeOrder(order);
+
+      expect(result.success).toBe(true);
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).toHaveBeenCalledWith({ asset: 0, isCross: false, leverage: 10 });
+    });
+
+    it('defaults to isolated when positions cannot be read', async () => {
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockRejectedValue(new Error('offline')),
+      });
+
+      await provider.placeOrder(order);
+
+      expect(
+        mockClientService.getExchangeClient().updateLeverage,
+      ).toHaveBeenCalledWith({ asset: 0, isCross: false, leverage: 10 });
+    });
+  });
+
+  describe('getMarginModeLock', () => {
+    const mockInfoClient = (overrides: Record<string, unknown>): void => {
+      mockClientService.getInfoClient.mockReturnValue(
+        createMockInfoClient(overrides) as unknown as ReturnType<
+          HyperLiquidClientService['getInfoClient']
+        >,
+      );
+    };
+
+    it('reports the mode of an open position', async () => {
+      const activeAssetData = vi.fn();
+      mockInfoClient({ activeAssetData });
+
+      const lock = await provider.getMarginModeLock({ symbol: 'BTC' });
+
+      expect(lock).toStrictEqual({
+        status: 'locked',
+        providerId: 'hyperliquid',
+        marginMode: 'cross',
+        reason: 'position',
+      });
+      expect(activeAssetData).not.toHaveBeenCalled();
+    });
+
+    it('reports the asset mode of a resting order', async () => {
+      const activeAssetData = vi
+        .fn()
+        .mockResolvedValue({ leverage: { type: 'cross', value: 5 } });
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+        frontendOpenOrders: vi.fn().mockResolvedValue([{ coin: 'BTC' }]),
+        activeAssetData,
+      });
+
+      const lock = await provider.getMarginModeLock({ symbol: 'BTC' });
+
+      expect(lock).toStrictEqual({
+        status: 'locked',
+        providerId: 'hyperliquid',
+        marginMode: 'cross',
+        reason: 'open_order',
+      });
+      expect(activeAssetData).toHaveBeenCalledWith(
+        expect.objectContaining({ coin: 'BTC' }),
+      );
+    });
+
+    it('reports the asset mode of an active TWAP with no resting order', async () => {
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+        frontendOpenOrders: vi.fn().mockResolvedValue([]),
+        twapHistory: vi.fn().mockResolvedValue([
+          {
+            time: 1_700_000_030,
+            twapId: 987,
+            state: { coin: 'BTC' },
+            status: { status: 'activated' },
+          },
+        ]),
+        activeAssetData: vi
+          .fn()
+          .mockResolvedValue({ leverage: { type: 'isolated', value: 5 } }),
+      });
+
+      const lock = await provider.getMarginModeLock({ symbol: 'BTC' });
+
+      expect(lock).toStrictEqual({
+        status: 'locked',
+        providerId: 'hyperliquid',
+        marginMode: 'isolated',
+        reason: 'open_order',
+      });
+    });
+
+    it('reports unlocked when nothing is open for the asset', async () => {
+      const activeAssetData = vi.fn();
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+        frontendOpenOrders: vi.fn().mockResolvedValue([{ coin: 'ETH' }]),
+        activeAssetData,
+      });
+
+      const lock = await provider.getMarginModeLock({ symbol: 'BTC' });
+
+      expect(lock).toStrictEqual({
+        status: 'unlocked',
+        providerId: 'hyperliquid',
+      });
+      expect(activeAssetData).not.toHaveBeenCalled();
+    });
+
+    it('reports unavailable when the selected account changes mid-read', async () => {
+      mockWalletService.getUserAddressWithDefault
+        .mockResolvedValueOnce('0x1234567890123456789012345678901234567890')
+        .mockResolvedValueOnce('0x1234567890123456789012345678901234567890')
+        .mockResolvedValue('0xabcdefabcdefabcdefabcdefabcdefabcdefabcd');
+      const activeAssetData = vi.fn();
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+        frontendOpenOrders: vi.fn().mockResolvedValue([{ coin: 'BTC' }]),
+        activeAssetData,
+      });
+
+      const lock = await provider.getMarginModeLock({ symbol: 'BTC' });
+
+      expect(lock).toStrictEqual({
+        status: 'unavailable',
+        providerId: 'hyperliquid',
+        reason: 'provider_unavailable',
+      });
+      expect(activeAssetData).not.toHaveBeenCalled();
+    });
+
+    it('reports unavailable when the selected account changes while the asset mode is read', async () => {
+      let resolveAssetData: (value: unknown) => void = () => undefined;
+      const activeAssetData = vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          resolveAssetData = resolve;
+        }),
+      );
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockResolvedValue({ assetPositions: [] }),
+        frontendOpenOrders: vi.fn().mockResolvedValue([{ coin: 'BTC' }]),
+        activeAssetData,
+      });
+
+      const pendingLock = provider.getMarginModeLock({ symbol: 'BTC' });
+      await new Promise(process.nextTick);
+      await new Promise(process.nextTick);
+      mockWalletService.getUserAddressWithDefault.mockResolvedValue(
+        '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+      );
+      resolveAssetData({ leverage: { type: 'cross', value: 5 } });
+      const lock = await pendingLock;
+
+      expect(activeAssetData).toHaveBeenCalled();
+      expect(lock).toStrictEqual({
+        status: 'unavailable',
+        providerId: 'hyperliquid',
+        reason: 'provider_unavailable',
+      });
+    });
+
+    it('reports unavailable when positions cannot be read', async () => {
+      mockInfoClient({
+        clearinghouseState: vi.fn().mockRejectedValue(new Error('offline')),
+      });
+
+      const lock = await provider.getMarginModeLock({ symbol: 'BTC' });
+
+      expect(lock).toStrictEqual({
+        status: 'unavailable',
+        providerId: 'hyperliquid',
+        reason: 'provider_unavailable',
+      });
+    });
+  });
+
   describe('Advanced order placement', () => {
     const TPSL_SLIPPAGE = ORDER_SLIPPAGE_CONFIG.DefaultTpslSlippageBps / 10000;
 
@@ -524,15 +1126,13 @@ describe('HyperLiquidProvider', () => {
      * @returns The submitted `order` request.
      */
     const getSubmittedOrderRequest = () =>
-      (mockClientService.getExchangeClient().order as jest.Mock).mock
-        .calls[0][0];
+      (mockClientService.getExchangeClient().order as Mock).mock.calls[0][0];
 
     it('rejects an attached TP/SL size that rounds to zero before changing leverage', async () => {
       // The leverage change is on-chain and not undone by a later rejection, so
       // a size that disappears at szDecimals: 3 has to be caught before it.
       mockValidateOrderParams.mockImplementation(
-        jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-          .validateOrderParams,
+        actualValidation.validateOrderParams,
       );
 
       const result = await provider.placeOrder({
@@ -560,8 +1160,7 @@ describe('HyperLiquidProvider', () => {
       // The SDK would reject triggerPx: '0' anyway, but only after the leverage
       // change has already been written on-chain.
       mockValidateOrderParams.mockImplementation(
-        jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-          .validateOrderParams,
+        actualValidation.validateOrderParams,
       );
 
       const result = await provider.placeOrder({
@@ -680,8 +1279,7 @@ describe('HyperLiquidProvider', () => {
         // Real validation, so the rejection happens at step 1 of placeOrder
         // rather than while the exchange payload is being built.
         mockValidateOrderParams.mockImplementation(
-          jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-            .validateOrderParams,
+          actualValidation.validateOrderParams,
         );
 
         const result = await provider.placeOrder({
@@ -965,7 +1563,7 @@ describe('HyperLiquidProvider', () => {
 
         expect(result.success).toBe(true);
         const modifyCall = (
-          mockClientService.getExchangeClient().modify as jest.Mock
+          mockClientService.getExchangeClient().modify as Mock
         ).mock.calls[0][0];
         expect(modifyCall.order.t).toStrictEqual({ limit: { tif } });
       },
@@ -1004,7 +1602,7 @@ describe('HyperLiquidProvider', () => {
        * @returns The frontendOpenOrders mock.
        */
       const withSnapshots = (before: unknown[], after: unknown[]) => {
-        const frontendOpenOrders = jest
+        const frontendOpenOrders = vi
           .fn()
           .mockResolvedValueOnce(before)
           .mockResolvedValue(after);
@@ -1129,7 +1727,7 @@ describe('HyperLiquidProvider', () => {
         ] as never);
         mockClientService.getInfoClient.mockReturnValue(
           createMockInfoClient({
-            frontendOpenOrders: jest
+            frontendOpenOrders: vi
               .fn()
               .mockRejectedValue(new Error('network down')),
           }) as never,
@@ -1145,7 +1743,7 @@ describe('HyperLiquidProvider', () => {
       it('keeps the edit successful when the post-modify read fails', async () => {
         // The modify was accepted; only the identity lookup failed. Turning that
         // into a failed edit would misreport an order that really was changed.
-        const frontendOpenOrders = jest
+        const frontendOpenOrders = vi
           .fn()
           .mockResolvedValueOnce([restingOrder()])
           .mockRejectedValue(new Error('network down'));
@@ -1168,7 +1766,7 @@ describe('HyperLiquidProvider', () => {
       // ordering placeOrder and updatePositionTPSL already observe.
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          frontendOpenOrders: jest.fn().mockResolvedValue([]),
+          frontendOpenOrders: vi.fn().mockResolvedValue([]),
         }) as never,
       );
 
@@ -1246,7 +1844,7 @@ describe('HyperLiquidProvider', () => {
       // that lookup the edit would rebuild the protective stop as a plain order.
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          frontendOpenOrders: jest.fn().mockResolvedValue([
+          frontendOpenOrders: vi.fn().mockResolvedValue([
             {
               coin: 'BTC',
               side: 'A',
@@ -1290,7 +1888,7 @@ describe('HyperLiquidProvider', () => {
     it('rejects an edit when the resting order cannot be verified at all', async () => {
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          frontendOpenOrders: jest.fn().mockResolvedValue([]),
+          frontendOpenOrders: vi.fn().mockResolvedValue([]),
         }) as unknown as ReturnType<typeof mockClientService.getInfoClient>,
       );
 
@@ -1335,13 +1933,125 @@ describe('HyperLiquidProvider', () => {
         mockClientService.getExchangeClient().modify,
       ).not.toHaveBeenCalled();
     });
+
+    // Regression coverage for the editOrder half of TAT-3252. The submitted
+    // size is formatted with formatHyperLiquidSize, which rounds half-up, so a
+    // reduce-only edit could be sent above the size the caller asked to keep —
+    // the same "Reduce only order would increase position" rejection the close
+    // and TP/SL paths were hardened against.
+    describe('reduce-only size formatting', () => {
+      /**
+       * Read the size submitted to the venue's modify action.
+       * @returns The formatted size string.
+       */
+      const getModifiedSize = () =>
+        (mockClientService.getExchangeClient().modify as Mock).mock.calls[0][0]
+          .order.s;
+
+      it('rounds a reduce-only edit size down to the size grid', async () => {
+        // BTC is szDecimals 3 here, so 0.1155 rounds half-up to '0.116' —
+        // one increment above the position the edit is meant to reduce.
+        const result = await provider.editOrder({
+          orderId: '123',
+          newOrder: {
+            symbol: 'BTC',
+            isBuy: false,
+            size: '0.1155',
+            orderType: 'limit',
+            price: '51000',
+            reduceOnly: true,
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(getModifiedSize()).toBe('0.115');
+      });
+
+      it('leaves a non-reduce-only edit size on its existing rounding', async () => {
+        // An opening order has no position ceiling to breach, so rounding it
+        // down would shrink an order the caller asked for.
+        const result = await provider.editOrder({
+          orderId: '123',
+          newOrder: {
+            symbol: 'BTC',
+            isBuy: true,
+            size: '0.1155',
+            orderType: 'limit',
+            price: '49000',
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(getModifiedSize()).toBe('0.116');
+      });
+
+      it('refuses a reduce-only edit smaller than one size increment', async () => {
+        // Flooring 0.0004 at szDecimals 3 yields 0, and a zero-size modify is
+        // rejected by the venue rather than being a no-op.
+        const result = await provider.editOrder({
+          orderId: '123',
+          newOrder: {
+            symbol: 'BTC',
+            isBuy: false,
+            size: '0.0004',
+            orderType: 'limit',
+            price: '51000',
+            reduceOnly: true,
+          },
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe(PERPS_ERROR_CODES.ORDER_SIZE_POSITIVE);
+        expect(
+          mockClientService.getExchangeClient().modify,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('refuses a non-numeric edit size', async () => {
+        const result = await provider.editOrder({
+          orderId: '123',
+          newOrder: {
+            symbol: 'BTC',
+            isBuy: true,
+            size: 'abc',
+            orderType: 'limit',
+            price: '51000',
+          },
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe(PERPS_ERROR_CODES.ORDER_SIZE_POSITIVE);
+        expect(
+          mockClientService.getExchangeClient().modify,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('keeps a grid-aligned reduce-only edit size intact', async () => {
+        // 0.123 * 1000 === 122.99999999999999, so a naive truncation would
+        // drop a whole increment.
+        const result = await provider.editOrder({
+          orderId: '123',
+          newOrder: {
+            symbol: 'BTC',
+            isBuy: false,
+            size: '0.123',
+            orderType: 'limit',
+            price: '51000',
+            reduceOnly: true,
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(getModifiedSize()).toBe('0.123');
+      });
+    });
   });
 
   describe('Advanced orders in open-orders state', () => {
     it('exposes trigger data for open stop and take profit orders', async () => {
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          clearinghouseState: jest.fn().mockResolvedValue({
+          clearinghouseState: vi.fn().mockResolvedValue({
             marginSummary: { totalMarginUsed: '500', accountValue: '10500' },
             crossMarginSummary: {
               totalMarginUsed: '500',
@@ -1371,7 +2081,7 @@ describe('HyperLiquidProvider', () => {
               },
             ],
           }),
-          frontendOpenOrders: jest.fn().mockResolvedValue([
+          frontendOpenOrders: vi.fn().mockResolvedValue([
             {
               coin: 'BTC',
               side: 'A',
@@ -1433,7 +2143,7 @@ describe('HyperLiquidProvider', () => {
     it('reports partial and full trigger orders on the position', async () => {
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          clearinghouseState: jest.fn().mockResolvedValue({
+          clearinghouseState: vi.fn().mockResolvedValue({
             marginSummary: { totalMarginUsed: '500', accountValue: '10500' },
             crossMarginSummary: {
               totalMarginUsed: '500',
@@ -1463,7 +2173,7 @@ describe('HyperLiquidProvider', () => {
               },
             ],
           }),
-          frontendOpenOrders: jest.fn().mockResolvedValue([
+          frontendOpenOrders: vi.fn().mockResolvedValue([
             {
               coin: 'BTC',
               side: 'A',
@@ -1552,7 +2262,7 @@ describe('HyperLiquidProvider', () => {
 
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          clearinghouseState: jest.fn().mockResolvedValue({
+          clearinghouseState: vi.fn().mockResolvedValue({
             marginSummary: { totalMarginUsed: '500', accountValue: '10500' },
             crossMarginSummary: {
               totalMarginUsed: '500',
@@ -1582,7 +2292,7 @@ describe('HyperLiquidProvider', () => {
               },
             ],
           }),
-          frontendOpenOrders: jest.fn().mockResolvedValue([
+          frontendOpenOrders: vi.fn().mockResolvedValue([
             {
               // Pending entry order carrying the TP child
               coin: 'BTC',
@@ -1617,7 +2327,7 @@ describe('HyperLiquidProvider', () => {
     it('includes standalone partial triggers that are not position-bound', async () => {
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          clearinghouseState: jest.fn().mockResolvedValue({
+          clearinghouseState: vi.fn().mockResolvedValue({
             marginSummary: { totalMarginUsed: '500', accountValue: '10500' },
             crossMarginSummary: {
               totalMarginUsed: '500',
@@ -1647,7 +2357,7 @@ describe('HyperLiquidProvider', () => {
               },
             ],
           }),
-          frontendOpenOrders: jest.fn().mockResolvedValue([
+          frontendOpenOrders: vi.fn().mockResolvedValue([
             {
               coin: 'BTC',
               side: 'A',
@@ -1684,8 +2394,76 @@ describe('HyperLiquidProvider', () => {
           reduceOnly: true,
         },
       ]);
-      // The scalar summary field stays position-bound-only, which is exactly why
-      // the array exists.
+      // A lone trigger is the position's take profit whether or not it is
+      // position-bound, so the scalar summary field reports its price.
+      expect(position?.takeProfitPrice).toBe('60000');
+      expect(position?.takeProfitCount).toBe(1);
+    });
+
+    it('leaves the summary price unset when two partial take profits share the position', async () => {
+      const partialTakeProfit = (oid: number, triggerPx: string) => ({
+        coin: 'BTC',
+        side: 'A',
+        limitPx: triggerPx,
+        sz: '0.04',
+        origSz: '0.04',
+        oid,
+        timestamp: 1_700_000_000_000,
+        triggerCondition: `Price above ${triggerPx}`,
+        isTrigger: true,
+        triggerPx,
+        children: [],
+        isPositionTpsl: false,
+        reduceOnly: true,
+        orderType: 'Take Profit Limit',
+      });
+
+      mockClientService.getInfoClient.mockReturnValue(
+        createMockInfoClient({
+          clearinghouseState: vi.fn().mockResolvedValue({
+            marginSummary: { totalMarginUsed: '500', accountValue: '10500' },
+            crossMarginSummary: {
+              totalMarginUsed: '500',
+              accountValue: '10500',
+            },
+            withdrawable: '9500',
+            assetPositions: [
+              {
+                position: {
+                  coin: 'BTC',
+                  szi: '0.1',
+                  entryPx: '50000',
+                  positionValue: '5000',
+                  unrealizedPnl: '100',
+                  marginUsed: '500',
+                  leverage: { type: 'cross', value: 10 },
+                  liquidationPx: '45000',
+                  maxLeverage: 50,
+                  returnOnEquity: '20',
+                  cumFunding: {
+                    allTime: '10',
+                    sinceOpen: '5',
+                    sinceChange: '2',
+                  },
+                },
+                type: 'oneWay',
+              },
+            ],
+          }),
+          frontendOpenOrders: vi
+            .fn()
+            .mockResolvedValue([
+              partialTakeProfit(701, '60000'),
+              partialTakeProfit(702, '62000'),
+            ]),
+        }) as unknown as ReturnType<typeof mockClientService.getInfoClient>,
+      );
+
+      const positions = await provider.getPositions({ skipCache: true });
+      const position = positions.find((pos) => pos.symbol === 'BTC');
+
+      // No single price describes two triggers; the count is what a client shows.
+      expect(position?.takeProfitCount).toBe(2);
       expect(position?.takeProfitPrice).toBeUndefined();
     });
   });
@@ -1707,26 +2485,45 @@ describe('HyperLiquidProvider', () => {
       stopLossCount: 0,
     };
 
-    it('places partial TP/SL as standalone reduce-only triggers', async () => {
+    it.each([undefined, 'independent'] as const)(
+      'places partial TP/SL as standalone reduce-only triggers linkage=%s',
+      async (partialPairLinkage) => {
+        const result = await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          partialPairLinkage,
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.04',
+          stopLossPrice: '45000',
+          stopLossSize: '0.06',
+          position,
+        });
+
+        expect(result.success).toBe(true);
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        // A quantity cannot be expressed under positionTpsl grouping
+        expect(request.grouping).toBe('na');
+        expect(request.orders).toHaveLength(2);
+        expect(request.orders[0].s).toBe('0.04');
+        expect(request.orders[0].r).toBe(true);
+        expect(request.orders[1].s).toBe('0.06');
+        expect(request.orders[1].r).toBe(true);
+      },
+    );
+
+    it('rejects an explicit native OCO linkage before trading setup', async () => {
       const result = await provider.updatePositionTPSL({
         symbol: 'BTC',
         takeProfitPrice: '60000',
-        takeProfitSize: '0.04',
         stopLossPrice: '45000',
-        stopLossSize: '0.06',
-        position,
+        takeProfitSize: '0.04',
+        stopLossSize: '0.04',
+        partialPairLinkage: 'equal-quantity-oco',
       });
-
-      expect(result.success).toBe(true);
-      const request = (mockClientService.getExchangeClient().order as jest.Mock)
-        .mock.calls[0][0];
-      // A quantity cannot be expressed under positionTpsl grouping
-      expect(request.grouping).toBe('na');
-      expect(request.orders).toHaveLength(2);
-      expect(request.orders[0].s).toBe('0.04');
-      expect(request.orders[0].r).toBe(true);
-      expect(request.orders[1].s).toBe('0.06');
-      expect(request.orders[1].r).toBe(true);
+      expect(result.success).toBe(false);
+      expect(
+        mockClientService.getExchangeClient().order,
+      ).not.toHaveBeenCalled();
     });
 
     it('keeps whole-position TP/SL on positionTpsl grouping with size 0', async () => {
@@ -1738,8 +2535,8 @@ describe('HyperLiquidProvider', () => {
       });
 
       expect(result.success).toBe(true);
-      const request = (mockClientService.getExchangeClient().order as jest.Mock)
-        .mock.calls[0][0];
+      const request = (mockClientService.getExchangeClient().order as Mock).mock
+        .calls[0][0];
       expect(request.grouping).toBe('positionTpsl');
       expect(request.orders[0].s).toBe('0');
       expect(request.orders[1].s).toBe('0');
@@ -1754,12 +2551,377 @@ describe('HyperLiquidProvider', () => {
         position,
       });
 
-      const request = (mockClientService.getExchangeClient().order as jest.Mock)
-        .mock.calls[0][0];
+      const request = (mockClientService.getExchangeClient().order as Mock).mock
+        .calls[0][0];
       expect(request.grouping).toBe('na');
       expect(request.orders[0].s).toBe('0.04');
       // The stop loss without an explicit size covers the full position size
       expect(request.orders[1].s).toBe('0.1');
+    });
+
+    // TAT-3252: a partial TP/SL is a reduce-only trigger, so its size may never
+    // exceed the position it protects, and the position it is measured against
+    // must be the live one rather than the caller's throttled snapshot.
+    // Otherwise HyperLiquid rejects the order with "Order 0: Reduce only order
+    // would increase position".
+    describe('reduce-only safety', () => {
+      it('floors a partial size onto the size grid instead of rounding it up', async () => {
+        // BTC is szDecimals 3 here, so 0.1155 rounds half-up to '0.116' —
+        // more than the 0.1155 the caller asked to cover.
+        mockSubscriptionService.getCachedPositionsForDex.mockReturnValue([
+          { ...position, size: '0.1155' },
+        ]);
+        await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.1155',
+          position: { ...position, size: '0.1155' },
+        });
+
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        expect(request.orders[0].r).toBe(true);
+        expect(parseFloat(request.orders[0].s)).toBeLessThanOrEqual(0.1155);
+        expect(request.orders[0].s).toBe('0.115');
+      });
+
+      it('floors a whole-position TP/SL size onto the size grid', async () => {
+        // Position-bound TP/SL sends size '0', so the formatted whole-position
+        // size is only reachable alongside a partial trigger.
+        mockSubscriptionService.getCachedPositionsForDex.mockReturnValue([
+          { ...position, size: '0.1155' },
+        ]);
+        await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.01',
+          stopLossPrice: '45000',
+          position: { ...position, size: '0.1155' },
+        });
+
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        // The stop loss carries no size of its own, so it covers the position.
+        expect(parseFloat(request.orders[1].s)).toBeLessThanOrEqual(0.1155);
+        expect(request.orders[1].s).toBe('0.115');
+      });
+
+      it('re-reads the live position when the caller snapshot is stale', async () => {
+        // The snapshot says 0.1 but a concurrent fill left only 0.04 open. A
+        // whole-position stop loss must cover the live size, not the snapshot.
+        mockSubscriptionService.isPositionsCacheInitialized.mockReturnValue(
+          true,
+        );
+        mockSubscriptionService.getCachedPositionsForDex = vi
+          .fn()
+          .mockReturnValue([{ ...position, size: '0.04' }]);
+        const infoClient = mockClientService.getInfoClient();
+        const clearinghouseState = infoClient.clearinghouseState as Mock;
+        clearinghouseState.mockClear();
+
+        await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.04',
+          stopLossPrice: '45000',
+          position,
+        });
+
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        // The stop loss carries no explicit size, so it covers the position —
+        // the live 0.04, not the snapshot's 0.1.
+        expect(request.orders[1].s).toBe('0.04');
+        expect(clearinghouseState).not.toHaveBeenCalled();
+      });
+
+      it('re-reads the live position while the aggregate flag is still false', async () => {
+        // isPositionsCacheInitialized() only flips once EVERY expected DEX has
+        // published, so during a staggered start or reconnect it reads false
+        // while this symbol's own slice is already live. Gating revalidation on
+        // it suppressed the fresher answer and built the trigger from the stale
+        // snapshot — the reduce-only rejection this revalidation exists to stop.
+        mockSubscriptionService.isPositionsCacheInitialized.mockReturnValue(
+          false,
+        );
+        mockSubscriptionService.getCachedPositionsForDex = vi
+          .fn()
+          .mockReturnValue([{ ...position, size: '0.04' }]);
+
+        await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.04',
+          stopLossPrice: '45000',
+          position,
+        });
+
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        expect(request.orders[1].s).toBe('0.04');
+      });
+
+      it('takes the trigger side from the live position when the snapshot flipped', async () => {
+        // The snapshot is long but the position is now short. A trigger built
+        // from the stale side would sit on the wrong side of the position and
+        // increase it rather than reduce it.
+        mockSubscriptionService.isPositionsCacheInitialized.mockReturnValue(
+          true,
+        );
+        mockSubscriptionService.getCachedPositionsForDex = vi
+          .fn()
+          .mockReturnValue([{ ...position, size: '-0.1' }]);
+
+        await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '40000',
+          takeProfitSize: '0.04',
+          position,
+        });
+
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        // Closing a short buys, so the reduce-only trigger is a buy.
+        expect(request.orders[0].b).toBe(true);
+      });
+
+      it('uses the target-DEX REST position when the WebSocket slice is unavailable', async () => {
+        mockSubscriptionService.getCachedPositionsForDex.mockReturnValue(null);
+        mockClientService.getInfoClient.mockReturnValue(
+          createMockInfoClient({
+            clearinghouseState: vi.fn().mockResolvedValue({
+              marginSummary: { totalMarginUsed: '200', accountValue: '10200' },
+              withdrawable: '10000',
+              assetPositions: [
+                {
+                  position: {
+                    coin: 'BTC',
+                    szi: '0.04',
+                    entryPx: '50000',
+                    positionValue: '2000',
+                    unrealizedPnl: '20',
+                    marginUsed: '200',
+                    leverage: { type: 'cross', value: 10 },
+                    liquidationPx: '45000',
+                  },
+                  type: 'oneWay',
+                },
+              ],
+            }),
+          }),
+        );
+
+        await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.04',
+          stopLossPrice: '45000',
+          position,
+        });
+
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        expect(request.orders[1].s).toBe('0.04');
+        expect(mockClientService.getInfoClient).toHaveBeenCalledWith({
+          useHttp: true,
+        });
+      });
+
+      it('revalidates a current empty DEX slice before reporting no position', async () => {
+        mockSubscriptionService.getCachedPositionsForDex = vi
+          .fn()
+          .mockReturnValue([]);
+        mockClientService.getInfoClient.mockReturnValue(
+          createMockInfoClient({
+            clearinghouseState: vi.fn().mockResolvedValue({
+              marginSummary: { totalMarginUsed: '200', accountValue: '10200' },
+              withdrawable: '10000',
+              assetPositions: [
+                {
+                  position: {
+                    coin: 'BTC',
+                    szi: '0.04',
+                    entryPx: '50000',
+                    positionValue: '2000',
+                    unrealizedPnl: '20',
+                    marginUsed: '200',
+                    leverage: { type: 'cross', value: 10 },
+                    liquidationPx: '45000',
+                  },
+                  type: 'oneWay',
+                },
+              ],
+            }),
+          }),
+        );
+
+        const result = await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.04',
+          stopLossPrice: '45000',
+          position,
+        });
+
+        expect(result.success).toBe(true);
+        expect(mockClientService.getInfoClient).toHaveBeenCalledWith({
+          useHttp: true,
+        });
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        expect(request.orders[1].s).toBe('0.04');
+      });
+
+      it('revalidates when the current DEX slice contains only another market', async () => {
+        mockSubscriptionService.getCachedPositionsForDex = vi
+          .fn()
+          .mockReturnValue([{ ...position, symbol: 'ETH' }]);
+        mockClientService.getInfoClient.mockReturnValue(
+          createMockInfoClient({
+            clearinghouseState: vi.fn().mockResolvedValue({
+              marginSummary: { totalMarginUsed: '200', accountValue: '10200' },
+              withdrawable: '10000',
+              assetPositions: [
+                {
+                  position: {
+                    coin: 'BTC',
+                    szi: '-0.04',
+                    entryPx: '50000',
+                    positionValue: '2000',
+                    unrealizedPnl: '20',
+                    marginUsed: '200',
+                    leverage: { type: 'cross', value: 10 },
+                    liquidationPx: '55000',
+                  },
+                  type: 'oneWay',
+                },
+              ],
+            }),
+          }),
+        );
+
+        const result = await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '40000',
+          takeProfitSize: '0.04',
+          position,
+        });
+
+        expect(result.success).toBe(true);
+        const request = (mockClientService.getExchangeClient().order as Mock)
+          .mock.calls[0][0];
+        expect(request.orders[0].b).toBe(true);
+      });
+
+      it('reports no position when target-DEX REST confirms the cache miss', async () => {
+        mockSubscriptionService.getCachedPositionsForDex = vi
+          .fn()
+          .mockReturnValue([]);
+        mockClientService.getInfoClient.mockReturnValue(
+          createMockInfoClient({
+            clearinghouseState: vi.fn().mockResolvedValue({
+              marginSummary: { totalMarginUsed: '0', accountValue: '10000' },
+              withdrawable: '10000',
+              assetPositions: [],
+            }),
+          }),
+        );
+
+        const result = await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          position,
+        });
+
+        expect(result).toStrictEqual({
+          success: false,
+          error: PERPS_ERROR_CODES.POSITION_NOT_FOUND,
+        });
+        expect(mockClientService.getInfoClient).toHaveBeenCalledWith({
+          useHttp: true,
+        });
+        expect(
+          mockClientService.getExchangeClient().order,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('stops revalidating once the slice publishes the filled position', async () => {
+        // The post-fill window is transient: the first update runs before the
+        // subscription publishes the new position and pays for one HTTP read,
+        // and the next one must be served from the slice alone. Asserting the
+        // second call makes no request is what keeps this fix from becoming
+        // steady REST traffic on a hot path.
+        mockSubscriptionService.getCachedPositionsForDex = vi
+          .fn()
+          .mockReturnValueOnce([])
+          .mockReturnValue([{ ...position, size: '0.04' }]);
+        const clearinghouseState = vi.fn().mockResolvedValue({
+          marginSummary: { totalMarginUsed: '200', accountValue: '10200' },
+          withdrawable: '10000',
+          assetPositions: [
+            {
+              position: {
+                coin: 'BTC',
+                szi: '0.04',
+                entryPx: '50000',
+                positionValue: '2000',
+                unrealizedPnl: '20',
+                marginUsed: '200',
+                leverage: { type: 'cross', value: 10 },
+                liquidationPx: '45000',
+              },
+              type: 'oneWay',
+            },
+          ],
+        });
+        mockClientService.getInfoClient.mockReturnValue(
+          createMockInfoClient({ clearinghouseState }),
+        );
+
+        const duringWindow = await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          position,
+        });
+        const revalidationCalls = clearinghouseState.mock.calls.length;
+
+        const afterWindow = await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          position,
+        });
+
+        expect(duringWindow.success).toBe(true);
+        expect(revalidationCalls).toBe(1);
+        expect(afterWindow.success).toBe(true);
+        expect(clearinghouseState).toHaveBeenCalledTimes(1);
+      });
+
+      it('reports provider unavailable instead of trusting a snapshot when REST fails', async () => {
+        mockSubscriptionService.getCachedPositionsForDex.mockReturnValue([]);
+        mockClientService.getInfoClient.mockReturnValue(
+          createMockInfoClient({
+            clearinghouseState: vi
+              .fn()
+              .mockRejectedValue(new Error('REST unavailable')),
+          }),
+        );
+
+        const result = await provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '60000',
+          takeProfitSize: '0.04',
+          position,
+        });
+
+        expect(result).toStrictEqual({
+          success: false,
+          error: PERPS_ERROR_CODES.PROVIDER_NOT_AVAILABLE,
+        });
+        expect(
+          mockClientService.getExchangeClient().order,
+        ).not.toHaveBeenCalled();
+      });
     });
 
     it('cancels standalone partial triggers but never another order TP/SL child', async () => {
@@ -1782,7 +2944,7 @@ describe('HyperLiquidProvider', () => {
 
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          frontendOpenOrders: jest.fn().mockResolvedValue([
+          frontendOpenOrders: vi.fn().mockResolvedValue([
             {
               // Standalone partial TP previously placed for this position
               coin: 'BTC',
@@ -1881,7 +3043,7 @@ describe('HyperLiquidProvider', () => {
         },
       ]);
       const infoClient = createMockInfoClient({
-        frontendOpenOrders: jest.fn().mockResolvedValue([
+        frontendOpenOrders: vi.fn().mockResolvedValue([
           {
             coin: 'BTC',
             side: 'A',
@@ -1925,8 +3087,7 @@ describe('HyperLiquidProvider', () => {
 
     it('returns a typed error when a partial size exceeds the position', async () => {
       mockValidateOrderParams.mockImplementation(
-        jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-          .validateOrderParams,
+        actualValidation.validateOrderParams,
       );
 
       const result = await provider.updatePositionTPSL({
@@ -1948,8 +3109,7 @@ describe('HyperLiquidProvider', () => {
       // formats to '0' at szDecimals: 3 — which HyperLiquid reads as a
       // whole-position trigger, silently closing the entire position.
       mockValidateOrderParams.mockImplementation(
-        jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-          .validateOrderParams,
+        actualValidation.validateOrderParams,
       );
 
       const result = await provider.updatePositionTPSL({
@@ -1969,6 +3129,13 @@ describe('HyperLiquidProvider', () => {
     it.each([
       ['a size larger than the position', '0.5'],
       ['a size that rounds to zero', '0.0004'],
+      // The pre-side-effect check formatted half-up while the size that is
+      // actually submitted is floored, so a size in [0.5, 1) increments passed
+      // validation and was only refused after trading setup and the pre-cancel
+      // sweep had already run. 0.0007 at szDecimals 3 rounds up to '0.001' but
+      // floors to 0.
+      ['a size below one full increment', '0.0007'],
+      ['a size on exactly half an increment', '0.0005'],
       ['a non-positive size', '0'],
     ])(
       'rejects %s without running trading setup',
@@ -1977,8 +3144,7 @@ describe('HyperLiquidProvider', () => {
         // builder-fee approvals on-chain. None of that should happen for an
         // update that is rejected outright.
         mockValidateOrderParams.mockImplementation(
-          jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-            .validateOrderParams,
+          actualValidation.validateOrderParams,
         );
 
         const result = await provider.updatePositionTPSL({
@@ -1993,13 +3159,21 @@ describe('HyperLiquidProvider', () => {
         expect(
           mockClientService.getExchangeClient().setReferrer,
         ).not.toHaveBeenCalled();
+        expect(
+          mockClientService.getExchangeClient().approveBuilderFee,
+        ).not.toHaveBeenCalled();
+        // The pre-cancel sweep is the costly one: it clears the position's
+        // existing triggers, so a refusal after it runs leaves the position
+        // unprotected with nothing put back.
+        expect(
+          mockClientService.getExchangeClient().cancel,
+        ).not.toHaveBeenCalled();
       },
     );
 
     it('rejects a TP/SL price that rounds to zero before the pre-cancel sweep', async () => {
       mockValidateOrderParams.mockImplementation(
-        jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-          .validateOrderParams,
+        actualValidation.validateOrderParams,
       );
 
       const result = await provider.updatePositionTPSL({
@@ -2023,14 +3197,13 @@ describe('HyperLiquidProvider', () => {
       // Rejecting the update after that sweep would strip the protection and
       // put nothing back, so the rejection has to come first.
       mockValidateOrderParams.mockImplementation(
-        jest.requireActual('../../../src/utils/hyperLiquidValidation.js')
-          .validateOrderParams,
+        actualValidation.validateOrderParams,
       );
       // A partial update always reads the REST payload for parent/child links,
       // so that is where the sweep finds the trigger it would cancel.
       mockClientService.getInfoClient.mockReturnValue(
         createMockInfoClient({
-          frontendOpenOrders: jest.fn().mockResolvedValue([
+          frontendOpenOrders: vi.fn().mockResolvedValue([
             {
               coin: 'BTC',
               side: 'A',

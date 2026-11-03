@@ -1,11 +1,15 @@
 import { successfulFetch } from '@metamask/controller-utils';
 import { TransactionStatus } from '@metamask/transaction-controller';
-import type { TransactionMeta } from '@metamask/transaction-controller';
+import type {
+  TransactionMeta,
+  TransactionType,
+} from '@metamask/transaction-controller';
 import type { Hex } from '@metamask/utils';
-import { cloneDeep } from 'lodash';
+import { cloneDeep } from 'lodash-es';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getMessengerMock } from '../../../tests/messenger-mock.js';
 import { PaymentOverride } from '../../constants.js';
-import { getMessengerMock } from '../../tests/messenger-mock.js';
 import type {
   PayStrategyExecuteRequest,
   TransactionPayQuote,
@@ -14,6 +18,11 @@ import {
   getServerPollingInterval,
   getServerPollingTimeout,
 } from '../../utils/feature-flags.js';
+import {
+  submitPolymarketWithdraw,
+  sweepPolymarketDepositWallet,
+} from '../../utils/polymarket/withdraw.js';
+import { submitSecondLeg } from '../../utils/second-leg.js';
 import { getLiveTokenBalance } from '../../utils/token.js';
 import {
   collectTransactionIds,
@@ -22,25 +31,27 @@ import {
 } from '../../utils/transaction.js';
 import { getServerStatus, submitServerIntent } from './server-api.js';
 import { submitServerQuotes } from './server-submit.js';
-import { ServerProviderName, ServerStatus } from './types.js';
+import { ServerStatus } from './types.js';
 import type { ServerQuote, ServerSignatureStep } from './types.js';
 
-jest.mock('@metamask/controller-utils', () => ({
-  ...jest.requireActual('@metamask/controller-utils'),
-  successfulFetch: jest.fn(),
+vi.mock(import('@metamask/controller-utils'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  successfulFetch: vi.fn(),
 }));
-jest.mock('../../utils/feature-flags');
-jest.mock('../../utils/token', () => ({
-  ...jest.requireActual('../../utils/token'),
-  getLiveTokenBalance: jest.fn(),
+vi.mock(import('../../utils/feature-flags.js'));
+vi.mock(import('../../utils/polymarket/withdraw.js'));
+vi.mock(import('../../utils/second-leg.js'));
+vi.mock(import('../../utils/token.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getLiveTokenBalance: vi.fn(),
 }));
-jest.mock('../../utils/transaction', () => ({
-  ...jest.requireActual('../../utils/transaction'),
-  collectTransactionIds: jest.fn(),
-  getTransaction: jest.fn(),
-  waitForTransactionConfirmed: jest.fn(),
+vi.mock(import('../../utils/transaction.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  collectTransactionIds: vi.fn(),
+  getTransaction: vi.fn(),
+  waitForTransactionConfirmed: vi.fn(),
 }));
-jest.mock('./server-api');
+vi.mock(import('./server-api.js'));
 
 const NETWORK_CLIENT_ID_MOCK = 'networkClientIdMock';
 const ORIGINAL_TRANSACTION_ID_MOCK = 'original-transaction-id';
@@ -58,9 +69,9 @@ const TRANSACTION_META_MOCK = {
   time: 12345,
   txParams: {
     from: ORIGINAL_FROM_MOCK,
-    nonce: '0x7' as Hex,
-    to: '0x3333333333333333333333333333333333333333' as Hex,
-    value: '0x0' as Hex,
+    nonce: '0x7',
+    to: '0x3333333333333333333333333333333333333333',
+    value: '0x0',
   },
 } as TransactionMeta;
 
@@ -80,22 +91,22 @@ const ORIGINAL_QUOTE_MOCK: ServerQuote = {
     decimals: 6,
     formatted: '1.23',
     raw: '1230000',
-    token: '0x5555555555555555555555555555555555555555' as Hex,
+    token: '0x5555555555555555555555555555555555555555',
   },
   output: {
     chainId: 1,
     decimals: 6,
     formatted: '1',
     raw: '1000000',
-    token: '0x6666666666666666666666666666666666666666' as Hex,
+    token: '0x6666666666666666666666666666666666666666',
   },
-  provider: ServerProviderName.Relay,
+  provider: 'relay',
   steps: [
     {
       type: 'transaction' as const,
       chainId: 137,
-      data: '0xstepdata' as Hex,
-      to: '0x4444444444444444444444444444444444444444' as Hex,
+      data: '0xstepdata',
+      to: '0x4444444444444444444444444444444444444444',
       value: '0x10',
     },
   ],
@@ -118,11 +129,11 @@ const QUOTE_MOCK = {
     from: QUOTE_FROM_MOCK,
     sourceBalanceRaw: '10000000',
     sourceChainId: SOURCE_CHAIN_ID_MOCK,
-    sourceTokenAddress: '0x5555555555555555555555555555555555555555' as Hex,
+    sourceTokenAddress: '0x5555555555555555555555555555555555555555',
     sourceTokenAmount: '1230000',
     targetAmountMinimum: '1000000',
-    targetChainId: '0x1' as Hex,
-    targetTokenAddress: '0x6666666666666666666666666666666666666666' as Hex,
+    targetChainId: '0x1',
+    targetTokenAddress: '0x6666666666666666666666666666666666666666',
   },
   sourceAmount: { fiat: '1', human: '1', raw: '1230000', usd: '1' },
   strategy: 'server',
@@ -146,11 +157,11 @@ const DELEGATION_MOCK = {
 };
 
 describe('submitServerQuotes', () => {
-  const getLiveTokenBalanceMock = jest.mocked(getLiveTokenBalance);
-  const getServerPollingIntervalMock = jest.mocked(getServerPollingInterval);
-  const getServerPollingTimeoutMock = jest.mocked(getServerPollingTimeout);
-  const getServerStatusMock = jest.mocked(getServerStatus);
-  const submitServerIntentMock = jest.mocked(submitServerIntent);
+  const getLiveTokenBalanceMock = vi.mocked(getLiveTokenBalance);
+  const getServerPollingIntervalMock = vi.mocked(getServerPollingInterval);
+  const getServerPollingTimeoutMock = vi.mocked(getServerPollingTimeout);
+  const getServerStatusMock = vi.mocked(getServerStatus);
+  const submitServerIntentMock = vi.mocked(submitServerIntent);
 
   const {
     addTransactionMock: addTxMock,
@@ -158,6 +169,7 @@ describe('submitServerQuotes', () => {
     findNetworkClientIdByChainIdMock,
     getControllerStateMock,
     getDelegationTransactionMock,
+    getKeyringControllerStateMock,
     getPaymentOverrideDataMock,
     getTransactionControllerStateMock,
     messenger,
@@ -168,7 +180,7 @@ describe('submitServerQuotes', () => {
   let request: PayStrategyExecuteRequest<ServerQuote>;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     currentTransaction = cloneDeep(TRANSACTION_META_MOCK);
     request = {
@@ -178,6 +190,17 @@ describe('submitServerQuotes', () => {
       quotes: [cloneDeep(QUOTE_MOCK)],
       transaction: cloneDeep(TRANSACTION_META_MOCK),
     };
+
+    getKeyringControllerStateMock.mockReturnValue({
+      isUnlocked: true,
+      keyrings: [
+        {
+          type: 'HD Key Tree',
+          accounts: [ORIGINAL_FROM_MOCK, QUOTE_FROM_MOCK],
+          metadata: { id: 'hd-keyring', name: 'HD Key Tree' },
+        },
+      ],
+    });
 
     findNetworkClientIdByChainIdMock.mockReturnValue(NETWORK_CLIENT_ID_MOCK);
     getDelegationTransactionMock.mockResolvedValue(DELEGATION_MOCK);
@@ -214,7 +237,7 @@ describe('submitServerQuotes', () => {
       chainId: 137,
       data: DELEGATION_MOCK.data,
       id: ORIGINAL_QUOTE_MOCK.id,
-      provider: ServerProviderName.Relay,
+      provider: 'relay',
       to: DELEGATION_MOCK.to,
       value: '16',
     });
@@ -286,6 +309,154 @@ describe('submitServerQuotes', () => {
     expect(getServerStatusMock).toHaveBeenCalledTimes(2);
   });
 
+  describe('second leg', () => {
+    const SECOND_LEG_HASH_MOCK = '0xsecondleg' as Hex;
+    const RECIPIENT_MOCK = '0x9999999999999999999999999999999999999999' as Hex;
+
+    const submitSecondLegMock = vi.mocked(submitSecondLeg);
+
+    beforeEach(() => {
+      submitSecondLegMock.mockResolvedValue({
+        transactionHash: SECOND_LEG_HASH_MOCK,
+      });
+
+      getServerStatusMock.mockResolvedValue({
+        status: ServerStatus.Confirmed,
+        targetHash: TARGET_HASH_MOCK,
+      });
+
+      request.quotes = [{ ...cloneDeep(QUOTE_MOCK), requiresSecondLeg: true }];
+    });
+
+    it('submits the second leg with the settlement hash and target token address', async () => {
+      const result = await submitServerQuotes(request);
+
+      expect(submitSecondLegMock).toHaveBeenCalledWith({
+        chainId: '0x1',
+        from: QUOTE_FROM_MOCK,
+        getCalls: undefined,
+        messenger,
+        settlementHash: TARGET_HASH_MOCK,
+        tokenAddress: '0x6666666666666666666666666666666666666666',
+        transaction: expect.objectContaining({
+          id: ORIGINAL_TRANSACTION_ID_MOCK,
+        }),
+      });
+      expect(result).toStrictEqual({ transactionHash: SECOND_LEG_HASH_MOCK });
+    });
+
+    it('submits from the quote recipient when set', async () => {
+      request.quotes = [
+        {
+          ...cloneDeep(QUOTE_MOCK),
+          request: { ...QUOTE_MOCK.request, recipient: RECIPIENT_MOCK },
+          requiresSecondLeg: true,
+        },
+      ];
+
+      await submitServerQuotes(request);
+
+      expect(submitSecondLegMock).toHaveBeenCalledWith(
+        expect.objectContaining({ from: RECIPIENT_MOCK }),
+      );
+    });
+
+    it('falls back to the settlement hash when the second leg returns none', async () => {
+      submitSecondLegMock.mockResolvedValue({ transactionHash: undefined });
+
+      const result = await submitServerQuotes(request);
+
+      expect(result).toStrictEqual({ transactionHash: TARGET_HASH_MOCK });
+    });
+
+    it('passes no settlement hash when the intent confirmed without one', async () => {
+      getServerStatusMock.mockResolvedValue({
+        status: ServerStatus.Confirmed,
+        targetHash: undefined,
+      });
+
+      await submitServerQuotes(request);
+
+      expect(submitSecondLegMock).toHaveBeenCalledWith(
+        expect.objectContaining({ settlementHash: undefined }),
+      );
+    });
+
+    it('builds post-quote calls from the payment override for the settled amount', async () => {
+      const overrideCalls = [
+        { data: '0xdeposit' as Hex, to: RECIPIENT_MOCK, value: '0x0' as Hex },
+      ];
+
+      getControllerStateMock.mockReturnValue({
+        transactionData: { [ORIGINAL_TRANSACTION_ID_MOCK]: { tokens: [] } },
+        transactions: [],
+      });
+      getPaymentOverrideDataMock.mockResolvedValue({ calls: overrideCalls });
+
+      request.quotes = [
+        {
+          ...cloneDeep(QUOTE_MOCK),
+          request: { ...QUOTE_MOCK.request, atomic: false, isPostQuote: true },
+          requiresSecondLeg: true,
+        },
+      ];
+
+      await submitServerQuotes(request);
+
+      const { getCalls } = submitSecondLegMock.mock.calls[0][0];
+
+      expect(await getCalls?.('1500000')).toStrictEqual(overrideCalls);
+      expect(getPaymentOverrideDataMock).toHaveBeenCalledWith({
+        amount: '1.5',
+        transaction: expect.objectContaining({
+          id: ORIGINAL_TRANSACTION_ID_MOCK,
+        }),
+        transactionData: { tokens: [] },
+      });
+    });
+
+    it('passes no call builder when the flow is not post-quote', async () => {
+      await submitServerQuotes(request);
+
+      expect(submitSecondLegMock).toHaveBeenCalledWith(
+        expect.objectContaining({ getCalls: undefined }),
+      );
+    });
+
+    it('is skipped when the quote embedded the calls', async () => {
+      request.quotes = [cloneDeep(QUOTE_MOCK)];
+
+      const result = await submitServerQuotes(request);
+
+      expect(submitSecondLegMock).not.toHaveBeenCalled();
+      expect(result).toStrictEqual({ transactionHash: TARGET_HASH_MOCK });
+    });
+
+    it('marks the intent complete only after the second leg is submitted', async () => {
+      let isIntentCompleteDuringSecondLeg: boolean | undefined;
+
+      submitSecondLegMock.mockImplementation(async () => {
+        isIntentCompleteDuringSecondLeg = currentTransaction.isIntentComplete;
+        return { transactionHash: SECOND_LEG_HASH_MOCK };
+      });
+
+      await submitServerQuotes(request);
+
+      expect(isIntentCompleteDuringSecondLeg).toBeUndefined();
+      expect(currentTransaction.isIntentComplete).toBe(true);
+    });
+
+    it('does not mark the intent complete when the second leg fails', async () => {
+      submitSecondLegMock.mockRejectedValue(new Error('Second leg failed'));
+
+      await expect(submitServerQuotes(request)).rejects.toThrow(
+        'Second leg failed',
+      );
+
+      expect(currentTransaction.isIntentComplete).toBeUndefined();
+    });
+  });
+
   it('marks the parent transaction isIntentComplete after confirmation', async () => {
     getServerStatusMock.mockResolvedValue({
       status: ServerStatus.Confirmed,
@@ -333,7 +504,7 @@ describe('submitServerQuotes', () => {
   });
 
   it('honors the polling timeout and includes the last status', async () => {
-    const dateNowMock = jest
+    const dateNowMock = vi
       .spyOn(Date, 'now')
       .mockReturnValueOnce(100)
       .mockReturnValueOnce(110);
@@ -349,7 +520,7 @@ describe('submitServerQuotes', () => {
   });
 
   it('omits last status detail when polling times out before any status is received', async () => {
-    const dateNowMock = jest
+    const dateNowMock = vi
       .spyOn(Date, 'now')
       .mockReturnValueOnce(100)
       .mockReturnValueOnce(110);
@@ -371,7 +542,7 @@ describe('submitServerQuotes', () => {
         status: ServerStatus.Submitted,
       })
       .mockResolvedValueOnce({
-        sourceHash: '0xsecondsource' as Hex,
+        sourceHash: '0xsecondsource',
         status: ServerStatus.Confirmed,
         targetHash: TARGET_HASH_MOCK,
       });
@@ -397,12 +568,12 @@ describe('submitServerQuotes', () => {
     getControllerStateMock.mockReturnValue({
       transactionData: {},
       transactions: [],
-    } as never);
+    });
     getPaymentOverrideDataMock.mockResolvedValue({
       calls: [{ to: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Hex }],
       recipient: undefined,
       authorizationList: undefined,
-    } as never);
+    });
 
     const req = {
       ...request,
@@ -435,10 +606,117 @@ describe('submitServerQuotes', () => {
     expect(getServerStatusMock).toHaveBeenCalledTimes(2);
   });
 
+  describe('Polymarket deposit wallet', () => {
+    const DEPOSIT_DATA_MOCK =
+      `0xa9059cbb${'1'.padStart(64, '0')}${'2'.padStart(64, '0')}` as Hex;
+    const PRE_SUBMIT_BALANCE_MOCK = 5n;
+
+    const submitPolymarketWithdrawMock = vi.mocked(submitPolymarketWithdraw);
+    const sweepPolymarketDepositWalletMock = vi.mocked(
+      sweepPolymarketDepositWallet,
+    );
+
+    beforeEach(() => {
+      submitPolymarketWithdrawMock.mockResolvedValue({
+        preSubmitUsdceBalance: PRE_SUBMIT_BALANCE_MOCK,
+        sourceHash: SOURCE_HASH_MOCK,
+      });
+
+      getServerStatusMock.mockResolvedValue({
+        status: ServerStatus.Confirmed,
+        targetHash: TARGET_HASH_MOCK,
+      });
+
+      request.quotes = [
+        {
+          ...cloneDeep(QUOTE_MOCK),
+          original: {
+            ...ORIGINAL_QUOTE_MOCK,
+            gasless: false,
+            steps: [
+              {
+                chainId: 137,
+                data: DEPOSIT_DATA_MOCK,
+                to: '0x4444444444444444444444444444444444444444',
+                type: 'transaction' as const,
+                value: '0',
+              },
+            ],
+          },
+          request: { ...QUOTE_MOCK.request, isPolymarketDepositWallet: true },
+        },
+      ];
+    });
+
+    it('unwraps to the deposit address instead of submitting the quote steps', async () => {
+      const result = await submitServerQuotes(request);
+
+      expect(submitPolymarketWithdrawMock).toHaveBeenCalledWith({
+        depositData: DEPOSIT_DATA_MOCK,
+        from: QUOTE_FROM_MOCK,
+        messenger,
+        sourceAmountRaw: QUOTE_MOCK.sourceAmount.raw,
+      });
+      expect(submitServerIntentMock).not.toHaveBeenCalled();
+      expect(addTxMock).not.toHaveBeenCalled();
+      expect(addTxBatchMock).not.toHaveBeenCalled();
+      expect(result).toStrictEqual({ transactionHash: TARGET_HASH_MOCK });
+    });
+
+    it('records the unwrap hash as the source hash', async () => {
+      await submitServerQuotes(request);
+
+      expect(currentTransaction.metamaskPay?.sourceHash).toBe(SOURCE_HASH_MOCK);
+    });
+
+    it('sweeps leftover USDC.e after confirmation', async () => {
+      await submitServerQuotes(request);
+
+      expect(sweepPolymarketDepositWalletMock).toHaveBeenCalledWith({
+        from: QUOTE_FROM_MOCK,
+        isRefund: false,
+        messenger,
+        preSubmitUsdceBalance: PRE_SUBMIT_BALANCE_MOCK,
+      });
+    });
+
+    it('sweeps the refund before reporting a refunded intent', async () => {
+      getServerStatusMock.mockResolvedValue({ status: ServerStatus.Refunded });
+
+      await expect(submitServerQuotes(request)).rejects.toThrow(
+        'Server intent refunded',
+      );
+
+      expect(sweepPolymarketDepositWalletMock).toHaveBeenCalledWith(
+        expect.objectContaining({ isRefund: true }),
+      );
+    });
+
+    it('sweeps before reporting a failed intent', async () => {
+      getServerStatusMock.mockResolvedValue({ status: ServerStatus.Failed });
+
+      await expect(submitServerQuotes(request)).rejects.toThrow(
+        'Server intent failed',
+      );
+
+      expect(sweepPolymarketDepositWalletMock).toHaveBeenCalledWith(
+        expect.objectContaining({ isRefund: false }),
+      );
+    });
+
+    it('does not sweep for other flows', async () => {
+      request.quotes = [cloneDeep(QUOTE_MOCK)];
+
+      await submitServerQuotes(request);
+
+      expect(sweepPolymarketDepositWalletMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('non-gasless fallback', () => {
-    const collectTransactionIdsMock = jest.mocked(collectTransactionIds);
-    const getTransactionMock = jest.mocked(getTransaction);
-    const waitForTransactionConfirmedMock = jest.mocked(
+    const collectTransactionIdsMock = vi.mocked(collectTransactionIds);
+    const getTransactionMock = vi.mocked(getTransaction);
+    const waitForTransactionConfirmedMock = vi.mocked(
       waitForTransactionConfirmed,
     );
     const SUBMITTED_TX_ID_MOCK = 'submitted-tx-id';
@@ -448,7 +726,7 @@ describe('submitServerQuotes', () => {
       collectTransactionIdsMock.mockImplementation(
         (_chainId, _from, _messenger, onTransactionId) => {
           onTransactionId(SUBMITTED_TX_ID_MOCK);
-          return { end: jest.fn() };
+          return { end: vi.fn() };
         },
       );
       getTransactionMock.mockReturnValue({
@@ -457,10 +735,10 @@ describe('submitServerQuotes', () => {
       waitForTransactionConfirmedMock.mockResolvedValue(undefined);
       addTxMock.mockResolvedValue({
         result: Promise.resolve(SUBMITTED_TX_HASH_MOCK),
-      } as never);
+      });
       addTxBatchMock.mockResolvedValue({
         batchId: 'batch-id',
-      } as never);
+      });
     });
 
     const buildNonGaslessRequest = (
@@ -489,6 +767,20 @@ describe('submitServerQuotes', () => {
       expect(submitServerIntentMock).not.toHaveBeenCalled();
     });
 
+    it('passes the semantic type as an option rather than in the transaction params', async () => {
+      const singleStepRequest = buildNonGaslessRequest();
+      singleStepRequest.transaction.type = 'predictDeposit' as TransactionType;
+
+      await submitServerQuotes(singleStepRequest);
+
+      const [txParams, options] = addTxMock.mock.calls[0];
+
+      // `TransactionParams.type` is the EVM envelope type, so leaking the
+      // semantic type into it makes the controller reject the envelope.
+      expect(txParams).not.toHaveProperty('type');
+      expect(options).toMatchObject({ type: 'predictRelayDeposit' });
+    });
+
     it('uses addTransactionBatch when the quote has multiple steps', async () => {
       await submitServerQuotes(
         buildNonGaslessRequest({
@@ -497,8 +789,8 @@ describe('submitServerQuotes', () => {
             {
               type: 'transaction' as const,
               chainId: 137,
-              data: '0xseconddata' as Hex,
-              to: '0x9999999999999999999999999999999999999999' as Hex,
+              data: '0xseconddata',
+              to: '0x9999999999999999999999999999999999999999',
               value: '0x20',
             },
           ],
@@ -518,8 +810,131 @@ describe('submitServerQuotes', () => {
       expect(addTxMock).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
+          excludeNativeTokenForFee: true,
           gasFeeToken: reqWithGasFeeToken.quotes[0].request.sourceTokenAddress,
         }),
+      );
+    });
+
+    it('passes gasFeeToken to the batch when fees.isSourceGasFeeToken is true', async () => {
+      const reqWithGasFeeToken = buildNonGaslessRequest({
+        steps: [
+          ORIGINAL_QUOTE_MOCK.steps[0],
+          {
+            type: 'transaction' as const,
+            chainId: 137,
+            data: '0xseconddata' as Hex,
+            to: '0x9999999999999999999999999999999999999999' as Hex,
+            value: '0x20',
+          },
+        ],
+      });
+
+      reqWithGasFeeToken.quotes[0].fees.isSourceGasFeeToken = true;
+
+      await submitServerQuotes(reqWithGasFeeToken);
+
+      expect(addTxBatchMock).toHaveBeenCalledTimes(1);
+      expect(addTxBatchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludeNativeTokenForFee: true,
+          gasFeeToken: reqWithGasFeeToken.quotes[0].request.sourceTokenAddress,
+        }),
+      );
+    });
+
+    const buildSponsoredRequest = (
+      overrides: Partial<ServerQuote> = {},
+    ): PayStrategyExecuteRequest<ServerQuote> => {
+      const sponsoredRequest = buildNonGaslessRequest(overrides);
+      const { chainId } = sponsoredRequest.transaction;
+
+      // Sponsorship only applies when the quote never leaves the parent
+      // transaction's chain.
+      sponsoredRequest.quotes[0].request.sourceChainId = chainId;
+      sponsoredRequest.quotes[0].request.targetChainId = chainId;
+      sponsoredRequest.transaction.isGasFeeSponsored = true;
+
+      return sponsoredRequest;
+    };
+
+    it('passes isGasFeeSponsored when the parent is sponsored and the route is same-chain', async () => {
+      await submitServerQuotes(buildSponsoredRequest());
+
+      expect(addTxMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ isGasFeeSponsored: true }),
+      );
+    });
+
+    it('suppresses gasFeeToken when sponsored', async () => {
+      const sponsoredRequest = buildSponsoredRequest();
+
+      // Sponsorship outranks the gas fee token, so the user must not also be
+      // billed in the source token for gas MetaMask is covering.
+      sponsoredRequest.quotes[0].fees.isSourceGasFeeToken = true;
+
+      await submitServerQuotes(sponsoredRequest);
+
+      const [, options] = addTxMock.mock.calls[0];
+
+      expect(options).toMatchObject({ isGasFeeSponsored: true });
+      expect(options?.gasFeeToken).toBeUndefined();
+      expect(options?.excludeNativeTokenForFee).toBeUndefined();
+    });
+
+    it('passes isGasFeeSponsored to the batch when sponsored', async () => {
+      await submitServerQuotes(
+        buildSponsoredRequest({
+          steps: [
+            ORIGINAL_QUOTE_MOCK.steps[0],
+            {
+              type: 'transaction' as const,
+              chainId: 137,
+              data: '0xseconddata' as Hex,
+              to: '0x9999999999999999999999999999999999999999' as Hex,
+              value: '0x20',
+            },
+          ],
+        }),
+      );
+
+      expect(addTxBatchMock).toHaveBeenCalledWith(
+        expect.objectContaining({ isGasFeeSponsored: true }),
+      );
+    });
+
+    it('passes isGasFeeSponsored as false when the parent is explicitly unsponsored', async () => {
+      const unsponsoredRequest = buildSponsoredRequest();
+      unsponsoredRequest.transaction.isGasFeeSponsored = false;
+
+      await submitServerQuotes(unsponsoredRequest);
+
+      // An explicit `false` and an absent flag are not equivalent to the
+      // `TransactionController`, so the evaluated result must be forwarded.
+      expect(addTxMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ isGasFeeSponsored: false }),
+      );
+    });
+
+    it('omits isGasFeeSponsored when the parent sponsorship is unknown', async () => {
+      await submitServerQuotes(buildNonGaslessRequest());
+
+      const [, options] = addTxMock.mock.calls[0];
+
+      expect(options?.isGasFeeSponsored).toBeUndefined();
+    });
+
+    it('does not sponsor a cross-chain route even when the parent is sponsored', async () => {
+      const crossChainRequest = buildSponsoredRequest();
+      crossChainRequest.quotes[0].request.sourceChainId = '0x89';
+
+      await submitServerQuotes(crossChainRequest);
+
+      expect(addTxMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ isGasFeeSponsored: false }),
       );
     });
 
@@ -563,7 +978,7 @@ describe('submitServerQuotes', () => {
     });
 
     it('skips source hash update when no transaction ids were collected', async () => {
-      collectTransactionIdsMock.mockImplementation(() => ({ end: jest.fn() }));
+      collectTransactionIdsMock.mockImplementation(() => ({ end: vi.fn() }));
 
       await submitServerQuotes(buildNonGaslessRequest());
 
@@ -654,8 +1069,8 @@ describe('submitServerQuotes', () => {
           {
             type: 'transaction' as const,
             chainId: 137,
-            data: '0xseconddata' as Hex,
-            to: '0x9999999999999999999999999999999999999999' as Hex,
+            data: '0xseconddata',
+            to: '0x9999999999999999999999999999999999999999',
             value: '0x20',
           },
         ],
@@ -666,7 +1081,15 @@ describe('submitServerQuotes', () => {
       expect(addTxBatchMock).toHaveBeenCalledWith(
         expect.objectContaining({
           disable7702: false,
-          gasLimit7702: expect.any(String),
+          gasLimit7702: '0x5208',
+          transactions: [
+            expect.objectContaining({
+              params: expect.objectContaining({ gas: undefined }),
+            }),
+            expect.objectContaining({
+              params: expect.objectContaining({ gas: undefined }),
+            }),
+          ],
         }),
       );
     });
@@ -690,15 +1113,15 @@ describe('submitServerQuotes', () => {
       },
     };
 
-    const signTypedMessageMock = jest.fn();
-    const successfulFetchMock = jest.mocked(successfulFetch);
+    const signTypedMessageMock = vi.fn();
+    const successfulFetchMock = vi.mocked(successfulFetch);
 
     // Register the handler once — can't re-register after the first test.
     // The outer beforeEach resets mock implementations so we re-apply in
     // our own beforeEach which runs after the outer one.
     beforeAll(() => {
       messenger.registerActionHandler(
-        'KeyringController:signTypedMessage' as never,
+        'KeyringController:signTypedMessage',
         signTypedMessageMock as never,
       );
     });
@@ -706,7 +1129,7 @@ describe('submitServerQuotes', () => {
     beforeEach(() => {
       signTypedMessageMock.mockResolvedValue(SIGNATURE_MOCK);
       successfulFetchMock.mockResolvedValue({
-        json: jest.fn().mockResolvedValue({ success: true }),
+        json: vi.fn().mockResolvedValue({ success: true }),
       } as never);
     });
 
@@ -740,7 +1163,7 @@ describe('submitServerQuotes', () => {
 
     it('signs and POSTs signature step with rsv format', async () => {
       successfulFetchMock.mockResolvedValue({
-        json: jest.fn().mockResolvedValue({ status: 'ok' }),
+        json: vi.fn().mockResolvedValue({ status: 'ok' }),
       } as never);
 
       const rsvStep: ServerSignatureStep = {
@@ -760,7 +1183,7 @@ describe('submitServerQuotes', () => {
 
     it('throws when rsv POST response status is not ok', async () => {
       successfulFetchMock.mockResolvedValue({
-        json: jest
+        json: vi
           .fn()
           .mockResolvedValue({ status: 'error', message: 'rejected' }),
       } as never);
@@ -818,7 +1241,7 @@ describe('submitServerQuotes', () => {
 
   describe('validateSourceBalance', () => {
     it('throws when source balance is insufficient', async () => {
-      jest.mocked(getLiveTokenBalance).mockResolvedValue('0');
+      vi.mocked(getLiveTokenBalance).mockResolvedValue('0');
 
       const quote = cloneDeep(QUOTE_MOCK);
       quote.original.gasless = false;
@@ -836,9 +1259,9 @@ describe('submitServerQuotes', () => {
     });
 
     it('wraps getLiveTokenBalance errors with context message', async () => {
-      jest
-        .mocked(getLiveTokenBalance)
-        .mockRejectedValue(new Error('RPC timeout'));
+      vi.mocked(getLiveTokenBalance).mockRejectedValue(
+        new Error('RPC timeout'),
+      );
 
       const quote = cloneDeep(QUOTE_MOCK);
       quote.original.gasless = false;
@@ -872,23 +1295,23 @@ describe('submitServerQuotes', () => {
     };
 
     beforeEach(() => {
-      jest
-        .mocked(collectTransactionIds)
-        .mockImplementation((_chainId, _from, _messenger, onTransactionId) => {
+      vi.mocked(collectTransactionIds).mockImplementation(
+        (_chainId, _from, _messenger, onTransactionId) => {
           onTransactionId('submitted-tx-id');
-          return { end: jest.fn() };
-        });
-      jest.mocked(getTransaction).mockReturnValue({
+          return { end: vi.fn() };
+        },
+      );
+      vi.mocked(getTransaction).mockReturnValue({
         hash: '0xsubmitted' as Hex,
       } as TransactionMeta);
-      jest.mocked(waitForTransactionConfirmed).mockResolvedValue(undefined);
+      vi.mocked(waitForTransactionConfirmed).mockResolvedValue(undefined);
       addTxMock.mockResolvedValue({
         result: Promise.resolve('0xsubmitted' as Hex),
-      } as never);
+      });
       getControllerStateMock.mockReturnValue({
         transactionData: {},
         transactions: [],
-      } as never);
+      });
     });
 
     it('skips prepend when paymentOverride returns empty calls', async () => {
@@ -896,7 +1319,7 @@ describe('submitServerQuotes', () => {
         calls: [],
         recipient: undefined,
         authorizationList: undefined,
-      } as never);
+      });
 
       await submitServerQuotes(
         buildRequest({
@@ -922,7 +1345,7 @@ describe('submitServerQuotes', () => {
         calls: [overrideCall],
         recipient: undefined,
         authorizationList: undefined,
-      } as never);
+      });
 
       await submitServerQuotes(
         buildRequest({
@@ -972,6 +1395,86 @@ describe('submitServerQuotes', () => {
               }),
             }),
           ]),
+        }),
+      );
+    });
+
+    it('does not prepend payment override calls for non-atomic flows', async () => {
+      await submitServerQuotes(
+        buildRequest({
+          request: {
+            ...QUOTE_MOCK.request,
+            atomic: false,
+            paymentOverride: PaymentOverride.MoneyAccount,
+          },
+        }),
+      );
+
+      expect(getPaymentOverrideDataMock).not.toHaveBeenCalled();
+      expect(addTxMock).toHaveBeenCalled();
+    });
+
+    it('prepends the original tx for non-atomic Money Account post-quote flows', async () => {
+      await submitServerQuotes(
+        buildRequest({
+          request: {
+            ...QUOTE_MOCK.request,
+            atomic: false,
+            from: ORIGINAL_FROM_MOCK,
+            isPostQuote: true,
+            paymentOverride: PaymentOverride.MoneyAccount,
+          },
+        }),
+      );
+
+      expect(getPaymentOverrideDataMock).not.toHaveBeenCalled();
+      expect(addTxBatchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transactions: [
+            expect.objectContaining({
+              params: expect.objectContaining({
+                to: TRANSACTION_META_MOCK.txParams.to,
+              }),
+            }),
+            expect.objectContaining({
+              params: expect.objectContaining({
+                to: '0x4444444444444444444444444444444444444444',
+              }),
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('assigns the leading gas limit to the prepended original tx', async () => {
+      await submitServerQuotes(
+        buildRequest({
+          original: {
+            ...ORIGINAL_QUOTE_MOCK,
+            client: {
+              ...ORIGINAL_QUOTE_MOCK.client,
+              gasLimits: [100000, 50000],
+            },
+            gasless: false,
+          },
+          request: {
+            ...QUOTE_MOCK.request,
+            from: ORIGINAL_FROM_MOCK,
+            isPostQuote: true,
+          },
+        }),
+      );
+
+      expect(addTxBatchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transactions: [
+            expect.objectContaining({
+              params: expect.objectContaining({ gas: '0x186a0' }),
+            }),
+            expect.objectContaining({
+              params: expect.objectContaining({ gas: '0xc350' }),
+            }),
+          ],
         }),
       );
     });
@@ -1051,7 +1554,7 @@ describe('submitServerQuotes', () => {
         nestedTransactions: [
           {
             type: 'relayPerpsDeposit' as never,
-            to: '0x1111111111111111111111111111111111111111' as Hex,
+            to: '0x1111111111111111111111111111111111111111',
             data: '0x',
           },
         ],

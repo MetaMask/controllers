@@ -10,7 +10,7 @@ import {
 import type {
   BatchSellTradesResponse,
   QuoteMetadata,
-  QuoteResponse,
+  QuoteResponseV1,
   SimulatedGasFeeLimits,
   Trade,
   TxData,
@@ -87,6 +87,11 @@ export const hasNestedSwapTransactions = (txMeta: TransactionMeta) => {
   );
 };
 
+export const isAtomic7702BatchTx = (txMeta: TransactionMeta): boolean =>
+  txMeta.type === TransactionType.batch ||
+  hasNestedSwapTransactions(txMeta) ||
+  Boolean(txMeta.txParams?.authorizationList?.length);
+
 export const getGasFeeEstimates = async (
   messenger: BridgeStatusControllerMessenger,
   args: Parameters<TransactionController['estimateGasFee']>[0],
@@ -100,7 +105,7 @@ export const getGasFeeEstimates = async (
     return estimates[BRIDGE_PREFERRED_GAS_ESTIMATE];
   }
 
-  return undefined;
+  return;
 };
 
 export const getTransactions = (messenger: BridgeStatusControllerMessenger) => {
@@ -113,6 +118,15 @@ export const getTransactionMetaById = (
 ) => {
   return getTransactions(messenger).find(
     (tx: TransactionMeta) => tx.id === txId,
+  );
+};
+
+export const getTransactionMetaByActionId = (
+  messenger: BridgeStatusControllerMessenger,
+  actionId?: string,
+) => {
+  return getTransactions(messenger).find(
+    (tx: TransactionMeta) => tx.actionId === actionId,
   );
 };
 
@@ -215,7 +229,7 @@ export const addSyntheticTransaction = async (
 };
 
 export const handleApprovalDelay = async (
-  srcChainId: QuoteResponse['quote']['srcChainId'],
+  srcChainId: QuoteResponseV1['quote']['srcChainId'],
 ) => {
   if ([ChainId.LINEA, ChainId.BASE].includes(srcChainId)) {
     const debugLog = createProjectLogger('bridge');
@@ -295,7 +309,7 @@ export const toQuoteAndTxMetadata = ({
   quoteResponse,
   isBridgeTx,
 }: {
-  quoteResponse: QuoteResponse<Trade, Trade> & QuoteMetadata;
+  quoteResponse: QuoteResponseV1<Trade, Trade> & QuoteMetadata;
   isBridgeTx: boolean;
 }): Omit<QuoteAndTxMetadata, 'txMeta'>[] => {
   const tradeData: QuoteAndTxMetadata[] = [];
@@ -347,7 +361,7 @@ export const toQuoteAndTxMetadataBatch = ({
   quoteResponses,
   batchSellTrades,
 }: {
-  quoteResponses: (QuoteResponse<TxData, TxData> & QuoteMetadata)[];
+  quoteResponses: (QuoteResponseV1<TxData, TxData> & QuoteMetadata)[];
   batchSellTrades: BatchSellTradesResponse;
 }): Omit<QuoteAndTxMetadata, 'txMeta'>[] => {
   const tradeData: QuoteAndTxMetadata[] = [];
@@ -584,15 +598,20 @@ export const updateTransactionsInBatch = ({
     const { txMeta, type } = tradeWithMetadata;
 
     if (txMeta) {
-      // Update the tx type from batch to swap/bridge
-      updateTransaction(
-        messenger,
-        txMeta,
-        { type },
-        `Update tx type to ${type}`,
-      );
-      const updatedTx = { ...txMeta, type };
-      return { ...tradeWithMetadata, txMeta: updatedTx, type };
+      try {
+        // Update the tx type from batch to swap/bridge
+        updateTransaction(
+          messenger,
+          txMeta,
+          { type },
+          `Update tx type to ${type}`,
+        );
+        const updatedTx = { ...txMeta, type };
+        return { ...tradeWithMetadata, txMeta: updatedTx, type };
+      } catch (error) {
+        console.warn(`Failed to update transaction type to ${type}`, error);
+        return tradeWithMetadata;
+      }
     }
 
     return tradeWithMetadata;

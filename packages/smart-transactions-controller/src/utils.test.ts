@@ -3,9 +3,10 @@ import { keccak256 } from '@ethersproject/keccak256';
 import { ChainId, NetworkType } from '@metamask/controller-utils';
 import { TransactionStatus } from '@metamask/transaction-controller';
 import type { TransactionMeta } from '@metamask/transaction-controller';
+import { describe, expect, it, vi } from 'vitest';
 
 import packageJson from '../package.json';
-import { API_BASE_URL, SENTINEL_API_BASE_URL_MAP } from './constants.js';
+import { SENTINEL_API_BASE_URL_MAP } from './constants.js';
 import {
   SmartTransactionMinedTx,
   APIType,
@@ -49,44 +50,46 @@ describe('src/utils.js', () => {
     const ethereumChainIdDec = parseInt(ChainId.mainnet, 16);
     const ethSepoliaChainIdDec = parseInt(ChainId.sepolia, 16);
 
-    it('returns a URL for getting transactions', () => {
+    it('returns a sentinel URL for getting fees', () => {
       expect(utils.getAPIRequestURL(APIType.GET_FEES, ChainId.mainnet)).toBe(
-        `${API_BASE_URL}/networks/${ethereumChainIdDec}/getFees`,
+        `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/getFees`,
       );
     });
 
-    it('returns correct URL for ESTIMATE_GAS', () => {
+    it('returns correct sentinel URL for ESTIMATE_GAS', () => {
       const chainId = '0x1'; // Mainnet in hex
-      const expectedUrl = `${API_BASE_URL}/networks/1/estimateGas`;
+      const expectedUrl = `${SENTINEL_API_BASE_URL_MAP[1]}/v1/networks/1/estimateGas`;
       const result = utils.getAPIRequestURL(APIType.ESTIMATE_GAS, chainId);
       expect(result).toBe(expectedUrl);
     });
 
     it('converts hex chainId to decimal for ESTIMATE_GAS', () => {
       const chainId = '0x89'; // Polygon in hex (137 in decimal)
-      const expectedUrl = `${API_BASE_URL}/networks/137/estimateGas`;
+      const expectedUrl = `${SENTINEL_API_BASE_URL_MAP[137]}/v1/networks/137/estimateGas`;
       const result = utils.getAPIRequestURL(APIType.ESTIMATE_GAS, chainId);
       expect(result).toBe(expectedUrl);
     });
 
-    it('returns a URL for submitting transactions', () => {
+    it('returns a sentinel URL for submitting transactions', () => {
       expect(
         utils.getAPIRequestURL(APIType.SUBMIT_TRANSACTIONS, ChainId.mainnet),
       ).toBe(
-        `${API_BASE_URL}/networks/${ethereumChainIdDec}/submitTransactions?stxControllerVersion=${packageJson.version}`,
+        `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/submitTransactions?stxControllerVersion=${packageJson.version}`,
       );
     });
 
-    it('returns a URL for transaction cancelation', () => {
+    it('returns a sentinel URL for transaction cancellation', () => {
       expect(utils.getAPIRequestURL(APIType.CANCEL, ChainId.mainnet)).toBe(
-        `${API_BASE_URL}/networks/${ethereumChainIdDec}/cancel`,
+        `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/cancel`,
       );
     });
 
-    it('returns a URL for checking a smart transactions status', () => {
+    it('returns a sentinel URL for checking smart transaction status', () => {
       expect(
         utils.getAPIRequestURL(APIType.BATCH_STATUS, ChainId.mainnet),
-      ).toBe(`${API_BASE_URL}/networks/${ethereumChainIdDec}/batchStatus`);
+      ).toBe(
+        `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/batchStatus`,
+      );
     });
 
     it('returns a URL for smart transactions API liveness on ETH Mainnet', () => {
@@ -117,121 +120,12 @@ describe('src/utils.js', () => {
       );
     });
 
-    // Sentinel routing via useSentinel flag
-    describe('GET_FEES sentinel routing', () => {
-      it('returns a sentinel URL when useSentinel is true and chain is in SENTINEL_API_BASE_URL_MAP', () => {
-        expect(
-          utils.getAPIRequestURL(APIType.GET_FEES, ChainId.mainnet, true),
-        ).toBe(
-          `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/getFees`,
-        );
-      });
-
-      it('returns the API_BASE_URL when useSentinel is false', () => {
-        expect(
-          utils.getAPIRequestURL(APIType.GET_FEES, ChainId.mainnet, false),
-        ).toBe(`${API_BASE_URL}/networks/${ethereumChainIdDec}/getFees`);
-      });
-
-      it('returns the API_BASE_URL when useSentinel is true but chain is not in SENTINEL_API_BASE_URL_MAP', () => {
-        const unsupportedChainId = '0x539'; // 1337 — local dev chain, not in map
-        const chainIdDec = parseInt(unsupportedChainId, 16);
-        expect(
-          utils.getAPIRequestURL(APIType.GET_FEES, unsupportedChainId, true),
-        ).toBe(`${API_BASE_URL}/networks/${chainIdDec}/getFees`);
-      });
-    });
-
-    describe('SUBMIT_TRANSACTIONS sentinel routing', () => {
-      it('returns a sentinel URL when useSentinel is true and chain is in SENTINEL_API_BASE_URL_MAP', () => {
-        expect(
-          utils.getAPIRequestURL(
-            APIType.SUBMIT_TRANSACTIONS,
-            ChainId.mainnet,
-            true,
-          ),
-        ).toBe(
-          `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/submitTransactions?stxControllerVersion=${packageJson.version}`,
-        );
-      });
-
-      it('returns the API_BASE_URL when useSentinel is false', () => {
-        expect(
-          utils.getAPIRequestURL(
-            APIType.SUBMIT_TRANSACTIONS,
-            ChainId.mainnet,
-            false,
-          ),
-        ).toBe(
-          `${API_BASE_URL}/networks/${ethereumChainIdDec}/submitTransactions?stxControllerVersion=${packageJson.version}`,
-        );
-      });
-
-      it('returns the API_BASE_URL when useSentinel is true but chain is not in SENTINEL_API_BASE_URL_MAP', () => {
-        const unsupportedChainId = '0x539';
-        const chainIdDec = parseInt(unsupportedChainId, 16);
-        expect(
-          utils.getAPIRequestURL(
-            APIType.SUBMIT_TRANSACTIONS,
-            unsupportedChainId,
-            true,
-          ),
-        ).toBe(
-          `${API_BASE_URL}/networks/${chainIdDec}/submitTransactions?stxControllerVersion=${packageJson.version}`,
-        );
-      });
-    });
-
-    describe('CANCEL sentinel routing', () => {
-      it('returns a sentinel URL when useSentinel is true and chain is in SENTINEL_API_BASE_URL_MAP', () => {
-        expect(
-          utils.getAPIRequestURL(APIType.CANCEL, ChainId.mainnet, true),
-        ).toBe(
-          `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/cancel`,
-        );
-      });
-
-      it('returns the API_BASE_URL when useSentinel is false', () => {
-        expect(
-          utils.getAPIRequestURL(APIType.CANCEL, ChainId.mainnet, false),
-        ).toBe(`${API_BASE_URL}/networks/${ethereumChainIdDec}/cancel`);
-      });
-
-      it('returns the API_BASE_URL when useSentinel is true but chain is not in SENTINEL_API_BASE_URL_MAP', () => {
-        const unsupportedChainId = '0x539';
-        const chainIdDec = parseInt(unsupportedChainId, 16);
-        expect(
-          utils.getAPIRequestURL(APIType.CANCEL, unsupportedChainId, true),
-        ).toBe(`${API_BASE_URL}/networks/${chainIdDec}/cancel`);
-      });
-    });
-
-    describe('BATCH_STATUS sentinel routing', () => {
-      it('returns a sentinel URL when useSentinel is true and chain is in SENTINEL_API_BASE_URL_MAP', () => {
-        expect(
-          utils.getAPIRequestURL(APIType.BATCH_STATUS, ChainId.mainnet, true),
-        ).toBe(
-          `${SENTINEL_API_BASE_URL_MAP[ethereumChainIdDec]}/v1/networks/${ethereumChainIdDec}/batchStatus`,
-        );
-      });
-
-      it('returns the API_BASE_URL when useSentinel is false', () => {
-        expect(
-          utils.getAPIRequestURL(APIType.BATCH_STATUS, ChainId.mainnet, false),
-        ).toBe(`${API_BASE_URL}/networks/${ethereumChainIdDec}/batchStatus`);
-      });
-
-      it('returns the API_BASE_URL when useSentinel is true but chain is not in SENTINEL_API_BASE_URL_MAP', () => {
-        const unsupportedChainId = '0x539';
-        const chainIdDec = parseInt(unsupportedChainId, 16);
-        expect(
-          utils.getAPIRequestURL(
-            APIType.BATCH_STATUS,
-            unsupportedChainId,
-            true,
-          ),
-        ).toBe(`${API_BASE_URL}/networks/${chainIdDec}/batchStatus`);
-      });
+    it('throws when chain is not in SENTINEL_API_BASE_URL_MAP', () => {
+      const unsupportedChainId = '0x539'; // 1337 — local dev chain
+      const chainIdDec = parseInt(unsupportedChainId, 16);
+      expect(() =>
+        utils.getAPIRequestURL(APIType.GET_FEES, unsupportedChainId),
+      ).toThrow(`Chain ${chainIdDec} is not supported`);
     });
   });
 
@@ -671,7 +565,7 @@ describe('src/utils.js', () => {
     };
 
     it('fails the transaction with a SmartTransactionFailed error', () => {
-      const failTransactionMock = jest.fn();
+      const failTransactionMock = vi.fn();
 
       utils.markRegularTransactionsAsFailed({
         smartTransaction: createSmartTransaction(
@@ -691,7 +585,7 @@ describe('src/utils.js', () => {
     });
 
     it('includes originalTransactionStatus in error message when available', () => {
-      const failTransactionMock = jest.fn();
+      const failTransactionMock = vi.fn();
       const smartTransaction = {
         ...createSmartTransaction(SmartTransactionStatuses.CANCELLED),
         statusMetadata: {
@@ -722,8 +616,8 @@ describe('src/utils.js', () => {
     });
 
     it('throws error if original transaction cannot be found', () => {
-      const failTransactionMock = jest.fn();
-      const getRegularTransactionsMock = jest.fn(() => []);
+      const failTransactionMock = vi.fn();
+      const getRegularTransactionsMock = vi.fn(() => []);
 
       expect(() =>
         utils.markRegularTransactionsAsFailed({
@@ -739,7 +633,7 @@ describe('src/utils.js', () => {
     });
 
     it('does not fail the transaction if status is already failed', () => {
-      const failTransactionMock = jest.fn();
+      const failTransactionMock = vi.fn();
       const failedTransaction = {
         ...mockTransaction,
         status: TransactionStatus.failed,
@@ -761,7 +655,7 @@ describe('src/utils.js', () => {
     });
 
     it('fails multiple transactions when txHashes match', () => {
-      const failTransactionMock = jest.fn();
+      const failTransactionMock = vi.fn();
       const transaction1: TransactionMeta = {
         ...mockTransaction,
         id: '456',
@@ -851,6 +745,77 @@ describe('src/utils.js', () => {
         utils.getSmartTransactionMetricsProperties(smartTransaction);
 
       expect(result.stx_original_transaction_status).toBeUndefined();
+    });
+  });
+
+  describe('handleFetch', () => {
+    it('returns the response from the fetch', async () => {
+      const response = { transactions: [{ id: '123' }] };
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+        json: () => Promise.resolve(response),
+        ok: true,
+        status: 200,
+      } as Response);
+      expect(await utils.handleFetch('https://example.com')).toStrictEqual(
+        response,
+      );
+    });
+
+    it('throws an error if the fetch fails', async () => {
+      vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Fetch error'));
+      await expect(utils.handleFetch('https://example.com')).rejects.toThrow(
+        'Fetch error',
+      );
+    });
+
+    it('throws an error if the response is not ok', async () => {
+      const consoleLogSpy = vi
+        .spyOn(console, 'log')
+        .mockImplementationOnce(vi.fn());
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+        json: () =>
+          Promise.resolve({
+            data: { error: 'too_cheap', details: 'insufficient funds' },
+          }),
+        ok: false,
+        status: 500,
+      } as Response);
+      await expect(utils.handleFetch('https://example.com')).rejects.toThrow(
+        'Fetch error: 500',
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        'response',
+        expect.objectContaining({
+          ok: false,
+          status: 500,
+        }),
+      );
+    });
+  });
+
+  describe('getErrorData', () => {
+    it('returns data.error from a thrown fetch error object', () => {
+      const error = Object.assign({}, new Error('Fetch error: 400'), {
+        data: { error: 'too_cheap' },
+      });
+
+      expect(error instanceof Error).toBe(false);
+      expect(utils.getErrorData(error)).toBe('too_cheap');
+    });
+
+    it('returns data.error object from a thrown fetch error object', () => {
+      const error = Object.assign({}, new Error('Fetch error: 400'), {
+        data: { error: { message: 'too_cheap' } },
+      });
+
+      expect(error instanceof Error).toBe(false);
+      expect(utils.getErrorData(error)).toBe(
+        '{"error":{"message":"too_cheap"}}',
+      );
+    });
+
+    it('returns error.message for a real Error', () => {
+      expect(utils.getErrorData(new Error('boom'))).toBe('boom');
     });
   });
 });

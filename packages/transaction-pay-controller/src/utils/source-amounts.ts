@@ -17,6 +17,8 @@ import type {
 import { TransactionPayStrategy } from '../index.js';
 import { projectLogger } from '../logger.js';
 import type {
+  GetBalanceCallback,
+  GetBalanceResponse,
   TransactionPaySourceAmount,
   TransactionData,
   TransactionPayRequiredToken,
@@ -32,11 +34,15 @@ const log = createModuleLogger(projectLogger, 'source-amounts');
  * @param transactionId - ID of the transaction to update.
  * @param transactionData - Existing transaction data.
  * @param messenger - Controller messenger.
+ * @param getBalance - Optional callback to override the source balance used for max-amount
+ * calculation. Called only when `isMaxAmount` is true. Return `undefined` to fall back to
+ * the built-in token balance.
  */
 export function updateSourceAmounts(
   transactionId: string,
   transactionData: TransactionData | undefined,
   messenger: TransactionPayControllerMessenger,
+  getBalance?: GetBalanceCallback,
 ): void {
   if (!transactionData) {
     return;
@@ -48,16 +54,28 @@ export function updateSourceAmounts(
     return;
   }
 
+  const transaction =
+    getBalance && isMaxAmount
+      ? getTransaction(transactionId, messenger)
+      : undefined;
+  const balanceOverride =
+    getBalance && transaction
+      ? getBalance({ transaction, transactionData })
+      : undefined;
+
   // For post-quote flows, source amounts are calculated differently
   // The source is the transaction's required token, not the selected token
   if (isPostQuote) {
-    const { isHyperliquidSource, isPolymarketDepositWallet } = transactionData;
+    const { isHyperliquidSource, isPolymarketDepositWallet, paymentOverride } =
+      transactionData;
     const sourceAmounts = calculatePostQuoteSourceAmounts(
       tokens,
       paymentToken,
       isMaxAmount ?? false,
       isHyperliquidSource,
       isPolymarketDepositWallet,
+      balanceOverride,
+      Boolean(paymentOverride),
     );
     log('Updated post-quote source amounts', { transactionId, sourceAmounts });
     transactionData.sourceAmounts = sourceAmounts;
@@ -75,6 +93,7 @@ export function updateSourceAmounts(
         transactionId,
         isMaxAmount ?? false,
         isQuoteRequired,
+        balanceOverride,
       ),
     )
     .filter(Boolean) as TransactionPaySourceAmount[];
@@ -94,6 +113,8 @@ export function updateSourceAmounts(
  * @param isMaxAmount - Whether the transaction is a maximum amount transaction.
  * @param isHyperliquidSource - Whether the source is HyperLiquid (perps withdrawal).
  * @param isPolymarketDepositWallet - Whether the source is a Polymarket deposit wallet.
+ * @param balanceOverride - Optional balance override from the `getBalance` callback.
+ * @param hasPaymentOverride - Whether the source calls are rebuilt from the quote amount.
  * @returns Array of source amounts.
  */
 function calculatePostQuoteSourceAmounts(
@@ -102,6 +123,8 @@ function calculatePostQuoteSourceAmounts(
   isMaxAmount: boolean,
   isHyperliquidSource?: boolean,
   isPolymarketDepositWallet?: boolean,
+  balanceOverride?: GetBalanceResponse,
+  hasPaymentOverride?: boolean,
 ): TransactionPaySourceAmount[] {
   return tokens
     .filter((token) => {
@@ -129,14 +152,41 @@ function calculatePostQuoteSourceAmounts(
 
       return true;
     })
-    .map((token) => ({
-      sourceAmountHuman: isMaxAmount ? token.balanceHuman : token.amountHuman,
-      sourceAmountRaw: isMaxAmount ? token.balanceRaw : token.amountRaw,
-      sourceBalanceRaw: token.balanceRaw,
-      sourceChainId: token.chainId,
-      sourceTokenAddress: token.address,
-      targetTokenAddress: paymentToken.address,
-    }));
+    .map((token) => {
+      const sourceBalanceRaw = balanceOverride?.balanceRaw ?? token.balanceRaw;
+
+      // On max, the batch funds the source account with the amount encoded in
+      // the original transaction, which is prepended ahead of the Relay
+      // deposit. A balance refreshed after that amount was encoded can exceed
+      // it, and the deposit then reverts for the difference. Synthetic sources
+      // (HyperLiquid, Polymarket deposit wallet) and payment overrides build
+      // their funding from the quote amount itself, so they are not bounded by
+      // the original transaction.
+      const isCapped =
+        isMaxAmount &&
+        !isHyperliquidSource &&
+        !isPolymarketDepositWallet &&
+        !hasPaymentOverride &&
+        token.amountRaw !== '0' &&
+        new BigNumber(sourceBalanceRaw).gt(token.amountRaw);
+
+      let sourceAmountHuman = token.amountHuman;
+      let sourceAmountRaw = token.amountRaw;
+
+      if (isMaxAmount && !isCapped) {
+        sourceAmountHuman = token.balanceHuman;
+        sourceAmountRaw = sourceBalanceRaw;
+      }
+
+      return {
+        sourceAmountHuman,
+        sourceAmountRaw,
+        sourceBalanceRaw,
+        sourceChainId: token.chainId,
+        sourceTokenAddress: token.address,
+        targetTokenAddress: paymentToken.address,
+      };
+    });
 }
 
 /**
@@ -148,6 +198,7 @@ function calculatePostQuoteSourceAmounts(
  * @param transactionId - ID of the transaction.
  * @param isMaxAmount - Whether the transaction is a maximum amount transaction.
  * @param isQuoteRequired - When true, a quote is always fetched even when source and target tokens are identical.
+ * @param balanceOverride - Optional balance override from the `getBalance` callback.
  * @returns The source amount or undefined if calculation failed.
  */
 function calculateSourceAmount(
@@ -157,6 +208,7 @@ function calculateSourceAmount(
   transactionId: string,
   isMaxAmount: boolean,
   isQuoteRequired?: boolean,
+  balanceOverride?: GetBalanceResponse,
 ): TransactionPaySourceAmount | undefined {
   const paymentTokenFiatRate = getTokenFiatRate(
     messenger,
@@ -193,6 +245,11 @@ function calculateSourceAmount(
     return undefined;
   }
 
+  if (token.amountRaw === '0') {
+    log('Skipping token as zero amount', { tokenAddress: token.address });
+    return undefined;
+  }
+
   const sourceAmountHumanValue = new BigNumber(token.amountUsd).div(
     paymentTokenFiatRate.usdRate,
   );
@@ -203,15 +260,15 @@ function calculateSourceAmount(
     .shiftedBy(paymentToken.decimals)
     .toFixed(0);
 
-  if (token.amountRaw === '0') {
-    log('Skipping token as zero amount', { tokenAddress: token.address });
-    return undefined;
-  }
-
+  // On Max, use the exact source balance. The client `getBalance` callback is
+  // authoritative and owns all balance complexity (perps, predict, money
+  // account, payment overrides): when it returns a `balanceOverride`, use it;
+  // when it returns `undefined`, that is a deliberate signal to use the pay
+  // token's on-chain balance. This path is payment-override agnostic.
   if (isMaxAmount) {
     return {
       sourceAmountHuman: paymentToken.balanceHuman,
-      sourceAmountRaw: paymentToken.balanceRaw,
+      sourceAmountRaw: balanceOverride?.balanceRaw ?? paymentToken.balanceRaw,
       targetTokenAddress: token.address,
     };
   }

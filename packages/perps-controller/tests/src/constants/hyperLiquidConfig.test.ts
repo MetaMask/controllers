@@ -1,6 +1,25 @@
-import { HIP3_ASSET_MARKET_TYPES } from '../../../src/constants/hyperLiquidConfig.js';
+import { describe, expect, it } from 'vitest';
+
+import {
+  getSupportedAssets,
+  HIP3_ASSET_MARKET_TYPES,
+} from '../../../src/constants/hyperLiquidConfig.js';
 import { MarketCategory, MARKET_CATEGORIES } from '../../../src/types/index.js';
 import type { MarketType, MarketTypeFilter } from '../../../src/types/index.js';
+
+describe('getSupportedAssets', () => {
+  it('returns the USDC2 token the Arbitrum Sepolia bridge credits on testnet', () => {
+    expect(getSupportedAssets(true)).toStrictEqual([
+      'eip155:421614/erc20:0x1baAbB04529D43a73232B713C0FE471f7c7334d5/default',
+    ]);
+  });
+
+  it('returns Arbitrum One USDC on mainnet', () => {
+    expect(getSupportedAssets(false)).toStrictEqual([
+      'eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831/default',
+    ]);
+  });
+});
 
 describe('HIP3_ASSET_MARKET_TYPES', () => {
   it('classifies known US stocks correctly', () => {
@@ -24,6 +43,8 @@ describe('HIP3_ASSET_MARKET_TYPES', () => {
     expect(HIP3_ASSET_MARKET_TYPES['xyz:ARM']).toBe('stock');
     expect(HIP3_ASSET_MARKET_TYPES['xyz:BX']).toBe('stock');
     expect(HIP3_ASSET_MARKET_TYPES['xyz:LITE']).toBe('stock');
+    expect(HIP3_ASSET_MARKET_TYPES['xyz:CBRS']).toBe('stock');
+    expect(HIP3_ASSET_MARKET_TYPES['xyz:SPCX']).toBe('stock');
   });
 
   it('classifies USAR as stock (USA Rare Earth)', () => {
@@ -37,8 +58,6 @@ describe('HIP3_ASSET_MARKET_TYPES', () => {
   });
 
   it('classifies pre-IPO markets correctly', () => {
-    expect(HIP3_ASSET_MARKET_TYPES['xyz:CBRS']).toBe('pre-ipo');
-    expect(HIP3_ASSET_MARKET_TYPES['xyz:SPCX']).toBe('pre-ipo');
     expect(HIP3_ASSET_MARKET_TYPES['xyz:IPOP']).toBe('pre-ipo');
   });
 
@@ -93,7 +112,7 @@ describe('HIP3_ASSET_MARKET_TYPES', () => {
 });
 
 describe('MarketCategory', () => {
-  it('has string values for all 7 data-model categories', () => {
+  it('has string values for all 8 data-model categories', () => {
     expect(MarketCategory.CryptoCurrency).toBe('crypto');
     expect(MarketCategory.Stock).toBe('stock');
     expect(MarketCategory.PreIpo).toBe('pre-ipo');
@@ -101,17 +120,18 @@ describe('MarketCategory', () => {
     expect(MarketCategory.Etf).toBe('etf');
     expect(MarketCategory.Commodity).toBe('commodity');
     expect(MarketCategory.Forex).toBe('forex');
+    expect(MarketCategory.Memecoin).toBe('memecoin');
   });
 
-  it('has exactly 7 members', () => {
+  it('has exactly 8 members', () => {
     const values = Object.values(MarketCategory);
-    expect(values).toHaveLength(7);
+    expect(values).toHaveLength(8);
   });
 });
 
 describe('MARKET_CATEGORIES', () => {
-  it('has exactly 7 entries (one per data-model category)', () => {
-    expect(MARKET_CATEGORIES).toHaveLength(7);
+  it('has exactly 8 entries (one per data-model category)', () => {
+    expect(MARKET_CATEGORIES).toHaveLength(8);
   });
 
   it('does not include the all or new sentinel values', () => {
@@ -119,9 +139,10 @@ describe('MARKET_CATEGORIES', () => {
     expect(MARKET_CATEGORIES).not.toContain('new');
   });
 
-  it('includes all 7 MarketTypeFilter data categories', () => {
+  it('includes all 8 MarketTypeFilter data categories', () => {
     const dataCategories: MarketTypeFilter[] = [
       'crypto',
+      'memecoin',
       'stock',
       'pre-ipo',
       'index',
@@ -139,6 +160,7 @@ describe('MARKET_CATEGORIES', () => {
     // The runtime check here mirrors that constraint.
     const validValues: readonly string[] = [
       'crypto',
+      'memecoin',
       'stock',
       'pre-ipo',
       'index',

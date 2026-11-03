@@ -130,6 +130,10 @@ export {
   UserFeeLevel,
   WalletDevice,
 } from './types.js';
+export type {
+  EstimateGasBatchMode,
+  EstimateGasBatchResult,
+} from './utils/gas.js';
 export { mergeGasFeeEstimates } from './utils/gas-flow.js';
 export {
   decodeAuthorizationSignature,
@@ -141,7 +145,7 @@ export {
   normalizeTransactionParams,
 } from './utils/utils.js';
 export { hasTransactionType } from './utils/transaction-type.js';
-export { getEffectiveRecipient } from './utils/recipient.js';
+export { getEffectiveRecipient, getSendRecipients } from './utils/recipient.js';
 export { CHAIN_IDS } from './constants.js';
 export { HARDFORK } from './utils/prepare.js';
 export { getAccountAddressRelationship } from './api/accounts-api.js';

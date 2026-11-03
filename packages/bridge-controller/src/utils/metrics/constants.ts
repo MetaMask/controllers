@@ -59,18 +59,21 @@ export enum AbortReason {
  * analytics can trace the user's origin regardless of where they are in the flow.
  */
 export enum MetaMetricsSwapsEventSource {
-  MainView = 'Main View',
-  TokenView = 'Token View',
-  TrendingExplore = 'Trending Explore',
-  Rewards = 'Rewards',
+  ActivityDetails = 'Activity Details',
+  ActivityTabEmptyState = 'Activity Tab Empty State',
+  BottomNavBar = 'Bottom Nav Bar',
+  DeepLink = 'Deep Link',
   FollowTradingTokenScreen = 'Follow Trading Token Screen',
   FollowTradingFeedScreen = 'Follow Trading Feed Screen',
-  ActivityTabEmptyState = 'Activity Tab Empty State',
-  TransactionShield = 'Transaction Shield',
+  MainView = 'Main View',
+  OnboardingChecklist = 'Onboarding Checklist',
+  Rewards = 'Rewards',
+  TokenView = 'Token View',
   TransactionDetails = 'Transaction Details',
-  DeepLink = 'Deep Link',
+  TransactionShield = 'Transaction Shield',
+  TrendingExplore = 'Trending Explore',
   Unknown = 'Unknown',
-  BottomNavBar = 'Bottom Nav Bar',
+  XWidget = 'x_widget',
 }
 
 export enum BatchSellMetricsLocation {
@@ -104,4 +107,29 @@ export enum MetricsActionType {
 export enum MetricsSwapType {
   SINGLE = 'single_chain',
   CROSSCHAIN = 'crosschain',
+}
+
+/**
+ * When a SwapBridge attempt failed. Derived from the failing code path plus
+ * hash presence — never from `error_message` text.
+ */
+export enum FailurePhase {
+  Quote = 'quote',
+  Broadcast = 'broadcast',
+  SourceExecution = 'source_execution',
+  DestinationExecution = 'destination_execution',
+  Poll = 'poll',
+  Unknown = 'unknown',
+}
+
+/**
+ * Stable Mixpanel reason for a SwapBridge failure. Independent of free-text
+ * `error_message`.
+ */
+export enum SwapBridgeErrorCode {
+  QuoteFetchFailed = 'quote_fetch_failed',
+  MissingErrorObject = 'missing_error_object',
+  NonErrorRejection = 'non_error_rejection',
+  StatusFailedWithoutReason = 'status_failed_without_reason',
+  Unknown = 'unknown',
 }

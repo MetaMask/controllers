@@ -3,7 +3,7 @@ import {
   isNonEvmChainId,
   StatusTypes,
 } from '@metamask/bridge-controller';
-import type { Quote, QuoteResponse } from '@metamask/bridge-controller';
+import type { QuoteResponseV1 } from '@metamask/bridge-controller';
 import type { Provider } from '@metamask/network-controller';
 import { StructError } from '@metamask/superstruct';
 
@@ -92,7 +92,7 @@ export const fetchBridgeTxStatus = async (
         const aggregatorId =
           (rawTxStatus as StatusResponse)?.bridge ??
           (statusRequest.bridge || statusRequest.bridgeId) ??
-          ('unknown' as string);
+          'unknown';
         const pathString = path?.join('.') || 'unknown';
         validationFailures.push([aggregatorId, pathString].join('|'));
       });
@@ -105,7 +105,7 @@ export const fetchBridgeTxStatus = async (
 };
 
 export const getStatusRequestWithSrcTxHash = (
-  quote: Quote,
+  quote: QuoteResponseV1['quote'],
   srcTxHash: string,
 ): StatusRequestWithSrcTxHash => {
   const { bridgeId, bridges, srcChainId, destChainId, refuel } = quote;
@@ -205,7 +205,7 @@ export const shouldWaitForFinalBridgeStatus = async (
  * @returns The status request parameters
  */
 export const getStatusRequestParams = (
-  quoteResponse: QuoteResponse,
+  quoteResponse: QuoteResponseV1,
 ): StatusRequest => {
   return {
     bridgeId: quoteResponse.quote.bridgeId,

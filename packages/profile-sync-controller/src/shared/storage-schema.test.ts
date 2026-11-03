@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import {
   createEntryPath,
   getFeatureAndKeyFromPath,
@@ -8,6 +10,17 @@ import {
 type ErroneousUserStoragePath = any;
 
 describe('user-storage/schema.ts', () => {
+  it('lists supported feature names', () => {
+    expect(USER_STORAGE_FEATURE_NAMES).toMatchInlineSnapshot(`
+      {
+        "accounts": "accounts_v2",
+        "addressBook": "addressBook",
+        "notifications": "notifications",
+        "rampsOrders": "rampsOrders",
+      }
+    `);
+  });
+
   describe('getFeatureAndKeyFromPath', () => {
     it('should correctly construct user storage url', () => {
       expect(

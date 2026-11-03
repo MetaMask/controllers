@@ -1,7 +1,7 @@
 import { convertHexToDecimal } from '@metamask/controller-utils';
 import { createModuleLogger } from '@metamask/utils';
 import type { Hex } from '@metamask/utils';
-import { cloneDeep } from 'lodash';
+import { cloneDeep } from 'lodash-es';
 
 import {
   CODE_DELEGATION_MANAGER_NO_SIGNATURE_ERRORS,
@@ -87,6 +87,12 @@ export type SimulationRequest = {
 
     /* Whether to include the gas fee of the token transfer. */
     withFeeTransfer?: boolean;
+
+    /*
+     * Whether to include a RedeemerEnforcer caveat, restricting redemption to
+     * the relay signers, in the delegation used for the EIP-7702 estimate.
+     */
+    withRedeemerEnforcer?: boolean;
 
     /* Whether to include the native transfer if available. */
     withTransfer?: boolean;
@@ -260,6 +266,9 @@ export type SimulationResponse = {
 
     /** Error message for the determination of sponsorship. */
     error: string | null;
+
+    /** Name of the party paying the gas fee, such as `Uniswap` or `MetaMask`. */
+    sponsor?: string;
   };
 };
 

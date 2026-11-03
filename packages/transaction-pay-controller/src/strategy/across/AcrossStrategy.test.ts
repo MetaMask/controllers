@@ -4,6 +4,7 @@ import {
   TransactionType,
 } from '@metamask/transaction-controller';
 import type { Hex } from '@metamask/utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ARBITRUM_USDC_ADDRESS, CHAIN_ID_ARBITRUM } from '../../constants.js';
 import type {
@@ -18,14 +19,14 @@ import { submitAcrossQuotes } from './across-submit.js';
 import { AcrossStrategy } from './AcrossStrategy.js';
 import type { AcrossQuote } from './types.js';
 
-jest.mock('./across-quotes');
-jest.mock('./across-submit');
-jest.mock('../../utils/feature-flags');
+vi.mock(import('./across-quotes.js'));
+vi.mock(import('./across-submit.js'));
+vi.mock(import('../../utils/feature-flags.js'));
 
 describe('AcrossStrategy', () => {
-  const getPayStrategiesConfigMock = jest.mocked(getPayStrategiesConfig);
-  const getAcrossQuotesMock = jest.mocked(getAcrossQuotes);
-  const submitAcrossQuotesMock = jest.mocked(submitAcrossQuotes);
+  const getPayStrategiesConfigMock = vi.mocked(getPayStrategiesConfig);
+  const getAcrossQuotesMock = vi.mocked(getAcrossQuotes);
+  const submitAcrossQuotesMock = vi.mocked(submitAcrossQuotes);
 
   const messenger = {} as never;
 
@@ -45,14 +46,14 @@ describe('AcrossStrategy', () => {
     transaction: TRANSACTION_META_MOCK,
     requests: [
       {
-        from: '0xabc' as Hex,
+        from: '0xabc',
         sourceBalanceRaw: '100',
-        sourceChainId: '0x1' as Hex,
-        sourceTokenAddress: '0xabc' as Hex,
+        sourceChainId: '0x1',
+        sourceTokenAddress: '0xabc',
         sourceTokenAmount: '100',
         targetAmountMinimum: '100',
-        targetChainId: '0x2' as Hex,
-        targetTokenAddress: '0xdef' as Hex,
+        targetChainId: '0x2',
+        targetTokenAddress: '0xdef',
       },
     ],
   } as PayStrategyGetQuotesRequest;
@@ -77,7 +78,7 @@ describe('AcrossStrategy', () => {
   } as TransactionPayQuote<AcrossQuote>;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     getPayStrategiesConfigMock.mockReturnValue({
       across: {
         apiBase: 'https://across.test',
@@ -120,10 +121,10 @@ describe('AcrossStrategy', () => {
         transaction: {
           ...TRANSACTION_META_MOCK,
           type: TransactionType.perpsDeposit,
-        } as TransactionMeta,
+        },
         requests: [
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
@@ -145,10 +146,10 @@ describe('AcrossStrategy', () => {
         transaction: {
           ...TRANSACTION_META_MOCK,
           type: TransactionType.perpsDeposit,
-        } as TransactionMeta,
+        },
         requests: [
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
@@ -158,15 +159,14 @@ describe('AcrossStrategy', () => {
             targetTokenAddress: ARBITRUM_USDC_ADDRESS,
           },
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
             targetChainId: CHAIN_ID_ARBITRUM,
-            targetTokenAddress:
-              '0x0000000000000000000000000000000000000000' as Hex,
+            targetTokenAddress: '0x0000000000000000000000000000000000000000',
           },
         ],
       }),
@@ -180,15 +180,14 @@ describe('AcrossStrategy', () => {
         ...baseRequest,
         requests: [
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             sourceBalanceRaw: '100',
             sourceChainId: CHAIN_ID_ARBITRUM,
             sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
             targetChainId: CHAIN_ID_ARBITRUM,
-            targetTokenAddress:
-              '0x0000000000000000000000000000000000000000' as Hex,
+            targetTokenAddress: '0x0000000000000000000000000000000000000000',
           },
         ],
       }),
@@ -202,15 +201,15 @@ describe('AcrossStrategy', () => {
         ...baseRequest,
         requests: [
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             isMaxAmount: true,
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1' as Hex,
-            sourceTokenAddress: '0xabc' as Hex,
+            sourceChainId: '0x1',
+            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
-            targetChainId: '0x2' as Hex,
-            targetTokenAddress: '0xdef' as Hex,
+            targetChainId: '0x2',
+            targetTokenAddress: '0xdef',
           },
         ],
       }),
@@ -227,22 +226,22 @@ describe('AcrossStrategy', () => {
           nestedTransactions: [{ type: TransactionType.predictWithdraw }],
           txParams: {
             ...TRANSACTION_META_MOCK.txParams,
-            authorizationList: [{ address: '0xabc' as Hex }],
-            data: '0x12345678' as Hex,
-            to: '0xdef' as Hex,
+            authorizationList: [{ address: '0xabc' }],
+            data: '0x12345678',
+            to: '0xdef',
           },
-        } as TransactionMeta,
+        },
         requests: [
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             isPostQuote: true,
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1' as Hex,
-            sourceTokenAddress: '0xabc' as Hex,
+            sourceChainId: '0x1',
+            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
-            targetChainId: '0x2' as Hex,
-            targetTokenAddress: '0xdef' as Hex,
+            targetChainId: '0x2',
+            targetTokenAddress: '0xdef',
           },
         ],
       }),
@@ -256,15 +255,15 @@ describe('AcrossStrategy', () => {
         ...baseRequest,
         requests: [
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             isPostQuote: true,
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1' as Hex,
-            sourceTokenAddress: '0xabc' as Hex,
+            sourceChainId: '0x1',
+            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
-            targetChainId: '0x2' as Hex,
-            targetTokenAddress: '0xdef' as Hex,
+            targetChainId: '0x2',
+            targetTokenAddress: '0xdef',
           },
         ],
       }),
@@ -279,7 +278,7 @@ describe('AcrossStrategy', () => {
         transaction: {
           ...TRANSACTION_META_MOCK,
           type: TransactionType.perpsDeposit,
-        } as TransactionMeta,
+        },
       }),
     ).toBe(false);
   });
@@ -292,7 +291,7 @@ describe('AcrossStrategy', () => {
         transaction: {
           ...TRANSACTION_META_MOCK,
           type: TransactionType.perpsAcrossDeposit,
-        } as TransactionMeta,
+        },
       }),
     ).toBe(true);
   });
@@ -304,14 +303,14 @@ describe('AcrossStrategy', () => {
         ...baseRequest,
         requests: [
           {
-            from: '0xabc' as Hex,
+            from: '0xabc',
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1' as Hex,
-            sourceTokenAddress: '0xabc' as Hex,
+            sourceChainId: '0x1',
+            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '100',
-            targetChainId: '0x1' as Hex,
-            targetTokenAddress: '0xdef' as Hex,
+            targetChainId: '0x1',
+            targetTokenAddress: '0xdef',
           },
         ],
       }),
@@ -327,9 +326,9 @@ describe('AcrossStrategy', () => {
           ...TRANSACTION_META_MOCK,
           txParams: {
             ...TRANSACTION_META_MOCK.txParams,
-            authorizationList: [{ address: '0xabc' as Hex }],
+            authorizationList: [{ address: '0xabc' }],
           },
-        } as TransactionMeta,
+        },
       }),
     ).toBe(false);
   });
@@ -342,9 +341,9 @@ describe('AcrossStrategy', () => {
         ...TRANSACTION_META_MOCK,
         txParams: {
           ...TRANSACTION_META_MOCK.txParams,
-          authorizationList: [{ address: '0xabc' as Hex }],
+          authorizationList: [{ address: '0xabc' }],
         },
-      } as TransactionMeta,
+      },
     });
 
     expect(result).toBe(false);
@@ -427,7 +426,7 @@ describe('AcrossStrategy', () => {
                   args: [],
                   functionSignature: 'function transfer(address,uint256)',
                   isNativeTransfer: false,
-                  target: '0xdef' as Hex,
+                  target: '0xdef',
                   value: '0',
                 },
               ],
@@ -473,10 +472,10 @@ describe('AcrossStrategy', () => {
           ...TRANSACTION_META_MOCK,
           txParams: {
             ...TRANSACTION_META_MOCK.txParams,
-            data: '0x12345678' as Hex,
-            to: '0xdef' as Hex,
+            data: '0x12345678',
+            to: '0xdef',
           },
-        } as TransactionMeta,
+        },
       }),
     ).toBe(false);
   });
@@ -503,7 +502,7 @@ describe('AcrossStrategy', () => {
       messenger,
       quotes: [],
       transaction: TRANSACTION_META_MOCK,
-      isSmartTransaction: jest.fn(),
+      isSmartTransaction: vi.fn(),
     } as PayStrategyExecuteRequest<AcrossQuote>;
 
     submitAcrossQuotesMock.mockResolvedValue({ transactionHash: '0xhash' });

@@ -54,6 +54,7 @@ export function getAccountTreeControllerMessenger(
     actions: [
       'AccountsController:listMultichainAccounts',
       'AccountsController:getAccount',
+      'AccountsController:getAccounts',
       'AccountsController:getSelectedMultichainAccount',
       'AccountsController:setSelectedAccount',
       'UserStorageController:getState',
@@ -65,7 +66,15 @@ export function getAccountTreeControllerMessenger(
       'MultichainAccountService:getMultichainAccountGroup',
       'MultichainAccountService:getMultichainAccountWallet',
       'MultichainAccountService:createMultichainAccountGroup',
+      'MultichainAccountService:createMultichainAccountGroups',
+      'MultichainAccountService:createMultichainAccountWallet',
+      'MultichainAccountService:removeMultichainAccountWallet',
       'KeyringController:getState',
+      'KeyringController:removeAccount',
+      'KeyringController:verifyPassword',
+      'KeyringController:withController',
+      'KeyringController:withKeyringV2',
+      'KeyringController:withKeyringV2Unsafe',
       'SnapController:getSnap',
     ],
   });

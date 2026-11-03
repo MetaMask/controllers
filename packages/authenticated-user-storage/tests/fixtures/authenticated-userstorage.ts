@@ -5,6 +5,10 @@ import {
   MOCK_ASSETS_WATCHLIST_URL,
   MOCK_DELEGATIONS_URL,
   MOCK_DELEGATION_RESPONSE,
+  MOCK_MARKETING_CONSENT,
+  MOCK_MARKETING_CONSENT_URL,
+  MOCK_IDENTITY_SHARING_CONSENT,
+  MOCK_IDENTITY_SHARING_CONSENT_URL,
   MOCK_NOTIFICATION_PREFERENCES,
   MOCK_NOTIFICATION_PREFERENCES_URL,
 } from '../mocks/authenticated-userstorage.js';
@@ -27,16 +31,13 @@ export function handleMockListDelegations(mockReply?: MockReply): nock.Scope {
 
 export function handleMockCreateDelegation(
   mockReply?: MockReply,
-  callback?: (uri: string, requestBody: nock.Body) => Promise<void>,
+  expectedRequestBody?: nock.RequestBodyMatcher,
 ): nock.Scope {
   const reply = mockReply ?? { status: 200 };
-  const interceptor = nock(MOCK_DELEGATIONS_URL).persist().post('');
+  const interceptor = nock(MOCK_DELEGATIONS_URL)
+    .persist()
+    .post('', expectedRequestBody);
 
-  if (callback) {
-    return interceptor.reply(reply.status, async (uri, requestBody) => {
-      return callback(uri, requestBody);
-    });
-  }
   return interceptor.reply(reply.status, reply.body);
 }
 
@@ -63,16 +64,63 @@ export function handleMockGetNotificationPreferences(
 
 export function handleMockPutNotificationPreferences(
   mockReply?: MockReply,
-  callback?: (uri: string, requestBody: nock.Body) => Promise<void>,
+  expectedRequestBody?: nock.RequestBodyMatcher,
 ): nock.Scope {
   const reply = mockReply ?? { status: 200 };
-  const interceptor = nock(MOCK_NOTIFICATION_PREFERENCES_URL).persist().put('');
+  const interceptor = nock(MOCK_NOTIFICATION_PREFERENCES_URL)
+    .persist()
+    .put('', expectedRequestBody);
 
-  if (callback) {
-    return interceptor.reply(reply.status, async (uri, requestBody) => {
-      return callback(uri, requestBody);
-    });
-  }
+  return interceptor.reply(reply.status, reply.body);
+}
+
+export function handleMockGetMarketingConsent(
+  mockReply?: MockReply,
+): nock.Scope {
+  const reply = mockReply ?? {
+    status: 200,
+    body: MOCK_MARKETING_CONSENT,
+  };
+  return nock(MOCK_MARKETING_CONSENT_URL)
+    .persist()
+    .get('')
+    .reply(reply.status, reply.body);
+}
+
+export function handleMockPutMarketingConsent(
+  mockReply?: MockReply,
+  expectedRequestBody?: nock.RequestBodyMatcher,
+): nock.Scope {
+  const reply = mockReply ?? { status: 200 };
+  const interceptor = nock(MOCK_MARKETING_CONSENT_URL)
+    .persist()
+    .put('', expectedRequestBody);
+
+  return interceptor.reply(reply.status, reply.body);
+}
+
+export function handleMockGetIdentitySharingConsent(
+  mockReply?: MockReply,
+): nock.Scope {
+  const reply = mockReply ?? {
+    status: 200,
+    body: MOCK_IDENTITY_SHARING_CONSENT,
+  };
+  return nock(MOCK_IDENTITY_SHARING_CONSENT_URL)
+    .persist()
+    .get('')
+    .reply(reply.status, reply.body);
+}
+
+export function handleMockPutIdentitySharingConsent(
+  mockReply?: MockReply,
+  expectedRequestBody?: nock.RequestBodyMatcher,
+): nock.Scope {
+  const reply = mockReply ?? { status: 200 };
+  const interceptor = nock(MOCK_IDENTITY_SHARING_CONSENT_URL)
+    .persist()
+    .put('', expectedRequestBody);
+
   return interceptor.reply(reply.status, reply.body);
 }
 
@@ -91,15 +139,12 @@ export function handleMockGetAssetsWatchlist(
 
 export function handleMockSetAssetsWatchlist(
   mockReply?: MockReply,
-  callback?: (uri: string, requestBody: nock.Body) => Promise<void>,
+  expectedRequestBody?: nock.RequestBodyMatcher,
 ): nock.Scope {
   const reply = mockReply ?? { status: 200 };
-  const interceptor = nock(MOCK_ASSETS_WATCHLIST_URL).persist().put('');
+  const interceptor = nock(MOCK_ASSETS_WATCHLIST_URL)
+    .persist()
+    .put('', expectedRequestBody);
 
-  if (callback) {
-    return interceptor.reply(reply.status, async (uri, requestBody) => {
-      return callback(uri, requestBody);
-    });
-  }
   return interceptor.reply(reply.status, reply.body);
 }

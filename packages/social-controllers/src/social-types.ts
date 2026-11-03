@@ -7,6 +7,7 @@ import {
   string,
   type as structType,
 } from '@metamask/superstruct';
+import type { CaipAssetTypeOrId } from '@metamask/utils';
 
 // ---------------------------------------------------------------------------
 // Shared sub-types
@@ -27,6 +28,28 @@ export type ProfileSummary = {
 };
 
 /**
+ * Trader attached to a feed item. Extends {@link ProfileSummary} with the
+ * profile stats the feed hydrator already loaded and used to drop.
+ *
+ * Every field is optional: a social-api that predates them omits the keys,
+ * and `null` means the window has no data (distinct from "not sent").
+ */
+export type FeedActorSummary = ProfileSummary & {
+  /** 30-day win rate as a 0–1 ratio. */
+  winRate30d?: number | null;
+  /** 30-day realized PnL in USD. */
+  pnl30d?: number | null;
+  /** 30-day trading volume in USD, totaled across all chains. */
+  volumeUsd30d?: number | null;
+  /** 7-day trading volume in USD, totaled across all chains. */
+  volumeUsd7d?: number | null;
+  /** 30-day sell count behind `winRate30d`. */
+  tradeCount30d?: number | null;
+  /** Profiles following this trader. */
+  followerCount?: number | null;
+};
+
+/**
  * Social media handles attached to a trader profile.
  */
 export type SocialHandles = {
@@ -36,9 +59,26 @@ export type SocialHandles = {
   lens?: string | null;
 };
 
+/**
+ * Where a fill sits in its position's lifecycle.
+ *
+ * Deliberately asset-agnostic so the classification is computed once, upstream:
+ * clients render `opened / added / reduced / closed` for perps and
+ * `bought / bought more / sold some / sold all` for spot from the same value.
+ *
+ * Distinct from `intent`, which only says whether the fill grew or shrank the
+ * position — `intent: 'exit'` covers both a partial trim and a full close.
+ */
+export type TradeAction = 'opened' | 'added' | 'reduced' | 'closed';
+
 export const TradeStruct = structType({
   direction: enums(['buy', 'sell']),
   intent: enums(['enter', 'exit']),
+  /**
+   * Lifecycle stage of this fill. Absent on responses from a social-api that
+   * predates the field, so treat it as a hint and keep a client-side fallback.
+   */
+  action: optional(enums(['opened', 'added', 'reduced', 'closed'])),
   category: optional(string()),
   /** High-level trade classification. `null` when Clicker does not classify. */
   classification: optional(
@@ -81,6 +121,16 @@ export type LeaderboardEntry = {
   winRate7d?: number | null;
   roiPercent7d?: number | null;
   tradeCount7d?: number | null;
+  /**
+   * 30-day trading volume in USD. When the request includes `chains`, this is
+   * the sum of those chains; otherwise it is the all-chain total.
+   */
+  volumeUsd30d?: number | null;
+  /**
+   * 7-day trading volume in USD. When the request includes `chains`, this is
+   * the sum of those chains; otherwise it is the all-chain total.
+   */
+  volumeUsd7d?: number | null;
   pnlPerChain: Record<string, number>;
   followerCount: number;
   socialHandles: SocialHandles;
@@ -97,12 +147,34 @@ export type LeaderboardResponse = {
 // Trader profile
 // ---------------------------------------------------------------------------
 
+/**
+ * Position flag for a wallet/token pair Codex marked as an insider.
+ *
+ * Those positions are excluded from the trader's realized PnL, and clients
+ * must not offer copy-trade on them.
+ */
+export const INSIDER_POSITION_FLAG = 'insider' as const;
+
+/** Known position flag value `developer`. */
+export const DEVELOPER_POSITION_FLAG = 'developer' as const;
+
+/** Values for `TraderProfileResponse.rankingTag` from social-api. */
+export const TRADER_RANKING_TAGS = ['shrimp', 'dolphin', 'whale'] as const;
+
+export type TraderRankingTag = (typeof TRADER_RANKING_TAGS)[number];
+
 export type TraderProfile = {
   profileId: string;
   address: string;
   allAddresses: string[];
   name: string;
   imageUrl?: string | null;
+  /**
+   * When the social-api profile row was created, as an ISO-8601 timestamp.
+   * Omitted on older social-api builds. This is the row insert time, which can
+   * predate the trader claiming a username and avatar.
+   */
+  createdAt?: string | null;
 };
 
 export type TraderStats = {
@@ -112,12 +184,20 @@ export type TraderStats = {
   roiPercent30d?: number | null;
   /** Renamed from tradeCount. */
   tradeCount30d?: number | null;
+  /** 30-day trading volume in USD. */
+  volumeUsd30d?: number | null;
   pnl7d?: number | null;
   winRate7d?: number | null;
   roiPercent7d?: number | null;
   tradeCount7d?: number | null;
   /** Median holding time in minutes. */
   medianHoldMinutes?: number | null;
+};
+
+export type CopytradedAllTime = {
+  count: number;
+  volumeUSD: number;
+  distinctActors: number;
 };
 
 export type PerChainBreakdown = {
@@ -147,6 +227,16 @@ export type TraderProfileResponse = {
   socialHandles: SocialHandles;
   followerCount: number;
   followingCount: number;
+  /**
+   * Linked copy-swap stats for this trader. Social-api always sends zeros
+   * when there are none.
+   */
+  copytradedAllTime: CopytradedAllTime;
+  /**
+   * Backend-derived tier from the Auth primary account 30d PnL. Omitted on older
+   * social-api builds; `null` when unclaimed or activity is insufficient.
+   */
+  rankingTag?: TraderRankingTag | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -160,10 +250,26 @@ export type Position = {
   tokenAddress: string;
   chain: string;
   positionAmount: number;
-  boughtUsd: number;
-  soldUsd: number;
-  realizedPnl: number;
-  costBasis: number;
+  /**
+   * Whether the position still carries exposure. Clicker's own verdict, which
+   * beats a `positionAmount === 0` check: it survives precision dust and
+   * distinguishes "no position" from "a position of size ~0". Absent on
+   * responses from a social-api that predates the field.
+   */
+  isOpen?: boolean;
+  /**
+   * Total USD spent buying into the position. `null` when Clicker stats are
+   * incomplete (the social-api used to JSON-serialize `NaN` as `null`).
+   */
+  boughtUsd: number | null;
+  /** Total USD received from sells. `null` when stats are incomplete. */
+  soldUsd: number | null;
+  /** Realized profit or loss in USD. `null` when stats are incomplete. */
+  realizedPnl: number | null;
+  /**
+   * USD cost basis of the remaining holdings. `null` when stats are incomplete.
+   */
+  costBasis: number | null;
   trades: Trade[];
   lastTradeAt: number;
   /** Daylight-hosted token image URL. */
@@ -174,6 +280,8 @@ export type Position = {
   pnlValueUsd?: number | null;
   /** PnL as a percentage of cost basis. */
   pnlPercent?: number | null;
+  /** Number of detected copy trades for this position. */
+  copyCount?: number;
   /** Perp side of the position. `null`/absent for spot positions. */
   perpPositionType?: 'long' | 'short' | null;
   /** Leverage multiplier for perp positions. `null`/absent for spot. */
@@ -187,6 +295,15 @@ export type Position = {
    * `costBasis`). Hyperliquid/perp positions only; absent for spot.
    */
   positionAmountWithLeverage?: number | null;
+  /**
+   * Server flags for this position. {@link INSIDER_POSITION_FLAG} means Codex
+   * marked this wallet and token as an insider pair, so the position is
+   * excluded from the trader's realized PnL and must not be copy-traded.
+   * {@link DEVELOPER_POSITION_FLAG} is the other known value. The list is
+   * open: unrecognized strings are preserved. Absent on older social-api
+   * builds; `null` when the deployment sends an explicit empty mark.
+   */
+  flags?: string[] | null;
 };
 
 export type Pagination = {
@@ -210,15 +327,281 @@ export type PositionsResponse = {
 // ---------------------------------------------------------------------------
 
 /**
+ * One emotion's aggregated count on a Call (swap comment), plus an optional
+ * facepile sample. `profiles` is always present on the wire and is often empty.
+ */
+export type CommentReaction = {
+  emotion: string;
+  count: number;
+  profiles: CommentReactionProfile[];
+};
+
+export type CommentReactionProfile = {
+  id: string;
+  name: string;
+};
+
+/**
+ * Engagement on a Call. Counts live on `reactions`; do not read deprecated
+ * `likeCount` / `isLikedByUser` even if the social-api still emits them as 0/false.
+ */
+export type CommentEngagement = {
+  reactions: CommentReaction[];
+  /** Viewer's own emotion, when the hydrator was given their profile. */
+  userReaction: string | null;
+  /** Reply count on the comment. Present on feed `authorComment`, not on write responses. */
+  replyCount?: number;
+};
+
+/**
+ * Position thesis for the feed big card. `null` when that intent phase has no Call.
+ */
+export type AuthorComment = {
+  uid: string;
+  text: string;
+  /** Unix timestamp (seconds) when the comment was created. */
+  timestamp: number;
+  /**
+   * AWS language code of the comment text, for example `en` or `pt`. `null`
+   * when detection has not run. Absent on older social-api builds.
+   */
+  sourceLanguage?: string | null;
+  /**
+   * Stored translations keyed by AWS language code. Empty when none are
+   * stored. Absent on older social-api builds.
+   */
+  translations?: Record<string, string>;
+  engagement: CommentEngagement;
+};
+
+/**
  * A single trader-activity feed item: a {@link Position} the trade belongs to,
- * plus the {@link ProfileSummary} of the trader who made it (`actor`) and the
+ * plus the {@link FeedActorSummary} of the trader who made it (`actor`) and the
  * item's creation `timestamp` (Unix seconds).
  */
 export type FeedItem = Position & {
   /** The trader who made this trade. */
-  actor: ProfileSummary;
+  actor: FeedActorSummary;
   /** Unix timestamp (seconds) when the feed item was created. */
   timestamp: number;
+  /**
+   * Latest author Call in the current intent phase. Absent on older social-api
+   * builds; `null` when that phase has no comment.
+   */
+  authorComment?: AuthorComment | null;
+  /** Author comments on this position. Absent on older social-api builds. */
+  commentCount?: number;
+  /** Replies across those comments. Absent on older social-api builds. */
+  replyCount?: number;
+  /** Detected copies of this position. Absent on older social-api builds. */
+  copyCount?: number;
+  /**
+   * Unix seconds of the position's first fill. Count from this to render a
+   * live hold on a position that is still open, where {@link holdTimeMs} is
+   * `null`. `null` when unknown. Absent on older social-api builds.
+   */
+  firstTradeAt?: number | null;
+  /**
+   * Final hold in milliseconds, first fill to last. Only set once the
+   * position is closed; `null` while it is still running, because that span
+   * grows every second — use {@link firstTradeAt} for those. Absent on older
+   * social-api builds.
+   */
+  holdTimeMs?: number | null;
+  /**
+   * Average entry price in USD from remaining cost basis / remaining holding.
+   * `null` when the position is flat. Absent on older social-api builds.
+   */
+  entryPriceUsd?: number | null;
+  /** Stable event ID for the shared feed-all projection. */
+  eventId?: string;
+  /** Projection revision for the shared feed-all item. */
+  revision?: number;
+  /** ISO timestamp for the shared feed-all projection event. */
+  occurredAt?: string;
+};
+
+export type ReactToCommentOptions = {
+  commentId: string;
+  /** Emoji or short code (1–64 chars), e.g. `👍`. */
+  emotion: string;
+};
+
+export type RemoveCommentReactionOptions = {
+  commentId: string;
+};
+
+/**
+ * Options for `POST /v1/swap-comment/:commentId/translate`.
+ */
+export type TranslateCommentOptions = {
+  /** `authorComment.uid` from a feed item. */
+  commentId: string;
+  /** AWS language code to translate into, for example `en`. */
+  targetLanguage: string;
+};
+
+/**
+ * Translation stored for a swap comment. Returned by
+ * `POST /v1/swap-comment/:commentId/translate` once that route exists.
+ */
+export type CommentTranslation = {
+  /** Detected source language. `null` when detection has not run. */
+  sourceLanguage: string | null;
+  /** Translations keyed by AWS language code. */
+  translations: Record<string, string>;
+};
+
+/**
+ * Identifies a swap that may not be indexed yet. Prefer {@link CreateSwapCommentOptions.positionUid}
+ * when the client already has a feed or positions `positionId`.
+ *
+ * A spot swap sends `transactionHash`. A Hyperliquid order that has not
+ * settled sends `orderId` (the exchange `oid`) instead: the fill hash does not
+ * exist yet, and social-api rejects a body that names both. For Hyperliquid,
+ * `tokenAddress` is the coin (for example `BTC`), not a contract address.
+ */
+export type TradeInFlight =
+  | {
+      transactionHash: string;
+      chain: string;
+      /** Contract address of the token traded. */
+      tokenAddress: string;
+    }
+  | {
+      /**
+       * Hyperliquid order id (`oid`) of an order just submitted. Digits only.
+       * The comment attaches once the fill is indexed.
+       */
+      orderId: string;
+      chain: 'hyperliquid';
+      /** Hyperliquid coin, for example `BTC`. */
+      tokenAddress: string;
+    };
+
+/**
+ * Options for `POST /v1/swap-comments`. Provide exactly one of `positionUid`
+ * or `tradeInFlight`; the social-api rejects a body that names both or neither.
+ */
+export type CreateSwapCommentOptions = {
+  /**
+   * Message body of the post. May include a `https://static.klipy.com/...gif`
+   * file URL (the social-api allowlists that host); other links are rejected.
+   */
+  commentText: string;
+  /** Free-form origin label stored on the comment. */
+  source?: string;
+  /**
+   * Position UUID (`positionId` / feed `itemId`). The comment attaches to that
+   * position's most recent trade, which must be the caller's own.
+   */
+  positionUid?: string;
+  /** Swap made seconds ago that may not have a position yet. */
+  tradeInFlight?: TradeInFlight;
+};
+
+/**
+ * Author profile on a swap-comment write response. Matches social-api
+ * `ProfileResponseV1`; extra fields from newer builds are allowed.
+ */
+export type SwapCommentAuthor = {
+  id: string;
+  name: string;
+  images?: {
+    raw: string | null;
+    xs: string | null;
+    sm: string | null;
+  };
+  addresses?: string[];
+  externalId?: string;
+};
+
+/**
+ * Response from `POST /v1/swap-comments`.
+ *
+ * `transactionHash` is empty when the comment was saved against a Hyperliquid
+ * `orderId` whose fill is not indexed yet. Social-api stamps the hash once the
+ * order settles.
+ */
+export type SwapCommentResponse = {
+  uid: string;
+  transactionHash: string;
+  chain: string;
+  tokenAddress: string;
+  commentText: string;
+  author: SwapCommentAuthor;
+  timestamp: number;
+  isAppUserComment: boolean;
+  metrics: CommentEngagement;
+};
+
+// ---------------------------------------------------------------------------
+// Copy-trade intents
+// ---------------------------------------------------------------------------
+
+/**
+ * Social resource a copy trade was started from. Only comments are supported.
+ */
+export type CopyTradeOrigin = {
+  kind: 'comment';
+  /** Comment UUID. */
+  id: string;
+};
+
+/**
+ * Trade being copied. Swaps are identified by their Bridge quote id, perps by
+ * the Hyperliquid order id returned on submission.
+ */
+export type CopyTradeExecution =
+  | { product: 'swaps'; quoteId: string }
+  | { product: 'perps'; oid: string };
+
+/**
+ * Options for `POST /v1/copy-trade-intents`.
+ */
+export type CreateCopyTradeIntentOptions = {
+  origin: CopyTradeOrigin;
+  copierAccount: {
+    /**
+     * CAIP-10 id of the account placing the trade. The social-api verifies it
+     * belongs to the authenticated profile.
+     */
+    caip10: string;
+  };
+  execution: CopyTradeExecution;
+};
+
+/**
+ * Account on a copy-trade intent response.
+ */
+export type CopyTradeAccount = {
+  profileId: string;
+  caip10: string;
+};
+
+/**
+ * Payout eligibility snapshotted when the intent is created. `reason` is one
+ * of `comment_source`, `source_account_unavailable`, or `unknown_reason`;
+ * newer social-api builds may add more.
+ */
+export type CopyTradePayoutEligibility = {
+  status: 'payable' | 'non_payable';
+  reason: string;
+};
+
+/**
+ * Response from `POST /v1/copy-trade-intents`. The endpoint is idempotent, so
+ * a retry returns the existing intent.
+ */
+export type CopyTradeIntentResponse = {
+  id: string;
+  origin: CopyTradeOrigin;
+  copierAccount: CopyTradeAccount;
+  sourceAccount: CopyTradeAccount | null;
+  execution: CopyTradeExecution;
+  payoutEligibility: CopyTradePayoutEligibility;
+  /** ISO 8601 timestamp. */
+  createdAt: string;
 };
 
 /**
@@ -244,7 +627,8 @@ export type FeedResponse = {
 // ---------------------------------------------------------------------------
 
 /**
- * Response from `GET /v1/traders/:addressOrId/followers`.
+ * Response from `GET /v1/users/me/followers` and bearer-authenticated
+ * `GET /v1/traders/:addressOrId/followers` (optionally `?mutuals=true`).
  */
 export type FollowersResponse = {
   followers: ProfileSummary[];
@@ -256,7 +640,8 @@ export type FollowersResponse = {
 // ---------------------------------------------------------------------------
 
 /**
- * Response from `GET /v1/users/me/following`.
+ * Response from `GET /v1/users/me/following` and bearer-authenticated
+ * `GET /v1/traders/:addressOrId/following`.
  */
 export type FollowingResponse = {
   following: ProfileSummary[];
@@ -308,20 +693,27 @@ export type FetchPositionsOptions = {
 export type FetchFollowersOptions = {
   /** Wallet address or Clicker profile ID. */
   addressOrId: string;
+  /**
+   * When true, requests `GET .../followers?mutuals=true` so `followers` are
+   * profiles that follow both this trader and the authenticated user; `count` is
+   * the mutual total. Omit or false returns the trader's full follower list.
+   */
+  mutuals?: boolean;
 };
 
-export type FetchFeedOptions = {
+export type FetchTraderFollowingOptions = {
+  /** Wallet address or Clicker profile ID. */
+  addressOrId: string;
+};
+
+export type FetchTraderFeedOptions = {
+  /** Wallet address or Clicker profile ID. */
+  addressOrId: string;
   /**
-   * Which feed to fetch: `following` (personalized to the current user,
-   * identified server-side from the JWT) or `leaderboard` (generic, shared by
-   * all users). Defaults to `following` server-side when omitted.
+   * When true, return only positions that carry an author comment.
+   * Omitted from the request when false or unset (API default is false).
    */
-  scope?: 'following' | 'leaderboard';
-  /**
-   * Filter by one or more chains, given as CAIP-2 chain ids (e.g.
-   * `eip155:8453`). Omit for the server defaults.
-   */
-  chains?: string[];
+  commentedOnly?: boolean;
   /** Number of results to return. */
   limit?: number;
   /** Cursor for older items (infinite scroll). Use `pagination.olderCursor`. */
@@ -329,6 +721,83 @@ export type FetchFeedOptions = {
   /** Cursor for newer items (pull to refresh). Use `pagination.newerCursor`. */
   newerThan?: string;
 };
+
+/**
+ * Position status filter for a token feed.
+ * Omit to return both open and recently closed positions.
+ */
+export type TokenFeedStatus = 'open' | 'closed';
+
+/**
+ * Chain name accepted by `GET /v1/tokens/:chain/:contractAddress/feed`.
+ */
+export type TokenFeedChain =
+  | 'base'
+  | 'bsc'
+  | 'ethereum'
+  | 'hyperliquid'
+  | 'robinhood'
+  | 'solana';
+
+/**
+ * Options for `GET /v1/tokens/:chain/:contractAddress/feed`.
+ */
+export type FetchTokenFeedOptions = {
+  /** Chain name where the token is deployed. */
+  chain: TokenFeedChain;
+  /** Token contract address. */
+  contractAddress: string;
+  /**
+   * Only open or only closed positions. Omit for both. Closed positions are
+   * limited to the API's recent lookback.
+   */
+  status?: TokenFeedStatus;
+  /** Number of results to return (1–100). Server default is 25. */
+  limit?: number;
+  /** Cursor for older items (infinite scroll). Use `pagination.olderCursor`. */
+  olderThan?: string;
+  /** Cursor for newer items (pull to refresh). Use `pagination.newerCursor`. */
+  newerThan?: string;
+};
+
+export type FetchFeedOptions = {
+  /**
+   * Which feed to fetch: `following` (personalized to the current user,
+   * identified server-side from the JWT), `leaderboard` (generic, shared by
+   * all users), or `all` (the shared feed-all projection). Defaults to
+   * `following` server-side when omitted.
+   */
+  scope?: FeedScope;
+  /**
+   * Filter by one or more chains, given as CAIP-2 chain ids (e.g.
+   * `eip155:8453`). Omit for the server defaults. A set that excludes the chain
+   * of an asset in `assetIds` is rejected with a 400.
+   */
+  chains?: string[];
+  /**
+   * Only items in any of these assets, given as 1–10 CAIP-19 asset id (e.g.
+   * `eip155:8453/erc20:0x…`). Matches ANY of them. Invalid or unsupported asset
+   * ids (for example, ones with a token id) are rejected with a 400.
+   */
+  assetIds?: CaipAssetTypeOrId[];
+  /**
+   * Only this trader's items. A Clicker profile ID (UUID), not a wallet address.
+   */
+  profileId?: string;
+  /**
+   * When true, return only items that carry an author comment. Omitted from
+   * the request when false or unset.
+   */
+  commentedOnly?: boolean;
+  /** Number of results to return. */
+  limit?: number;
+  /** Cursor for older items (infinite scroll). Use `pagination.olderCursor`. */
+  olderThan?: string;
+  /** Cursor for newer items (pull to refresh). Use `pagination.newerCursor`. */
+  newerThan?: string;
+};
+
+export type FeedScope = 'following' | 'leaderboard' | 'all' | 'trending';
 
 export type FetchPositionByIdOptions = {
   /** Unique position ID (UUID). */
@@ -343,6 +812,100 @@ export type FollowOptions = {
 export type UnfollowOptions = {
   /** Array of wallet addresses or profile IDs to unfollow. */
   targets: string[];
+};
+
+// ---------------------------------------------------------------------------
+// Moderation blocks
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for `PUT /v1/moderation/block`. Provide exactly one target. Blocking
+ * the same target again replaces `reason` when one is given.
+ */
+export type BlockOptions =
+  | {
+      /** Profile id (UUID) of the trader to block. */
+      profileId: string;
+      /** Free-form reason stored on the block. Max 1000 characters. */
+      reason?: string;
+    }
+  | {
+      /** Swap comment (post) to block. */
+      commentId: string;
+      /** Free-form reason stored on the block. Max 1000 characters. */
+      reason?: string;
+    }
+  | {
+      /** Comment reply to block. */
+      replyId: string;
+      /** Free-form reason stored on the block. Max 1000 characters. */
+      reason?: string;
+    };
+
+/**
+ * Options for the cursor-paginated moderation list endpoints. Omit `cursor`
+ * for the first page.
+ */
+export type FetchBlockedListOptions = {
+  /** The `cursor` from the previous page. */
+  cursor?: string;
+};
+
+/**
+ * A trader the current user has blocked.
+ */
+export type BlockedProfile = {
+  /** When the block was placed, in Unix epoch seconds. */
+  blockedAt: number;
+  /** Reason given when the block was placed, if any. */
+  reason: string | null;
+  /** The blocked trader. */
+  profile: ProfileSummary;
+};
+
+/**
+ * Response from `GET /v1/moderation/blocks/profiles`.
+ */
+export type BlockedProfilesResponse = {
+  /** Blocked traders, most recently blocked first. */
+  items: BlockedProfile[];
+  /** Pass as `cursor` for the next page. `null` on the last page. */
+  cursor: string | null;
+};
+
+/**
+ * Whether a blocked content row is a swap comment or a reply.
+ */
+export type BlockedContentType = 'comment' | 'reply';
+
+/**
+ * A comment or reply the current user has blocked.
+ */
+export type BlockedContent = {
+  /** When the block was placed, in Unix epoch seconds. */
+  blockedAt: number;
+  /** Reason given when the block was placed, if any. */
+  reason: string | null;
+  /** Whether `id` refers to a swap comment or a reply. */
+  type: BlockedContentType;
+  /** Comment or reply id (UUID). */
+  id: string;
+  /** Text of the blocked comment or reply. */
+  text: string;
+  /** When the content was posted, in Unix epoch seconds. */
+  createdAt: number;
+  /** Author of the content. `null` when the profile cannot be resolved. */
+  author: ProfileSummary | null;
+};
+
+/**
+ * Response from `GET /v1/moderation/blocks/content`.
+ */
+export type BlockedContentResponse = {
+  /** Blocked comments and replies, most recently blocked first. */
+  items: BlockedContent[];
+  /** Pass as `cursor` for the next page. `null` on the last page. */
+  cursor: string | null;
 };
 
 // ---------------------------------------------------------------------------

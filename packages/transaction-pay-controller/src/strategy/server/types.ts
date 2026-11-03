@@ -1,16 +1,6 @@
 import type { Hex } from '@metamask/utils';
 
-/** Provider names supported by the server intents API. */
-export enum ServerProviderName {
-  Relay = 'relay',
-  Across = 'across',
-}
-
-/** Trade type for server quote requests. */
-export enum ServerTradeType {
-  ExactInput = 'EXACT_INPUT',
-  ExpectedOutput = 'EXPECTED_OUTPUT',
-}
+import type { TradeType } from '../../utils/trade-type.js';
 
 /** Token amount with chain and token context. */
 export type ServerQuoteAmount = {
@@ -72,15 +62,24 @@ export type ServerQuoteRequest = {
   source: { chainId: number; token: Hex };
   target: { chainId: number; token: Hex };
   amount: string;
-  tradeType: ServerTradeType;
+  tradeType: TradeType;
   sender: Hex;
   recipient: Hex;
   refundTo?: Hex;
   slippage?: number;
-  providers?: ServerProviderName[];
+  providers?: string[];
   calls?: ServerCall[];
   authorizationList?: ServerAuthorization[];
+  supportsDeferredCalls?: boolean;
   supportsGasless?: boolean;
+
+  /**
+   * Whether the quote is funded with a plain token transfer to a provider
+   * deposit address, rather than by calling the provider contracts. The
+   * transfer must not include any additional calldata, such as an appended
+   * request ID.
+   */
+  useDepositAddress?: boolean;
 };
 
 /** Error detail from a rejected quote result. */
@@ -98,6 +97,7 @@ export type ServerQuotePayload = {
   duration: number;
   steps: ServerStep[];
   gasless: boolean;
+  callsDeferred?: boolean;
 };
 
 /** Fee breakdown from a quote. */
@@ -109,7 +109,7 @@ export type ServerQuoteFees = {
 
 /** A single provider result within the quote response. */
 export type ServerQuoteResult = {
-  provider: ServerProviderName;
+  provider: string;
   quote?: ServerQuotePayload;
   error?: ServerQuoteError;
 };
@@ -129,7 +129,7 @@ export type ServerQuoteClient = {
 /** Normalized server quote stored in TransactionPayQuote.original. */
 export type ServerQuote = {
   id: string;
-  provider: ServerProviderName;
+  provider: string;
   input: ServerQuoteAmount;
   output: ServerQuoteAmount;
   fees: ServerQuoteFees;
@@ -159,7 +159,7 @@ export type ServerStatusResponse = {
 
 /** Request body for POST /submit. */
 export type ServerSubmitRequest = {
-  provider: ServerProviderName;
+  provider: string;
   id: string;
   chainId: number;
   to: Hex;

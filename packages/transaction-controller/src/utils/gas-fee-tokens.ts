@@ -54,6 +54,7 @@ export async function getGasFeeTokens({
   transactionMeta,
   getSimulationConfig,
 }: GetGasFeeTokensRequest): Promise<{
+  gasFeeSponsor?: string;
   gasFeeTokens: GasFeeToken[];
   isGasFeeSponsored: boolean;
 }> {
@@ -104,6 +105,9 @@ export async function getGasFeeTokens({
         withTransfer: true,
         withFeeTransfer: true,
         with7702,
+        // The EIP-7702 publish hook always restricts redemption to the relay
+        // signers via a RedeemerEnforcer caveat, so include it in the estimate.
+        withRedeemerEnforcer: with7702,
       },
     });
 
@@ -187,6 +191,20 @@ export async function checkGasFeeTokenBeforePublish({
     isExternalSign: true,
   });
 
+  const isSelectedGasFeeTokenAvailable = gasFeeTokens?.some(
+    (token) =>
+      token.tokenAddress.toLowerCase() === selectedGasFeeToken.toLowerCase(),
+  );
+
+  if (!isSelectedGasFeeTokenAvailable) {
+    updateTransaction(transaction.id, (tx) => {
+      tx.gasFeeTokens = gasFeeTokens;
+      tx.isExternalSign = false;
+    });
+
+    throw new Error('Gas fee token not found and insufficient native balance');
+  }
+
   updateTransaction(transaction.id, (tx) => {
     tx.gasFeeTokens = gasFeeTokens;
     tx.isExternalSign = true;
@@ -194,16 +212,6 @@ export async function checkGasFeeTokenBeforePublish({
   });
 
   log('Updated gas fee tokens before publish', gasFeeTokens);
-
-  if (
-    !gasFeeTokens?.some(
-      (token) =>
-        token.tokenAddress.toLowerCase() === selectedGasFeeToken.toLowerCase(),
-    )
-  ) {
-    throw new Error('Gas fee token not found and insufficient native balance');
-  }
-
   log('Publishing with selected gas fee token', { selectedGasFeeToken });
 }
 
@@ -211,9 +219,10 @@ export async function checkGasFeeTokenBeforePublish({
  * Extract gas fee tokens from a simulation response.
  *
  * @param response - The simulation response.
- * @returns gasFeeTokens: An array of gas fee tokens. isGasFeeSponsored: Whether the transaction is sponsored
+ * @returns gasFeeTokens: An array of gas fee tokens. isGasFeeSponsored: Whether the transaction is sponsored. gasFeeSponsor: Who pays the gas fee if sponsored.
  */
 function parseGasFeeTokens(response: SimulationResponse): {
+  gasFeeSponsor?: string;
   gasFeeTokens: GasFeeToken[];
   isGasFeeSponsored: boolean;
 } {
@@ -221,10 +230,12 @@ function parseGasFeeTokens(response: SimulationResponse): {
     ?.fees?.[0] as Required<SimulationResponseTransaction>['fees'][0];
 
   const isGasFeeSponsored = response.sponsorship?.isSponsored ?? false;
+  const sponsor = isGasFeeSponsored ? response.sponsorship?.sponsor : undefined;
 
   const tokenFees = feeLevel?.tokenFees ?? [];
 
   return {
+    ...(sponsor ? { gasFeeSponsor: sponsor } : {}),
     gasFeeTokens: tokenFees.map((tokenFee) => ({
       amount: tokenFee.balanceNeededToken,
       balance: tokenFee.currentBalanceToken,
@@ -236,6 +247,7 @@ function parseGasFeeTokens(response: SimulationResponse): {
       maxPriorityFeePerGas: feeLevel.maxPriorityFeePerGas,
       rateWei: tokenFee.rateWei,
       recipient: tokenFee.feeRecipient,
+      ...(sponsor ? { sponsor } : {}),
       symbol: tokenFee.token.symbol,
       tokenAddress: tokenFee.token.address,
     })),

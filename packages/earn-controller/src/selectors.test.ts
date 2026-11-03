@@ -1,4 +1,5 @@
 import type { LendingMarket } from '@metamask/stake-sdk';
+import { describe, it, expect } from 'vitest';
 
 import type {
   EarnControllerState,
@@ -89,7 +90,7 @@ describe('Earn Controller Selectors', () => {
     assets: '100',
     marketId: 'market1',
     marketAddress: '0x123',
-    protocol: 'aave-v3' as LendingMarket['protocol'],
+    protocol: 'aave-v3',
     market: mockMarket1,
   };
 
@@ -99,7 +100,7 @@ describe('Earn Controller Selectors', () => {
     assets: '200',
     marketId: 'market2',
     marketAddress: '0x456',
-    protocol: 'compound-v3' as LendingMarket['protocol'],
+    protocol: 'compound-v3',
     market: mockMarket2,
   };
 

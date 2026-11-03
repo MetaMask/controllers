@@ -17,14 +17,13 @@ import type {
 } from '../../types.js';
 import { prefixError } from '../../utils/error-prefix.js';
 import { getFiatVaultDisabled } from '../../utils/feature-flags.js';
-import { submitMoneyAccountVaultDeposit } from '../../utils/ma-vault-deposit.js';
+import { submitSecondLeg } from '../../utils/second-leg.js';
 import { buildCaipAssetType, getTokenInfo } from '../../utils/token.js';
 import { MUSD_MONAD_FIAT_ASSET } from './constants.js';
 import type { FiatQuote } from './types.js';
 import {
   getRampsQuote,
   getRawSourceAmountFromOrderCryptoAmount,
-  resolveSourceAmountRaw,
   validateOrderAsset,
 } from './utils.js';
 
@@ -65,6 +64,9 @@ export async function getDirectMusdFiatQuote({
       throw new Error('Invalid fiat amount for direct mUSD quote');
     }
 
+    // `getRampsQuote` requests `getQuoteWithFees`, so a Transak Native quote
+    // already carries the native fee (fee-on-top for direct mUSD) in its
+    // provider/network fee fields.
     const fiatQuote = await getRampsQuote({
       adjustedAmount,
       errorMessage: 'No matching ramps quote found for direct mUSD provider',
@@ -132,6 +134,7 @@ export async function submitDirectMusdAfterFiatCompletion({
   request: PayStrategyExecuteRequest<FiatQuote>;
 }): Promise<{ transactionHash?: Hex }> {
   const { messenger, transaction } = request;
+  const moneyAccountAddress = transaction.txParams.from as Hex;
 
   try {
     validateOrderAsset({
@@ -140,20 +143,24 @@ export async function submitDirectMusdAfterFiatCompletion({
       transactionId: transaction.id,
     });
 
-    const { amountRaw: sourceAmountRaw, fromBlock } =
-      await resolveSourceAmountRaw({
-        messenger,
-        order,
-        fiatAsset: MUSD_MONAD_FIAT_ASSET,
-        walletAddress: transaction.txParams.from as Hex,
+    // Kill switch: leave the on-ramped mUSD in the Money Account rather than
+    // depositing it into the vault.
+    if (getFiatVaultDisabled(messenger)) {
+      log('Skipping vault deposit because the fiat vault is disabled', {
+        moneyAccountAddress,
+        transactionId: transaction.id,
       });
 
-    return await submitMoneyAccountVaultDeposit({
-      fromBlock,
+      return { transactionHash: '0x' };
+    }
+
+    return await submitSecondLeg({
+      chainId: MUSD_MONAD_FIAT_ASSET.chainId,
+      from: moneyAccountAddress,
       messenger,
-      sourceAmountRaw,
+      settlementHash: order.txHash as Hex | undefined,
+      tokenAddress: MUSD_MONAD_FIAT_ASSET.address,
       transaction,
-      vaultDisabled: getFiatVaultDisabled(messenger),
     });
   } catch (error) {
     throw prefixError(error, DIRECT_MUSD_ERROR_PREFIX);
@@ -187,21 +194,44 @@ function combineDirectMusdFiatQuote({
     cryptoAmount: fiatQuote.quote.amountOut,
     decimals: tokenInfo.decimals,
   });
-  const rampsProviderFee = getRampsProviderFee(fiatQuote).toString(10);
+  // `getQuoteWithFees` already reconciled the fee split to the resolved
+  // provider (for Transak Native, the native total split across provider and
+  // network), so the provider/network fields can be mapped straight into the
+  // fee buckets.
+  const rampsProviderFee = getSafeFee(fiatQuote.quote.providerFee).toString(10);
+  const rampsNetworkFee = getSafeFee(fiatQuote.quote.networkFee).toString(10);
+  const rampsTotalFee = new BigNumber(rampsProviderFee)
+    .plus(rampsNetworkFee)
+    .toString(10);
+  const targetAmountFiat = getDirectMusdTargetAmountFiat(fiatQuote, amountFiat);
   const sourceAmountHuman = new BigNumber(sourceAmountRaw)
     .shiftedBy(-tokenInfo.decimals)
     .toString(10);
 
   return {
+    // Direct mUSD is fee-on-top: the fee is added to the entered amount, so the
+    // fees are NOT already inside the source amount and the total becomes
+    // amount + fees (see calculateTotals).
+    areFeesIncludedInSourceAmount: false,
     dust: { fiat: '0', usd: '0' },
     estimatedDuration: 0,
     fees: {
       metaMask: { fiat: '0', usd: '0' },
       provider: { fiat: rampsProviderFee, usd: rampsProviderFee },
-      providerFiat: { fiat: rampsProviderFee, usd: rampsProviderFee },
+      providerFiat: { fiat: rampsTotalFee, usd: rampsTotalFee },
       sourceNetwork: {
-        estimate: { fiat: '0', human: '0', raw: '0', usd: '0' },
-        max: { fiat: '0', human: '0', raw: '0', usd: '0' },
+        estimate: {
+          fiat: rampsNetworkFee,
+          human: '0',
+          raw: '0',
+          usd: rampsNetworkFee,
+        },
+        max: {
+          fiat: rampsNetworkFee,
+          human: '0',
+          raw: '0',
+          usd: rampsNetworkFee,
+        },
       },
       targetNetwork: { fiat: '0', usd: '0' },
     },
@@ -228,12 +258,36 @@ function combineDirectMusdFiatQuote({
       usd: amountFiat,
     },
     strategy: TransactionPayStrategy.Fiat,
-    targetAmount: { fiat: amountFiat, usd: amountFiat },
+    targetAmount: { fiat: targetAmountFiat, usd: targetAmountFiat },
   };
 }
 
-function getRampsProviderFee(fiatQuote: RampsQuote): BigNumber {
-  return new BigNumber(fiatQuote.quote.providerFee ?? 0).plus(
-    fiatQuote.quote.networkFee ?? 0,
-  );
+/**
+ * Resolves the fiat value of the received mUSD for a direct deposit quote.
+ *
+ * Prefers the quote's `amountOutInFiat`. When that is missing, it falls back to
+ * the entered fiat amount rather than `amountOut`, which is a crypto amount and
+ * would otherwise put crypto units into a fiat field.
+ *
+ * @param fiatQuote - The resolved ramps quote.
+ * @param amountFiat - The entered fiat amount, used as the fallback.
+ * @returns The target amount in fiat.
+ */
+function getDirectMusdTargetAmountFiat(
+  fiatQuote: RampsQuote,
+  amountFiat: string,
+): string {
+  const amountOutInFiat = new BigNumber(fiatQuote.quote.amountOutInFiat ?? NaN);
+  if (amountOutInFiat.isFinite() && amountOutInFiat.isGreaterThanOrEqualTo(0)) {
+    return amountOutInFiat.toString(10);
+  }
+
+  return amountFiat;
+}
+
+function getSafeFee(value: BigNumber.Value | undefined): BigNumber {
+  const fee = new BigNumber(value ?? 0);
+  return fee.isFinite() && fee.isGreaterThanOrEqualTo(0)
+    ? fee
+    : new BigNumber(0);
 }

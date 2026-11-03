@@ -4,17 +4,19 @@
  * Clean, focused test suite for PerpsController
  */
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+
 import { createMockHyperLiquidProvider } from '../helpers/providerMocks.js';
 import {
   createMockInfrastructure,
+  callMissingFrom,
+  createDeferred,
   createMockMessenger,
+  createPartiallyDelegatedMessenger,
 } from '../helpers/serviceMocks.js';
 
-jest.mock('@nktkas/hyperliquid', () => ({}));
-jest.mock('@myx-trade/sdk', () => ({
-  MyxClient: jest.fn(),
-  OrderStatusEnum: { Successful: 9 },
-}));
+vi.mock('@nktkas/hyperliquid', () => ({}));
 
 import {
   PERPS_EVENT_PROPERTY,
@@ -29,142 +31,139 @@ import {
   PerpsController,
   getDefaultPerpsControllerState,
   InitializationState,
-  firstNonEmpty,
-  resolveMyxAuthConfig,
 } from '../../src/PerpsController.js';
 import { PERPS_ERROR_CODES } from '../../src/perpsErrorCodes.js';
 import { HyperLiquidProvider } from '../../src/providers/HyperLiquidProvider.js';
+import * as accountServiceModule from '../../src/services/AccountService.js';
+import * as dataLakeServiceModule from '../../src/services/DataLakeService.js';
+import * as depositServiceModule from '../../src/services/DepositService.js';
+import * as eligibilityServiceModule from '../../src/services/EligibilityService.js';
+import * as featureFlagConfigurationServiceModule from '../../src/services/FeatureFlagConfigurationService.js';
+import * as marketDataServiceModule from '../../src/services/MarketDataService.js';
+import * as tradingServiceModule from '../../src/services/TradingService.js';
 import { PerpsAnalyticsEvent } from '../../src/types/index.js';
 
-jest.mock('../../src/providers/HyperLiquidProvider');
-jest.mock('../../src/providers/MYXProvider');
+vi.mock('../../src/providers/HyperLiquidProvider');
 
 // Mock transaction controller utility
-const mockAddTransaction = jest.fn();
-jest.mock(
-  '../../../util/transaction-controller',
-  () => ({
-    addTransaction: (...args) => mockAddTransaction(...args),
-  }),
-  { virtual: true },
-);
+const mockAddTransaction = vi.fn();
+vi.mock('../../../util/transaction-controller', () => ({
+  addTransaction: (...args) => mockAddTransaction(...args),
+}));
 
 // Mock wait utility to speed up retry tests
-jest.mock('../../src/utils/wait', () => ({
-  wait: jest.fn().mockResolvedValue(undefined),
+vi.mock('../../src/utils/wait', () => ({
+  wait: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock stream manager
 const mockStreamManager = {
-  positions: { pause: jest.fn(), resume: jest.fn() },
-  account: { pause: jest.fn(), resume: jest.fn() },
-  orders: { pause: jest.fn(), resume: jest.fn() },
-  prices: { pause: jest.fn(), resume: jest.fn() },
-  orderFills: { pause: jest.fn(), resume: jest.fn() },
+  positions: { pause: vi.fn(), resume: vi.fn() },
+  account: { pause: vi.fn(), resume: vi.fn() },
+  orders: { pause: vi.fn(), resume: vi.fn() },
+  prices: { pause: vi.fn(), resume: vi.fn() },
+  orderFills: { pause: vi.fn(), resume: vi.fn() },
 };
 
-jest.mock(
-  '../../../components/UI/Perps/providers/PerpsStreamManager',
-  () => ({
-    getStreamManagerInstance: jest.fn(() => mockStreamManager),
-  }),
-  { virtual: true },
-);
+vi.mock('../../../components/UI/Perps/providers/PerpsStreamManager', () => ({
+  getStreamManagerInstance: vi.fn(() => mockStreamManager),
+}));
 
-jest.mock('@metamask/utils', () => ({
-  ...jest.requireActual('@metamask/utils'),
-  formatAccountToCaipAccountId: jest
+vi.mock(import('@metamask/utils'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  formatAccountToCaipAccountId: vi
     .fn()
     .mockReturnValue('eip155:1:0x1234567890123456789012345678901234567890'),
 }));
 
 // Mock EligibilityService as a class with instance methods
 const mockEligibilityServiceInstance = {
-  checkEligibility: jest.fn().mockResolvedValue(true),
+  checkEligibility: vi.fn().mockResolvedValue(true),
 };
-jest.mock('../../src/services/EligibilityService', () => ({
-  EligibilityService: jest
-    .fn()
-    .mockImplementation(() => mockEligibilityServiceInstance),
+vi.mock('../../src/services/EligibilityService', () => ({
+  EligibilityService: vi.fn().mockImplementation(function () {
+    return mockEligibilityServiceInstance;
+  }),
 }));
 
 // Mock DepositService as a class with instance methods
 const mockDepositServiceInstance = {
-  prepareTransaction: jest.fn(),
+  prepareTransaction: vi.fn(),
 };
-jest.mock('../../src/services/DepositService', () => ({
-  DepositService: jest
-    .fn()
-    .mockImplementation(() => mockDepositServiceInstance),
+vi.mock('../../src/services/DepositService', () => ({
+  DepositService: vi.fn().mockImplementation(function () {
+    return mockDepositServiceInstance;
+  }),
 }));
 
 // Mock MarketDataService as a class with instance methods
 const mockMarketDataServiceInstance = {
-  getPositions: jest.fn(),
-  getAccountState: jest.fn(),
-  getMarkets: jest.fn(),
-  getWithdrawalRoutes: jest.fn().mockReturnValue([]),
-  validateClosePosition: jest.fn().mockResolvedValue({ isValid: true }),
-  validateOrder: jest.fn(),
-  calculateMaintenanceMargin: jest.fn().mockResolvedValue(0),
-  calculateLiquidationPrice: jest.fn(),
-  getMaxLeverage: jest.fn(),
-  calculateFees: jest.fn().mockResolvedValue({ totalFee: 0 }),
-  getAvailableDexs: jest.fn().mockResolvedValue([]),
-  getBlockExplorerUrl: jest.fn(),
-  getOrderFills: jest.fn(),
-  getOrders: jest.fn(),
-  getFunding: jest.fn(),
+  getPositions: vi.fn(),
+  getAccountState: vi.fn(),
+  getMarkets: vi.fn(),
+  getWithdrawalRoutes: vi.fn().mockReturnValue([]),
+  validateClosePosition: vi.fn().mockResolvedValue({ isValid: true }),
+  validateOrder: vi.fn(),
+  calculateMaintenanceMargin: vi.fn().mockResolvedValue(0),
+  calculateLiquidationPrice: vi.fn(),
+  getMaxLeverage: vi.fn(),
+  calculateFees: vi.fn().mockResolvedValue({ totalFee: 0 }),
+  previewPositionModify: vi.fn(),
+  getAvailableDexs: vi.fn().mockResolvedValue([]),
+  getBlockExplorerUrl: vi.fn(),
+  getOrderFills: vi.fn(),
+  getOrders: vi.fn(),
+  getFunding: vi.fn(),
 };
-jest.mock('../../src/services/MarketDataService', () => ({
-  MarketDataService: jest
-    .fn()
-    .mockImplementation(() => mockMarketDataServiceInstance),
+vi.mock('../../src/services/MarketDataService', () => ({
+  MarketDataService: vi.fn().mockImplementation(function () {
+    return mockMarketDataServiceInstance;
+  }),
 }));
 
 // Mock TradingService as a class with instance methods
 const mockTradingServiceInstance = {
-  placeOrder: jest.fn(),
-  editOrder: jest.fn(),
-  cancelOrder: jest.fn(),
-  cancelOrders: jest.fn(),
-  closePosition: jest.fn(),
-  closePositions: jest.fn(),
-  updatePositionTPSL: jest.fn(),
-  updateMargin: jest.fn(),
-  flipPosition: jest.fn(),
-  setControllerDependencies: jest.fn(),
+  placeOrder: vi.fn(),
+  editOrder: vi.fn(),
+  cancelOrder: vi.fn(),
+  cancelOrders: vi.fn(),
+  closePosition: vi.fn(),
+  closePositions: vi.fn(),
+  updatePositionTPSL: vi.fn(),
+  updateMargin: vi.fn(),
+  flipPosition: vi.fn(),
+  setControllerDependencies: vi.fn(),
 };
-jest.mock('../../src/services/TradingService', () => ({
-  TradingService: jest
-    .fn()
-    .mockImplementation(() => mockTradingServiceInstance),
+vi.mock('../../src/services/TradingService', () => ({
+  TradingService: vi.fn().mockImplementation(function () {
+    return mockTradingServiceInstance;
+  }),
 }));
 
 // Mock AccountService as a class with instance methods
 const mockAccountServiceInstance = {
-  withdraw: jest.fn(),
-  validateWithdrawal: jest.fn(),
+  withdraw: vi.fn(),
+  validateWithdrawal: vi.fn(),
 };
-jest.mock('../../src/services/AccountService', () => ({
-  AccountService: jest
-    .fn()
-    .mockImplementation(() => mockAccountServiceInstance),
+vi.mock('../../src/services/AccountService', () => ({
+  AccountService: vi.fn().mockImplementation(function () {
+    return mockAccountServiceInstance;
+  }),
 }));
 
 // Mock DataLakeService as a class with instance methods
 const mockDataLakeServiceInstance = {
-  reportOrder: jest.fn(),
+  reportOrder: vi.fn(),
 };
-jest.mock('../../src/services/DataLakeService', () => ({
-  DataLakeService: jest
-    .fn()
-    .mockImplementation(() => mockDataLakeServiceInstance),
+vi.mock('../../src/services/DataLakeService', () => ({
+  DataLakeService: vi.fn().mockImplementation(function () {
+    return mockDataLakeServiceInstance;
+  }),
 }));
 
 // Mock FeatureFlagConfigurationService as a class with instance methods
 const mockFeatureFlagConfigurationServiceInstance = {
-  refreshEligibility: jest.fn((options) => {
+  refreshEligibility: vi.fn((options) => {
     // Simulate the service's behavior: extract blocked regions from remote flags
     const remoteFlags =
       options.remoteFeatureFlagControllerState.remoteFeatureFlags;
@@ -196,8 +195,8 @@ const mockFeatureFlagConfigurationServiceInstance = {
       mockFeatureFlagConfigurationServiceInstance.refreshHip3Config(options);
     }
   }),
-  refreshHip3Config: jest.fn(),
-  setBlockedRegions: jest.fn((options) => {
+  refreshHip3Config: vi.fn(),
+  setBlockedRegions: vi.fn((options) => {
     // Simulate setBlockedRegions behavior
     const { list, source, context } = options;
     if (context.setBlockedRegionList && context.getBlockedRegionList) {
@@ -219,10 +218,10 @@ const mockFeatureFlagConfigurationServiceInstance = {
     }
   }),
 };
-jest.mock('../../src/services/FeatureFlagConfigurationService', () => ({
-  FeatureFlagConfigurationService: jest
-    .fn()
-    .mockImplementation(() => mockFeatureFlagConfigurationServiceInstance),
+vi.mock('../../src/services/FeatureFlagConfigurationService', () => ({
+  FeatureFlagConfigurationService: vi.fn().mockImplementation(function () {
+    return mockFeatureFlagConfigurationServiceInstance;
+  }),
 }));
 
 /**
@@ -284,14 +283,6 @@ class TestablePerpsController extends PerpsController {
   testHasStandaloneProvider() {
     return this.hasStandaloneProvider();
   }
-
-  testRegisterMYXProvider(MYXProvider) {
-    this.registerMYXProvider(MYXProvider);
-  }
-
-  testHandleMYXImportError(error) {
-    this.handleMYXImportError(error);
-  }
 }
 
 describe('PerpsController', () => {
@@ -305,35 +296,43 @@ describe('PerpsController', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    jest
-      .requireMock('../../src/services/EligibilityService')
-      .EligibilityService.mockImplementation(
-        () => mockEligibilityServiceInstance,
-      );
-    jest
-      .requireMock('../../src/services/DepositService')
-      .DepositService.mockImplementation(() => mockDepositServiceInstance);
-    jest
-      .requireMock('../../src/services/MarketDataService')
-      .MarketDataService.mockImplementation(
-        () => mockMarketDataServiceInstance,
-      );
-    jest
-      .requireMock('../../src/services/TradingService')
-      .TradingService.mockImplementation(() => mockTradingServiceInstance);
-    jest
-      .requireMock('../../src/services/AccountService')
-      .AccountService.mockImplementation(() => mockAccountServiceInstance);
-    jest
-      .requireMock('../../src/services/DataLakeService')
-      .DataLakeService.mockImplementation(() => mockDataLakeServiceInstance);
-    jest
-      .requireMock('../../src/services/FeatureFlagConfigurationService')
-      .FeatureFlagConfigurationService.mockImplementation(
-        () => mockFeatureFlagConfigurationServiceInstance,
-      );
+    (
+      eligibilityServiceModule as unknown as Record<string, Mock>
+    ).EligibilityService.mockImplementation(function () {
+      return mockEligibilityServiceInstance;
+    });
+    (
+      depositServiceModule as unknown as Record<string, Mock>
+    ).DepositService.mockImplementation(function () {
+      return mockDepositServiceInstance;
+    });
+    (
+      marketDataServiceModule as unknown as Record<string, Mock>
+    ).MarketDataService.mockImplementation(function () {
+      return mockMarketDataServiceInstance;
+    });
+    (
+      tradingServiceModule as unknown as Record<string, Mock>
+    ).TradingService.mockImplementation(function () {
+      return mockTradingServiceInstance;
+    });
+    (
+      accountServiceModule as unknown as Record<string, Mock>
+    ).AccountService.mockImplementation(function () {
+      return mockAccountServiceInstance;
+    });
+    (
+      dataLakeServiceModule as unknown as Record<string, Mock>
+    ).DataLakeService.mockImplementation(function () {
+      return mockDataLakeServiceInstance;
+    });
+    (
+      featureFlagConfigurationServiceModule as unknown as Record<string, Mock>
+    ).FeatureFlagConfigurationService.mockImplementation(function () {
+      return mockFeatureFlagConfigurationServiceInstance;
+    });
 
     mockEligibilityServiceInstance.checkEligibility.mockResolvedValue(true);
     mockMarketDataServiceInstance.getPositions.mockResolvedValue([]);
@@ -444,9 +443,11 @@ describe('PerpsController', () => {
     );
     mockProvider.getWithdrawalRoutes.mockReturnValue([]);
 
-    HyperLiquidProvider.mockImplementation(() => mockProvider);
+    HyperLiquidProvider.mockImplementation(function () {
+      return mockProvider;
+    });
 
-    const mockCall = jest.fn().mockImplementation((action) => {
+    const mockCall = vi.fn().mockImplementation((action) => {
       if (action === 'RemoteFeatureFlagController:getState') {
         return {
           remoteFeatureFlags: {
@@ -504,7 +505,7 @@ describe('PerpsController', () => {
     mockInfrastructure.logger.error.mockClear();
     mockInfrastructure.debugLogger.log.mockClear();
   });
-  describe('attribution context (TAT-3463)', () => {
+  describe('attribution context', () => {
     it('returns an empty context by default', () => {
       expect(controller.getAttributionContext()).toStrictEqual({});
     });
@@ -592,9 +593,9 @@ describe('PerpsController', () => {
 
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest
-        .spyOn(mockMarketDataServiceInstance, 'getPositions')
-        .mockResolvedValue(mockPositions);
+      vi.spyOn(mockMarketDataServiceInstance, 'getPositions').mockResolvedValue(
+        mockPositions,
+      );
 
       const result = await controller.getPositions();
 
@@ -607,9 +608,9 @@ describe('PerpsController', () => {
 
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest
-        .spyOn(mockMarketDataServiceInstance, 'getPositions')
-        .mockRejectedValue(new Error(errorMessage));
+      vi.spyOn(mockMarketDataServiceInstance, 'getPositions').mockRejectedValue(
+        new Error(errorMessage),
+      );
 
       await expect(controller.getPositions()).rejects.toThrow(errorMessage);
       expect(mockMarketDataServiceInstance.getPositions).toHaveBeenCalled();
@@ -628,7 +629,7 @@ describe('PerpsController', () => {
     });
 
     it('cleans up preload subscriptions on disconnect', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
       mockProvider.disconnect.mockResolvedValue({ success: true });
@@ -636,7 +637,7 @@ describe('PerpsController', () => {
 
       // Arrange: start preloading to set up timer + subscriptions
       controller.startMarketDataPreload();
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Act: disconnect should tear down all preload state
       await controller.disconnect();
@@ -645,12 +646,12 @@ describe('PerpsController', () => {
       expect(mockProvider.disconnect).toHaveBeenCalled();
       const callsBefore =
         mockProvider.getMarketDataWithPrices.mock.calls.length;
-      jest.advanceTimersByTime(10 * 60 * 1000);
+      vi.advanceTimersByTime(10 * 60 * 1000);
       expect(mockProvider.getMarketDataWithPrices.mock.calls.length).toBe(
         callsBefore,
       );
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 
@@ -668,9 +669,9 @@ describe('PerpsController', () => {
 
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest
-        .spyOn(mockMarketDataServiceInstance, 'getFunding')
-        .mockResolvedValue(mockFunding);
+      vi.spyOn(mockMarketDataServiceInstance, 'getFunding').mockResolvedValue(
+        mockFunding,
+      );
 
       const result = await controller.getFunding();
 
@@ -701,9 +702,10 @@ describe('PerpsController', () => {
 
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest
-        .spyOn(mockMarketDataServiceInstance, 'getOrderFills')
-        .mockResolvedValue(mockOrderFills);
+      vi.spyOn(
+        mockMarketDataServiceInstance,
+        'getOrderFills',
+      ).mockResolvedValue(mockOrderFills);
 
       const result = await controller.getOrderFills(params);
 
@@ -737,9 +739,9 @@ describe('PerpsController', () => {
 
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest
-        .spyOn(mockTradingServiceInstance, 'editOrder')
-        .mockResolvedValue(mockEditResult);
+      vi.spyOn(mockTradingServiceInstance, 'editOrder').mockResolvedValue(
+        mockEditResult,
+      );
 
       const result = await controller.editOrder(editParams);
 
@@ -769,9 +771,9 @@ describe('PerpsController', () => {
 
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest
-        .spyOn(mockTradingServiceInstance, 'editOrder')
-        .mockRejectedValue(new Error(errorMessage));
+      vi.spyOn(mockTradingServiceInstance, 'editOrder').mockRejectedValue(
+        new Error(errorMessage),
+      );
 
       await expect(controller.editOrder(editParams)).rejects.toThrow(
         errorMessage,
@@ -782,9 +784,9 @@ describe('PerpsController', () => {
 
   describe('subscription management', () => {
     it('subscribes to order fills', () => {
-      const mockUnsubscribe = jest.fn();
+      const mockUnsubscribe = vi.fn();
       const params = {
-        callback: jest.fn(),
+        callback: vi.fn(),
       };
 
       markControllerAsInitialized();
@@ -813,10 +815,10 @@ describe('PerpsController', () => {
     });
 
     it('handles subscription cleanup', () => {
-      const mockUnsubscribe = jest.fn();
+      const mockUnsubscribe = vi.fn();
       const params = {
         symbols: ['BTC', 'ETH'],
-        callback: jest.fn(),
+        callback: vi.fn(),
       };
 
       markControllerAsInitialized();
@@ -876,9 +878,10 @@ describe('PerpsController', () => {
 
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest
-        .spyOn(mockMarketDataServiceInstance, 'getWithdrawalRoutes')
-        .mockReturnValue(mockRoutes);
+      vi.spyOn(
+        mockMarketDataServiceInstance,
+        'getWithdrawalRoutes',
+      ).mockReturnValue(mockRoutes);
 
       const result = controller.getWithdrawalRoutes();
 
@@ -975,11 +978,11 @@ describe('PerpsController', () => {
 
   describe('recently viewed markets', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('returns empty array by default', () => {
@@ -994,7 +997,7 @@ describe('PerpsController', () => {
 
     it('prepends new entries (newest first)', () => {
       controller.recordMarketViewed('BTC');
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       controller.recordMarketViewed('ETH');
 
       expect(controller.getRecentlyViewedMarkets()).toStrictEqual([
@@ -1005,9 +1008,9 @@ describe('PerpsController', () => {
 
     it('deduplicates: moves existing symbol to front', () => {
       controller.recordMarketViewed('BTC');
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       controller.recordMarketViewed('ETH');
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       controller.recordMarketViewed('BTC');
 
       const result = controller.getRecentlyViewedMarkets();
@@ -1018,7 +1021,7 @@ describe('PerpsController', () => {
     it('caps at 10 entries', () => {
       for (let i = 0; i < 15; i++) {
         controller.recordMarketViewed(`COIN${i}`);
-        jest.advanceTimersByTime(100);
+        vi.advanceTimersByTime(100);
       }
 
       expect(controller.getRecentlyViewedMarkets()).toHaveLength(10);
@@ -1027,7 +1030,7 @@ describe('PerpsController', () => {
     it('filters out entries older than 24 hours', () => {
       controller.recordMarketViewed('BTC');
       // Advance past the 24h TTL
-      jest.advanceTimersByTime(25 * 60 * 60 * 1000);
+      vi.advanceTimersByTime(25 * 60 * 60 * 1000);
       controller.recordMarketViewed('ETH');
 
       const result = controller.getRecentlyViewedMarkets();
@@ -1037,7 +1040,7 @@ describe('PerpsController', () => {
 
     it('returns empty array when all entries are expired', () => {
       controller.recordMarketViewed('BTC');
-      jest.advanceTimersByTime(25 * 60 * 60 * 1000);
+      vi.advanceTimersByTime(25 * 60 * 60 * 1000);
 
       expect(controller.getRecentlyViewedMarkets()).toStrictEqual([]);
     });
@@ -1104,7 +1107,7 @@ describe('PerpsController', () => {
     let mockAusInfrastructure;
 
     beforeEach(() => {
-      mockAusCall = jest.fn().mockImplementation((action) => {
+      mockAusCall = vi.fn().mockImplementation((action) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return {
             remoteFeatureFlags: {
@@ -1157,7 +1160,7 @@ describe('PerpsController', () => {
           ...MOCK_PREFS_BASE.perps,
           watchlistMarkets: {
             hyperliquid: { testnet: [], mainnet: [] },
-            myx: { testnet: [], mainnet: [] },
+            lighter: { testnet: [], mainnet: [] },
           },
         },
       };
@@ -1213,7 +1216,7 @@ describe('PerpsController', () => {
           ...MOCK_PREFS_BASE.perps,
           watchlistMarkets: {
             hyperliquid: { testnet: [], mainnet: [] },
-            myx: { testnet: [], mainnet: [] },
+            lighter: { testnet: [], mainnet: [] },
           },
         },
       };
@@ -1326,7 +1329,7 @@ describe('PerpsController', () => {
                 testnet: ['BTC', 'ETH'],
                 mainnet: ['SOL'],
               },
-              myx: { testnet: [], mainnet: [] },
+              lighter: { testnet: [], mainnet: [] },
             },
           },
         };
@@ -1374,7 +1377,7 @@ describe('PerpsController', () => {
             ...MOCK_PREFS_BASE.perps,
             watchlistMarkets: {
               hyperliquid: { testnet: [], mainnet: [] },
-              myx: { testnet: [], mainnet: [] },
+              lighter: { testnet: [], mainnet: [] },
             },
           },
         };
@@ -1530,13 +1533,559 @@ describe('PerpsController', () => {
         expect(mockAusInfrastructure.logger.error).toHaveBeenCalled();
       });
     });
+
+    const GET = 'AuthenticatedUserStorageService:getNotificationPreferences';
+    const PUT = 'AuthenticatedUserStorageService:putNotificationPreferences';
+
+    /**
+     * Build a controller whose AUS calls go through a real child messenger
+     * that delegates only the given AUS handlers.
+     *
+     * @param options - Options.
+     * @param options.mainnetWatchlist - Local mainnet watchlist.
+     * @param options.handlers - AUS handlers the host delegates.
+     * @returns The controller, its messenger `call` mock and infrastructure.
+     */
+    const buildController = ({
+      mainnetWatchlist = [],
+      handlers = {},
+    }: {
+      mainnetWatchlist?: string[];
+      handlers?: Record<string, (...args: never[]) => unknown>;
+    } = {}) => {
+      const aus = createPartiallyDelegatedMessenger(handlers);
+      const call = vi
+        .fn()
+        .mockImplementation((action: string, ...args: unknown[]) => {
+          if (action === 'RemoteFeatureFlagController:getState') {
+            return { remoteFeatureFlags: {} };
+          }
+          if (action === GET) {
+            return aus.call(GET);
+          }
+          if (action === PUT) {
+            return aus.call(PUT, args[0] as never);
+          }
+          return undefined;
+        });
+      const infrastructure = createMockInfrastructure();
+      const state = getDefaultPerpsControllerState();
+      state.isTestnet = false;
+      state.activeProvider = 'hyperliquid';
+      state.watchlistMarkets.mainnet = mainnetWatchlist;
+      const controller = new TestablePerpsController({
+        messenger: createMockMessenger({ call }),
+        state,
+        infrastructure,
+      });
+      return { controller, call, infrastructure };
+    };
+
+    describe('when the host does not delegate AuthenticatedUserStorageService', () => {
+      it('keeps a toggled market without logging an error', async () => {
+        const { controller, call, infrastructure } = buildController();
+
+        await controller.toggleWatchlistMarket('BTC');
+
+        expect(call).toHaveBeenCalledWith(GET);
+        expect(controller.getWatchlistMarkets()).toContain('BTC');
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      it('keeps a toggled market without logging an error when only the read is delegated', async () => {
+        const { controller, call, infrastructure } = buildController({
+          handlers: { [GET]: async () => MOCK_PREFS_BASE },
+        });
+
+        await controller.toggleWatchlistMarket('BTC');
+
+        expect(call).toHaveBeenCalledWith(PUT, expect.anything());
+        expect(controller.getWatchlistMarkets()).toContain('BTC');
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      it('keeps the local watchlist on init without logging an error', async () => {
+        const { controller, call, infrastructure } = buildController({
+          mainnetWatchlist: ['BTC'],
+        });
+
+        await controller.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(call).toHaveBeenCalledWith(GET);
+        expect(controller.state.watchlistMarkets.mainnet).toEqual(['BTC']);
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      it('keeps the local watchlist on init without logging an error when only the read is delegated', async () => {
+        const { controller, call, infrastructure } = buildController({
+          mainnetWatchlist: ['BTC'],
+          handlers: { [GET]: async () => MOCK_PREFS_BASE },
+        });
+
+        await controller.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The blob has no watchlist yet, so init tries the one-time migration.
+        expect(call).toHaveBeenCalledWith(PUT, expect.anything());
+        expect(controller.state.watchlistMarkets.mainnet).toEqual(['BTC']);
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      it('drops session-only toggles on the next init when only the read is delegated', async () => {
+        // AUS stays the source of truth: without the write, a toggle lives in
+        // local state until init hydrates the remote list again.
+        const remotePrefs = {
+          ...MOCK_PREFS_BASE,
+          perps: {
+            ...MOCK_PREFS_BASE.perps,
+            watchlistMarkets: {
+              hyperliquid: { testnet: [], mainnet: ['ETH'] },
+              lighter: { testnet: [], mainnet: [] },
+            },
+          },
+        };
+        const { controller, infrastructure } = buildController({
+          handlers: { [GET]: async () => remotePrefs },
+        });
+
+        await controller.toggleWatchlistMarket('BTC');
+        expect(controller.getWatchlistMarkets()).toStrictEqual(['BTC']);
+
+        await controller.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+          'ETH',
+        ]);
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      describe('when the hydration read is still in flight', () => {
+        const remotePrefs = {
+          ...MOCK_PREFS_BASE,
+          perps: {
+            ...MOCK_PREFS_BASE.perps,
+            watchlistMarkets: {
+              hyperliquid: { testnet: [], mainnet: ['ETH', 'SOL'] },
+              lighter: { testnet: [], mainnet: [] },
+            },
+          },
+        };
+
+        it('applies toggles made meanwhile on top of the remote watchlist when only the read is delegated', async () => {
+          const hydration = createDeferred<typeof remotePrefs>();
+          const { controller, infrastructure } = buildController({
+            mainnetWatchlist: ['SOL'],
+            handlers: { [GET]: async () => hydration.promise },
+          });
+
+          await controller.init();
+          // Both toggles apply locally at once; their writes queue behind
+          // the hydration read.
+          const toggles = Promise.all([
+            controller.toggleWatchlistMarket('SOL'),
+            controller.toggleWatchlistMarket('BTC'),
+          ]);
+          hydration.resolve(remotePrefs);
+          await toggles;
+
+          expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+            'ETH',
+            'BTC',
+          ]);
+          expect(infrastructure.logger.error).not.toHaveBeenCalled();
+        });
+
+        it('writes the remote watchlist plus toggles made meanwhile', async () => {
+          const hydration = createDeferred<typeof remotePrefs>();
+          let reads = 0;
+          const put = vi.fn(async () => undefined);
+          const { controller, infrastructure } = buildController({
+            handlers: {
+              // The first read hydrates; the toggle's own read sees the
+              // remote list.
+              [GET]: async () => {
+                reads += 1;
+                return reads === 1 ? hydration.promise : remotePrefs;
+              },
+              [PUT]: put,
+            },
+          });
+
+          await controller.init();
+          const toggle = controller.toggleWatchlistMarket('BTC');
+          hydration.resolve(remotePrefs);
+          await toggle;
+
+          expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+            'ETH',
+            'SOL',
+            'BTC',
+          ]);
+          expect(put).toHaveBeenCalledWith(
+            expect.objectContaining({
+              perps: expect.objectContaining({
+                watchlistMarkets: expect.objectContaining({
+                  hyperliquid: { testnet: [], mainnet: ['ETH', 'SOL', 'BTC'] },
+                }),
+              }),
+            }),
+          );
+          expect(infrastructure.logger.error).not.toHaveBeenCalled();
+        });
+      });
+
+      describe('when a delegated AUS handler fails on a missing dependency of its own', () => {
+        // Each handler makes a real nested `Messenger` call that throws.
+        const cases: [
+          string,
+          Record<string, () => Promise<unknown>>,
+          string,
+        ][] = [
+          [
+            'the read misses AuthenticationController',
+            {
+              [GET]: async () =>
+                callMissingFrom(
+                  'AuthenticatedUserStorageService',
+                  'AuthenticationController:getBearerToken',
+                ),
+            },
+            'A handler for AuthenticationController:getBearerToken has not been delegated to AuthenticatedUserStorageService',
+          ],
+          [
+            'the read misses the write action',
+            {
+              [GET]: async () => callMissingFrom('UserStorageProxy', PUT),
+            },
+            `A handler for ${PUT} has not been delegated to UserStorageProxy`,
+          ],
+          [
+            'the write misses the read action',
+            {
+              [GET]: async () => MOCK_PREFS_BASE,
+              [PUT]: async () => callMissingFrom('UserStorageProxy', GET),
+            },
+            `A handler for ${GET} has not been delegated to UserStorageProxy`,
+          ],
+        ];
+
+        it.each(cases)(
+          'logs an error and reverts the toggle when %s',
+          async (_case, handlers, expectedMessage) => {
+            const { controller, infrastructure } = buildController({
+              handlers,
+            });
+
+            await controller.toggleWatchlistMarket('BTC');
+
+            expect(controller.getWatchlistMarkets()).not.toContain('BTC');
+            expect(infrastructure.logger.error).toHaveBeenCalledWith(
+              expect.objectContaining({ message: expectedMessage }),
+              expect.anything(),
+            );
+          },
+        );
+
+        it.each(cases)(
+          'logs an error on init when %s',
+          async (_case, handlers, expectedMessage) => {
+            // A local list with no remote watchlist also exercises the
+            // one-time migration write.
+            const { controller, infrastructure } = buildController({
+              mainnetWatchlist: ['BTC'],
+              handlers,
+            });
+
+            await controller.init();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect(infrastructure.logger.error).toHaveBeenCalledWith(
+              expect.objectContaining({ message: expectedMessage }),
+              expect.anything(),
+            );
+          },
+        );
+      });
+    });
+
+    describe('with a stateful AUS store', () => {
+      type StoredPrefs = typeof MOCK_PREFS_BASE & {
+        perps: {
+          watchlistMarkets: {
+            hyperliquid: { testnet: string[]; mainnet: string[] };
+            lighter: { testnet: string[]; mainnet: string[] };
+          };
+        };
+      };
+
+      const flush = async () =>
+        new Promise((resolve) => setTimeout(resolve, 0));
+
+      /**
+       * An AUS store whose reads snapshot the remote blob when called and
+       * answer only when the test drains them, in call order.
+       *
+       * @param options - Options.
+       * @param options.mainnet - Remote mainnet watchlist.
+       * @param options.withWrite - Whether the host delegates the write.
+       * @param options.failingWrites - How many first writes reject.
+       * @returns The handlers, the remote list and a drain function.
+       */
+      const createAusStore = ({
+        mainnet,
+        withWrite = true,
+        failingWrites = 0,
+      }: {
+        mainnet: string[];
+        withWrite?: boolean;
+        failingWrites?: number;
+      }) => {
+        let remote: StoredPrefs = {
+          ...MOCK_PREFS_BASE,
+          perps: {
+            ...MOCK_PREFS_BASE.perps,
+            watchlistMarkets: {
+              hyperliquid: { testnet: [], mainnet },
+              lighter: { testnet: [], mainnet: [] },
+            },
+          },
+        };
+        const pendingReads: (() => void)[] = [];
+        let failuresLeft = failingWrites;
+        const handlers: Record<string, (...args: never[]) => unknown> = {
+          [GET]: async () => {
+            const snapshot = structuredClone(remote);
+            return new Promise((resolve) => {
+              pendingReads.push(() => resolve(snapshot));
+            });
+          },
+        };
+        if (withWrite) {
+          handlers[PUT] = async (prefs: StoredPrefs) => {
+            if (failuresLeft > 0) {
+              failuresLeft -= 1;
+              throw new Error('AUS server error');
+            }
+            remote = prefs;
+          };
+        }
+        return {
+          handlers,
+          remote: () => remote.perps.watchlistMarkets.hyperliquid,
+          // Make the next `count` writes reject.
+          failNextWrites: (count: number) => {
+            failuresLeft += count;
+          },
+          // Answer reads in call order until none are left.
+          drain: async () => {
+            await flush();
+            while (pendingReads.length > 0) {
+              pendingReads.shift()?.();
+              await flush();
+            }
+          },
+        };
+      };
+
+      it('keeps a star made during hydration when a re-initialization starts before it is written', async () => {
+        const store = createAusStore({ mainnet: ['ETH'] });
+        const { controller, infrastructure } = buildController({
+          handlers: store.handlers,
+        });
+
+        await controller.init();
+        const toggle = controller.toggleWatchlistMarket('BTC');
+        await controller.toggleTestnet();
+        await store.drain();
+        await toggle;
+
+        expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+          'ETH',
+          'BTC',
+        ]);
+        expect(store.remote().mainnet).toStrictEqual(['ETH', 'BTC']);
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      it('keeps a star made while a re-initialization hydration waits in the queue', async () => {
+        const store = createAusStore({ mainnet: ['ETH'] });
+        const { controller, infrastructure } = buildController({
+          handlers: store.handlers,
+        });
+
+        await controller.init();
+        const mainnetToggle = controller.toggleWatchlistMarket('BTC');
+        await controller.toggleTestnet();
+        const testnetToggle = controller.toggleWatchlistMarket('SOL');
+        await store.drain();
+        await Promise.all([mainnetToggle, testnetToggle]);
+
+        expect(controller.state.watchlistMarkets).toStrictEqual({
+          testnet: ['SOL'],
+          mainnet: ['ETH', 'BTC'],
+        });
+        expect(store.remote()).toStrictEqual({
+          testnet: ['SOL'],
+          mainnet: ['ETH', 'BTC'],
+        });
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      it('still replaces a star with the remote list on a later hydration when only the read is delegated', async () => {
+        const store = createAusStore({ mainnet: ['ETH'], withWrite: false });
+        const { controller, infrastructure } = buildController({
+          handlers: store.handlers,
+        });
+
+        await controller.init();
+        const toggle = controller.toggleWatchlistMarket('BTC');
+        await controller.toggleTestnet();
+        await store.drain();
+        await toggle;
+
+        // The re-initialization hydration is queued after the star, which
+        // never reached AUS.
+        expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+          'ETH',
+        ]);
+        expect(infrastructure.logger.error).not.toHaveBeenCalled();
+      });
+
+      it('undoes only the failed star when its write fails after hydration', async () => {
+        const store = createAusStore({ mainnet: ['ETH'], failingWrites: 1 });
+        const { controller, infrastructure } = buildController({
+          mainnetWatchlist: ['SOL'],
+          handlers: store.handlers,
+        });
+
+        await controller.init();
+        const toggle = controller.toggleWatchlistMarket('BTC');
+        await store.drain();
+        await toggle;
+
+        expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+          'ETH',
+        ]);
+        expect(infrastructure.logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'AUS server error' }),
+          expect.anything(),
+        );
+      });
+
+      it('keeps a later star when an earlier star fails to write', async () => {
+        const store = createAusStore({ mainnet: [], failingWrites: 1 });
+        const { controller } = buildController({ handlers: store.handlers });
+
+        const toggles = Promise.all([
+          controller.toggleWatchlistMarket('BTC'),
+          controller.toggleWatchlistMarket('ETH'),
+        ]);
+        await store.drain();
+        await toggles;
+
+        expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+          'ETH',
+        ]);
+        expect(store.remote().mainnet).toStrictEqual(['ETH']);
+      });
+
+      it.each([
+        ['starred, unstarred and starred again', 'the first', [], 1, ['BTC']],
+        ['unstarred, starred and unstarred again', 'the first', ['BTC'], 1, []],
+        // Only the latest toggle is undone.
+        ['starred, unstarred and starred again', 'every', [], 3, []],
+      ])(
+        'undoes a failed toggle only when it is the latest, when a market is %s and %s write fails',
+        async (_case, _failing, initial, failingWrites, expected) => {
+          const store = createAusStore({ mainnet: initial, failingWrites });
+          const { controller } = buildController({
+            mainnetWatchlist: initial,
+            handlers: store.handlers,
+          });
+
+          const toggles = Promise.all([
+            controller.toggleWatchlistMarket('BTC'),
+            controller.toggleWatchlistMarket('BTC'),
+            controller.toggleWatchlistMarket('BTC'),
+          ]);
+          await store.drain();
+          await toggles;
+
+          expect(controller.state.watchlistMarkets.mainnet).toStrictEqual(
+            expected,
+          );
+          expect(store.remote().mainnet).toStrictEqual(expected);
+        },
+      );
+
+      it('undoes a failed star on one network when the same market is starred on the other', async () => {
+        const store = createAusStore({ mainnet: [], failingWrites: 1 });
+        const { controller } = buildController({ handlers: store.handlers });
+
+        const mainnetToggle = controller.toggleWatchlistMarket('BTC');
+        controller.testUpdate((state: { isTestnet: boolean }) => {
+          state.isTestnet = true;
+        });
+        const testnetToggle = controller.toggleWatchlistMarket('BTC');
+        await store.drain();
+        await Promise.all([mainnetToggle, testnetToggle]);
+
+        expect(controller.state.watchlistMarkets).toStrictEqual({
+          testnet: ['BTC'],
+          mainnet: [],
+        });
+        expect(store.remote()).toStrictEqual({ testnet: ['BTC'], mainnet: [] });
+      });
+
+      it('undoes a failed toggle after an earlier burst of the same market completed', async () => {
+        const store = createAusStore({ mainnet: [] });
+        const { controller } = buildController({ handlers: store.handlers });
+        const burst = Promise.all([
+          controller.toggleWatchlistMarket('BTC'),
+          controller.toggleWatchlistMarket('BTC'),
+        ]);
+        await store.drain();
+        await burst;
+
+        store.failNextWrites(1);
+        const toggle = controller.toggleWatchlistMarket('BTC');
+        await store.drain();
+        await toggle;
+
+        expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([]);
+        expect(store.remote().mainnet).toStrictEqual([]);
+      });
+
+      it('restores an unstarred market at its position when the write fails', async () => {
+        const store = createAusStore({
+          mainnet: ['ETH', 'BTC', 'SOL'],
+          failingWrites: 1,
+        });
+        const { controller } = buildController({
+          mainnetWatchlist: ['ETH', 'BTC', 'SOL'],
+          handlers: store.handlers,
+        });
+
+        const toggle = controller.toggleWatchlistMarket('BTC');
+        await store.drain();
+        await toggle;
+
+        expect(controller.state.watchlistMarkets.mainnet).toStrictEqual([
+          'ETH',
+          'BTC',
+          'SOL',
+        ]);
+      });
+    });
   });
 
   describe('additional subscriptions', () => {
     it('subscribes to orders', () => {
-      const mockUnsubscribe = jest.fn();
+      const mockUnsubscribe = vi.fn();
       const params = {
-        callback: jest.fn(),
+        callback: vi.fn(),
       };
 
       markControllerAsInitialized();
@@ -1550,9 +2099,9 @@ describe('PerpsController', () => {
     });
 
     it('subscribes to account updates', () => {
-      const mockUnsubscribe = jest.fn();
+      const mockUnsubscribe = vi.fn();
       const params = {
-        callback: jest.fn(),
+        callback: vi.fn(),
       };
 
       markControllerAsInitialized();
@@ -1569,13 +2118,13 @@ describe('PerpsController', () => {
     });
 
     it('updates accountState when subscribeToAccount callback receives non-null account', () => {
-      const originalCallback = jest.fn();
+      const originalCallback = vi.fn();
       let wrappedCallback = () => {
         /* assigned by mock */
       };
       mockProvider.subscribeToAccount.mockImplementation((p) => {
         wrappedCallback = p.callback;
-        return jest.fn();
+        return vi.fn();
       });
 
       markControllerAsInitialized();
@@ -1598,7 +2147,7 @@ describe('PerpsController', () => {
     });
 
     it('returns no-op unsub and does not throw when subscribeToAccount called before init', () => {
-      const params = { callback: jest.fn() };
+      const params = { callback: vi.fn() };
 
       const unsubscribe = controller.subscribeToAccount(params);
 

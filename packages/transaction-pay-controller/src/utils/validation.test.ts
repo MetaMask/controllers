@@ -1,6 +1,7 @@
 import type { Hex } from '@metamask/utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getMessengerMock } from '../tests/messenger-mock.js';
+import { getMessengerMock } from '../../tests/messenger-mock.js';
 import type { TransactionPayQuote } from '../types.js';
 import {
   simulateQuoteTransactions,
@@ -14,11 +15,11 @@ import {
 } from './validation.js';
 import type { QuoteSimulation } from './validation.js';
 
-jest.mock('./simulation', () => ({
-  ...jest.requireActual('./simulation'),
-  simulateQuoteTransactions: jest.fn(),
+vi.mock(import('./simulation.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  simulateQuoteTransactions: vi.fn(),
 }));
-jest.mock('./token');
+vi.mock(import('./token.js'));
 
 const CHAIN_ID_MOCK = '0x38' as Hex;
 const FROM_MOCK = '0x1111111111111111111111111111111111111111' as Hex;
@@ -42,8 +43,8 @@ function buildQuote(
       sourceTokenAddress: TOKEN_ADDRESS_MOCK,
       sourceTokenAmount: sourceAmountRaw,
       targetAmountMinimum: '0',
-      targetChainId: '0x1' as Hex,
-      targetTokenAddress: '0x4444444444444444444444444444444444444444' as Hex,
+      targetChainId: '0x1',
+      targetTokenAddress: '0x4444444444444444444444444444444444444444',
       ...overrides,
     },
     sourceAmount: { fiat: '0', human: '0', raw: sourceAmountRaw, usd: '0' },
@@ -68,16 +69,16 @@ function buildSimulation(
 
 describe('validateQuoteExecution', () => {
   let messengerMock: ReturnType<typeof getMessengerMock>;
-  const simulateQuoteTransactionsMock = jest.mocked(simulateQuoteTransactions);
-  const getLiveTokenBalanceMock = jest.mocked(tokenModule.getLiveTokenBalance);
-  const getNativeTokenMock = jest.mocked(tokenModule.getNativeToken);
-  const getTokenInfoMock = jest.mocked(tokenModule.getTokenInfo);
-  const normalizeTokenAddressMock = jest.mocked(
+  const simulateQuoteTransactionsMock = vi.mocked(simulateQuoteTransactions);
+  const getLiveTokenBalanceMock = vi.mocked(tokenModule.getLiveTokenBalance);
+  const getNativeTokenMock = vi.mocked(tokenModule.getNativeToken);
+  const getTokenInfoMock = vi.mocked(tokenModule.getTokenInfo);
+  const normalizeTokenAddressMock = vi.mocked(
     tokenModule.normalizeTokenAddress,
   );
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     messengerMock = getMessengerMock();
 
     // Default: balance is sufficient
@@ -105,6 +106,33 @@ describe('validateQuoteExecution', () => {
           simulation: buildSimulation(),
         }),
       ).toBeUndefined();
+    });
+
+    it('reads the source balance at the quote from address', async () => {
+      const overrideAddress =
+        '0x1111111111111111111111111111111111111111' as Hex;
+      getLiveTokenBalanceMock.mockResolvedValue('500');
+
+      await validateQuoteExecution({
+        messenger: messengerMock.messenger,
+        quote: buildQuote({}, '500'),
+        simulation: buildSimulation({
+          transactions: [
+            {
+              data: TRANSFER_DATA_MOCK as Hex,
+              from: overrideAddress,
+              to: TOKEN_ADDRESS_MOCK,
+            },
+          ],
+        }),
+      });
+
+      expect(getLiveTokenBalanceMock).toHaveBeenCalledWith(
+        expect.anything(),
+        FROM_MOCK,
+        CHAIN_ID_MOCK,
+        TOKEN_ADDRESS_MOCK,
+      );
     });
 
     it('passes when live balance exceeds required amount', async () => {
@@ -266,7 +294,7 @@ describe('validateQuoteExecution', () => {
               {
                 data: TRANSFER_DATA_MOCK as Hex,
                 from: FROM_MOCK,
-                to: nativeAddress as Hex,
+                to: nativeAddress,
               },
             ],
           }),
@@ -300,7 +328,7 @@ describe('validateQuoteExecution', () => {
           simulation: buildSimulation({
             transactions: [
               {
-                data: '0xdeadbeef' as Hex, // not a transfer selector
+                data: '0xdeadbeef', // not a transfer selector
                 from: FROM_MOCK,
                 to: TOKEN_ADDRESS_MOCK,
               },
@@ -308,6 +336,109 @@ describe('validateQuoteExecution', () => {
           }),
         }),
       ).toBeUndefined();
+    });
+
+    it('skips the check when the first transaction is not a source-token transfer, even if a later transfer exceeds the starting balance', async () => {
+      // The Safe starts with 0 source token; the first call produces it (e.g.
+      // unwrapping legacy USDC) before a later transfer spends it. The starting
+      // balance must not be treated as the constraint.
+      getLiveTokenBalanceMock.mockResolvedValue('0');
+
+      expect(
+        await validateQuoteExecution({
+          messenger: messengerMock.messenger,
+          // Post-quote (like a Safe withdraw) so the up-front required-amount
+          // check is skipped and the decoded-transfer check is what matters.
+          quote: buildQuote({ isPostQuote: true }, '50'),
+          simulation: buildSimulation({
+            transactions: [
+              {
+                // Unwrap on some other contract, not a source-token transfer.
+                data: '0xdeadbeef',
+                from: FROM_MOCK,
+                to: '0x9999999999999999999999999999999999999999',
+              },
+              {
+                // Transfer of 500 source token that only exists post-unwrap.
+                data: TRANSFER_DATA_MOCK as Hex,
+                from: FROM_MOCK,
+                to: TOKEN_ADDRESS_MOCK,
+              },
+            ],
+          }),
+        }),
+      ).toBeUndefined();
+    });
+
+    it('skips the check when there is more than one transaction, even if the first is a source-token transfer that exceeds the balance', async () => {
+      // A multi-step batch (e.g. Safe withdraw: transfer + a follow-up call)
+      // produces or transforms the source-token balance mid-batch, so the
+      // single-transfer balance heuristic does not apply.
+      getLiveTokenBalanceMock.mockResolvedValue('0');
+
+      expect(
+        await validateQuoteExecution({
+          messenger: messengerMock.messenger,
+          quote: buildQuote({ isPostQuote: true }, '50'),
+          simulation: buildSimulation({
+            transactions: [
+              {
+                data: TRANSFER_DATA_MOCK as Hex,
+                from: FROM_MOCK,
+                to: TOKEN_ADDRESS_MOCK,
+              },
+              {
+                data: '0xdeadbeef',
+                from: FROM_MOCK,
+                to: '0x9999999999999999999999999999999999999999',
+              },
+            ],
+          }),
+        }),
+      ).toBeUndefined();
+    });
+
+    it('skips the check for a single transfer that targets a non-source token', async () => {
+      getLiveTokenBalanceMock.mockResolvedValue('0');
+
+      expect(
+        await validateQuoteExecution({
+          messenger: messengerMock.messenger,
+          quote: buildQuote({ isPostQuote: true }, '50'),
+          simulation: buildSimulation({
+            transactions: [
+              {
+                data: TRANSFER_DATA_MOCK as Hex,
+                from: FROM_MOCK,
+                // Transfer on a different token, not the quote's source token.
+                to: '0x9999999999999999999999999999999999999999',
+              },
+            ],
+          }),
+        }),
+      ).toBeUndefined();
+    });
+
+    it('runs the check for a single source-token transfer that exceeds the live balance', async () => {
+      getLiveTokenBalanceMock.mockResolvedValue('100');
+
+      await expect(
+        validateQuoteExecution({
+          messenger: messengerMock.messenger,
+          quote: buildQuote({}, '50'),
+          simulation: buildSimulation({
+            transactions: [
+              {
+                data: TRANSFER_DATA_MOCK as Hex,
+                from: FROM_MOCK,
+                to: TOKEN_ADDRESS_MOCK,
+              },
+            ],
+          }),
+        }),
+      ).rejects.toMatchObject({
+        info: { reason: 'insufficient-transfer-balance' },
+      });
     });
   });
 

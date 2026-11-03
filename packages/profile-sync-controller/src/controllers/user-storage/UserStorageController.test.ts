@@ -1,6 +1,7 @@
 import { deriveStateFromMetadata } from '@metamask/base-controller';
 import { KeyringTypes } from '@metamask/keyring-controller';
 import nock from 'nock';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Env, getEnvUrls } from '../../sdk/index.js';
 import { createSHA256Hash } from '../../shared/encryption/index.js';
@@ -25,6 +26,14 @@ import {
   UserStorageController,
   defaultState,
 } from './UserStorageController.js';
+
+vi.mock('../../shared/utils/message-signing.js', () => ({
+  MESSAGE_SIGNING_SNAP_ID: 'npm:@metamask/message-signing-snap',
+  getMessageSigningPublicKey: vi.fn(async () => 'MOCK_PUBLIC_KEY'),
+  signMessageWithMessageSigningKey: vi.fn(async () => 'mockStorageKey'),
+  deriveMessageSigningPrivateKey: vi.fn(),
+  deriveSip6PrivateKey: vi.fn(),
+}));
 
 describe('UserStorageController', () => {
   describe('constructor', () => {
@@ -596,11 +605,10 @@ describe('UserStorageController', () => {
       const controller = new UserStorageController({
         messenger: messengerMocks.messenger,
         state: {
+          ...defaultState,
           isBackupAndSyncEnabled: false,
-          isBackupAndSyncUpdateLoading: false,
           isAccountSyncingEnabled: false,
           isContactSyncingEnabled: false,
-          isContactSyncingInProgress: false,
         },
       });
 
@@ -621,11 +629,10 @@ describe('UserStorageController', () => {
       const controller = new UserStorageController({
         messenger: messengerMocks.messenger,
         state: {
+          ...defaultState,
           isBackupAndSyncEnabled: false,
-          isBackupAndSyncUpdateLoading: false,
           isAccountSyncingEnabled: false,
           isContactSyncingEnabled: false,
-          isContactSyncingInProgress: false,
         },
       });
 
@@ -655,6 +662,7 @@ describe('UserStorageController', () => {
           isAccountSyncingEnabled: true,
           isContactSyncingEnabled: true,
           isContactSyncingInProgress: false,
+          isRampsSyncingEnabled: true,
         },
       });
 
@@ -664,6 +672,31 @@ describe('UserStorageController', () => {
         false,
       );
       expect(controller.state.isAccountSyncingEnabled).toBe(false);
+      expect(controller.state.isBackupAndSyncEnabled).toBe(true);
+    });
+
+    it('should not disable backup and sync when disabling ramps syncing', async () => {
+      const { messengerMocks } = await arrangeMocks();
+      messengerMocks.mockAuthIsSignedIn.mockReturnValue(false);
+
+      const controller = new UserStorageController({
+        messenger: messengerMocks.messenger,
+        state: {
+          isBackupAndSyncEnabled: true,
+          isBackupAndSyncUpdateLoading: false,
+          isAccountSyncingEnabled: true,
+          isContactSyncingEnabled: true,
+          isContactSyncingInProgress: false,
+          isRampsSyncingEnabled: true,
+        },
+      });
+
+      await controller.setIsBackupAndSyncFeatureEnabled(
+        BACKUPANDSYNC_FEATURES.rampsSyncing,
+        false,
+      );
+
+      expect(controller.state.isRampsSyncingEnabled).toBe(false);
       expect(controller.state.isBackupAndSyncEnabled).toBe(true);
     });
   });
@@ -712,7 +745,7 @@ describe('UserStorageController', () => {
     });
   });
 
-  describe('snap handling', () => {
+  describe('message signing', () => {
     it('leverages a cache', async () => {
       const messengerMocks = mockUserStorageMessenger();
       const controller = new UserStorageController({
@@ -729,7 +762,7 @@ describe('UserStorageController', () => {
       // The signed message (`metamask:${profileId}`) is identical across both
       // calls, so the only thing that can isolate the two vaults is the entropy
       // scope. The HD keyring metadata id is randomly regenerated on restore.
-      messengerMocks.mockSnapSignMessage
+      messengerMocks.mockSignMessage
         .mockResolvedValueOnce('signature-before-restore')
         .mockResolvedValueOnce('signature-after-restore');
 
@@ -756,7 +789,7 @@ describe('UserStorageController', () => {
       // The regenerated id changes the cache scope, so the new primary must
       // re-derive its own key instead of inheriting the previous vault's cached
       // key — proving no `'primary'`-style stable key carries across restores.
-      expect(messengerMocks.mockSnapSignMessage).toHaveBeenCalledTimes(2);
+      expect(messengerMocks.mockSignMessage).toHaveBeenCalledTimes(2);
       expect(keyAfterRestore).not.toBe(keyBeforeRestore);
       expect(keyAfterRestore).toBe(createSHA256Hash('signature-after-restore'));
     });
@@ -787,7 +820,7 @@ describe('UserStorageController', () => {
 
       mockAPI1.done();
       mockAPI2.done();
-      expect(messengerMocks.mockSnapSignMessage).toHaveBeenCalledTimes(1);
+      expect(messengerMocks.mockSignMessage).toHaveBeenCalledTimes(1);
     });
 
     it('derives a distinct storage key per entropy source even when both resolve to the same profileId', async () => {
@@ -808,7 +841,7 @@ describe('UserStorageController', () => {
       });
       // Each entropy source signs with its own key, so the identical message
       // yields a different signature — and thus a different derived storage key.
-      messengerMocks.mockSnapSignMessage
+      messengerMocks.mockSignMessage
         .mockResolvedValueOnce('signature-for-entropy-source-1')
         .mockResolvedValueOnce('signature-for-entropy-source-2');
 
@@ -841,7 +874,7 @@ describe('UserStorageController', () => {
       // storage keys despite the shared profileId.
       mockSource1.done();
       mockSource2.done();
-      expect(messengerMocks.mockSnapSignMessage).toHaveBeenCalledTimes(2);
+      expect(messengerMocks.mockSignMessage).toHaveBeenCalledTimes(2);
     });
 
     it('throws if the wallet is locked', async () => {
@@ -855,7 +888,7 @@ describe('UserStorageController', () => {
       });
 
       await expect(controller.getStorageKey()).rejects.toThrow(
-        '#snapSignMessage - unable to call snap, wallet is locked',
+        '#signMessage - unable to proceed, wallet is locked',
       );
       await expect(controller.listEntropySources()).rejects.toThrow(
         'listEntropySources - unable to list entropy sources, wallet is locked',
@@ -883,7 +916,7 @@ describe('UserStorageController', () => {
       messengerMocks.baseMessenger.publish('KeyringController:lock');
 
       await expect(controller.getStorageKey()).rejects.toThrow(
-        '#snapSignMessage - unable to call snap, wallet is locked',
+        '#signMessage - unable to proceed, wallet is locked',
       );
 
       messengerMocks.baseMessenger.publish('KeyringController:unlock');
@@ -909,6 +942,7 @@ describe('metadata', () => {
         "isAccountSyncingEnabled": true,
         "isBackupAndSyncEnabled": true,
         "isContactSyncingEnabled": true,
+        "isRampsSyncingEnabled": true,
       }
     `);
   });
@@ -929,6 +963,7 @@ describe('metadata', () => {
         "isAccountSyncingEnabled": true,
         "isBackupAndSyncEnabled": true,
         "isContactSyncingEnabled": true,
+        "isRampsSyncingEnabled": true,
       }
     `);
   });
@@ -945,6 +980,7 @@ describe('metadata', () => {
         "isAccountSyncingEnabled": true,
         "isBackupAndSyncEnabled": true,
         "isContactSyncingEnabled": true,
+        "isRampsSyncingEnabled": true,
       }
     `);
   });
@@ -967,6 +1003,7 @@ describe('metadata', () => {
         "isBackupAndSyncUpdateLoading": false,
         "isContactSyncingEnabled": true,
         "isContactSyncingInProgress": false,
+        "isRampsSyncingEnabled": true,
       }
     `);
   });

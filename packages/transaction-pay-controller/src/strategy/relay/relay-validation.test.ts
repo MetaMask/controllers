@@ -1,35 +1,74 @@
-import { generateEIP7702BatchTransaction } from '@metamask/transaction-controller';
+import {
+  generateEIP7702BatchTransaction,
+  TransactionType,
+} from '@metamask/transaction-controller';
 import type { TransactionMeta } from '@metamask/transaction-controller';
 import type { Hex } from '@metamask/utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDefaultRemoteFeatureFlagControllerState } from '../../../../remote-feature-flag-controller/src/remote-feature-flag-controller.js';
-import { getMessengerMock } from '../../tests/messenger-mock.js';
+import { getMessengerMock } from '../../../tests/messenger-mock.js';
 import type { TransactionPayQuote } from '../../types.js';
-import { QuoteError } from '../../utils/validation.js';
+import { QuoteError, validateQuoteExecution } from '../../utils/validation.js';
 import { getRelayExecuteRequest } from './relay-submit-execute.js';
 import { getRelaySubmitCalls } from './relay-submit.js';
 import { validateRelayQuotes } from './relay-validation.js';
 import type { RelayQuote } from './types.js';
 
-jest.mock('./relay-submit');
-jest.mock('./relay-submit-execute');
-jest.mock('../../utils/validation', () => ({
-  ...jest.requireActual('../../utils/validation'),
-  validateQuoteExecution: jest.fn(),
+vi.mock(import('./relay-submit.js'));
+vi.mock(import('./relay-submit-execute.js'));
+vi.mock(import('../../utils/validation.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  validateQuoteExecution: vi.fn(),
 }));
-jest.mock('@metamask/transaction-controller', () => ({
-  ...jest.requireActual('@metamask/transaction-controller'),
-  generateEIP7702BatchTransaction: jest.fn(),
+vi.mock(import('@metamask/transaction-controller'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  generateEIP7702BatchTransaction: vi.fn(),
 }));
-
-const { validateQuoteExecution } = jest.requireMock<
-  typeof import('../../utils/validation')
->('../../utils/validation');
 
 const FROM_MOCK = '0xabcdef1234567890abcdef1234567890abcdef12' as Hex;
+const REFUND_TO_MOCK = '0x1111111111111111111111111111111111111111' as Hex;
+const DEPOSIT_WALLET_MOCK = '0x2222222222222222222222222222222222222222' as Hex;
 const REQUEST_ID_MOCK = '0xreqid1234' as string;
 const CHAIN_ID_MOCK = '0x1' as Hex;
 const TOKEN_ADDRESS_MOCK = '0xtoken' as Hex;
+
+// transfer(0x1234...7890, 1000000) encoded calldata; the recipient is decoded
+// as the Relay deposit address for the deposit-wallet unwrap.
+const TRANSFER_CALLDATA_MOCK =
+  '0xa9059cbb0000000000000000000000001234567890123456789012345678901234567890000000000000000000000000000000000000000000000000000000003b9aca00' as Hex;
+
+const DEPOSIT_STEP_MOCK = {
+  requestId: REQUEST_ID_MOCK,
+  id: 'deposit',
+  kind: 'transaction',
+  items: [],
+};
+
+const PREDICT_WITHDRAW_TRANSACTION_MOCK = {
+  id: 'tx-id',
+  txParams: { from: FROM_MOCK },
+  type: TransactionType.predictWithdraw,
+} as TransactionMeta;
+
+const PREDICT_WITHDRAW_TRANSACTION_WITH_NESTED_MOCK = {
+  id: 'tx-id',
+  txParams: {
+    from: FROM_MOCK,
+    to: '0xtoplevel',
+    data: '0xtopleveldata',
+    value: '0x0',
+  },
+  type: TransactionType.predictWithdraw,
+  nestedTransactions: [
+    { to: '0xsafeapprove', data: '0xsafeapprovedata' },
+    {
+      to: '0xsafewithdraw',
+      data: '0xsafewithdrawdata',
+      value: '0x0',
+    },
+  ],
+} as TransactionMeta;
 
 function buildQuote(
   overrides: Partial<TransactionPayQuote<RelayQuote>['request']> = {},
@@ -60,8 +99,8 @@ function buildQuote(
       sourceBalanceRaw: '1000',
       sourceTokenAmount: '100',
       targetAmountMinimum: '100',
-      targetChainId: '0x2' as Hex,
-      targetTokenAddress: '0xtarget' as Hex,
+      targetChainId: '0x2',
+      targetTokenAddress: '0xtarget',
       ...overrides,
     },
     fees: {
@@ -78,7 +117,7 @@ function buildQuote(
     dust: { usd: '0', fiat: '0' },
     estimatedDuration: 30,
     strategy: 'relay' as never,
-  } as TransactionPayQuote<RelayQuote>;
+  };
 }
 
 const TRANSACTION_MOCK = {
@@ -86,39 +125,40 @@ const TRANSACTION_MOCK = {
   txParams: { from: FROM_MOCK },
 } as TransactionMeta;
 
-const getRelaySubmitCallsMock = jest.mocked(getRelaySubmitCalls);
-const getRelayExecuteRequestMock = jest.mocked(getRelayExecuteRequest);
-const validateQuoteExecutionMock = jest.mocked(validateQuoteExecution);
-const generateEIP7702BatchTransactionMock = jest.mocked(
+const getRelaySubmitCallsMock = vi.mocked(getRelaySubmitCalls);
+const getRelayExecuteRequestMock = vi.mocked(getRelayExecuteRequest);
+const validateQuoteExecutionMock = vi.mocked(validateQuoteExecution);
+const generateEIP7702BatchTransactionMock = vi.mocked(
   generateEIP7702BatchTransaction,
 );
 
 describe('validateRelayQuotes', () => {
-  const { messenger, getRemoteFeatureFlagControllerStateMock } =
-    getMessengerMock();
+  const {
+    messenger,
+    getRemoteFeatureFlagControllerStateMock,
+    polymarketGetDepositWalletAddressMock,
+  } = getMessengerMock();
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     getRemoteFeatureFlagControllerStateMock.mockReturnValue({
       ...getDefaultRemoteFeatureFlagControllerState(),
       remoteFeatureFlags: {
         confirmations_pay_extended: {
-          payStrategies: { relay: { validationEnabled: true } },
+          payStrategies: { relay: { validationEnabled: { default: true } } },
         },
       },
     });
 
-    getRelaySubmitCallsMock.mockResolvedValue({
-      calls: [],
-    });
+    getRelaySubmitCallsMock.mockResolvedValue({ calls: [] });
     getRelayExecuteRequestMock.mockResolvedValue(undefined as never);
     validateQuoteExecutionMock.mockResolvedValue(undefined);
     generateEIP7702BatchTransactionMock.mockReturnValue({
-      data: '0xbatchdata' as Hex,
-      to: '0xbatchto' as Hex,
-      value: '0x0' as Hex,
-    } as never);
+      data: '0xbatchdata',
+      to: '0xbatchto',
+      value: '0x0',
+    });
   });
 
   it('skips validation for Hyperliquid source quotes', async () => {
@@ -134,13 +174,74 @@ describe('validateRelayQuotes', () => {
     expect(validateQuoteExecutionMock).not.toHaveBeenCalled();
   });
 
-  it('skips validation for Polymarket deposit wallet quotes', async () => {
-    const quote = buildQuote({ isPolymarketDepositWallet: true });
+  it('validates Polymarket deposit wallet quotes by simulating the real approve + unwrap batch', async () => {
+    polymarketGetDepositWalletAddressMock.mockResolvedValue(
+      DEPOSIT_WALLET_MOCK,
+    );
+
+    const quote = buildQuote(
+      { isPolymarketDepositWallet: true, isPostQuote: true },
+      {
+        steps: [
+          {
+            ...DEPOSIT_STEP_MOCK,
+            items: [{ data: { data: TRANSFER_CALLDATA_MOCK } }],
+          },
+        ],
+      } as unknown as Partial<RelayQuote>,
+    );
 
     await validateRelayQuotes({
       messenger,
       quotes: [quote],
-      transaction: TRANSACTION_MOCK,
+      transaction: PREDICT_WITHDRAW_TRANSACTION_MOCK,
+    });
+
+    // The Relay submit calldata is a placeholder for this variant and must not
+    // be used to build the simulation.
+    expect(getRelaySubmitCallsMock).not.toHaveBeenCalled();
+    expect(polymarketGetDepositWalletAddressMock).toHaveBeenCalledWith({
+      eoa: FROM_MOCK,
+    });
+
+    const { transactions } =
+      validateQuoteExecutionMock.mock.calls[0][0].simulation;
+    expect(transactions).toHaveLength(2);
+    expect(transactions[0].from).toBe(DEPOSIT_WALLET_MOCK);
+    expect(transactions[1].from).toBe(DEPOSIT_WALLET_MOCK);
+  });
+
+  it('skips validation entirely for a Safe-based (non-deposit-wallet) Predict withdraw', async () => {
+    const quote = buildQuote({ isPostQuote: true, refundTo: REFUND_TO_MOCK }, {
+      metamask: { gasLimits: [], is7702: false, isExecute: false },
+      steps: [DEPOSIT_STEP_MOCK],
+    } as unknown as Partial<RelayQuote>);
+
+    await validateRelayQuotes({
+      messenger,
+      quotes: [quote],
+      transaction: PREDICT_WITHDRAW_TRANSACTION_WITH_NESTED_MOCK,
+    });
+
+    // Legacy Safe withdraws convert USDC.e to pUSD outside the calls the
+    // controller can see, so a faithful simulation is impossible. The quote is
+    // skipped: no submit calls are built and no simulation is validated.
+    expect(getRelaySubmitCallsMock).not.toHaveBeenCalled();
+    expect(validateQuoteExecutionMock).not.toHaveBeenCalled();
+  });
+
+  it('skips validation for a swap-only Safe-based Predict withdraw (no deposit step)', async () => {
+    const quote = buildQuote(
+      { isPostQuote: true, refundTo: REFUND_TO_MOCK },
+      {
+        metamask: { gasLimits: [], is7702: false, isExecute: false },
+      },
+    );
+
+    await validateRelayQuotes({
+      messenger,
+      quotes: [quote],
+      transaction: PREDICT_WITHDRAW_TRANSACTION_MOCK,
     });
 
     expect(getRelaySubmitCallsMock).not.toHaveBeenCalled();
@@ -336,17 +437,20 @@ describe('validateRelayQuotes', () => {
         getRelaySubmitCallsMock.mockResolvedValue({
           calls: [
             {
-              data: '0xdata' as Hex,
+              data: '0xdata',
               from: FROM_MOCK,
-              gas: '0x0' as Hex,
-              to: '0xto' as Hex,
-              value: '0x0' as Hex,
+              gas: '0x0',
+              to: '0xto',
+              value: '0x0',
             },
           ],
         });
-        const quote = buildQuote({}, {
-          metamask: { gasLimits: [], is7702: false, isExecute: false },
-        } as Partial<RelayQuote>);
+        const quote = buildQuote(
+          {},
+          {
+            metamask: { gasLimits: [], is7702: false, isExecute: false },
+          },
+        );
         await validateRelayQuotes({
           messenger,
           quotes: [quote],
@@ -451,11 +555,11 @@ describe('validateRelayQuotes', () => {
           request: {
             authorizationList: [
               {
-                address: '0xabc' as Hex,
+                address: '0xabc',
                 chainId: 1,
                 nonce: 1,
-                r: '0xr' as Hex,
-                s: '0xs' as Hex,
+                r: '0xr',
+                s: '0xs',
                 yParity: 0,
               },
             ],
@@ -486,7 +590,9 @@ describe('validateRelayQuotes', () => {
           ...getDefaultRemoteFeatureFlagControllerState(),
           remoteFeatureFlags: {
             confirmations_pay_extended: {
-              payStrategies: { relay: { validationEnabled: true } },
+              payStrategies: {
+                relay: { validationEnabled: { default: true } },
+              },
             },
             confirmations_eip_7702: {
               contracts: {
@@ -588,11 +694,11 @@ describe('validateRelayQuotes', () => {
           request: {
             authorizationList: [
               {
-                address: '0xabc' as Hex,
+                address: '0xabc',
                 chainId: 1,
                 nonce: 1,
-                r: '0xr' as Hex,
-                s: '0xs' as Hex,
+                r: '0xr',
+                s: '0xs',
                 yParity: 0,
               },
             ],
@@ -618,17 +724,20 @@ describe('validateRelayQuotes', () => {
         getRelaySubmitCallsMock.mockResolvedValue({
           calls: [
             {
-              data: '0xcall1' as Hex,
+              data: '0xcall1',
               from: FROM_MOCK,
-              gas: '0x5208' as Hex,
-              to: '0xdest1' as Hex,
-              value: '0x0' as Hex,
+              gas: '0x5208',
+              to: '0xdest1',
+              value: '0x0',
             },
           ],
         });
-        const quote = buildQuote({}, {
-          metamask: { gasLimits: [0], is7702: true, isExecute: false },
-        } as Partial<RelayQuote>);
+        const quote = buildQuote(
+          {},
+          {
+            metamask: { gasLimits: [0], is7702: true, isExecute: false },
+          },
+        );
         await validateRelayQuotes({
           messenger,
           quotes: [quote],
@@ -638,6 +747,41 @@ describe('validateRelayQuotes', () => {
           validateQuoteExecutionMock.mock.calls[0][0].simulation
             .transactions[0];
         expect(batchTx).not.toHaveProperty('gas');
+      });
+
+      it('skips validation for a deposit-style Safe Predict withdraw even when the quote is 7702', async () => {
+        const quote = buildQuote(
+          { isPostQuote: true, refundTo: REFUND_TO_MOCK },
+          {
+            metamask: { gasLimits: [21000], is7702: true, isExecute: false },
+            request: {
+              authorizationList: [
+                {
+                  address: '0xabc' as Hex,
+                  chainId: 1,
+                  nonce: 1,
+                  r: '0xr' as Hex,
+                  s: '0xs' as Hex,
+                  yParity: 0,
+                },
+              ],
+            },
+            steps: [DEPOSIT_STEP_MOCK],
+          } as unknown as Partial<RelayQuote>,
+        );
+
+        await validateRelayQuotes({
+          messenger,
+          quotes: [quote],
+          transaction: PREDICT_WITHDRAW_TRANSACTION_WITH_NESTED_MOCK,
+        });
+
+        // A Safe withdraw is a signed Safe `execTransaction` that converts USDC.e
+        // to pUSD outside the controller's visible calls, so it is skipped before
+        // any 7702 batch wrapper or simulation is built.
+        expect(generateEIP7702BatchTransactionMock).not.toHaveBeenCalled();
+        expect(getRelaySubmitCallsMock).not.toHaveBeenCalled();
+        expect(validateQuoteExecutionMock).not.toHaveBeenCalled();
       });
     });
 
@@ -658,9 +802,12 @@ describe('validateRelayQuotes', () => {
         getRelaySubmitCallsMock.mockResolvedValue({ calls: [] });
         getRelayExecuteRequestMock.mockResolvedValue(EXECUTE_REQUEST_MOCK);
 
-        const quote = buildQuote({}, {
-          metamask: { gasLimits: [], is7702: false, isExecute: true },
-        } as Partial<RelayQuote>);
+        const quote = buildQuote(
+          {},
+          {
+            metamask: { gasLimits: [], is7702: false, isExecute: true },
+          },
+        );
 
         await validateRelayQuotes({
           messenger,
@@ -712,9 +859,12 @@ describe('validateRelayQuotes', () => {
         getRelaySubmitCallsMock.mockResolvedValue({ calls: [] });
         getRelayExecuteRequestMock.mockResolvedValue(executeRequestWithAuth);
 
-        const quote = buildQuote({}, {
-          metamask: { gasLimits: [], is7702: false, isExecute: true },
-        } as Partial<RelayQuote>);
+        const quote = buildQuote(
+          {},
+          {
+            metamask: { gasLimits: [], is7702: false, isExecute: true },
+          },
+        );
 
         await validateRelayQuotes({
           messenger,
@@ -756,9 +906,12 @@ describe('validateRelayQuotes', () => {
         getRelaySubmitCallsMock.mockResolvedValue({ calls: [] });
         getRelayExecuteRequestMock.mockResolvedValue(executeRequestWithAuth);
 
-        const quote = buildQuote({}, {
-          metamask: { gasLimits: [], is7702: false, isExecute: true },
-        } as Partial<RelayQuote>);
+        const quote = buildQuote(
+          {},
+          {
+            metamask: { gasLimits: [], is7702: false, isExecute: true },
+          },
+        );
 
         await validateRelayQuotes({
           messenger,
@@ -795,6 +948,30 @@ describe('validateRelayQuotes', () => {
           }),
         );
       });
+
+      it('skips validation for a deposit-style Safe Predict withdraw even when the quote is execute', async () => {
+        const quote = buildQuote(
+          { isPostQuote: true, refundTo: REFUND_TO_MOCK },
+          {
+            metamask: { gasLimits: [], is7702: false, isExecute: true },
+            steps: [DEPOSIT_STEP_MOCK],
+          } as unknown as Partial<RelayQuote>,
+        );
+
+        await validateRelayQuotes({
+          messenger,
+          quotes: [quote],
+          transaction: PREDICT_WITHDRAW_TRANSACTION_WITH_NESTED_MOCK,
+        });
+
+        // The real submit is a signed Safe `execTransaction`, not a
+        // `redeemDelegations` authorized for the EOA, and it converts USDC.e to
+        // pUSD outside the controller's visible calls. It is skipped before the
+        // execute request or any simulation is built.
+        expect(getRelayExecuteRequestMock).not.toHaveBeenCalled();
+        expect(getRelaySubmitCallsMock).not.toHaveBeenCalled();
+        expect(validateQuoteExecutionMock).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -811,5 +988,60 @@ describe('validateRelayQuotes', () => {
 
     expect(getRelaySubmitCallsMock).not.toHaveBeenCalled();
     expect(validateQuoteExecutionMock).not.toHaveBeenCalled();
+  });
+
+  it('skips validation when per-type override is false', async () => {
+    getRemoteFeatureFlagControllerStateMock.mockReturnValue({
+      ...getDefaultRemoteFeatureFlagControllerState(),
+      remoteFeatureFlags: {
+        confirmations_pay_extended: {
+          payStrategies: {
+            relay: {
+              validationEnabled: {
+                default: true,
+                transactionTypes: { simpleSend: false },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await validateRelayQuotes({
+      messenger,
+      quotes: [buildQuote()],
+      transaction: { ...TRANSACTION_MOCK, type: 'simpleSend' as never },
+    });
+
+    expect(getRelaySubmitCallsMock).not.toHaveBeenCalled();
+    expect(validateQuoteExecutionMock).not.toHaveBeenCalled();
+  });
+
+  it('runs validation when per-type override is true and default is false', async () => {
+    getRemoteFeatureFlagControllerStateMock.mockReturnValue({
+      ...getDefaultRemoteFeatureFlagControllerState(),
+      remoteFeatureFlags: {
+        confirmations_pay_extended: {
+          payStrategies: {
+            relay: {
+              validationEnabled: {
+                default: false,
+                transactionTypes: { simpleSend: true },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    getRelaySubmitCallsMock.mockResolvedValue({ calls: [] });
+
+    await validateRelayQuotes({
+      messenger,
+      quotes: [buildQuote()],
+      transaction: { ...TRANSACTION_MOCK, type: 'simpleSend' as never },
+    });
+
+    expect(validateQuoteExecutionMock).toHaveBeenCalled();
   });
 });

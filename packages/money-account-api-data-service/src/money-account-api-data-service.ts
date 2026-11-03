@@ -12,7 +12,6 @@ import type {
 import { handleWhen, HttpError } from '@metamask/controller-utils';
 import type { Messenger } from '@metamask/messenger';
 import { validate } from '@metamask/superstruct';
-import type { Json } from '@metamask/utils';
 import type { QueryClientConfig } from '@tanstack/query-core';
 
 import {
@@ -20,8 +19,12 @@ import {
   Env,
   MONEY_ACCOUNT_API_URL_MAP,
   RATE_HISTORY_STALE_TIME_MS,
+  VAULT_RATE_STALE_TIME_MS,
 } from './constants.js';
-import { MoneyAccountApiResponseValidationError } from './errors.js';
+import {
+  MoneyAccountApiHttpError,
+  MoneyAccountApiResponseValidationError,
+} from './errors.js';
 import { projectLogger, createModuleLogger } from './logger.js';
 import type { MoneyAccountApiDataServiceMethodActions } from './money-account-api-data-service-method-action-types.js';
 import type {
@@ -29,17 +32,32 @@ import type {
   InterestResponse,
   PositionResponse,
   RateHistoryResponse,
-} from './response.types';
+  VaultRateResponse,
+  VbaSiweChallengeResponse,
+  VbaTransfersResponse,
+} from './response.types.js';
+import type { SiweMessageTemplate } from './siwe-message.js';
+import {
+  getSiweMessageTemplate,
+  validateSiweChallengeMessage,
+} from './siwe-message.js';
 import {
   HistoryResponseStruct,
   InterestResponseStruct,
   PositionResponseStruct,
   RateHistoryResponseStruct,
+  VaultRateResponseStruct,
+  VbaSiweChallengeResponseStruct,
+  VbaSiweSessionResponseStruct,
+  VbaTransfersResponseStruct,
 } from './structs.js';
 import type {
   HistoryOptions,
   InterestOptions,
   RateHistoryOptions,
+  FetchPositionsOptions,
+  VaultRateOptions,
+  FetchVbaTransfersOptions,
 } from './types.js';
 
 // === GENERAL ===
@@ -53,11 +71,19 @@ export const serviceName = 'MoneyAccountApiDataService';
 const log = createModuleLogger(projectLogger, serviceName);
 const traceLogger = createModuleLogger(projectLogger, 'trace');
 
+class SiweSigningError extends Error {
+  constructor(cause: unknown) {
+    super('Failed to sign the SIWE message', { cause });
+    this.name = 'SiweSigningError';
+  }
+}
+
 export const TRACES = {
   POSITIONS_API: 'Money Account API Fetch Positions',
   INTEREST_API: 'Money Account API Fetch Interest',
   HISTORY_API: 'Money Account API Fetch History',
   RATE_HISTORY_API: 'Money Account API Fetch Rate History',
+  VAULT_RATE_API: 'Money Account API Fetch Vault Rate',
 } as const;
 
 export type MoneyAccountApiDataServiceTraceName =
@@ -83,6 +109,8 @@ const MESSENGER_EXPOSED_METHODS = [
   'fetchInterest',
   'fetchHistory',
   'fetchRateHistory',
+  'fetchVaultRate',
+  'fetchVbaTransfers',
 ] as const;
 
 /**
@@ -106,7 +134,14 @@ type AuthenticationControllerGetBearerTokenAction = {
   handler: (entropySourceId?: string) => Promise<string>;
 };
 
-type AllowedActions = AuthenticationControllerGetBearerTokenAction;
+type KeyringControllerSignPersonalMessageAction = {
+  type: 'KeyringController:signPersonalMessage';
+  handler: (messageParams: { data: string; from: string }) => Promise<string>;
+};
+
+type AllowedActions =
+  | AuthenticationControllerGetBearerTokenAction
+  | KeyringControllerSignPersonalMessageAction;
 
 /**
  * Published when {@link MoneyAccountApiDataService}'s cache is updated.
@@ -156,7 +191,8 @@ export type MoneyAccountApiDataServiceOptions = {
 
 /**
  * Data service responsible for fetching positions, interest, cash-flow
- * history, and vault rate history from the Money Account APY Tracking API.
+ * history, vault rate history, and the current vault exchange rate from the
+ * Money Account APY Tracking API.
  */
 export class MoneyAccountApiDataService extends BaseDataService<
   typeof serviceName,
@@ -164,7 +200,16 @@ export class MoneyAccountApiDataService extends BaseDataService<
 > {
   readonly #baseUrl: string;
 
+  readonly #siweTemplate: SiweMessageTemplate;
+
   readonly #trace: MoneyAccountApiDataServiceTraceCallback;
+
+  readonly #siweSessions = new Map<
+    string,
+    { token: string; expiresAt: number }
+  >();
+
+  readonly #siweSessionRequests = new Map<string, Promise<string>>();
 
   /**
    * Constructs a new MoneyAccountApiDataService.
@@ -192,13 +237,18 @@ export class MoneyAccountApiDataService extends BaseDataService<
         retryFilterPolicy: handleWhen(
           (error) =>
             !(error instanceof MoneyAccountApiResponseValidationError) &&
-            !(error instanceof HttpError && error.httpStatus === 403),
+            !(error instanceof SiweSigningError) &&
+            !(
+              error instanceof HttpError &&
+              [401, 403].includes(error.httpStatus)
+            ),
         ),
         ...policyOptions,
       },
     });
 
     this.#baseUrl = MONEY_ACCOUNT_API_URL_MAP[env];
+    this.#siweTemplate = getSiweMessageTemplate(this.#baseUrl);
 
     this.#trace =
       trace ??
@@ -242,50 +292,98 @@ export class MoneyAccountApiDataService extends BaseDataService<
    * Fetches the current vault positions for a given user address.
    *
    * @param address - The user's Ethereum address.
+   * @param options - Optional fetch options.
+   * @param options.fresh - When true, cancels in-flight reads, fetches with a
+   * zero stale time, invalidates the result for subsequent reads, and asks the
+   * Money API to skip its Nest response cache with `Cache-Control: no-cache`.
    * @returns The position response containing vault positions and an optional
    * `balance` summary (`null` when the API balance path is unavailable).
    */
-  async fetchPositions(address: string): Promise<PositionResponse> {
-    const url = new URL(
-      `/v1/positions/${address.toLowerCase()}`,
-      this.#baseUrl,
-    );
+  async fetchPositions(
+    address: string,
+    { fresh = false }: FetchPositionsOptions = {},
+  ): Promise<PositionResponse> {
+    const normalizedAddress = address.toLowerCase();
+    const queryKey = [
+      `${this.name}:fetchPositions`,
+      normalizedAddress,
+    ] as const;
 
-    return this.fetchQuery({
-      queryKey: [`${this.name}:fetchPositions`, address.toLowerCase()],
-      staleTime: DEFAULT_STALE_TIME_MS,
+    if (fresh) {
+      // Cancel any in-flight non-fresh fetch so it cannot win the shared
+      // queryKey and re-seed a response that omitted Cache-Control: no-cache.
+      await this.cancelQueries({ queryKey: [...queryKey] });
+    }
+
+    const result = await this.fetchQuery({
+      queryKey: [...queryKey],
+      staleTime: fresh ? 0 : DEFAULT_STALE_TIME_MS,
       queryFn: async () => {
-        return this.#traceNetworkRequest(
-          {
-            name: TRACES.POSITIONS_API,
-            data: { operation: 'fetchPositions' },
-          },
-          async () => {
-            const response = await fetch(url, {
-              headers: await this.#getRequestHeaders(),
-            });
-
-            if (!response.ok) {
-              throw new HttpError(
-                response.status,
-                `Money Account API positions request failed with status '${response.status}'`,
-              );
-            }
-
-            const json: Json = await response.json();
-
-            const [error, validated] = validate(json, PositionResponseStruct);
-            if (error) {
-              throw new MoneyAccountApiResponseValidationError(
-                `Malformed response from positions endpoint: ${error.message}`,
-              );
-            }
-
-            return validated as unknown as PositionResponse;
-          },
-        );
+        return this.#fetchPositionsFromNetwork(normalizedAddress, fresh);
       },
     });
+
+    if (fresh) {
+      // The balance service may reject this body using minBlock. Keep it
+      // available to this caller, but do not let a later steady-state request
+      // treat it as warm merely because that request has a non-zero staleTime.
+      await this.invalidateQueries({
+        queryKey: [...queryKey],
+        refetchType: 'none',
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Performs the HTTP GET for `/v1/positions/:address`.
+   *
+   * @param normalizedAddress - Lowercased account address.
+   * @param fresh - When true, send `Cache-Control: no-cache`.
+   * @returns Validated positions response.
+   */
+  async #fetchPositionsFromNetwork(
+    normalizedAddress: string,
+    fresh: boolean,
+  ): Promise<PositionResponse> {
+    const url = new URL(`/v1/positions/${normalizedAddress}`, this.#baseUrl);
+
+    return this.#traceNetworkRequest(
+      {
+        name: TRACES.POSITIONS_API,
+        data: {
+          operation: 'fetchPositions',
+          ...(fresh ? { fresh: true } : {}),
+        },
+      },
+      async () => {
+        const headers = {
+          ...(await this.#getRequestHeaders()),
+          ...(fresh ? { 'Cache-Control': 'no-cache' } : {}),
+        };
+
+        const response = await fetch(url, { headers });
+
+        if (!response.ok) {
+          throw await MoneyAccountApiHttpError.fromResponse(
+            response,
+            `Money Account API positions request failed with status '${response.status}'`,
+          );
+        }
+
+        const json: unknown = await response.json();
+
+        const [error, validated] = validate(json, PositionResponseStruct);
+        if (error) {
+          throw new MoneyAccountApiResponseValidationError(
+            `Malformed response from positions endpoint: ${error.message}`,
+          );
+        }
+
+        return validated;
+      },
+    );
   }
 
   /**
@@ -334,13 +432,13 @@ export class MoneyAccountApiDataService extends BaseDataService<
             });
 
             if (!response.ok) {
-              throw new HttpError(
-                response.status,
+              throw await MoneyAccountApiHttpError.fromResponse(
+                response,
                 `Money Account API interest request failed with status '${response.status}'`,
               );
             }
 
-            const json: Json = await response.json();
+            const json: unknown = await response.json();
 
             const [error, validated] = validate(json, InterestResponseStruct);
             if (error) {
@@ -349,7 +447,7 @@ export class MoneyAccountApiDataService extends BaseDataService<
               );
             }
 
-            return validated as unknown as InterestResponse;
+            return validated;
           },
         );
       },
@@ -376,7 +474,7 @@ export class MoneyAccountApiDataService extends BaseDataService<
     const normalizedAddress = address.toLowerCase();
     const normalizedVault = options?.vaultAddress?.toLowerCase() ?? null;
 
-    return this.fetchInfiniteQuery(
+    return this.fetchInfiniteQuery<HistoryResponse>(
       {
         queryKey: [
           `${this.name}:fetchHistory`,
@@ -385,6 +483,8 @@ export class MoneyAccountApiDataService extends BaseDataService<
           options?.chainId ?? null,
           options?.limit ?? null,
         ],
+        initialPageParam: null,
+        getNextPageParam: (result) => result.next_cursor,
         staleTime: DEFAULT_STALE_TIME_MS,
         queryFn: async (context) => {
           const cursor = context.pageParam as string | null | undefined;
@@ -417,13 +517,13 @@ export class MoneyAccountApiDataService extends BaseDataService<
               });
 
               if (!response.ok) {
-                throw new HttpError(
-                  response.status,
+                throw await MoneyAccountApiHttpError.fromResponse(
+                  response,
                   `Money Account API history request failed with status '${response.status}'`,
                 );
               }
 
-              const json: Json = await response.json();
+              const json: unknown = await response.json();
 
               const [error, validated] = validate(json, HistoryResponseStruct);
               if (error) {
@@ -432,7 +532,7 @@ export class MoneyAccountApiDataService extends BaseDataService<
                 );
               }
 
-              return validated as unknown as HistoryResponse;
+              return validated;
             },
           );
         },
@@ -487,13 +587,13 @@ export class MoneyAccountApiDataService extends BaseDataService<
             });
 
             if (!response.ok) {
-              throw new HttpError(
-                response.status,
+              throw await MoneyAccountApiHttpError.fromResponse(
+                response,
                 `Money Account API rate-history request failed with status '${response.status}'`,
               );
             }
 
-            const json: Json = await response.json();
+            const json: unknown = await response.json();
 
             const [error, validated] = validate(
               json,
@@ -505,11 +605,293 @@ export class MoneyAccountApiDataService extends BaseDataService<
               );
             }
 
-            return validated as unknown as RateHistoryResponse;
+            return validated;
           },
         );
       },
     });
+  }
+
+  /**
+   * Fetches the current Accountant exchange rate for a vault.
+   *
+   * The server returns 404 when the vault is not in the deployment registry
+   * or has no indexed rate yet.
+   *
+   * @param vaultAddress - The vault's Ethereum address.
+   * @param options - Optional chain ID filter. Omitted requests use the API default.
+   * @returns The current vault rate response.
+   */
+  async fetchVaultRate(
+    vaultAddress: string,
+    options?: VaultRateOptions,
+  ): Promise<VaultRateResponse> {
+    const url = new URL(
+      `/v1/vaults/${vaultAddress.toLowerCase()}/rate`,
+      this.#baseUrl,
+    );
+    if (options?.chainId !== undefined) {
+      url.searchParams.append('chain_id', String(options.chainId));
+    }
+
+    return this.fetchQuery({
+      queryKey: [
+        `${this.name}:fetchVaultRate`,
+        vaultAddress.toLowerCase(),
+        options?.chainId ?? null,
+      ],
+      staleTime: VAULT_RATE_STALE_TIME_MS,
+      queryFn: async () => {
+        return this.#traceNetworkRequest(
+          {
+            name: TRACES.VAULT_RATE_API,
+            data: { operation: 'fetchVaultRate' },
+          },
+          async () => {
+            const response = await fetch(url, {
+              headers: await this.#getRequestHeaders(),
+            });
+
+            if (!response.ok) {
+              throw await MoneyAccountApiHttpError.fromResponse(
+                response,
+                `Money Account API vault rate request failed with status '${response.status}'`,
+              );
+            }
+
+            const json: unknown = await response.json();
+
+            const [error, validated] = validate(json, VaultRateResponseStruct);
+            if (error) {
+              throw new MoneyAccountApiResponseValidationError(
+                `Malformed response from vault rate endpoint: ${error.message}`,
+              );
+            }
+
+            return validated;
+          },
+        );
+      },
+    });
+  }
+
+  /**
+   * Fetches current VBA transfers for the wallet authenticated via SIWE.
+   *
+   * @param options - Fetch options, including the wallet address to authenticate.
+   * @returns Current transfers belonging to the authenticated wallet.
+   */
+  async fetchVbaTransfers(
+    options: FetchVbaTransfersOptions,
+  ): Promise<VbaTransfersResponse> {
+    const normalizedAddress = options.address.toLowerCase();
+    const queryKey = [
+      `${this.name}:fetchVbaTransfers`,
+      normalizedAddress,
+    ] as const;
+
+    // Session signing is not retried by the service policy, while parallel
+    // calls for this wallet share the in-flight SIWE exchange below.
+    try {
+      return await this.fetchQuery({
+        queryKey,
+        staleTime: 0,
+        queryFn: async () => {
+          const token = await this.#getSiweToken(normalizedAddress);
+          const response = await this.#fetchVbaTransfersWithToken(token);
+          if (response.status !== 401) {
+            return this.#parseVbaTransfersResponse(response);
+          }
+
+          this.#siweSessions.delete(normalizedAddress);
+          const renewedToken = await this.#getSiweToken(normalizedAddress);
+          const retriedResponse =
+            await this.#fetchVbaTransfersWithToken(renewedToken);
+          return this.#parseVbaTransfersResponse(retriedResponse);
+        },
+      });
+    } catch (error) {
+      if (error instanceof HttpError && error.httpStatus === 401) {
+        this.#siweSessions.delete(normalizedAddress);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Performs the HTTP GET for `/v1/vba/transfers` using a SIWE session token.
+   *
+   * @param siweToken - The SIWE session bearer token.
+   * @returns The raw transfers response.
+   */
+  async #fetchVbaTransfersWithToken(siweToken: string): Promise<Response> {
+    return await fetch(new URL('/v1/vba/transfers', this.#baseUrl), {
+      headers: { Authorization: `Bearer ${siweToken}` },
+    });
+  }
+
+  async #parseVbaTransfersResponse(
+    response: Response,
+  ): Promise<VbaTransfersResponse> {
+    if (!response.ok) {
+      throw await MoneyAccountApiHttpError.fromResponse(
+        response,
+        `Money Account API VBA transfers request failed with status '${response.status}'`,
+      );
+    }
+
+    const json: unknown = await response.json();
+    const [error, validated] = validate(json, VbaTransfersResponseStruct);
+    if (error) {
+      throw new MoneyAccountApiResponseValidationError(
+        `Malformed response from VBA transfers endpoint: ${error.message}`,
+      );
+    }
+
+    return validated;
+  }
+
+  async #getSiweToken(normalizedAddress: string): Promise<string> {
+    const cachedSession = this.#siweSessions.get(normalizedAddress);
+    if (cachedSession && cachedSession.expiresAt > Date.now()) {
+      return cachedSession.token;
+    }
+    this.#siweSessions.delete(normalizedAddress);
+
+    const requests = this.#siweSessionRequests;
+    const request = requests.get(normalizedAddress);
+    if (request !== undefined) {
+      return await request;
+    }
+
+    const newRequest = this.#createSiweSession(normalizedAddress);
+    requests.set(normalizedAddress, newRequest);
+    try {
+      return await newRequest;
+    } finally {
+      if (requests.get(normalizedAddress) === newRequest) {
+        requests.delete(normalizedAddress);
+      }
+    }
+  }
+
+  async #createSiweSession(normalizedAddress: string): Promise<string> {
+    const challenge = await this.#fetchSiweChallenge(normalizedAddress);
+    let signature: string;
+    try {
+      signature = await this.messenger.call(
+        'KeyringController:signPersonalMessage',
+        { data: challenge.message, from: normalizedAddress },
+      );
+    } catch (error) {
+      throw new SiweSigningError(error);
+    }
+    return await this.#verifySiweChallenge(
+      normalizedAddress,
+      challenge.message,
+      signature,
+    );
+  }
+
+  /**
+   * Fetches and validates a SIWE challenge for the given address.
+   *
+   * The challenge message is verified against the Money Account API's SIWE
+   * template before it is returned, so callers never sign a message the
+   * service did not expect.
+   *
+   * @param normalizedAddress - Lowercased account address to authenticate.
+   * @returns The validated challenge containing the message to sign.
+   */
+  async #fetchSiweChallenge(
+    normalizedAddress: string,
+  ): Promise<VbaSiweChallengeResponse> {
+    const challengeResponse = await fetch(
+      new URL('/v1/vba/auth/challenge', this.#baseUrl),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: normalizedAddress }),
+      },
+    );
+    if (!challengeResponse.ok) {
+      throw await MoneyAccountApiHttpError.fromResponse(
+        challengeResponse,
+        `Money Account API VBA SIWE challenge failed with status '${challengeResponse.status}'`,
+      );
+    }
+
+    const challengeJson: unknown = await challengeResponse.json();
+    const [challengeError, challenge] = validate(
+      challengeJson,
+      VbaSiweChallengeResponseStruct,
+    );
+    if (challengeError) {
+      throw new MoneyAccountApiResponseValidationError(
+        `Malformed response from VBA SIWE challenge endpoint: ${challengeError.message}`,
+      );
+    }
+
+    const invalidReason = validateSiweChallengeMessage({
+      template: this.#siweTemplate,
+      address: normalizedAddress,
+      nonce: challenge.nonce,
+      message: challenge.message,
+      now: Date.now(),
+    });
+    if (invalidReason) {
+      throw new MoneyAccountApiResponseValidationError(
+        `Invalid VBA SIWE challenge message: ${invalidReason}`,
+      );
+    }
+
+    return challenge;
+  }
+
+  /**
+   * Verifies a SIWE signature and caches the resulting session.
+   *
+   * @param normalizedAddress - Lowercased account address being authenticated.
+   * @param message - The signed SIWE message.
+   * @param signature - The signature produced for the message.
+   * @returns The session's access token.
+   */
+  async #verifySiweChallenge(
+    normalizedAddress: string,
+    message: string,
+    signature: string,
+  ): Promise<string> {
+    const verifyResponse = await fetch(
+      new URL('/v1/vba/auth/verify', this.#baseUrl),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, signature }),
+      },
+    );
+    if (!verifyResponse.ok) {
+      throw await MoneyAccountApiHttpError.fromResponse(
+        verifyResponse,
+        `Money Account API VBA SIWE verification failed with status '${verifyResponse.status}'`,
+      );
+    }
+
+    const sessionJson: unknown = await verifyResponse.json();
+    const [sessionError, session] = validate(
+      sessionJson,
+      VbaSiweSessionResponseStruct,
+    );
+    if (sessionError) {
+      throw new MoneyAccountApiResponseValidationError(
+        `Malformed response from VBA SIWE verification endpoint: ${sessionError.message}`,
+      );
+    }
+
+    this.#siweSessions.set(normalizedAddress, {
+      token: session.access_token,
+      expiresAt: Date.now() + session.expires_in * 1000,
+    });
+    return session.access_token;
   }
 
   /**

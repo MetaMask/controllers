@@ -1,3 +1,6 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mocked } from 'vitest';
+
 import { SubscriptionMultiplexer } from '../../../src/aggregation/SubscriptionMultiplexer.js';
 /* eslint-disable */
 import type {
@@ -11,12 +14,12 @@ import type {
 } from '../../../src/types/index.js';
 
 // Mock logger factory
-const createMockLogger = (): jest.Mocked<PerpsLogger> => ({
-  error: jest.fn(),
+const createMockLogger = (): Mocked<PerpsLogger> => ({
+  error: vi.fn(),
 });
 
 // Mock provider with test helper methods
-type MockProviderWithEmit = jest.Mocked<Partial<PerpsProvider>> & {
+type MockProviderWithEmit = Mocked<Partial<PerpsProvider>> & {
   _emitPrices: (prices: PriceUpdate[]) => void;
   _emitPositions: (positions: Position[]) => void;
   _emitOrders: (orders: Order[]) => void;
@@ -35,7 +38,7 @@ const createMockProvider = (providerId: string): MockProviderWithEmit => {
 
   return {
     protocolId: providerId,
-    subscribeToPrices: jest.fn((params) => {
+    subscribeToPrices: vi.fn((params) => {
       priceCallbacks.push(params.callback);
       return () => {
         const idx = priceCallbacks.indexOf(params.callback);
@@ -44,7 +47,7 @@ const createMockProvider = (providerId: string): MockProviderWithEmit => {
         }
       };
     }),
-    subscribeToPositions: jest.fn((params) => {
+    subscribeToPositions: vi.fn((params) => {
       positionCallbacks.push(params.callback);
       return () => {
         const idx = positionCallbacks.indexOf(params.callback);
@@ -53,7 +56,7 @@ const createMockProvider = (providerId: string): MockProviderWithEmit => {
         }
       };
     }),
-    subscribeToOrders: jest.fn((params) => {
+    subscribeToOrders: vi.fn((params) => {
       orderCallbacks.push(params.callback);
       return () => {
         const idx = orderCallbacks.indexOf(params.callback);
@@ -62,7 +65,7 @@ const createMockProvider = (providerId: string): MockProviderWithEmit => {
         }
       };
     }),
-    subscribeToOrderFills: jest.fn((params) => {
+    subscribeToOrderFills: vi.fn((params) => {
       fillCallbacks.push(params.callback);
       return () => {
         const idx = fillCallbacks.indexOf(params.callback);
@@ -71,7 +74,7 @@ const createMockProvider = (providerId: string): MockProviderWithEmit => {
         }
       };
     }),
-    subscribeToAccount: jest.fn((params) => {
+    subscribeToAccount: vi.fn((params) => {
       accountCallbacks.push(params.callback);
       return () => {
         const idx = accountCallbacks.indexOf(params.callback);
@@ -102,33 +105,33 @@ const createMockProvider = (providerId: string): MockProviderWithEmit => {
 describe('SubscriptionMultiplexer', () => {
   let mux: SubscriptionMultiplexer;
   let mockHLProvider: ReturnType<typeof createMockProvider>;
-  let mockMYXProvider: ReturnType<typeof createMockProvider>;
+  let mockLighterProvider: ReturnType<typeof createMockProvider>;
 
   beforeEach(() => {
     mux = new SubscriptionMultiplexer();
     mockHLProvider = createMockProvider('hyperliquid');
-    mockMYXProvider = createMockProvider('myx');
+    mockLighterProvider = createMockProvider('lighter');
   });
 
   describe('subscribeToPrices', () => {
     it('subscribes to multiple providers', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPrices({
         symbols: ['BTC', 'ETH'],
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
       });
 
       expect(mockHLProvider.subscribeToPrices).toHaveBeenCalledTimes(1);
-      expect(mockMYXProvider.subscribeToPrices).toHaveBeenCalledTimes(1);
+      expect(mockLighterProvider.subscribeToPrices).toHaveBeenCalledTimes(1);
     });
 
     it('injects providerId into price updates', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPrices({
         symbols: ['BTC'],
@@ -155,13 +158,13 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('aggregates prices from multiple providers in merge mode', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPrices({
         symbols: ['BTC'],
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
         aggregationMode: 'merge',
@@ -171,7 +174,7 @@ describe('SubscriptionMultiplexer', () => {
       mockHLProvider._emitPrices([
         { symbol: 'BTC', price: '50000', timestamp: Date.now() },
       ]);
-      mockMYXProvider._emitPrices([
+      mockLighterProvider._emitPrices([
         { symbol: 'BTC', price: '50100', timestamp: Date.now() },
       ]);
 
@@ -182,18 +185,18 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({ providerId: 'hyperliquid', price: '50000' }),
       );
       expect(lastCall).toContainEqual(
-        expect.objectContaining({ providerId: 'myx', price: '50100' }),
+        expect.objectContaining({ providerId: 'lighter', price: '50100' }),
       );
     });
 
     it('selects best price in best_price mode', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPrices({
         symbols: ['BTC'],
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
         aggregationMode: 'best_price',
@@ -203,27 +206,27 @@ describe('SubscriptionMultiplexer', () => {
       mockHLProvider._emitPrices([
         { symbol: 'BTC', price: '50000', timestamp: Date.now(), spread: '10' },
       ]);
-      mockMYXProvider._emitPrices([
+      mockLighterProvider._emitPrices([
         { symbol: 'BTC', price: '50100', timestamp: Date.now(), spread: '5' },
       ]);
 
-      // Should return MYX price (smaller spread)
+      // Should return lighter price (smaller spread)
       const lastCall = callback.mock.calls.at(-1)?.[0];
       expect(lastCall).toHaveLength(1);
       expect(lastCall[0]).toMatchObject({
-        providerId: 'myx',
+        providerId: 'lighter',
         spread: '5',
       });
     });
 
     it('unsubscribes from all providers', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       const unsubscribe = mux.subscribeToPrices({
         symbols: ['BTC'],
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
       });
@@ -263,7 +266,7 @@ describe('SubscriptionMultiplexer', () => {
       }) as Position;
 
     it('injects providerId into position updates', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPositions({
         providers: [
@@ -285,18 +288,18 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('aggregates positions from multiple providers', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPositions({
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
       });
 
       mockHLProvider._emitPositions([createMockPosition('BTC', '0.1')]);
-      mockMYXProvider._emitPositions([createMockPosition('ETH', '1.0')]);
+      mockLighterProvider._emitPositions([createMockPosition('ETH', '1.0')]);
 
       const lastCall = callback.mock.calls.at(-1)?.[0];
       expect(lastCall).toHaveLength(2);
@@ -304,12 +307,34 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({ symbol: 'BTC', providerId: 'hyperliquid' }),
       );
       expect(lastCall).toContainEqual(
-        expect.objectContaining({ symbol: 'ETH', providerId: 'myx' }),
+        expect.objectContaining({ symbol: 'ETH', providerId: 'lighter' }),
       );
     });
   });
 
   describe('subscribeToOrders', () => {
+    it.each(['subscribeToOrders', 'subscribeToOrderFills'] as const)(
+      'forwards a provider authentication failure through %s',
+      (method) => {
+        const onError = vi.fn();
+        const failure = new Error('Lighter authentication failed');
+        const unsubscribe = mux[method]({
+          providers: [
+            ['lighter', mockLighterProvider as unknown as PerpsProvider],
+          ],
+          callback: vi.fn(),
+          onError,
+        });
+        const subscribe = mockLighterProvider[method];
+        if (!subscribe) {
+          throw new Error('Missing mocked subscription');
+        }
+        vi.mocked(subscribe).mock.calls[0][0].onError?.(failure);
+
+        expect(onError).toHaveBeenCalledWith(failure, 'lighter');
+        unsubscribe();
+      },
+    );
     const createMockOrder = (orderId: string, symbol: string): Order =>
       ({
         orderId,
@@ -326,7 +351,7 @@ describe('SubscriptionMultiplexer', () => {
       }) as Order;
 
     it('injects providerId into order updates', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToOrders({
         providers: [
@@ -344,22 +369,25 @@ describe('SubscriptionMultiplexer', () => {
             providerId: 'hyperliquid',
           }),
         ]),
+        'hyperliquid',
       );
     });
 
     it('aggregates orders from multiple providers', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToOrders({
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
       });
 
       mockHLProvider._emitOrders([createMockOrder('hl-order', 'BTC')]);
-      mockMYXProvider._emitOrders([createMockOrder('myx-order', 'ETH')]);
+      mockLighterProvider._emitOrders([
+        createMockOrder('lighter-order', 'ETH'),
+      ]);
 
       const lastCall = callback.mock.calls.at(-1)?.[0];
       expect(lastCall).toHaveLength(2);
@@ -370,7 +398,10 @@ describe('SubscriptionMultiplexer', () => {
         }),
       );
       expect(lastCall).toContainEqual(
-        expect.objectContaining({ orderId: 'myx-order', providerId: 'myx' }),
+        expect.objectContaining({
+          orderId: 'lighter-order',
+          providerId: 'lighter',
+        }),
       );
     });
   });
@@ -391,7 +422,7 @@ describe('SubscriptionMultiplexer', () => {
       }) as OrderFill;
 
     it('injects providerId into fill updates', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToOrderFills({
         providers: [
@@ -410,11 +441,12 @@ describe('SubscriptionMultiplexer', () => {
           }),
         ]),
         false,
+        'hyperliquid',
       );
     });
 
     it('passes through isSnapshot flag', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToOrderFills({
         providers: [
@@ -425,7 +457,11 @@ describe('SubscriptionMultiplexer', () => {
 
       mockHLProvider._emitFills([createMockFill('fill-1', 'BTC')], true);
 
-      expect(callback).toHaveBeenCalledWith(expect.any(Array), true);
+      expect(callback).toHaveBeenCalledWith(
+        expect.any(Array),
+        true,
+        'hyperliquid',
+      );
     });
   });
 
@@ -441,7 +477,7 @@ describe('SubscriptionMultiplexer', () => {
       }) as AccountState;
 
     it('injects providerId into account updates', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToAccount({
         providers: [
@@ -464,18 +500,18 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('aggregates accounts from multiple providers', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToAccount({
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
       });
 
       mockHLProvider._emitAccount(createMockAccount('10000'));
-      mockMYXProvider._emitAccount(createMockAccount('5000'));
+      mockLighterProvider._emitAccount(createMockAccount('5000'));
 
       const lastCall = callback.mock.calls.at(-1)?.[0];
       expect(lastCall).toHaveLength(2);
@@ -490,13 +526,13 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({
           spendableBalance: '5000',
           withdrawableBalance: '5000',
-          providerId: 'myx',
+          providerId: 'lighter',
         }),
       );
     });
 
     it('removes provider from cache and invokes callback when provider emits null', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToAccount({
         providers: [
@@ -520,7 +556,7 @@ describe('SubscriptionMultiplexer', () => {
 
   describe('cache operations', () => {
     it('caches prices', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPrices({
         symbols: ['BTC'],
@@ -543,13 +579,13 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('returns all cached prices for a symbol', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPrices({
         symbols: ['BTC'],
         providers: [
           ['hyperliquid', mockHLProvider as unknown as PerpsProvider],
-          ['myx', mockMYXProvider as unknown as PerpsProvider],
+          ['lighter', mockLighterProvider as unknown as PerpsProvider],
         ],
         callback,
       });
@@ -557,18 +593,18 @@ describe('SubscriptionMultiplexer', () => {
       mockHLProvider._emitPrices([
         { symbol: 'BTC', price: '50000', timestamp: Date.now() },
       ]);
-      mockMYXProvider._emitPrices([
+      mockLighterProvider._emitPrices([
         { symbol: 'BTC', price: '50100', timestamp: Date.now() },
       ]);
 
       const allPrices = mux.getAllCachedPricesForSymbol('BTC');
       expect(allPrices?.size).toBe(2);
       expect(allPrices?.get('hyperliquid')?.price).toBe('50000');
-      expect(allPrices?.get('myx')?.price).toBe('50100');
+      expect(allPrices?.get('lighter')?.price).toBe('50100');
     });
 
     it('clears cache', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       mux.subscribeToPrices({
         symbols: ['BTC'],
@@ -589,7 +625,7 @@ describe('SubscriptionMultiplexer', () => {
   });
 
   describe('subscription cleanup on partial failure', () => {
-    let mockLogger: jest.Mocked<PerpsLogger>;
+    let mockLogger: Mocked<PerpsLogger>;
     let muxWithLogger: SubscriptionMultiplexer;
     let successfulProvider: ReturnType<typeof createMockProvider>;
     let failingProvider: MockProviderWithEmit;
@@ -601,20 +637,20 @@ describe('SubscriptionMultiplexer', () => {
 
       // Create a provider that throws on subscription
       failingProvider = {
-        ...createMockProvider('myx'),
-        subscribeToPrices: jest.fn(() => {
+        ...createMockProvider('lighter'),
+        subscribeToPrices: vi.fn(() => {
           throw new Error('Provider 2 failed');
         }),
-        subscribeToPositions: jest.fn(() => {
+        subscribeToPositions: vi.fn(() => {
           throw new Error('Provider 2 failed');
         }),
-        subscribeToOrders: jest.fn(() => {
+        subscribeToOrders: vi.fn(() => {
           throw new Error('Provider 2 failed');
         }),
-        subscribeToOrderFills: jest.fn(() => {
+        subscribeToOrderFills: vi.fn(() => {
           throw new Error('Provider 2 failed');
         }),
-        subscribeToAccount: jest.fn(() => {
+        subscribeToAccount: vi.fn(() => {
           throw new Error('Provider 2 failed');
         }),
       } as MockProviderWithEmit;
@@ -622,17 +658,17 @@ describe('SubscriptionMultiplexer', () => {
 
     it('cleans up successful subscriptions when subscribeToPrices fails for a later provider', () => {
       // Track if the first provider's unsubscribe was called
-      const unsubMock = jest.fn();
-      successfulProvider.subscribeToPrices = jest.fn(() => unsubMock);
+      const unsubMock = vi.fn();
+      successfulProvider.subscribeToPrices = vi.fn(() => unsubMock);
 
       expect(() => {
         muxWithLogger.subscribeToPrices({
           symbols: ['BTC'],
           providers: [
             ['hyperliquid', successfulProvider as unknown as PerpsProvider],
-            ['myx', failingProvider as unknown as PerpsProvider],
+            ['lighter', failingProvider as unknown as PerpsProvider],
           ],
-          callback: jest.fn(),
+          callback: vi.fn(),
         });
       }).toThrow('Provider 2 failed');
 
@@ -644,7 +680,7 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({
           tags: {
             feature: 'perps',
-            provider: 'myx',
+            provider: 'lighter',
             method: 'subscribeToPrices',
           },
           context: expect.objectContaining({
@@ -656,16 +692,16 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('cleans up successful subscriptions when subscribeToPositions fails for a later provider', () => {
-      const unsubMock = jest.fn();
-      successfulProvider.subscribeToPositions = jest.fn(() => unsubMock);
+      const unsubMock = vi.fn();
+      successfulProvider.subscribeToPositions = vi.fn(() => unsubMock);
 
       expect(() => {
         muxWithLogger.subscribeToPositions({
           providers: [
             ['hyperliquid', successfulProvider as unknown as PerpsProvider],
-            ['myx', failingProvider as unknown as PerpsProvider],
+            ['lighter', failingProvider as unknown as PerpsProvider],
           ],
-          callback: jest.fn(),
+          callback: vi.fn(),
         });
       }).toThrow('Provider 2 failed');
 
@@ -675,7 +711,7 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({
           tags: {
             feature: 'perps',
-            provider: 'myx',
+            provider: 'lighter',
             method: 'subscribeToPositions',
           },
         }),
@@ -683,16 +719,16 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('cleans up successful subscriptions when subscribeToOrders fails for a later provider', () => {
-      const unsubMock = jest.fn();
-      successfulProvider.subscribeToOrders = jest.fn(() => unsubMock);
+      const unsubMock = vi.fn();
+      successfulProvider.subscribeToOrders = vi.fn(() => unsubMock);
 
       expect(() => {
         muxWithLogger.subscribeToOrders({
           providers: [
             ['hyperliquid', successfulProvider as unknown as PerpsProvider],
-            ['myx', failingProvider as unknown as PerpsProvider],
+            ['lighter', failingProvider as unknown as PerpsProvider],
           ],
-          callback: jest.fn(),
+          callback: vi.fn(),
         });
       }).toThrow('Provider 2 failed');
 
@@ -702,7 +738,7 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({
           tags: {
             feature: 'perps',
-            provider: 'myx',
+            provider: 'lighter',
             method: 'subscribeToOrders',
           },
         }),
@@ -710,16 +746,16 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('cleans up successful subscriptions when subscribeToOrderFills fails for a later provider', () => {
-      const unsubMock = jest.fn();
-      successfulProvider.subscribeToOrderFills = jest.fn(() => unsubMock);
+      const unsubMock = vi.fn();
+      successfulProvider.subscribeToOrderFills = vi.fn(() => unsubMock);
 
       expect(() => {
         muxWithLogger.subscribeToOrderFills({
           providers: [
             ['hyperliquid', successfulProvider as unknown as PerpsProvider],
-            ['myx', failingProvider as unknown as PerpsProvider],
+            ['lighter', failingProvider as unknown as PerpsProvider],
           ],
-          callback: jest.fn(),
+          callback: vi.fn(),
         });
       }).toThrow('Provider 2 failed');
 
@@ -729,7 +765,7 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({
           tags: {
             feature: 'perps',
-            provider: 'myx',
+            provider: 'lighter',
             method: 'subscribeToOrderFills',
           },
         }),
@@ -737,16 +773,16 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('cleans up successful subscriptions when subscribeToAccount fails for a later provider', () => {
-      const unsubMock = jest.fn();
-      successfulProvider.subscribeToAccount = jest.fn(() => unsubMock);
+      const unsubMock = vi.fn();
+      successfulProvider.subscribeToAccount = vi.fn(() => unsubMock);
 
       expect(() => {
         muxWithLogger.subscribeToAccount({
           providers: [
             ['hyperliquid', successfulProvider as unknown as PerpsProvider],
-            ['myx', failingProvider as unknown as PerpsProvider],
+            ['lighter', failingProvider as unknown as PerpsProvider],
           ],
-          callback: jest.fn(),
+          callback: vi.fn(),
         });
       }).toThrow('Provider 2 failed');
 
@@ -756,7 +792,7 @@ describe('SubscriptionMultiplexer', () => {
         expect.objectContaining({
           tags: {
             feature: 'perps',
-            provider: 'myx',
+            provider: 'lighter',
             method: 'subscribeToAccount',
           },
         }),
@@ -765,17 +801,17 @@ describe('SubscriptionMultiplexer', () => {
 
     it('works without a logger (no crash when logger is undefined)', () => {
       const muxNoLogger = new SubscriptionMultiplexer();
-      const unsubMock = jest.fn();
-      successfulProvider.subscribeToPrices = jest.fn(() => unsubMock);
+      const unsubMock = vi.fn();
+      successfulProvider.subscribeToPrices = vi.fn(() => unsubMock);
 
       expect(() => {
         muxNoLogger.subscribeToPrices({
           symbols: ['BTC'],
           providers: [
             ['hyperliquid', successfulProvider as unknown as PerpsProvider],
-            ['myx', failingProvider as unknown as PerpsProvider],
+            ['lighter', failingProvider as unknown as PerpsProvider],
           ],
-          callback: jest.fn(),
+          callback: vi.fn(),
         });
       }).toThrow('Provider 2 failed');
 
@@ -784,23 +820,23 @@ describe('SubscriptionMultiplexer', () => {
     });
 
     it('cleans up multiple successful subscriptions when a later provider fails', () => {
-      const unsubMock1 = jest.fn();
-      const unsubMock2 = jest.fn();
+      const unsubMock1 = vi.fn();
+      const unsubMock2 = vi.fn();
       const provider1 = createMockProvider('provider1');
       const provider2 = createMockProvider('provider2');
 
-      provider1.subscribeToPrices = jest.fn(() => unsubMock1);
-      provider2.subscribeToPrices = jest.fn(() => unsubMock2);
+      provider1.subscribeToPrices = vi.fn(() => unsubMock1);
+      provider2.subscribeToPrices = vi.fn(() => unsubMock2);
 
       expect(() => {
         muxWithLogger.subscribeToPrices({
           symbols: ['BTC'],
           providers: [
             ['hyperliquid', provider1 as unknown as PerpsProvider],
-            ['myx', provider2 as unknown as PerpsProvider],
-            ['myx', failingProvider as unknown as PerpsProvider],
+            ['lighter', provider2 as unknown as PerpsProvider],
+            ['lighter', failingProvider as unknown as PerpsProvider],
           ],
-          callback: jest.fn(),
+          callback: vi.fn(),
         });
       }).toThrow('Provider 2 failed');
 

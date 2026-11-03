@@ -7,11 +7,9 @@ import {
 } from '@metamask/account-api';
 import { EthScope, SolScope } from '@metamask/keyring-api';
 import type { InternalAccount } from '@metamask/keyring-internal-api';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { GroupState } from './MultichainAccountGroup.js';
-import { MultichainAccountGroup } from './MultichainAccountGroup.js';
-import { MultichainAccountWallet } from './MultichainAccountWallet.js';
-import type { RootMessenger, MockAccountProvider } from './tests/index.js';
+import type { RootMessenger, MockAccountProvider } from '../tests/index.js';
 import {
   MOCK_SNAP_ACCOUNT_2,
   MOCK_WALLET_1_BTC_P2TR_ACCOUNT,
@@ -22,7 +20,10 @@ import {
   setupBip44AccountProvider,
   getMultichainAccountServiceMessenger,
   getRootMessenger,
-} from './tests/index.js';
+} from '../tests/index.js';
+import type { GroupState } from './MultichainAccountGroup.js';
+import { MultichainAccountGroup } from './MultichainAccountGroup.js';
+import { MultichainAccountWallet } from './MultichainAccountWallet.js';
 import type { MultichainAccountServiceMessenger } from './types.js';
 
 function setup({
@@ -92,7 +93,7 @@ describe('MultichainAccountGroup', () => {
         [MOCK_WALLET_1_SOL_ACCOUNT],
       ];
       const groupIndex = 0;
-      const { wallet, group } = setup({ groupIndex, accounts });
+      const { wallet, group, providers } = setup({ groupIndex, accounts });
 
       const expectedWalletId = toMultichainAccountWalletId(
         wallet.entropySource,
@@ -109,6 +110,12 @@ describe('MultichainAccountGroup', () => {
       expect(group.getAccountIds()).toStrictEqual(
         expectedAccounts.map((a) => a.id),
       );
+      expect(group.getAccountIds(providers[0])).toStrictEqual([
+        MOCK_WALLET_1_EVM_ACCOUNT.id,
+      ]);
+      expect(group.getAccountIds(providers[1])).toStrictEqual([
+        MOCK_WALLET_1_SOL_ACCOUNT.id,
+      ]);
       expect(group.getAccounts()).toHaveLength(expectedAccounts.length);
       expect(group.getAccounts()).toStrictEqual(expectedAccounts);
     });
@@ -225,7 +232,7 @@ describe('MultichainAccountGroup', () => {
       const { group, messenger: serviceMessenger } = setup({
         accounts: [[MOCK_WALLET_1_EVM_ACCOUNT], []],
       });
-      const publishSpy = jest.spyOn(serviceMessenger, 'publish');
+      const publishSpy = vi.spyOn(serviceMessenger, 'publish');
 
       await group.withState('in-progress:alignment', async () => {
         expect(group.status).toBe('in-progress:alignment');

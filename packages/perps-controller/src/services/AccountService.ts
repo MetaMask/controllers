@@ -5,10 +5,7 @@ import {
   PERPS_EVENT_VALUE,
 } from '../constants/eventNames.js';
 import { USDC_SYMBOL } from '../constants/hyperLiquidConfig.js';
-import {
-  PERPS_CONSTANTS,
-  WITHDRAWAL_CONSTANTS,
-} from '../constants/perpsConfig.js';
+import { WITHDRAWAL_CONSTANTS } from '../constants/perpsConfig.js';
 import { PERPS_ERROR_CODES } from '../perpsErrorCodes.js';
 import {
   PerpsAnalyticsEvent,
@@ -24,7 +21,13 @@ import type {
 import type { PerpsControllerMessengerBase } from '../types/messenger.js';
 import type { TransactionStatus } from '../types/transactionTypes.js';
 import { getSelectedEvmAccountFromMessenger } from '../utils/accountUtils.js';
+import {
+  PERPS_ERROR_ACTION,
+  PERPS_ERROR_OPERATION,
+  createPerpsErrorContext,
+} from '../utils/errorContext.js';
 import { ensureError } from '../utils/errorUtils.js';
+import { environmentTypeProperty } from './environmentTypeProperty.js';
 import type { ServiceContext } from './ServiceContext.js';
 
 /**
@@ -205,7 +208,7 @@ export class AccountService {
               const requestToUpdate =
                 state.withdrawalRequests[withdrawalRequestIndex];
               // Withdrawal is bridging (no txHash yet)
-              requestToUpdate.status = 'bridging' as TransactionStatus;
+              requestToUpdate.status = 'bridging';
               requestToUpdate.success = true;
               if (result.withdrawalId) {
                 requestToUpdate.withdrawalId = result.withdrawalId;
@@ -240,6 +243,7 @@ export class AccountService {
             [PERPS_EVENT_PROPERTY.STATUS]: PERPS_EVENT_VALUE.STATUS.EXECUTED,
             [PERPS_EVENT_PROPERTY.WITHDRAWAL_AMOUNT]: parseFloat(params.amount),
             [PERPS_EVENT_PROPERTY.COMPLETION_DURATION]: completionDuration,
+            ...environmentTypeProperty(params.environmentType),
           },
         );
 
@@ -247,13 +251,15 @@ export class AccountService {
         refreshAccountState().catch((refreshError) => {
           this.#deps.logger.error(
             ensureError(refreshError, 'AccountService.withdraw'),
-            {
-              tags: { feature: PERPS_CONSTANTS.FeatureName },
-              context: {
-                name: 'AccountService.withdraw',
-                data: { operation: 'refreshAccountState' },
+            createPerpsErrorContext({
+              contextName: 'AccountService.withdraw',
+              method: 'withdraw',
+              errorTags: {
+                operation: PERPS_ERROR_OPERATION.FinancialOperations,
+                action: PERPS_ERROR_ACTION.FinancialWithdrawal,
               },
-            },
+              data: { operation: 'refreshAccountState' },
+            }),
           );
         });
 
@@ -309,6 +315,7 @@ export class AccountService {
           [PERPS_EVENT_PROPERTY.WITHDRAWAL_AMOUNT]: parseFloat(params.amount),
           [PERPS_EVENT_PROPERTY.COMPLETION_DURATION]: completionDuration,
           [PERPS_EVENT_PROPERTY.ERROR_MESSAGE]: result.error ?? 'Unknown error',
+          ...environmentTypeProperty(params.environmentType),
         },
       );
 
@@ -324,13 +331,18 @@ export class AccountService {
           ? error.message
           : PERPS_ERROR_CODES.WITHDRAW_FAILED;
 
-      this.#deps.logger.error(ensureError(error, 'AccountService.withdraw'), {
-        tags: { feature: PERPS_CONSTANTS.FeatureName },
-        context: {
-          name: 'AccountService.withdraw',
+      this.#deps.logger.error(
+        ensureError(error, 'AccountService.withdraw'),
+        createPerpsErrorContext({
+          contextName: 'AccountService.withdraw',
+          method: 'withdraw',
+          errorTags: {
+            operation: PERPS_ERROR_OPERATION.FinancialOperations,
+            action: PERPS_ERROR_ACTION.FinancialWithdrawal,
+          },
           data: { assetId: params.assetId, amount: params.amount },
-        },
-      });
+        }),
+      );
 
       if (context.stateManager) {
         context.stateManager.update((state) => {
@@ -366,6 +378,7 @@ export class AccountService {
           [PERPS_EVENT_PROPERTY.WITHDRAWAL_AMOUNT]: params.amount,
           [PERPS_EVENT_PROPERTY.COMPLETION_DURATION]: completionDuration,
           [PERPS_EVENT_PROPERTY.ERROR_MESSAGE]: errorMessage,
+          ...environmentTypeProperty(params.environmentType),
         },
       );
 
@@ -403,13 +416,15 @@ export class AccountService {
     } catch (error) {
       this.#deps.logger.error(
         ensureError(error, 'AccountService.validateWithdrawal'),
-        {
-          tags: { feature: PERPS_CONSTANTS.FeatureName },
-          context: {
-            name: 'AccountService.validateWithdrawal',
-            data: { params },
+        createPerpsErrorContext({
+          contextName: 'AccountService.validateWithdrawal',
+          method: 'validateWithdrawal',
+          errorTags: {
+            operation: PERPS_ERROR_OPERATION.FinancialOperations,
+            action: PERPS_ERROR_ACTION.FinancialWithdrawal,
           },
-        },
+          data: { params },
+        }),
       );
       throw error;
     }

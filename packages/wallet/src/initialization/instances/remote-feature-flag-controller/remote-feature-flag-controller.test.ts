@@ -1,5 +1,7 @@
 import { Messenger } from '@metamask/messenger';
 import { RemoteFeatureFlagController } from '@metamask/remote-feature-flag-controller';
+import type { Mock } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { defaultConfigurations } from '../../defaults.js';
 import type {
@@ -24,9 +26,9 @@ function getRootMessenger(): RootMessenger<DefaultActions, DefaultEvents> {
  *
  * @returns A stub client-config API service.
  */
-function getClientConfigApiService(): { fetchRemoteFeatureFlags: jest.Mock } {
+function getClientConfigApiService(): { fetchRemoteFeatureFlags: Mock } {
   return {
-    fetchRemoteFeatureFlags: jest.fn().mockResolvedValue({
+    fetchRemoteFeatureFlags: vi.fn().mockResolvedValue({
       remoteFeatureFlags: {},
       cacheTimestamp: Date.now(),
     }),
@@ -95,11 +97,11 @@ describe('remoteFeatureFlagController', () => {
   });
 
   it('uses the injected clientConfigApiService, getMetaMetricsId, and clientVersion', async () => {
-    const fetchRemoteFeatureFlags = jest.fn().mockResolvedValue({
+    const fetchRemoteFeatureFlags = vi.fn().mockResolvedValue({
       remoteFeatureFlags: { testFlag: true },
       cacheTimestamp: Date.now(),
     });
-    const getMetaMetricsId = jest.fn(() => 'test-metrics-id');
+    const getMetaMetricsId = vi.fn(() => 'test-metrics-id');
     const messenger =
       remoteFeatureFlagController.getMessenger(getRootMessenger());
 
@@ -210,6 +212,26 @@ describe('remoteFeatureFlagController', () => {
     expect(
       clientConfigApiService.fetchRemoteFeatureFlags,
     ).not.toHaveBeenCalled();
+  });
+
+  it('forwards defaultFeatureFlags to the controller', async () => {
+    const messenger =
+      remoteFeatureFlagController.getMessenger(getRootMessenger());
+
+    const instance = remoteFeatureFlagController.init({
+      state: undefined,
+      messenger,
+      options: {
+        clientConfigApiService: getClientConfigApiService(),
+        defaultFeatureFlags: { defaultFlag: true },
+      },
+    });
+
+    await instance.init();
+
+    expect(instance.state.remoteFeatureFlags).toStrictEqual({
+      defaultFlag: true,
+    });
   });
 
   it('exposes its state through the root messenger', () => {

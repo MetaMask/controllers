@@ -1,12 +1,14 @@
 {
   "extends": "../../tsconfig.packages.build.json",
   "compilerOptions": {
-    "baseUrl": "./",
     "outDir": "./dist",
     "rootDir": "./src",
     "skipLibCheck": true
   },
   "references": [
+    {
+      "path": "../analytics-controller/tsconfig.build.json"
+    },
     {
       "path": "../authenticated-user-storage/tsconfig.build.json"
     },
@@ -24,13 +26,11 @@
     },
     {
       "path": "../controller-utils/tsconfig.build.json"
+    },
+    {
+      "path": "../utils/tsconfig.build.json"
     }
   ],
   "include": ["../../types", "./src"],
-  "exclude": [
-    "./jest.config.packages.ts",
-    "**/*.test.ts",
-    "**/jest.config.ts",
-    "**/__fixtures__/"
-  ]
+  "exclude": ["**/*.test.ts", "**/__fixtures__/"]
 }

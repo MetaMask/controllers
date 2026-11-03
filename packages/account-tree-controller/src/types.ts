@@ -4,6 +4,7 @@ import type {
   AccountsControllerAccountsAddedEvent,
   AccountsControllerAccountsRemovedEvent,
   AccountsControllerGetAccountAction,
+  AccountsControllerGetAccountsAction,
   AccountsControllerGetSelectedMultichainAccountAction,
   AccountsControllerListMultichainAccountsAction,
   AccountsControllerSelectedAccountChangeEvent,
@@ -14,16 +15,23 @@ import type {
   ControllerStateChangeEvent,
 } from '@metamask/base-controller';
 import type { TraceCallback } from '@metamask/controller-utils';
-import type { KeyringControllerGetStateAction } from '@metamask/keyring-controller';
+import type {
+  KeyringControllerGetStateAction,
+  KeyringControllerRemoveAccountAction,
+  KeyringControllerVerifyPasswordAction,
+  KeyringControllerWithControllerAction,
+  KeyringControllerWithKeyringV2Action,
+  KeyringControllerWithKeyringV2UnsafeAction,
+} from '@metamask/keyring-controller';
 import type { Messenger } from '@metamask/messenger';
 import type {
   MultichainAccountServiceCreateMultichainAccountGroupAction,
   MultichainAccountServiceCreateMultichainAccountGroupsAction,
+  MultichainAccountServiceCreateMultichainAccountWalletAction,
   MultichainAccountServiceGetMultichainAccountGroupAction,
   MultichainAccountServiceGetMultichainAccountWalletAction,
-} from '@metamask/multichain-account-service';
-import type {
   MultichainAccountServiceGroupStatusChangeEvent,
+  MultichainAccountServiceRemoveMultichainAccountWalletAction,
   MultichainAccountServiceWalletStatusChangeEvent,
 } from '@metamask/multichain-account-service';
 import type {
@@ -87,10 +95,13 @@ export type AccountTreeControllerGetStateAction = ControllerGetStateAction<
 
 export type AllowedActions =
   | AccountsControllerGetAccountAction
+  | AccountsControllerGetAccountsAction
   | AccountsControllerGetSelectedMultichainAccountAction
   | AccountsControllerListMultichainAccountsAction
   | AccountsControllerSetSelectedAccountAction
   | KeyringControllerGetStateAction
+  | KeyringControllerRemoveAccountAction
+  | KeyringControllerVerifyPasswordAction
   | SnapControllerGetSnapAction
   | UserStorageController.UserStorageControllerGetStateAction
   | UserStorageController.UserStorageControllerPerformGetStorageAction
@@ -101,7 +112,12 @@ export type AllowedActions =
   | MultichainAccountServiceCreateMultichainAccountGroupAction
   | MultichainAccountServiceCreateMultichainAccountGroupsAction
   | MultichainAccountServiceGetMultichainAccountGroupAction
-  | MultichainAccountServiceGetMultichainAccountWalletAction;
+  | MultichainAccountServiceGetMultichainAccountWalletAction
+  | MultichainAccountServiceCreateMultichainAccountWalletAction
+  | MultichainAccountServiceRemoveMultichainAccountWalletAction
+  | KeyringControllerWithControllerAction
+  | KeyringControllerWithKeyringV2Action
+  | KeyringControllerWithKeyringV2UnsafeAction;
 
 export type AccountTreeControllerActions =
   | AccountTreeControllerGetStateAction
@@ -160,6 +176,27 @@ export type AccountTreeControllerAccountGroupRemovedEvent = {
   payload: [AccountGroupId];
 };
 
+/**
+ * Represents the `AccountTreeController:initialized` event.
+ * This event is emitted when the account tree has been fully built and is
+ * ready to consume. It carries the full controller state at the moment of
+ * initialization so that consumers do not need an extra `getState()` call.
+ */
+export type AccountTreeControllerInitializedEvent = {
+  type: `${typeof controllerName}:initialized`;
+  payload: [AccountTreeControllerState];
+};
+
+/**
+ * Represents the `AccountTreeController:uninitialized` event.
+ * This event is emitted when the account tree has been torn down via
+ * `clearState()`, symmetric to `initialized`.
+ */
+export type AccountTreeControllerUninitializedEvent = {
+  type: `${typeof controllerName}:uninitialized`;
+  payload: [];
+};
+
 export type AllowedEvents =
   | AccountsControllerAccountsAddedEvent
   | AccountsControllerAccountsRemovedEvent
@@ -174,7 +211,9 @@ export type AccountTreeControllerEvents =
   | AccountTreeControllerSelectedAccountGroupChangeEvent
   | AccountTreeControllerAccountGroupCreatedEvent
   | AccountTreeControllerAccountGroupUpdatedEvent
-  | AccountTreeControllerAccountGroupRemovedEvent;
+  | AccountTreeControllerAccountGroupRemovedEvent
+  | AccountTreeControllerInitializedEvent
+  | AccountTreeControllerUninitializedEvent;
 
 export type AccountTreeControllerMessenger = Messenger<
   typeof controllerName,

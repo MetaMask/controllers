@@ -2,13 +2,15 @@
  * Token API Client Tests - token.api.cx.metamask.io
  */
 
-import type { ApiPlatformClient } from '../ApiPlatformClient.js';
-import { API_URLS } from '../shared-types.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import {
   mockFetch,
   createMockResponse,
   setupTestEnvironment,
-} from '../test-utils.js';
+} from '../../../tests/test-utils.js';
+import type { ApiPlatformClient } from '../ApiPlatformClient.js';
+import { API_URLS } from '../shared-types.js';
 import type { NetworkInfo, TokenMetadata } from './types.js';
 
 describe('TokenApiClient', () => {
@@ -131,6 +133,39 @@ describe('TokenApiClient', () => {
       const calledUrl = mockFetch.mock.calls[0]?.[0] as string;
       expect(calledUrl).toContain('includeIconUrl=true');
       expect(calledUrl).toContain('includeOccurrences=true');
+    });
+
+    it('forwards occurrence floor and native/rwa flags', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse([]));
+
+      await client.token.fetchTokenList(1, {
+        occurrenceFloor: 3,
+        includeNativeAssets: false,
+        includeRwaData: true,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${API_URLS.TOKEN}/tokens/1?occurrenceFloor=3&includeNativeAssets=false&includeRwaData=true`,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('Supported Networks', () => {
+    it('fetches v2 supported networks from the token API', async () => {
+      const mockResponse = {
+        fullSupport: ['eip155:1'],
+        partialSupport: ['eip155:59144'],
+      };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      const result = await client.token.fetchV2SupportedNetworks();
+
+      expect(result).toStrictEqual(mockResponse);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${API_URLS.TOKEN}/v2/supportedNetworks`,
+        expect.any(Object),
+      );
     });
   });
 

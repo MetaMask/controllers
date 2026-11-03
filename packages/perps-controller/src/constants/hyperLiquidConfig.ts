@@ -1,7 +1,10 @@
 import type { CaipAssetId, CaipChainId, Hex } from '@metamask/utils';
 
 import { MarketCategory } from '../types/index.js';
-import type { MarketType } from '../types/index.js';
+import type {
+  DirectProviderOrderCapabilities,
+  MarketType,
+} from '../types/index.js';
 import type {
   HyperLiquidNetwork,
   HyperLiquidEndpoints,
@@ -12,6 +15,11 @@ import type {
   TradingDefaultsConfig,
   FeeRatesConfig,
 } from '../types/perps-types.js';
+import {
+  STRATEGY_ORDER_TYPES,
+  TRIGGER_ORDER_TYPES,
+} from '../utils/orderTypes.js';
+import { PROVIDER_CONFIG } from './perpsConfig.js';
 
 // Network constants
 export const ARBITRUM_MAINNET_CHAIN_ID_HEX = '0xa4b1' as const;
@@ -27,6 +35,20 @@ export const HYPERLIQUID_MAINNET_CAIP_CHAIN_ID = 'eip155:999' as CaipChainId;
 export const HYPERLIQUID_TESTNET_CAIP_CHAIN_ID = 'eip155:998' as CaipChainId;
 export const HYPERLIQUID_NETWORK_NAME = 'Hyperliquid';
 
+/**
+ * Return the canonical snapshot identity: main first, then unique DEX ids.
+ *
+ * @param dexes - DEX identifiers to canonicalize.
+ * @returns The canonical DEX identifiers.
+ */
+export function canonicalizeHyperLiquidDexes(
+  dexes: Iterable<string>,
+): string[] {
+  const additionalDexes = new Set(dexes);
+  additionalDexes.delete('main');
+  return ['main', ...Array.from(additionalDexes).sort()];
+}
+
 // Token constants
 export const USDC_SYMBOL = 'USDC';
 export const USDC_NAME = 'USD Coin';
@@ -41,8 +63,9 @@ export const USDC_ETHEREUM_MAINNET_ADDRESS =
   '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 export const USDC_ARBITRUM_MAINNET_ADDRESS =
   '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+// USDC2: the token the Arbitrum Sepolia bridge credits (its usdcToken())
 export const USDC_ARBITRUM_TESTNET_ADDRESS =
-  '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d';
+  '0x1baAbB04529D43a73232B713C0FE471f7c7334d5';
 
 // USDC token icon URL using MetaMask's official Token Icons API
 // Format: https://static.cx.metamask.io/api/v1/tokenIcons/{chainId}/{contractAddress}.png
@@ -70,7 +93,7 @@ export const METAMASK_PERPS_ICONS_BASE_URL =
 export const HYPERLIQUID_ASSET_CONFIGS: HyperLiquidAssetConfigs = {
   usdc: {
     mainnet: `${ARBITRUM_MAINNET_CAIP_CHAIN_ID}/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831/default`,
-    testnet: `${ARBITRUM_TESTNET_CAIP_CHAIN_ID}/erc20:0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d/default`,
+    testnet: `${ARBITRUM_TESTNET_CAIP_CHAIN_ID}/erc20:0x1baAbB04529D43a73232B713C0FE471f7c7334d5/default`,
   },
 };
 
@@ -163,6 +186,18 @@ export const HIP3_FEE_CONFIG = {
   FeeMultiplier: 2,
 } as const;
 
+/**
+ * EIP-712 primary type of every HyperLiquid L1 action (orders, cancels,
+ * leverage, ...). Only L1 actions may be signed by an agent; every other
+ * request is a user-signed action for the main account.
+ */
+export const HYPERLIQUID_L1_ACTION_PRIMARY_TYPE = 'Agent';
+
+/**
+ * EIP-712 domain name of every HyperLiquid L1 action.
+ */
+export const HYPERLIQUID_L1_ACTION_DOMAIN_NAME = 'Exchange';
+
 const BUILDER_FEE_MAX_FEE_DECIMAL = 0.001;
 
 // Builder fee configuration
@@ -178,6 +213,31 @@ export const BUILDER_FEE_CONFIG = {
     .toFixed(4)
     .replace(/\.?0+$/u, '')}%`,
 };
+
+/**
+ * Strategies and standalone trigger orders HyperLiquid executes for its markets.
+ * Providers own this declaration so clients never infer support from a
+ * provider name.
+ */
+export const HYPERLIQUID_ORDER_CAPABILITIES = Object.freeze({
+  status: 'ready',
+  providerId: PROVIDER_CONFIG.DefaultProvider,
+  supportedStrategies: Object.freeze([...STRATEGY_ORDER_TYPES]),
+  supportedTriggerOrderTypes: Object.freeze([...TRIGGER_ORDER_TYPES]),
+  positionTpsl: Object.freeze({
+    supportsExpectedPosition: true,
+    childOrderIds: 'request-correlated',
+    takeProfitOrderType: 'take_profit_limit',
+    stopLossOrderType: 'stop_market',
+    defaultCoverage: 'dynamic-position',
+    partialCoverage: Object.freeze({
+      single: true,
+      pair: 'independent',
+      replacement: 'cancel-before-create',
+      recovery: 'provider-default',
+    }),
+  }),
+}) satisfies DirectProviderOrderCapabilities;
 
 // Referral code configuration
 export const REFERRAL_CONFIG = {
@@ -353,6 +413,8 @@ export const HIP3_ASSET_MARKET_TYPES: Record<string, MarketType> = {
   'xyz:ARM': MarketCategory.Stock,
   'xyz:BX': MarketCategory.Stock,
   'xyz:LITE': MarketCategory.Stock,
+  'xyz:CBRS': MarketCategory.Stock,
+  'xyz:SPCX': MarketCategory.Stock,
 
   // xyz DEX - Stocks (Korea)
   'xyz:SKHX': MarketCategory.Stock,
@@ -364,8 +426,6 @@ export const HIP3_ASSET_MARKET_TYPES: Record<string, MarketType> = {
   'xyz:KIOXIA': MarketCategory.Stock,
 
   // xyz DEX - Pre-IPO
-  'xyz:CBRS': MarketCategory.PreIpo,
-  'xyz:SPCX': MarketCategory.PreIpo,
   'xyz:IPOP': MarketCategory.PreIpo,
 
   // xyz DEX - Indices

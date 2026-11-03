@@ -6,24 +6,30 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock, Mocked, MockedClass } from 'vitest';
+
 import { createMockHyperLiquidProvider } from '../helpers/providerMocks.js';
 import {
+  createDeferred,
   createMockInfrastructure,
   createMockMessenger,
+  createPartiallyDelegatedMessenger,
 } from '../helpers/serviceMocks.js';
 
-jest.mock('@nktkas/hyperliquid', () => ({}));
-jest.mock('@myx-trade/sdk', () => ({
-  MyxClient: jest.fn(),
-  OrderStatusEnum: { Successful: 9 },
-}));
+vi.mock('@nktkas/hyperliquid', () => ({}));
 
+import {
+  PERPS_CONSTANTS,
+  PERPS_DISK_CACHE_MARKETS,
+} from '../../src/constants/perpsConfig.js';
 import {
   PerpsController,
   getDefaultPerpsControllerState,
   InitializationState,
 } from '../../src/PerpsController.js';
 import type { PerpsControllerState } from '../../src/PerpsController.js';
+import { PERPS_ERROR_CODES } from '../../src/perpsErrorCodes.js';
 import { HyperLiquidProvider } from '../../src/providers/HyperLiquidProvider.js';
 import type {
   PerpsProvider,
@@ -31,135 +37,137 @@ import type {
   PerpsProviderType,
 } from '../../src/types/index.js';
 
-jest.mock('../../src/providers/HyperLiquidProvider');
-jest.mock('../../src/providers/MYXProvider');
+vi.mock('../../src/providers/HyperLiquidProvider');
 
 // Mock transaction controller utility
-const mockAddTransaction = jest.fn();
-jest.mock(
-  '../../../util/transaction-controller',
-  () => ({
-    addTransaction: (...args: unknown[]) => mockAddTransaction(...args),
-  }),
-  { virtual: true },
-);
+const mockAddTransaction = vi.fn();
+vi.mock('../../../util/transaction-controller', () => ({
+  addTransaction: (...args: unknown[]) => mockAddTransaction(...args),
+}));
 
 // Mock wait utility to speed up retry tests
-jest.mock('../../src/utils/wait', () => ({
-  wait: jest.fn().mockResolvedValue(undefined),
+vi.mock('../../src/utils/wait', () => ({
+  wait: vi.fn().mockResolvedValue(undefined),
 }));
+
+import * as accountServiceModule from '../../src/services/AccountService.js';
+import * as dataLakeServiceModule from '../../src/services/DataLakeService.js';
+import * as depositServiceModule from '../../src/services/DepositService.js';
+import * as eligibilityServiceModule from '../../src/services/EligibilityService.js';
+import * as featureFlagConfigurationServiceModule from '../../src/services/FeatureFlagConfigurationService.js';
+import * as marketDataServiceModule from '../../src/services/MarketDataService.js';
+import * as tradingServiceModule from '../../src/services/TradingService.js';
+import { wait as mockWait } from '../../src/utils/wait';
 
 // Mock stream manager
 const mockStreamManager = {
-  positions: { pause: jest.fn(), resume: jest.fn() },
-  account: { pause: jest.fn(), resume: jest.fn() },
-  orders: { pause: jest.fn(), resume: jest.fn() },
-  prices: { pause: jest.fn(), resume: jest.fn() },
-  orderFills: { pause: jest.fn(), resume: jest.fn() },
+  positions: { pause: vi.fn(), resume: vi.fn() },
+  account: { pause: vi.fn(), resume: vi.fn() },
+  orders: { pause: vi.fn(), resume: vi.fn() },
+  prices: { pause: vi.fn(), resume: vi.fn() },
+  orderFills: { pause: vi.fn(), resume: vi.fn() },
 };
 
-jest.mock(
-  '../../../components/UI/Perps/providers/PerpsStreamManager',
-  () => ({
-    getStreamManagerInstance: jest.fn(() => mockStreamManager),
-  }),
-  { virtual: true },
-);
+vi.mock('../../../components/UI/Perps/providers/PerpsStreamManager', () => ({
+  getStreamManagerInstance: vi.fn(() => mockStreamManager),
+}));
 
-jest.mock('@metamask/utils', () => ({
-  ...jest.requireActual('@metamask/utils'),
-  formatAccountToCaipAccountId: jest
+vi.mock(import('@metamask/utils'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  formatAccountToCaipAccountId: vi
     .fn()
     .mockReturnValue('eip155:1:0x1234567890123456789012345678901234567890'),
 }));
 
 // Mock EligibilityService as a class with instance methods
 const mockEligibilityServiceInstance = {
-  checkEligibility: jest.fn().mockResolvedValue(true),
+  checkEligibility: vi.fn().mockResolvedValue(true),
 };
-jest.mock('../../src/services/EligibilityService', () => ({
-  EligibilityService: jest
-    .fn()
-    .mockImplementation(() => mockEligibilityServiceInstance),
+vi.mock('../../src/services/EligibilityService', () => ({
+  EligibilityService: vi.fn().mockImplementation(function () {
+    return mockEligibilityServiceInstance;
+  }),
 }));
 
 // Mock DepositService as a class with instance methods
 const mockDepositServiceInstance = {
-  prepareTransaction: jest.fn(),
+  prepareTransaction: vi.fn(),
 };
-jest.mock('../../src/services/DepositService', () => ({
-  DepositService: jest
-    .fn()
-    .mockImplementation(() => mockDepositServiceInstance),
+vi.mock('../../src/services/DepositService', () => ({
+  DepositService: vi.fn().mockImplementation(function () {
+    return mockDepositServiceInstance;
+  }),
 }));
 
 // Mock MarketDataService as a class with instance methods
 const mockMarketDataServiceInstance = {
-  getPositions: jest.fn(),
-  getAccountState: jest.fn(),
-  getMarkets: jest.fn(),
-  getWithdrawalRoutes: jest.fn().mockReturnValue([]),
-  validateClosePosition: jest.fn().mockResolvedValue({ isValid: true }),
-  validateOrder: jest.fn(),
-  calculateMaintenanceMargin: jest.fn().mockResolvedValue(0),
-  calculateLiquidationPrice: jest.fn(),
-  getMaxLeverage: jest.fn(),
-  calculateFees: jest.fn().mockResolvedValue({ totalFee: 0 }),
-  getAvailableDexs: jest.fn().mockResolvedValue([]),
-  getBlockExplorerUrl: jest.fn(),
-  getOrderFills: jest.fn(),
-  getOrders: jest.fn(),
-  getFunding: jest.fn(),
+  getMarketDataWithPrices: vi.fn(),
+  getPositions: vi.fn(),
+  getAccountState: vi.fn(),
+  getMarkets: vi.fn(),
+  getWithdrawalRoutes: vi.fn().mockReturnValue([]),
+  validateClosePosition: vi.fn().mockResolvedValue({ isValid: true }),
+  validateOrder: vi.fn(),
+  calculateMaintenanceMargin: vi.fn().mockResolvedValue(0),
+  calculateLiquidationPrice: vi.fn(),
+  getMaxLeverage: vi.fn(),
+  calculateFees: vi.fn().mockResolvedValue({ totalFee: 0 }),
+  previewPositionModify: vi.fn(),
+  getAvailableDexs: vi.fn().mockResolvedValue([]),
+  getBlockExplorerUrl: vi.fn(),
+  getOrderFills: vi.fn(),
+  getOrders: vi.fn(),
+  getFunding: vi.fn(),
 };
-jest.mock('../../src/services/MarketDataService', () => ({
-  MarketDataService: jest
-    .fn()
-    .mockImplementation(() => mockMarketDataServiceInstance),
+vi.mock('../../src/services/MarketDataService', () => ({
+  MarketDataService: vi.fn().mockImplementation(function () {
+    return mockMarketDataServiceInstance;
+  }),
 }));
 
 // Mock TradingService as a class with instance methods
 const mockTradingServiceInstance = {
-  placeOrder: jest.fn(),
-  editOrder: jest.fn(),
-  cancelOrder: jest.fn(),
-  cancelOrders: jest.fn(),
-  closePosition: jest.fn(),
-  closePositions: jest.fn(),
-  updatePositionTPSL: jest.fn(),
-  updateMargin: jest.fn(),
-  flipPosition: jest.fn(),
-  setControllerDependencies: jest.fn(),
+  placeOrder: vi.fn(),
+  editOrder: vi.fn(),
+  cancelOrder: vi.fn(),
+  cancelOrders: vi.fn(),
+  closePosition: vi.fn(),
+  closePositions: vi.fn(),
+  updatePositionTPSL: vi.fn(),
+  updateMargin: vi.fn(),
+  flipPosition: vi.fn(),
+  setControllerDependencies: vi.fn(),
 };
-jest.mock('../../src/services/TradingService', () => ({
-  TradingService: jest
-    .fn()
-    .mockImplementation(() => mockTradingServiceInstance),
+vi.mock('../../src/services/TradingService', () => ({
+  TradingService: vi.fn().mockImplementation(function () {
+    return mockTradingServiceInstance;
+  }),
 }));
 
 // Mock AccountService as a class with instance methods
 const mockAccountServiceInstance = {
-  withdraw: jest.fn(),
-  validateWithdrawal: jest.fn(),
+  withdraw: vi.fn(),
+  validateWithdrawal: vi.fn(),
 };
-jest.mock('../../src/services/AccountService', () => ({
-  AccountService: jest
-    .fn()
-    .mockImplementation(() => mockAccountServiceInstance),
+vi.mock('../../src/services/AccountService', () => ({
+  AccountService: vi.fn().mockImplementation(function () {
+    return mockAccountServiceInstance;
+  }),
 }));
 
 // Mock DataLakeService as a class with instance methods
 const mockDataLakeServiceInstance = {
-  reportOrder: jest.fn(),
+  reportOrder: vi.fn(),
 };
-jest.mock('../../src/services/DataLakeService', () => ({
-  DataLakeService: jest
-    .fn()
-    .mockImplementation(() => mockDataLakeServiceInstance),
+vi.mock('../../src/services/DataLakeService', () => ({
+  DataLakeService: vi.fn().mockImplementation(function () {
+    return mockDataLakeServiceInstance;
+  }),
 }));
 
 // Mock FeatureFlagConfigurationService as a class with instance methods
 const mockFeatureFlagConfigurationServiceInstance = {
-  refreshEligibility: jest.fn((options: any) => {
+  refreshEligibility: vi.fn((options: any) => {
     // Simulate the service's behavior: extract blocked regions from remote flags
     const remoteFlags =
       options.remoteFeatureFlagControllerState.remoteFeatureFlags;
@@ -191,8 +199,8 @@ const mockFeatureFlagConfigurationServiceInstance = {
       mockFeatureFlagConfigurationServiceInstance.refreshHip3Config(options);
     }
   }),
-  refreshHip3Config: jest.fn(),
-  setBlockedRegions: jest.fn((options: any) => {
+  refreshHip3Config: vi.fn(),
+  setBlockedRegions: vi.fn((options: any) => {
     // Simulate setBlockedRegions behavior
     const { list, source, context } = options;
     if (context.setBlockedRegionList && context.getBlockedRegionList) {
@@ -214,10 +222,10 @@ const mockFeatureFlagConfigurationServiceInstance = {
     }
   }),
 };
-jest.mock('../../src/services/FeatureFlagConfigurationService', () => ({
-  FeatureFlagConfigurationService: jest
-    .fn()
-    .mockImplementation(() => mockFeatureFlagConfigurationServiceInstance),
+vi.mock('../../src/services/FeatureFlagConfigurationService', () => ({
+  FeatureFlagConfigurationService: vi.fn().mockImplementation(function () {
+    return mockFeatureFlagConfigurationServiceInstance;
+  }),
 }));
 
 /**
@@ -340,22 +348,13 @@ class TestablePerpsController extends PerpsController {
   public testHasStandaloneProvider(): boolean {
     return this.hasStandaloneProvider();
   }
-
-  public testRegisterMYXProvider(
-    MYXProvider: new (opts: Record<string, unknown>) => PerpsProvider,
-  ) {
-    this.registerMYXProvider(MYXProvider as never);
-  }
-
-  public testHandleMYXImportError(error: unknown) {
-    this.handleMYXImportError(error);
-  }
 }
 
 describe('PerpsController', () => {
   let controller: TestablePerpsController;
-  let mockProvider: jest.Mocked<HyperLiquidProvider>;
-  let mockInfrastructure: jest.Mocked<PerpsPlatformDependencies>;
+  let mockProvider: Mocked<HyperLiquidProvider>;
+  let mockInfrastructure: Mocked<PerpsPlatformDependencies>;
+  let mockMessenger: ReturnType<typeof createMockMessenger>;
 
   // Helper to mark controller as initialized for tests
   const markControllerAsInitialized = () => {
@@ -363,38 +362,53 @@ describe('PerpsController', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     (
-      jest.requireMock('../../src/services/EligibilityService')
-        .EligibilityService as jest.Mock
-    ).mockImplementation(() => mockEligibilityServiceInstance);
+      (eligibilityServiceModule as unknown as Record<string, Mock>)
+        .EligibilityService as Mock
+    ).mockImplementation(function () {
+      return mockEligibilityServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/DepositService')
-        .DepositService as jest.Mock
-    ).mockImplementation(() => mockDepositServiceInstance);
+      (depositServiceModule as unknown as Record<string, Mock>)
+        .DepositService as Mock
+    ).mockImplementation(function () {
+      return mockDepositServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/MarketDataService')
-        .MarketDataService as jest.Mock
-    ).mockImplementation(() => mockMarketDataServiceInstance);
+      (marketDataServiceModule as unknown as Record<string, Mock>)
+        .MarketDataService as Mock
+    ).mockImplementation(function () {
+      return mockMarketDataServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/TradingService')
-        .TradingService as jest.Mock
-    ).mockImplementation(() => mockTradingServiceInstance);
+      (tradingServiceModule as unknown as Record<string, Mock>)
+        .TradingService as Mock
+    ).mockImplementation(function () {
+      return mockTradingServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/AccountService')
-        .AccountService as jest.Mock
-    ).mockImplementation(() => mockAccountServiceInstance);
+      (accountServiceModule as unknown as Record<string, Mock>)
+        .AccountService as Mock
+    ).mockImplementation(function () {
+      return mockAccountServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/DataLakeService')
-        .DataLakeService as jest.Mock
-    ).mockImplementation(() => mockDataLakeServiceInstance);
+      (dataLakeServiceModule as unknown as Record<string, Mock>)
+        .DataLakeService as Mock
+    ).mockImplementation(function () {
+      return mockDataLakeServiceInstance;
+    });
     (
-      jest.requireMock('../../src/services/FeatureFlagConfigurationService')
-        .FeatureFlagConfigurationService as jest.Mock
-    ).mockImplementation(() => mockFeatureFlagConfigurationServiceInstance);
+      (featureFlagConfigurationServiceModule as unknown as Record<string, Mock>)
+        .FeatureFlagConfigurationService as Mock
+    ).mockImplementation(function () {
+      return mockFeatureFlagConfigurationServiceInstance;
+    });
 
     mockEligibilityServiceInstance.checkEligibility.mockResolvedValue(true);
+    mockMarketDataServiceInstance.getMarketDataWithPrices.mockResolvedValue([]);
     mockMarketDataServiceInstance.getPositions.mockResolvedValue([]);
     mockMarketDataServiceInstance.getAccountState.mockResolvedValue({
       spendableBalance: '10000',
@@ -504,10 +518,12 @@ describe('PerpsController', () => {
     mockProvider.getWithdrawalRoutes.mockReturnValue([]);
 
     (
-      HyperLiquidProvider as jest.MockedClass<typeof HyperLiquidProvider>
-    ).mockImplementation(() => mockProvider);
+      HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+    ).mockImplementation(function () {
+      return mockProvider;
+    });
 
-    const mockCall = jest.fn().mockImplementation((action: string) => {
+    const mockCall = vi.fn().mockImplementation((action: string) => {
       if (action === 'RemoteFeatureFlagController:getState') {
         return {
           remoteFeatureFlags: {
@@ -540,8 +556,9 @@ describe('PerpsController', () => {
     });
 
     mockInfrastructure = createMockInfrastructure();
+    mockMessenger = createMockMessenger({ call: mockCall });
     controller = new TestablePerpsController({
-      messenger: createMockMessenger({ call: mockCall }),
+      messenger: mockMessenger,
       state: getDefaultPerpsControllerState(),
       infrastructure: mockInfrastructure,
     });
@@ -557,13 +574,13 @@ describe('PerpsController', () => {
           value !== null &&
           'mockClear' in value
         ) {
-          (value as jest.Mock).mockClear();
+          (value as Mock).mockClear();
         }
       });
     }
-    (mockInfrastructure.metrics.trackPerpsEvent as jest.Mock).mockClear();
-    (mockInfrastructure.logger.error as jest.Mock).mockClear();
-    (mockInfrastructure.debugLogger.log as jest.Mock).mockClear();
+    (mockInfrastructure.metrics.trackPerpsEvent as Mock).mockClear();
+    (mockInfrastructure.logger.error as Mock).mockClear();
+    (mockInfrastructure.debugLogger.log as Mock).mockClear();
   });
   describe('constructor', () => {
     it('initializes with default state', () => {
@@ -581,7 +598,7 @@ describe('PerpsController', () => {
 
     it('reads current RemoteFeatureFlagController state during construction', () => {
       // Given: A messenger that returns remote feature flags state
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return {
             remoteFeatureFlags: {
@@ -611,7 +628,7 @@ describe('PerpsController', () => {
 
     it('applies remote blocked regions when available during construction', () => {
       // Given: Messenger that returns remote feature flags with blocked regions
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return {
             remoteFeatureFlags: {
@@ -643,7 +660,7 @@ describe('PerpsController', () => {
 
     it('uses fallback regions when remote flags are not available', () => {
       // Given: Remote feature flags without blocked regions
-      const mockCall = jest.fn().mockImplementation((action: string) => {
+      const mockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return {
             remoteFeatureFlags: {},
@@ -670,7 +687,7 @@ describe('PerpsController', () => {
 
     it('never downgrade from remote to fallback regions', () => {
       // Given: Messenger that returns remote feature flags with blocked regions
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return {
             remoteFeatureFlags: {
@@ -709,7 +726,7 @@ describe('PerpsController', () => {
 
     it('continues initialization when RemoteFeatureFlagController state call throws error', () => {
       const testInfrastructure = createMockInfrastructure();
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           throw new Error('RemoteFeatureFlagController not ready');
         }
@@ -750,7 +767,7 @@ describe('PerpsController', () => {
   describe('deferEligibilityCheck', () => {
     it('skips refreshEligibility when eligibility check is deferred', async () => {
       // Arrange
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return { remoteFeatureFlags: {} };
         }
@@ -778,7 +795,7 @@ describe('PerpsController', () => {
 
     it('resumes eligibility checks after startEligibilityMonitoring is called', () => {
       // Arrange
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return {
             remoteFeatureFlags: {
@@ -831,7 +848,7 @@ describe('PerpsController', () => {
     it('logs error when RemoteFeatureFlagController throws during startEligibilityMonitoring', () => {
       // Arrange
       const testInfrastructure = createMockInfrastructure();
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           throw new Error('Controller not ready');
         }
@@ -846,7 +863,7 @@ describe('PerpsController', () => {
       });
 
       // Reset mock to isolate startEligibilityMonitoring errors from constructor errors
-      (testInfrastructure.logger.error as jest.Mock).mockClear();
+      (testInfrastructure.logger.error as Mock).mockClear();
 
       // Act — should not throw
       expect(() =>
@@ -869,7 +886,7 @@ describe('PerpsController', () => {
 
     it('stopEligibilityMonitoring defers subsequent refreshEligibility calls', async () => {
       // Arrange — controller without deferral
-      const testMockCall = jest.fn().mockImplementation((action: string) => {
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return { remoteFeatureFlags: {} };
         }
@@ -893,6 +910,43 @@ describe('PerpsController', () => {
       // Assert — geolocation was never called
       expect(testMockCall).not.toHaveBeenCalledWith(
         'GeolocationController:getGeolocation',
+      );
+    });
+  });
+
+  describe('required messenger actions', () => {
+    it('logs an error when GeolocationController is not delegated', async () => {
+      const testInfrastructure = createMockInfrastructure();
+      const undelegated = createPartiallyDelegatedMessenger();
+      const testMockCall = vi.fn().mockImplementation((action: string) => {
+        if (action === 'RemoteFeatureFlagController:getState') {
+          return { remoteFeatureFlags: {} };
+        }
+        if (action === 'GeolocationController:getGeolocation') {
+          return undelegated.call(
+            action as 'GeolocationController:getGeolocation',
+          );
+        }
+        return undefined;
+      });
+      const testController = new TestablePerpsController({
+        messenger: createMockMessenger({ call: testMockCall }),
+        state: getDefaultPerpsControllerState(),
+        infrastructure: testInfrastructure,
+      });
+
+      await testController.refreshEligibility();
+
+      expect(testInfrastructure.logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message:
+            'A handler for GeolocationController:getGeolocation has not been delegated to PerpsController',
+        }),
+        expect.objectContaining({
+          context: expect.objectContaining({
+            data: expect.objectContaining({ method: 'refreshEligibility' }),
+          }),
+        }),
       );
     });
   });
@@ -949,13 +1003,58 @@ describe('PerpsController', () => {
       const provider = controller.getActiveProvider();
       expect(provider).toBe(mockProvider);
     });
+
+    it('throws plain CLIENT_NOT_INITIALIZED on Failed state (not compound string)', () => {
+      controller.testSetInitialized(false);
+      controller.testUpdate((state) => {
+        state.initializationState = InitializationState.Failed;
+        state.initializationError = 'WebSocket transport failed';
+      });
+
+      expect(() => controller.getActiveProvider()).toThrow(
+        PERPS_ERROR_CODES.CLIENT_NOT_INITIALIZED,
+      );
+
+      try {
+        controller.getActiveProvider();
+      } catch (e: any) {
+        expect(e.message).toBe(PERPS_ERROR_CODES.CLIENT_NOT_INITIALIZED);
+        expect(e.message).not.toContain(':');
+      }
+    });
+
+    it('does not log to Sentry when state is Failed', () => {
+      controller.testSetInitialized(false);
+      controller.testUpdate((state) => {
+        state.initializationState = InitializationState.Failed;
+        state.initializationError = 'WebSocket transport failed';
+      });
+
+      expect(() => controller.getActiveProvider()).toThrow(
+        PERPS_ERROR_CODES.CLIENT_NOT_INITIALIZED,
+      );
+      expect(mockInfrastructure.logger.error).not.toHaveBeenCalled();
+    });
+
+    it('does not log to Sentry when initializationError is null on Failed state', () => {
+      controller.testSetInitialized(false);
+      controller.testUpdate((state) => {
+        state.initializationState = InitializationState.Failed;
+        state.initializationError = null;
+      });
+
+      expect(() => controller.getActiveProvider()).toThrow(
+        PERPS_ERROR_CODES.CLIENT_NOT_INITIALIZED,
+      );
+      expect(mockInfrastructure.logger.error).not.toHaveBeenCalled();
+    });
   });
 
   describe('getActiveProviderOrNull', () => {
     it('returns null during reinitialization', () => {
       markControllerAsInitialized();
       controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
-      jest.spyOn(controller, 'isCurrentlyReinitializing').mockReturnValue(true);
+      vi.spyOn(controller, 'isCurrentlyReinitializing').mockReturnValue(true);
 
       const result = controller.getActiveProviderOrNull();
 
@@ -980,12 +1079,1122 @@ describe('PerpsController', () => {
     });
   });
 
+  describe('action calls during initialization', () => {
+    it('discards an in-flight market preload after disconnect', async () => {
+      await controller.init();
+      const marketData = createDeferred<
+        {
+          symbol: string;
+          name: string;
+          price: string;
+          maxLeverage: string;
+          change24h: string;
+          change24hPercent: string;
+          volume: string;
+        }[]
+      >();
+      mockMarketDataServiceInstance.getMarketDataWithPrices.mockReturnValueOnce(
+        marketData.promise,
+      );
+
+      controller.startMarketDataPreload();
+      await Promise.resolve();
+      expect(
+        mockMarketDataServiceInstance.getMarketDataWithPrices,
+      ).toHaveBeenCalledTimes(1);
+
+      await controller.disconnect();
+      marketData.resolve([
+        {
+          symbol: 'BTC',
+          name: 'Bitcoin',
+          price: '50000',
+          maxLeverage: '50x',
+          change24h: '+100',
+          change24hPercent: '+0.2%',
+          volume: '$1B',
+        },
+      ]);
+      await marketData.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(
+        controller.state.cachedMarketDataByProvider['hyperliquid:mainnet'],
+      ).toBeUndefined();
+      expect(mockInfrastructure.diskCache.setItem).not.toHaveBeenCalledWith(
+        PERPS_DISK_CACHE_MARKETS,
+        expect.any(String),
+      );
+    });
+
+    it('defers market preloading until an in-flight disconnect finishes', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      mockProvider.disconnect.mockImplementationOnce(async () => {
+        disconnectStarted.resolve();
+        await pendingDisconnect.promise;
+        return { success: true };
+      });
+
+      const disconnectPromise = controller.disconnect();
+      await disconnectStarted.promise;
+      controller.startMarketDataPreload();
+
+      expect(mockInfrastructure.debugLogger.log).toHaveBeenCalledWith(
+        'PerpsController: Disconnect in progress, deferring market data preload',
+      );
+      expect(
+        mockMarketDataServiceInstance.getMarketDataWithPrices,
+      ).not.toHaveBeenCalled();
+
+      pendingDisconnect.resolve();
+      await disconnectPromise;
+      await Promise.resolve();
+
+      expect(
+        mockMarketDataServiceInstance.getMarketDataWithPrices,
+      ).toHaveBeenCalledTimes(1);
+      controller.stopMarketDataPreload();
+    });
+
+    it('lets an explicit stop cancel a deferred preload start', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      mockProvider.disconnect.mockImplementationOnce(async () => {
+        disconnectStarted.resolve();
+        await pendingDisconnect.promise;
+        return { success: true };
+      });
+
+      const disconnectPromise = controller.disconnect();
+      await disconnectStarted.promise;
+      controller.startMarketDataPreload();
+      controller.stopMarketDataPreload();
+      pendingDisconnect.resolve();
+      await disconnectPromise;
+      await Promise.resolve();
+
+      expect(
+        mockMarketDataServiceInstance.getMarketDataWithPrices,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('lets a later disconnect cancel a deferred preload start', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      mockProvider.disconnect.mockImplementationOnce(async () => {
+        disconnectStarted.resolve();
+        await pendingDisconnect.promise;
+        return { success: true };
+      });
+
+      const firstDisconnect = controller.disconnect();
+      await disconnectStarted.promise;
+      controller.startMarketDataPreload();
+      const secondDisconnect = controller.disconnect();
+      pendingDisconnect.resolve();
+      await Promise.all([firstDisconnect, secondDisconnect]);
+      await Promise.resolve();
+
+      expect(
+        mockMarketDataServiceInstance.getMarketDataWithPrices,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('initializes only after an in-flight disconnect finishes', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      mockProvider.disconnect.mockImplementationOnce(() => {
+        disconnectStarted.resolve();
+        return pendingDisconnect.promise;
+      });
+
+      const disconnectPromise = controller.disconnect();
+      await disconnectStarted.promise;
+      let initSettled = false;
+      const initPromise = controller.init().then(() => {
+        initSettled = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(initSettled).toBe(false);
+      pendingDisconnect.resolve();
+      await disconnectPromise;
+      await initPromise;
+
+      expect(controller.testGetInitialized()).toBe(true);
+      expect(mockProvider.disconnect).toHaveBeenCalledTimes(2);
+    });
+
+    it('lets a later disconnect win over init queued behind a disconnect', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      const replacementProvider = createMockHyperLiquidProvider();
+      mockProvider.disconnect.mockImplementationOnce(() => {
+        disconnectStarted.resolve();
+        return pendingDisconnect.promise;
+      });
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        return replacementProvider;
+      });
+
+      const firstDisconnect = controller.disconnect();
+      await disconnectStarted.promise;
+      const initPromise = controller.init();
+      const secondDisconnect = controller.disconnect();
+      pendingDisconnect.resolve();
+      await Promise.all([firstDisconnect, initPromise, secondDisconnect]);
+
+      expect(replacementProvider.disconnect).toHaveBeenCalledTimes(1);
+      expect(controller.testGetInitialized()).toBe(false);
+      expect(controller.getActiveProviderOrNull()).toBeNull();
+    });
+
+    it.each([
+      {
+        label: 'network toggle',
+        start: (current: TestablePerpsController) => current.toggleTestnet(),
+        expected: { success: true, isTestnet: true },
+      },
+      {
+        label: 'provider switch',
+        start: (current: TestablePerpsController) =>
+          current.switchProvider('aggregated'),
+        expected: { success: true, providerId: 'aggregated' },
+      },
+    ])(
+      'keeps a $label queued behind a second disconnect',
+      async ({ start, expected }) => {
+        await controller.init();
+        const firstDisconnectStarted = createDeferred<void>();
+        const releaseFirstDisconnect = createDeferred<void>();
+        mockProvider.disconnect.mockImplementationOnce(async () => {
+          firstDisconnectStarted.resolve();
+          await releaseFirstDisconnect.promise;
+          return { success: true };
+        });
+
+        const initializedProvider = createMockHyperLiquidProvider();
+        const initializedProviderCreated = createDeferred<void>();
+        const releaseInitialization = createDeferred<void>();
+        const secondDisconnectStarted = createDeferred<void>();
+        const releaseSecondDisconnect = createDeferred<void>();
+        initializedProvider.disconnect.mockImplementationOnce(async () => {
+          secondDisconnectStarted.resolve();
+          await releaseSecondDisconnect.promise;
+          return { success: true };
+        });
+        vi.mocked(mockWait).mockImplementationOnce(
+          () => releaseInitialization.promise,
+        );
+        vi.mocked(HyperLiquidProvider)
+          .mockImplementationOnce(function () {
+            initializedProviderCreated.resolve();
+            return initializedProvider;
+          })
+          .mockImplementation(function () {
+            return createMockHyperLiquidProvider();
+          });
+
+        const firstDisconnect = controller.disconnect();
+        await firstDisconnectStarted.promise;
+        const queuedInitialization = controller.init();
+        const secondDisconnect = controller.disconnect();
+        let operationSettled = false;
+        const operation = start(controller).then((result) => {
+          operationSettled = true;
+          return result;
+        });
+
+        releaseFirstDisconnect.resolve();
+        await initializedProviderCreated.promise;
+        releaseInitialization.resolve();
+        await secondDisconnectStarted.promise;
+
+        expect(controller.isCurrentlyReinitializing()).toBe(false);
+        expect(operationSettled).toBe(false);
+
+        releaseSecondDisconnect.resolve();
+        await Promise.all([
+          firstDisconnect,
+          queuedInitialization,
+          secondDisconnect,
+        ]);
+        await expect(operation).resolves.toStrictEqual(expected);
+        expect(controller.testGetInitialized()).toBe(true);
+        expect(controller.getActiveProviderOrNull()).not.toBeNull();
+      },
+    );
+
+    it('does not route an action through a provider being disconnected', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      mockProvider.disconnect.mockImplementationOnce(async () => {
+        disconnectStarted.resolve();
+        await pendingDisconnect.promise;
+        return { success: true };
+      });
+
+      vi.useFakeTimers();
+      try {
+        const disconnectPromise = controller.disconnect();
+        await disconnectStarted.promise;
+        const orderPromise = controller.placeOrder({
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.1',
+          orderType: 'market',
+        });
+        const orderRejection = expect(orderPromise).rejects.toThrow(
+          PERPS_ERROR_CODES.CLIENT_NOT_INITIALIZED,
+        );
+        await Promise.resolve();
+
+        expect(mockTradingServiceInstance.placeOrder).not.toHaveBeenCalled();
+        pendingDisconnect.resolve();
+        await disconnectPromise;
+        // No init follows this disconnect: the order fails once the bounded
+        // wait for a reconnect runs out.
+        await vi.advanceTimersByTimeAsync(PERPS_CONSTANTS.ConnectionTimeoutMs);
+        await orderRejection;
+        expect(mockTradingServiceInstance.placeOrder).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    describe('TAT-4041: order submitted during a client reconnect', () => {
+      it('places an order submitted while a disconnect is followed by init', async () => {
+        await controller.init();
+        const disconnectStarted = createDeferred<void>();
+        const pendingDisconnect = createDeferred<void>();
+        mockProvider.disconnect.mockImplementationOnce(async () => {
+          disconnectStarted.resolve();
+          await pendingDisconnect.promise;
+          return { success: true };
+        });
+        vi.spyOn(mockTradingServiceInstance, 'placeOrder').mockResolvedValue({
+          success: true,
+          orderId: '123',
+        });
+
+        // Clients reconnect with disconnect() then init(), with async work
+        // (for example a cleanup delay) between the two calls.
+        const reconnect = (async (): Promise<void> => {
+          await controller.disconnect();
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          await controller.init();
+        })();
+        await disconnectStarted.promise;
+        const orderPromise = controller.placeOrder({
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.1',
+          orderType: 'market',
+        });
+        pendingDisconnect.resolve();
+        await reconnect;
+
+        await expect(orderPromise).resolves.toStrictEqual(
+          expect.objectContaining({ success: true, orderId: '123' }),
+        );
+        expect(mockTradingServiceInstance.placeOrder).toHaveBeenCalledTimes(1);
+      });
+
+      it('bounds the wait for init after a disconnect', async () => {
+        await controller.init();
+        vi.useFakeTimers();
+        try {
+          const disconnectPromise = controller.disconnect();
+          const orderPromise = controller.placeOrder({
+            symbol: 'BTC',
+            isBuy: true,
+            size: '0.1',
+            orderType: 'market',
+          });
+          let settled = false;
+          orderPromise
+            .catch(() => undefined)
+            .finally(() => {
+              settled = true;
+            });
+          await disconnectPromise;
+
+          await vi.advanceTimersByTimeAsync(
+            PERPS_CONSTANTS.ConnectionTimeoutMs - 1,
+          );
+          expect(settled).toBe(false);
+
+          await vi.advanceTimersByTimeAsync(1);
+          await expect(orderPromise).rejects.toThrow(
+            PERPS_ERROR_CODES.CLIENT_NOT_INITIALIZED,
+          );
+          expect(mockTradingServiceInstance.placeOrder).not.toHaveBeenCalled();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it.each([
+        [
+          'account',
+          (): void => {
+            const call = mockMessenger.call as unknown as Mock;
+            const baseCall = call.getMockImplementation();
+            call.mockImplementation((action: string, ...args: unknown[]) =>
+              action ===
+              'AccountTreeController:getAccountsFromSelectedAccountGroup'
+                ? [
+                    {
+                      address: '0x9999999999999999999999999999999999999999',
+                      type: 'eip155:eoa',
+                      id: 'account-2',
+                      options: {},
+                      scopes: ['eip155:1'],
+                      methods: [],
+                      metadata: {
+                        name: 'Other',
+                        importTime: 0,
+                        keyring: { type: 'HD Key Tree' },
+                      },
+                    },
+                  ]
+                : baseCall?.(action, ...args),
+            );
+          },
+        ],
+        [
+          'network',
+          (): void => {
+            controller.testUpdate((state) => {
+              state.isTestnet = !state.isTestnet;
+            });
+          },
+        ],
+      ])(
+        'refuses an order parked across a reconnect that switched the %s',
+        async (_context, switchContext) => {
+          await controller.init();
+          const disconnectStarted = createDeferred<void>();
+          const pendingDisconnect = createDeferred<void>();
+          mockProvider.disconnect.mockImplementationOnce(async () => {
+            disconnectStarted.resolve();
+            await pendingDisconnect.promise;
+            return { success: true };
+          });
+          vi.spyOn(mockTradingServiceInstance, 'placeOrder').mockResolvedValue({
+            success: true,
+            orderId: '123',
+          });
+
+          const reconnect = (async (): Promise<void> => {
+            await controller.disconnect();
+            switchContext();
+            await controller.init();
+          })();
+          await disconnectStarted.promise;
+          const orderPromise = controller.placeOrder({
+            symbol: 'BTC',
+            isBuy: true,
+            size: '0.1',
+            orderType: 'market',
+          });
+          pendingDisconnect.resolve();
+          await reconnect;
+
+          await expect(orderPromise).rejects.toThrow(
+            PERPS_ERROR_CODES.PROVIDER_LIFECYCLE_STALE,
+          );
+          expect(mockTradingServiceInstance.placeOrder).not.toHaveBeenCalled();
+        },
+      );
+    });
+
+    it('keeps init queued when disconnect starts during reinitialization', async () => {
+      await controller.init();
+      const replacementProvider = createMockHyperLiquidProvider();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      replacementProvider.disconnect.mockImplementationOnce(async () => {
+        disconnectStarted.resolve();
+        await pendingDisconnect.promise;
+        return { success: true };
+      });
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        return replacementProvider;
+      });
+      const pendingReinitialization = createDeferred<void>();
+      vi.mocked(mockWait).mockImplementationOnce(
+        () => pendingReinitialization.promise,
+      );
+
+      const togglePromise = controller.toggleTestnet();
+      await Promise.resolve();
+      await Promise.resolve();
+      let initSettled = false;
+      const initPromise = controller.init().then(() => {
+        initSettled = true;
+      });
+      const disconnectPromise = controller.disconnect();
+
+      pendingReinitialization.resolve();
+      await disconnectStarted.promise;
+
+      expect(initSettled).toBe(false);
+      pendingDisconnect.resolve();
+      await disconnectPromise;
+      await togglePromise;
+      await initPromise;
+
+      expect(controller.testGetInitialized()).toBe(true);
+    });
+
+    it('keeps init queued behind a network toggle released by disconnect', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      mockProvider.disconnect.mockImplementationOnce(() => {
+        disconnectStarted.resolve();
+        return pendingDisconnect.promise;
+      });
+      const disconnectPromise = controller.disconnect();
+      await disconnectStarted.promise;
+
+      const replacementProvider = createMockHyperLiquidProvider();
+      const reinitializationStarted = createDeferred<void>();
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        reinitializationStarted.resolve();
+        return replacementProvider;
+      });
+      const pendingReinitialization = createDeferred<void>();
+      vi.mocked(mockWait).mockImplementationOnce(
+        () => pendingReinitialization.promise,
+      );
+      const togglePromise = controller.toggleTestnet();
+      let initSettled = false;
+      const initPromise = controller.init().then(() => {
+        initSettled = true;
+      });
+
+      pendingDisconnect.resolve();
+      await disconnectPromise;
+      await reinitializationStarted.promise;
+
+      expect(initSettled).toBe(false);
+      expect(HyperLiquidProvider).toHaveBeenCalledTimes(2);
+      pendingReinitialization.resolve();
+      await expect(togglePromise).resolves.toStrictEqual({
+        success: true,
+        isTestnet: true,
+      });
+      await initPromise;
+
+      expect(HyperLiquidProvider).toHaveBeenCalledTimes(2);
+      expect(controller.testGetInitialized()).toBe(true);
+    });
+
+    it('keeps a provider switch queued behind init released by disconnect', async () => {
+      await controller.init();
+      const disconnectStarted = createDeferred<void>();
+      const pendingDisconnect = createDeferred<void>();
+      mockProvider.disconnect.mockImplementationOnce(() => {
+        disconnectStarted.resolve();
+        return pendingDisconnect.promise;
+      });
+      const disconnectPromise = controller.disconnect();
+      await disconnectStarted.promise;
+
+      const initializedProvider = createMockHyperLiquidProvider();
+      const switchedProvider = createMockHyperLiquidProvider();
+      const initializationStarted = createDeferred<void>();
+      vi.mocked(HyperLiquidProvider)
+        .mockImplementationOnce(function () {
+          initializationStarted.resolve();
+          return initializedProvider;
+        })
+        .mockImplementationOnce(function () {
+          return switchedProvider;
+        });
+      const pendingInitialization = createDeferred<void>();
+      vi.mocked(mockWait).mockImplementationOnce(
+        () => pendingInitialization.promise,
+      );
+      const initPromise = controller.init();
+      let switchSettled = false;
+      const switchPromise = controller
+        .switchProvider('aggregated')
+        .then((result) => {
+          switchSettled = true;
+          return result;
+        });
+
+      pendingDisconnect.resolve();
+      await disconnectPromise;
+      await initializationStarted.promise;
+
+      expect(switchSettled).toBe(false);
+      expect(HyperLiquidProvider).toHaveBeenCalledTimes(2);
+      pendingInitialization.resolve();
+      await initPromise;
+      await expect(switchPromise).resolves.toStrictEqual({
+        success: true,
+        providerId: 'aggregated',
+      });
+
+      expect(initializedProvider.disconnect).toHaveBeenCalledTimes(1);
+      expect(HyperLiquidProvider).toHaveBeenCalledTimes(3);
+      expect(controller.testGetInitialized()).toBe(true);
+    });
+
+    it('waits for pending initialization before resolving a same-provider switch', async () => {
+      const pendingInitialization = createDeferred<void>();
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        throw new Error('Transient initialization failure');
+      });
+      vi.mocked(mockWait).mockImplementationOnce(
+        () => pendingInitialization.promise,
+      );
+
+      const initPromise = controller.init();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(controller.state.initializationState).toBe(
+        InitializationState.Initializing,
+      );
+
+      let switchSettled = false;
+      const switchPromise = controller
+        .switchProvider('hyperliquid')
+        .then((result) => {
+          switchSettled = true;
+          return result;
+        });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(switchSettled).toBe(false);
+      pendingInitialization.resolve();
+      await initPromise;
+      await expect(switchPromise).resolves.toStrictEqual({
+        success: true,
+        providerId: 'hyperliquid',
+      });
+    });
+
+    it('reinitializes before resolving a same-provider switch after disconnect', async () => {
+      await controller.init();
+      await controller.disconnect();
+      const replacementProvider = createMockHyperLiquidProvider();
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        return replacementProvider;
+      });
+
+      await expect(
+        controller.switchProvider('hyperliquid'),
+      ).resolves.toStrictEqual({
+        success: true,
+        providerId: 'hyperliquid',
+      });
+
+      expect(controller.testGetInitialized()).toBe(true);
+      expect(controller.getActiveProviderOrNull()).toBe(replacementProvider);
+    });
+
+    it('rejects a same-provider switch when reinitialization fails after disconnect', async () => {
+      await controller.init();
+      await controller.disconnect();
+      vi.mocked(HyperLiquidProvider).mockImplementation(function () {
+        throw new Error('Provider reinitialization failed');
+      });
+
+      await expect(
+        controller.switchProvider('hyperliquid'),
+      ).resolves.toStrictEqual({
+        success: false,
+        providerId: 'hyperliquid',
+        error: 'Provider reinitialization failed',
+      });
+
+      expect(controller.testGetInitialized()).toBe(false);
+      expect(controller.getActiveProviderOrNull()).toBeNull();
+    });
+
+    it.each([
+      {
+        label: 'network toggle',
+        start: (current: TestablePerpsController) => current.toggleTestnet(),
+      },
+      {
+        label: 'provider switch',
+        start: (current: TestablePerpsController) =>
+          current.switchProvider('aggregated'),
+      },
+    ])(
+      'serializes disconnect behind a $label started during initialization',
+      async ({ start }) => {
+        const pendingInitialization = createDeferred<void>();
+        vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+          throw new Error('Transient initialization failure');
+        });
+        vi.mocked(mockWait).mockImplementationOnce(
+          () => pendingInitialization.promise,
+        );
+
+        const initPromise = controller.init();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(controller.state.initializationState).toBe(
+          InitializationState.Initializing,
+        );
+
+        const reinitialization = start(controller);
+        expect(controller.isCurrentlyReinitializing()).toBe(true);
+        let disconnectSettled = false;
+        const disconnectPromise = controller.disconnect().then(() => {
+          disconnectSettled = true;
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(disconnectSettled).toBe(false);
+        pendingInitialization.resolve();
+        await initPromise;
+        await reinitialization;
+        await disconnectPromise;
+
+        expect(mockProvider.disconnect).toHaveBeenCalled();
+        expect(controller.testGetInitialized()).toBe(false);
+        expect(controller.getActiveProviderOrNull()).toBeNull();
+      },
+    );
+
+    it('disconnects the provider created by an in-flight network toggle', async () => {
+      await controller.init();
+      const replacementProvider = createMockHyperLiquidProvider();
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        return replacementProvider;
+      });
+      const pendingReinitialization = createDeferred<void>();
+      vi.mocked(mockWait).mockImplementationOnce(
+        () => pendingReinitialization.promise,
+      );
+
+      const togglePromise = controller.toggleTestnet();
+      await Promise.resolve();
+      await Promise.resolve();
+      let disconnectSettled = false;
+      const disconnectPromise = controller.disconnect().then(() => {
+        disconnectSettled = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(disconnectSettled).toBe(false);
+      expect(replacementProvider.disconnect).not.toHaveBeenCalled();
+      pendingReinitialization.resolve();
+      await expect(togglePromise).resolves.toStrictEqual({
+        success: true,
+        isTestnet: true,
+      });
+      await disconnectPromise;
+
+      expect(replacementProvider.disconnect).toHaveBeenCalledTimes(1);
+      expect(controller.testGetInitialized()).toBe(false);
+    });
+
+    it('disconnects the provider created by an in-flight provider switch', async () => {
+      await controller.init();
+      const replacementProvider = createMockHyperLiquidProvider();
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        return replacementProvider;
+      });
+      const pendingReinitialization = createDeferred<void>();
+      vi.mocked(mockWait).mockImplementationOnce(
+        () => pendingReinitialization.promise,
+      );
+
+      const switchPromise = controller.switchProvider('aggregated');
+      await Promise.resolve();
+      await Promise.resolve();
+      let disconnectSettled = false;
+      const disconnectPromise = controller.disconnect().then(() => {
+        disconnectSettled = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(disconnectSettled).toBe(false);
+      expect(replacementProvider.disconnect).not.toHaveBeenCalled();
+      pendingReinitialization.resolve();
+      await expect(switchPromise).resolves.toStrictEqual({
+        success: true,
+        providerId: 'aggregated',
+      });
+      await disconnectPromise;
+
+      expect(replacementProvider.disconnect).toHaveBeenCalledTimes(1);
+      expect(controller.testGetInitialized()).toBe(false);
+    });
+
+    it('waits for initialization before disconnecting the created provider', async () => {
+      let resolveBlock!: () => void;
+      const blockingPromise = new Promise<void>((resolve) => {
+        resolveBlock = resolve;
+      });
+      let attempt = 0;
+      (
+        HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+      ).mockImplementation(function () {
+        attempt++;
+        if (attempt === 1) {
+          throw new Error('Transient failure');
+        }
+        return mockProvider;
+      });
+      (mockWait as Mock).mockImplementationOnce(() => blockingPromise);
+
+      const initPromise = controller.init();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(controller.state.initializationState).toBe(
+        InitializationState.Initializing,
+      );
+
+      let disconnectSettled = false;
+      const disconnectPromise = controller.disconnect().then(() => {
+        disconnectSettled = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(disconnectSettled).toBe(false);
+      resolveBlock();
+      await initPromise;
+      await disconnectPromise;
+
+      expect(mockProvider.disconnect).toHaveBeenCalledTimes(1);
+      expect(controller.testGetInitialized()).toBe(false);
+      expect(controller.getActiveProviderOrNull()).toBeNull();
+    });
+
+    it('tears down an active provider when initialization rejects', async () => {
+      controller.testSetProviders(new Map([['hyperliquid', mockProvider]]));
+      mockInfrastructure.debugLogger.log.mockImplementationOnce(() => {
+        throw new Error('Initialization logging failed');
+      });
+
+      await expect(controller.init()).rejects.toThrow(
+        'Initialization logging failed',
+      );
+      await expect(controller.disconnect()).resolves.toBeUndefined();
+
+      expect(mockProvider.disconnect).toHaveBeenCalledTimes(1);
+      expect(controller.testGetInitialized()).toBe(false);
+      expect(controller.getActiveProviderOrNull()).toBeNull();
+    });
+
+    it('waits for init to complete before resolving when state is Initializing', async () => {
+      let resolveBlock!: () => void;
+      const blockingPromise = new Promise<void>((resolve) => {
+        resolveBlock = resolve;
+      });
+
+      let attempt = 0;
+      (
+        HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+      ).mockImplementation(function () {
+        attempt++;
+        if (attempt === 1) {
+          throw new Error('Transient failure');
+        }
+        return mockProvider;
+      });
+
+      // Block the first retry delay so init stays in Initializing
+      (mockWait as Mock).mockImplementationOnce(() => blockingPromise);
+
+      const mockOrderResult = {
+        success: true,
+        orderId: '123',
+        status: 'filled',
+      };
+      vi.spyOn(mockTradingServiceInstance, 'placeOrder').mockResolvedValue(
+        mockOrderResult,
+      );
+
+      // Start init (will fail first attempt → block on retry wait)
+      const initPromise = controller.init();
+
+      // Yield so init reaches the blocking wait
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(controller.state.initializationState).toBe(
+        InitializationState.Initializing,
+      );
+
+      // Call placeOrder while init is still in-flight — should not throw
+      const orderPromise = controller.placeOrder({
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+      } as any);
+
+      // Unblock init retry so initialization completes
+      resolveBlock();
+
+      await initPromise;
+      const result = await orderPromise;
+
+      expect(result).toEqual(expect.objectContaining({ orderId: '123' }));
+    });
+
+    it('waits for init before validating an order', async () => {
+      const pendingRetry = createDeferred<void>();
+      let attempt = 0;
+      vi.mocked(HyperLiquidProvider).mockImplementation(function () {
+        attempt += 1;
+        if (attempt === 1) {
+          throw new Error('Transient failure');
+        }
+        return mockProvider;
+      });
+      vi.mocked(mockWait).mockImplementationOnce(() => pendingRetry.promise);
+      mockMarketDataServiceInstance.validateOrder.mockResolvedValue({
+        isValid: true,
+      });
+
+      const initPromise = controller.init();
+      await Promise.resolve();
+      await Promise.resolve();
+      const validationPromise = controller.validateOrder({
+        symbol: 'BTC',
+        isBuy: true,
+        size: '0.1',
+        orderType: 'market',
+      });
+
+      expect(
+        mockMarketDataServiceInstance.validateOrder,
+      ).not.toHaveBeenCalled();
+      pendingRetry.resolve();
+      await initPromise;
+      await expect(validationPromise).resolves.toStrictEqual({ isValid: true });
+      expect(mockMarketDataServiceInstance.validateOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: mockProvider }),
+      );
+    });
+
+    it('waits for network reinitialization before selecting the capability provider', async () => {
+      await controller.init();
+      const replacementProvider = createMockHyperLiquidProvider();
+      replacementProvider.getOrderCapabilities = vi.fn().mockResolvedValue({
+        status: 'ready',
+        providerId: 'hyperliquid',
+        supportedStrategies: ['twap', 'scale', 'chase'],
+      });
+      vi.mocked(HyperLiquidProvider).mockImplementationOnce(function () {
+        return replacementProvider;
+      });
+
+      const togglePromise = controller.toggleTestnet();
+      const capabilitiesPromise = controller.getOrderCapabilities({
+        symbol: 'BTC',
+      });
+      expect(replacementProvider.getOrderCapabilities).not.toHaveBeenCalled();
+
+      await expect(togglePromise).resolves.toStrictEqual({
+        success: true,
+        isTestnet: true,
+      });
+      await expect(capabilitiesPromise).resolves.toStrictEqual({
+        status: 'ready',
+        providerId: 'hyperliquid',
+        supportedStrategies: ['twap', 'scale', 'chase'],
+      });
+      expect(replacementProvider.getOrderCapabilities).toHaveBeenCalledWith({
+        symbol: 'BTC',
+      });
+    });
+
+    it('waits for init before selecting the capability provider', async () => {
+      let resolveBlock!: () => void;
+      const blockingPromise = new Promise<void>((resolve) => {
+        resolveBlock = resolve;
+      });
+      let attempt = 0;
+      (
+        HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+      ).mockImplementation(function () {
+        attempt++;
+        if (attempt === 1) {
+          throw new Error('Transient failure');
+        }
+        return mockProvider;
+      });
+      (mockWait as Mock).mockImplementationOnce(() => blockingPromise);
+      mockProvider.getOrderCapabilities = vi.fn().mockResolvedValue({
+        status: 'ready',
+        providerId: 'hyperliquid',
+        supportedStrategies: ['twap', 'scale', 'chase'],
+      });
+
+      const initPromise = controller.init();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(controller.state.initializationState).toBe(
+        InitializationState.Initializing,
+      );
+
+      const capabilities = controller.getOrderCapabilities({ symbol: 'BTC' });
+      expect(mockProvider.getOrderCapabilities).not.toHaveBeenCalled();
+      resolveBlock();
+
+      await initPromise;
+      await expect(capabilities).resolves.toStrictEqual({
+        status: 'ready',
+        providerId: 'hyperliquid',
+        supportedStrategies: ['twap', 'scale', 'chase'],
+      });
+      expect(mockProvider.getOrderCapabilities).toHaveBeenCalledWith({
+        symbol: 'BTC',
+      });
+    });
+
+    it('waits for init before calculating a strategy fee quote', async () => {
+      let resolveBlock!: () => void;
+      const blockingPromise = new Promise<void>((resolve) => {
+        resolveBlock = resolve;
+      });
+
+      let attempt = 0;
+      (
+        HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+      ).mockImplementation(function () {
+        attempt++;
+        if (attempt === 1) {
+          throw new Error('Transient failure');
+        }
+        return mockProvider;
+      });
+      (mockWait as Mock).mockImplementationOnce(() => blockingPromise);
+
+      const initPromise = controller.init();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(controller.state.initializationState).toBe(
+        InitializationState.Initializing,
+      );
+
+      const feePromise = controller.calculateFees({
+        orderType: 'twap',
+        symbol: 'BTC',
+        providerId: 'hyperliquid',
+      });
+      expect(
+        mockMarketDataServiceInstance.calculateFees,
+      ).not.toHaveBeenCalled();
+
+      resolveBlock();
+
+      await initPromise;
+      await expect(feePromise).resolves.toEqual({ totalFee: 0 });
+      expect(mockMarketDataServiceInstance.calculateFees).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: mockProvider,
+          params: {
+            orderType: 'twap',
+            symbol: 'BTC',
+            providerId: 'hyperliquid',
+          },
+        }),
+      );
+    });
+
+    it('waits for init before calculating an ordinary fee quote', async () => {
+      let resolveBlock!: () => void;
+      const blockingPromise = new Promise<void>((resolve) => {
+        resolveBlock = resolve;
+      });
+
+      let attempt = 0;
+      (
+        HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+      ).mockImplementation(function () {
+        attempt++;
+        if (attempt === 1) {
+          throw new Error('Transient failure');
+        }
+        return mockProvider;
+      });
+      (mockWait as Mock).mockImplementationOnce(() => blockingPromise);
+
+      const initPromise = controller.init();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(controller.state.initializationState).toBe(
+        InitializationState.Initializing,
+      );
+
+      const feePromise = controller.calculateFees({
+        orderType: 'market',
+        symbol: 'BTC',
+      });
+      expect(
+        mockMarketDataServiceInstance.calculateFees,
+      ).not.toHaveBeenCalled();
+
+      resolveBlock();
+
+      await initPromise;
+      await expect(feePromise).resolves.toEqual({ totalFee: 0 });
+      expect(mockMarketDataServiceInstance.calculateFees).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: mockProvider,
+          params: {
+            orderType: 'market',
+            symbol: 'BTC',
+          },
+        }),
+      );
+    });
+
+    it('throws CLIENT_NOT_INITIALIZED immediately when state is Failed', async () => {
+      controller.testSetInitialized(false);
+      controller.testUpdate((state) => {
+        state.initializationState = InitializationState.Failed;
+        state.initializationError = 'Network error';
+      });
+
+      await expect(
+        controller.placeOrder({
+          symbol: 'BTC',
+          isBuy: true,
+          size: '0.1',
+          orderType: 'market',
+        } as any),
+      ).rejects.toThrow(PERPS_ERROR_CODES.CLIENT_NOT_INITIALIZED);
+    });
+  });
+
   describe('init', () => {
     it('initializes providers successfully', async () => {
       await controller.init();
 
       expect(controller.testGetInitialized()).toBe(true);
       expect(controller.testGetProviders().has('hyperliquid')).toBe(true);
+      expect(mockMessenger.registerMethodActionHandlers).toHaveBeenCalledWith(
+        controller,
+        expect.arrayContaining(['getOrderCapabilities', 'getMarginModeLock']),
+      );
     });
 
     it('handles initialization when already initialized', async () => {
@@ -1002,12 +2211,12 @@ describe('PerpsController', () => {
       // Set up mock to throw errors BEFORE creating controller
       const networkError = new Error('Network error');
       (
-        HyperLiquidProvider as jest.MockedClass<typeof HyperLiquidProvider>
-      ).mockImplementation(() => {
+        HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+      ).mockImplementation(function () {
         throw networkError;
       });
 
-      const mockCall = jest.fn().mockImplementation((action: string) => {
+      const mockCall = vi.fn().mockImplementation((action: string) => {
         if (action === 'RemoteFeatureFlagController:getState') {
           return {
             remoteFeatureFlags: {
@@ -1042,8 +2251,10 @@ describe('PerpsController', () => {
 
       // Network recovers - provider succeeds on next attempt
       (
-        HyperLiquidProvider as jest.MockedClass<typeof HyperLiquidProvider>
-      ).mockImplementation(() => mockProvider);
+        HyperLiquidProvider as MockedClass<typeof HyperLiquidProvider>
+      ).mockImplementation(function () {
+        return mockProvider;
+      });
 
       // User retries initialization (e.g., via network switch)
       await testController.init();

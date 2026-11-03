@@ -1,9 +1,5 @@
 {
   "extends": "../../tsconfig.packages.json",
-  "compilerOptions": {
-    "baseUrl": "./",
-    "target": "ES2022"
-  },
   "references": [
     {
       "path": "../accounts-controller"
@@ -40,6 +36,9 @@
     },
     {
       "path": "../eth-json-rpc-provider"
+    },
+    {
+      "path": "../utils"
     }
   ],
   "include": ["../../types", "./src", "./tests"]

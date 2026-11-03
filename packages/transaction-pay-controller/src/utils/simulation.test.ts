@@ -1,8 +1,9 @@
 import { SentinelChainNotSupportedError } from '@metamask/sentinel-api-service';
 import type { SentinelSimulationResponse } from '@metamask/sentinel-api-service';
 import type { Hex } from '@metamask/utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getMessengerMock } from '../tests/messenger-mock.js';
+import { getMessengerMock } from '../../tests/messenger-mock.js';
 import { simulateQuoteTransactions } from './simulation.js';
 import type { SimulationRequest } from './simulation.js';
 
@@ -29,11 +30,11 @@ describe('simulateQuoteTransactions', () => {
   }
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     messengerMock = getMessengerMock();
     messengerMock.simulateTransactionsMock.mockResolvedValue({
       transactions: [{}],
-    } as unknown as SentinelSimulationResponse);
+    });
   });
 
   describe('Sentinel throws', () => {
@@ -90,7 +91,7 @@ describe('simulateQuoteTransactions', () => {
     it('throws when Sentinel returns a direct error on a response transaction', async () => {
       messengerMock.simulateTransactionsMock.mockResolvedValue({
         transactions: [{ error: 'tx route error' }],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),
@@ -103,7 +104,7 @@ describe('simulateQuoteTransactions', () => {
     it('throws when Sentinel returns an error on the second response transaction', async () => {
       messengerMock.simulateTransactionsMock.mockResolvedValue({
         transactions: [{}, { error: 'tx2 route error' }],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),
@@ -115,7 +116,7 @@ describe('simulateQuoteTransactions', () => {
     it('throws a custom error with the return data when execution reverted with return data', async () => {
       messengerMock.simulateTransactionsMock.mockResolvedValue({
         transactions: [{ error: 'execution reverted', return: '0xdeadbeef' }],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),
@@ -128,7 +129,7 @@ describe('simulateQuoteTransactions', () => {
     it('throws an unknown reverted error when execution reverted with empty return data', async () => {
       messengerMock.simulateTransactionsMock.mockResolvedValue({
         transactions: [{ error: 'execution reverted', return: '0x' }],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),
@@ -141,7 +142,7 @@ describe('simulateQuoteTransactions', () => {
     it('throws an unknown reverted error when execution reverted with no return data', async () => {
       messengerMock.simulateTransactionsMock.mockResolvedValue({
         transactions: [{ error: 'execution reverted' }],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),
@@ -154,7 +155,7 @@ describe('simulateQuoteTransactions', () => {
     it('throws the original error unchanged for non-reverted errors even with return data', async () => {
       messengerMock.simulateTransactionsMock.mockResolvedValue({
         transactions: [{ error: 'tx route error', return: '0xdeadbeef' }],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),
@@ -167,7 +168,7 @@ describe('simulateQuoteTransactions', () => {
     it('strips the execution reverted prefix and surfaces the reason when a message follows', async () => {
       messengerMock.simulateTransactionsMock.mockResolvedValue({
         transactions: [{ error: 'execution reverted: insufficient allowance' }],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),
@@ -185,7 +186,7 @@ describe('simulateQuoteTransactions', () => {
             return: '0xdeadbeef',
           },
         ],
-      } as unknown as SentinelSimulationResponse);
+      });
 
       await expect(
         simulateQuoteTransactions(buildRequest()),

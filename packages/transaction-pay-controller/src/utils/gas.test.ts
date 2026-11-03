@@ -1,13 +1,14 @@
 import { toHex } from '@metamask/controller-utils';
 import type { Hex } from '@metamask/utils';
-import { clone, cloneDeep } from 'lodash';
+import { clone, cloneDeep } from 'lodash-es';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GasFeeEstimates } from '../../../gas-fee-controller/src/index.js';
 import type {
   GasFeeToken,
   TransactionMeta,
 } from '../../../transaction-controller/src/index.js';
-import { getMessengerMock } from '../tests/messenger-mock.js';
+import { getMessengerMock } from '../../tests/messenger-mock.js';
 import { getFallbackGas, getGasBuffer } from './feature-flags.js';
 import {
   calculateGasCost,
@@ -18,11 +19,11 @@ import {
 } from './gas.js';
 import { getTokenBalance, getTokenFiatRate } from './token.js';
 
-jest.mock('./token');
-jest.mock('./feature-flags', () => ({
-  ...jest.requireActual('./feature-flags'),
-  getGasBuffer: jest.fn(),
-  getFallbackGas: jest.fn(),
+vi.mock(import('./token.js'));
+vi.mock(import('./feature-flags.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getGasBuffer: vi.fn(),
+  getFallbackGas: vi.fn(),
 }));
 
 const GAS_USED_MOCK = toHex(21000);
@@ -63,10 +64,10 @@ const GAS_FEE_CONTROLLER_STATE_MOCK = {
 };
 
 describe('Gas Utils', () => {
-  const getGasBufferMock = jest.mocked(getGasBuffer);
-  const getFallbackGasMock = jest.mocked(getFallbackGas);
-  const getTokenFiatRateMock = jest.mocked(getTokenFiatRate);
-  const getTokenBalanceMock = jest.mocked(getTokenBalance);
+  const getGasBufferMock = vi.mocked(getGasBuffer);
+  const getFallbackGasMock = vi.mocked(getFallbackGas);
+  const getTokenFiatRateMock = vi.mocked(getTokenFiatRate);
+  const getTokenBalanceMock = vi.mocked(getTokenBalance);
   const {
     estimateGasMock,
     findNetworkClientIdByChainIdMock,
@@ -75,7 +76,7 @@ describe('Gas Utils', () => {
   } = getMessengerMock();
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     getGasFeeControllerStateMock.mockReturnValue(GAS_FEE_CONTROLLER_STATE_MOCK);
     getTokenBalanceMock.mockReturnValue('147000000000000');
@@ -374,7 +375,7 @@ describe('Gas Utils', () => {
       const transactionMeta = clone(TRANSACTION_META_MOCK);
 
       transactionMeta.gasFeeTokens = [GAS_FEE_TOKEN_MOCK];
-      transactionMeta.selectedGasFeeToken = '0x0' as Hex;
+      transactionMeta.selectedGasFeeToken = '0x0';
 
       const result = calculateTransactionGasCost(transactionMeta, messenger);
 
@@ -427,11 +428,11 @@ describe('Gas Utils', () => {
       expect(
         await estimateGasLimit({
           chainId: CHAIN_ID_MOCK,
-          data: '0xdead' as Hex,
-          from: '0xabc' as Hex,
+          data: '0xdead',
+          from: '0xabc',
           messenger,
-          to: '0xdef' as Hex,
-          value: '0x1' as Hex,
+          to: '0xdef',
+          value: '0x1',
         }),
       ).toStrictEqual({
         estimate: Math.ceil(21000 * 1.5),
@@ -451,10 +452,10 @@ describe('Gas Utils', () => {
       await expect(
         estimateGasLimit({
           chainId: CHAIN_ID_MOCK,
-          data: '0xdead' as Hex,
-          from: '0xabc' as Hex,
+          data: '0xdead',
+          from: '0xabc',
           messenger,
-          to: '0xdef' as Hex,
+          to: '0xdef',
         }),
       ).rejects.toThrow('Gas simulation failed');
     });
@@ -469,11 +470,11 @@ describe('Gas Utils', () => {
 
       const result = await estimateGasLimit({
         chainId: CHAIN_ID_MOCK,
-        data: '0xdead' as Hex,
+        data: '0xdead',
         fallbackOnSimulationFailure: true,
-        from: '0xabc' as Hex,
+        from: '0xabc',
         messenger,
-        to: '0xdef' as Hex,
+        to: '0xdef',
       });
 
       expect(result).toMatchObject({
@@ -502,10 +503,10 @@ describe('Gas Utils', () => {
       expect(
         await estimateGasLimit({
           chainId: CHAIN_ID_MOCK,
-          data: '0xdead' as Hex,
-          from: '0xabc' as Hex,
+          data: '0xdead',
+          from: '0xabc',
           messenger,
-          to: '0xdef' as Hex,
+          to: '0xdef',
         }),
       ).toStrictEqual({
         estimate: 123,
@@ -522,14 +523,14 @@ describe('Gas Utils', () => {
       expect(
         await estimateGasLimit({
           chainId: CHAIN_ID_MOCK,
-          data: '0xdead' as Hex,
+          data: '0xdead',
           fallbackGas: {
             estimate: 987,
             max: 654,
           },
-          from: '0xabc' as Hex,
+          from: '0xabc',
           messenger,
-          to: '0xdef' as Hex,
+          to: '0xdef',
         }),
       ).toStrictEqual({
         estimate: 987,
@@ -547,10 +548,10 @@ describe('Gas Utils', () => {
 
       const result = await estimateGasLimit({
         chainId: CHAIN_ID_MOCK,
-        data: '0xdead' as Hex,
-        from: '0xabc' as Hex,
+        data: '0xdead',
+        from: '0xabc',
         messenger,
-        to: '0xdef' as Hex,
+        to: '0xdef',
       });
 
       expect(result).toMatchObject({

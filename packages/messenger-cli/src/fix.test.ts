@@ -1,6 +1,7 @@
-import { createSandbox } from '@metamask/utils/node';
+import { createSandbox } from '@metamask/node-utils';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 
 import { generateAllActionTypesFiles } from './fix.js';
 import { generateActionTypesContent } from './generate-content.js';
@@ -20,7 +21,9 @@ describe('generateAllActionTypesFiles', () => {
         methods: [{ name: 'doStuff', jsDoc: '' }],
       };
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const consoleSpy = vi
+        .spyOn(console, 'log')
+        .mockImplementation(() => undefined);
       await generateAllActionTypesFiles([controller], 'prettier');
       consoleSpy.mockRestore();
 
@@ -52,7 +55,9 @@ describe('generateAllActionTypesFiles', () => {
         },
       ];
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const consoleSpy = vi
+        .spyOn(console, 'log')
+        .mockImplementation(() => undefined);
       await generateAllActionTypesFiles(controllers, 'prettier');
       consoleSpy.mockRestore();
 

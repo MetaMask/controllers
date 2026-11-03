@@ -8,7 +8,8 @@ import type { AccountsControllerState } from '@metamask/accounts-controller';
 import { TrxScope } from '@metamask/keyring-api';
 import type { NetworkState } from '@metamask/network-controller';
 import type { Hex } from '@metamask/utils';
-import { cloneDeep } from 'lodash';
+import { cloneDeep } from 'lodash-es';
+import { describe, expect, it } from 'vitest';
 
 import type { AccountGroupMultichainAccountObject } from '../../../account-tree-controller/src/group.js';
 import type { CurrencyRateState } from '../CurrencyRateController.js';

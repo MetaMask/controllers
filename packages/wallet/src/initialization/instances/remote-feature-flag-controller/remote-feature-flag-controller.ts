@@ -11,16 +11,21 @@ export const remoteFeatureFlagController: InitializationConfiguration<
   RemoteFeatureFlagControllerMessenger
 > = {
   name: 'RemoteFeatureFlagController',
+  reference: RemoteFeatureFlagController,
   init: ({ state, messenger, options }) =>
     new RemoteFeatureFlagController({
       state,
       messenger,
       clientConfigApiService: options.clientConfigApiService,
       getMetaMetricsId: options.getMetaMetricsId ?? ((): string => ''),
+      getCanonicalProfileId:
+        options.getCanonicalProfileId ?? ((): string => ''),
+      metaMetricsFlags: options.metaMetricsFlags,
       clientVersion: options.clientVersion ?? '0.0.0',
       prevClientVersion: options.prevClientVersion,
       fetchInterval: options.fetchInterval,
       disabled: options.disabled,
+      defaultFeatureFlags: options.defaultFeatureFlags,
     }),
   getMessenger: (parent) =>
     new Messenger({

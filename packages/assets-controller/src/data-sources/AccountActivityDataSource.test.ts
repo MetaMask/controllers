@@ -1,6 +1,3 @@
-// `getActiveChainsSync` is part of the data source's public API; asserting on
-// it is intentional and not a filesystem-style sync call.
-/* eslint-disable n/no-sync */
 import type { BalanceUpdate } from '@metamask/core-backend';
 import type { InternalAccount } from '@metamask/keyring-internal-api';
 import type {
@@ -9,7 +6,10 @@ import type {
   MockAnyNamespace,
 } from '@metamask/messenger';
 import { Messenger, MOCK_ANY_NAMESPACE } from '@metamask/messenger';
+import { describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 
+import { waitFor } from '../__fixtures__/test-utils.js';
 import type { AssetsControllerMessenger } from '../AssetsController.js';
 import type { ChainId, Caip19AssetId } from '../types.js';
 import {
@@ -31,6 +31,11 @@ const EVM_ADDRESS = '0x1234567890123456789012345678901234567890';
 const SOLANA_ADDRESS = 'DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1';
 
 const ETH_ASSET = 'eip155:1/slip44:60' as Caip19AssetId;
+// The websocket delivers lower-case addresses; state keys them checksummed.
+const USDC_ASSET_LOWERCASE =
+  'eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' as Caip19AssetId;
+const USDC_ASSET_CHECKSUMMED =
+  'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as Caip19AssetId;
 
 /**
  * Build an InternalAccount for tests.
@@ -55,7 +60,7 @@ function createMockAccount(
       lastSelected: Date.now(),
     },
     ...overrides,
-  } as InternalAccount;
+  };
 }
 
 /**
@@ -85,24 +90,22 @@ function createBalanceUpdate(overrides?: {
       ...overrides?.postBalance,
     },
     transfers: overrides?.transfers ?? [],
-  } as BalanceUpdate;
+  };
 }
 
 type SetupOptions = {
   groupAccounts?: InternalAccount[];
   selectedAccount?: InternalAccount | null;
-  getAssetType?: (assetId: Caip19AssetId) => 'native' | 'erc20' | 'spl';
-  onAssetsUpdate?: jest.Mock;
-  onActiveChainsUpdated?: jest.Mock;
+  onAssetsUpdate?: Mock;
+  onActiveChainsUpdated?: Mock;
   state?: { activeChains?: ChainId[] };
 };
 
 type SetupResult = {
   dataSource: AccountActivityDataSource;
   rootMessenger: RootMessenger;
-  onAssetsUpdate: jest.Mock;
-  onActiveChainsUpdated: jest.Mock;
-  getAssetType: jest.Mock;
+  onAssetsUpdate: Mock;
+  onActiveChainsUpdated: Mock;
   triggerBalanceUpdated: (payload: {
     address: string;
     chain: string;
@@ -126,8 +129,8 @@ function setup(options: SetupOptions = {}): SetupResult {
   const {
     groupAccounts = [createMockAccount()],
     selectedAccount = null,
-    onAssetsUpdate = jest.fn().mockResolvedValue(undefined),
-    onActiveChainsUpdated = jest.fn(),
+    onAssetsUpdate = vi.fn().mockResolvedValue(undefined),
+    onActiveChainsUpdated = vi.fn(),
     state,
   } = options;
 
@@ -161,14 +164,9 @@ function setup(options: SetupOptions = {}): SetupResult {
     () => selectedAccount as InternalAccount,
   );
 
-  const getAssetType = jest
-    .fn()
-    .mockImplementation(options.getAssetType ?? ((): 'native' => 'native'));
-
   const dataSource = new AccountActivityDataSource({
     messenger: assetsControllerMessenger,
     onActiveChainsUpdated,
-    getAssetType,
     onAssetsUpdate,
     state,
   });
@@ -199,7 +197,6 @@ function setup(options: SetupOptions = {}): SetupResult {
     rootMessenger,
     onAssetsUpdate,
     onActiveChainsUpdated,
-    getAssetType,
     triggerBalanceUpdated,
     triggerStatusChanged,
     cleanup,
@@ -276,27 +273,19 @@ describe('AccountActivityDataSource', () => {
         updates: [createBalanceUpdate()],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
       const [response, request] = onAssetsUpdate.mock.calls[0];
       // `processAccountActivityBalanceUpdates` builds null-prototype objects
       // (`Object.create(null)`), so `toStrictEqual` (which checks prototypes)
       // does not match a plain object literal here.
-      // eslint-disable-next-line jest/prefer-strict-equal
+      // eslint-disable-next-line vitest/prefer-strict-equal
       expect(response).toEqual({
         updateMode: 'merge',
         assetsBalance: {
           [account.id]: {
             [ETH_ASSET]: { amount: '1' },
-          },
-        },
-        assetsInfo: {
-          [ETH_ASSET]: {
-            type: 'native',
-            symbol: 'ETH',
-            name: 'ETH',
-            decimals: 18,
           },
         },
       });
@@ -305,7 +294,7 @@ describe('AccountActivityDataSource', () => {
           { account, supportedChains: [CHAIN_MAINNET] },
         ],
         chainIds: [CHAIN_MAINNET],
-        dataTypes: ['balance', 'metadata'],
+        dataTypes: ['balance', 'metadata', 'price'],
       });
 
       cleanup();
@@ -325,9 +314,9 @@ describe('AccountActivityDataSource', () => {
         ],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
       const [response] = onAssetsUpdate.mock.calls[0];
       expect(response.assetsBalance[account.id][ETH_ASSET]).toStrictEqual({
         amount: '0.00000114526056',
@@ -336,20 +325,108 @@ describe('AccountActivityDataSource', () => {
       cleanup();
     });
 
-    it('resolves the asset type via the injected getAssetType', async () => {
-      const { getAssetType, triggerBalanceUpdated, cleanup } = setup({
-        getAssetType: () => 'erc20',
+    it('persists Stellar trustline metadata from postBalance', async () => {
+      const STELLAR_CHAIN = 'stellar:pubnet' as ChainId;
+      const STELLAR_ADDRESS =
+        'GCRTHNJHYCV4F4JOAIMUE2ALYPE3C7Q53XTSUVGYJ4UXYIKWZAK7FWPG';
+      const STELLAR_USDC =
+        'stellar:pubnet/asset:USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN' as Caip19AssetId;
+      const trustlineMetadata = {
+        authorized: true,
+        limit: '9223372036854775807',
+      };
+      const account = createMockAccount({
+        address: STELLAR_ADDRESS,
+        type: 'stellar:ss58',
+        scopes: [STELLAR_CHAIN],
+      });
+      const { onAssetsUpdate, triggerBalanceUpdated, cleanup } = setup({
+        groupAccounts: [account],
+      });
+
+      triggerBalanceUpdated({
+        address: STELLAR_ADDRESS,
+        chain: STELLAR_CHAIN,
+        updates: [
+          createBalanceUpdate({
+            asset: {
+              type: STELLAR_USDC,
+              unit: 'USDC',
+              decimals: 7,
+            },
+            postBalance: {
+              amount: '201421',
+              metadata: trustlineMetadata,
+            },
+          }),
+        ],
+      });
+
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
+      const [response] = onAssetsUpdate.mock.calls[0];
+      expect(response.assetsBalance[account.id][STELLAR_USDC]).toStrictEqual({
+        amount: '0.0201421',
+        metadata: trustlineMetadata,
+      });
+      expect(response.assetsInfo).toBeUndefined();
+
+      cleanup();
+    });
+
+    it('checksums the lower-case ERC-20 asset IDs the websocket delivers', async () => {
+      const account = createMockAccount();
+      const { onAssetsUpdate, triggerBalanceUpdated, cleanup } = setup({
+        groupAccounts: [account],
       });
 
       triggerBalanceUpdated({
         address: EVM_ADDRESS,
         chain: CHAIN_MAINNET,
-        updates: [createBalanceUpdate()],
+        updates: [
+          createBalanceUpdate({
+            asset: { type: USDC_ASSET_LOWERCASE, unit: 'USDC', decimals: 6 },
+            postBalance: { amount: '1000000' },
+          }),
+        ],
       });
 
-      await Promise.resolve();
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
+      const [response] = onAssetsUpdate.mock.calls[0];
+      expect(response.assetsBalance[account.id]).toHaveProperty(
+        USDC_ASSET_CHECKSUMMED,
+      );
+      expect(response.assetsBalance[account.id]).not.toHaveProperty(
+        USDC_ASSET_LOWERCASE,
+      );
+      expect(response.assetsInfo).toBeUndefined();
 
-      expect(getAssetType).toHaveBeenCalledWith(ETH_ASSET);
+      cleanup();
+    });
+
+    it('keeps an unparseable asset ID as-is', async () => {
+      const account = createMockAccount();
+      const { onAssetsUpdate, triggerBalanceUpdated, cleanup } = setup({
+        groupAccounts: [account],
+      });
+
+      const malformedAssetId = 'eip155:1/erc20:not-an-address' as Caip19AssetId;
+      triggerBalanceUpdated({
+        address: EVM_ADDRESS,
+        chain: CHAIN_MAINNET,
+        updates: [createBalanceUpdate({ asset: { type: malformedAssetId } })],
+      });
+
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
+      const [response] = onAssetsUpdate.mock.calls[0];
+      expect(response.assetsBalance[account.id]).toHaveProperty(
+        malformedAssetId,
+      );
 
       cleanup();
     });
@@ -368,9 +445,9 @@ describe('AccountActivityDataSource', () => {
         ...override,
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(onAssetsUpdate).not.toHaveBeenCalled();
+      });
 
       cleanup();
     });
@@ -390,9 +467,9 @@ describe('AccountActivityDataSource', () => {
         updates: [createBalanceUpdate()],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(onAssetsUpdate).not.toHaveBeenCalled();
+      });
 
       cleanup();
     });
@@ -409,9 +486,9 @@ describe('AccountActivityDataSource', () => {
         updates: [createBalanceUpdate()],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
 
       cleanup();
     });
@@ -431,9 +508,9 @@ describe('AccountActivityDataSource', () => {
         updates: [createBalanceUpdate()],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
 
       cleanup();
     });
@@ -453,9 +530,9 @@ describe('AccountActivityDataSource', () => {
         updates: [createBalanceUpdate()],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(onAssetsUpdate).not.toHaveBeenCalled();
+      });
 
       cleanup();
     });
@@ -473,9 +550,9 @@ describe('AccountActivityDataSource', () => {
         updates: [createBalanceUpdate()],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
+      });
       const [response] = onAssetsUpdate.mock.calls[0];
       expect(response.assetsBalance).toHaveProperty('selected-id');
 
@@ -494,9 +571,9 @@ describe('AccountActivityDataSource', () => {
         updates: [createBalanceUpdate()],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(onAssetsUpdate).not.toHaveBeenCalled();
+      });
 
       cleanup();
     });
@@ -515,15 +592,15 @@ describe('AccountActivityDataSource', () => {
         ],
       });
 
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(onAssetsUpdate).not.toHaveBeenCalled();
+      });
 
       cleanup();
     });
 
     it('swallows rejections from onAssetsUpdate', async () => {
-      const onAssetsUpdate = jest
+      const onAssetsUpdate = vi
         .fn()
         .mockRejectedValue(new Error('report failed'));
       const { triggerBalanceUpdated, cleanup } = setup({ onAssetsUpdate });
@@ -536,32 +613,9 @@ describe('AccountActivityDataSource', () => {
         }),
       ).not.toThrow();
 
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
-
-      cleanup();
-    });
-
-    it('swallows synchronous errors thrown while handling the event', async () => {
-      const { onAssetsUpdate, triggerBalanceUpdated, cleanup } = setup({
-        getAssetType: () => {
-          throw new Error('boom');
-        },
+      await waitFor(() => {
+        expect(onAssetsUpdate).toHaveBeenCalledTimes(1);
       });
-
-      expect(() =>
-        triggerBalanceUpdated({
-          address: EVM_ADDRESS,
-          chain: CHAIN_MAINNET,
-          updates: [createBalanceUpdate()],
-        }),
-      ).not.toThrow();
-
-      await Promise.resolve();
-
-      expect(onAssetsUpdate).not.toHaveBeenCalled();
 
       cleanup();
     });
@@ -676,7 +730,7 @@ describe('AccountActivityDataSource', () => {
     });
 
     it('swallows errors thrown while handling the event', () => {
-      const onActiveChainsUpdated = jest.fn().mockImplementation(() => {
+      const onActiveChainsUpdated = vi.fn().mockImplementation(() => {
         throw new Error('listener boom');
       });
       const { triggerStatusChanged, cleanup } = setup({
@@ -770,9 +824,8 @@ describe('AccountActivityDataSource', () => {
 
       const dataSource = createAccountActivityDataSource({
         messenger: assetsControllerMessenger,
-        onActiveChainsUpdated: jest.fn(),
-        getAssetType: () => 'native',
-        onAssetsUpdate: jest.fn(),
+        onActiveChainsUpdated: vi.fn(),
+        onAssetsUpdate: vi.fn(),
       });
 
       expect(dataSource).toBeInstanceOf(AccountActivityDataSource);

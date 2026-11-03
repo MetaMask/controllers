@@ -29,9 +29,13 @@ export type {
   PasskeyAuthenticationOptions,
   PasskeyAuthenticationResponse,
 } from './webauthn/types.js';
+export { getAAGUIDFromRegistrationResponse } from './webauthn/verify-registration-response.js';
 export type {
   PasskeyControllerIsPasskeyEnrolledAction,
   PasskeyControllerGenerateRegistrationOptionsAction,
+  PasskeyControllerGeneratePasskeyReplacementRegistrationOptionsAction,
+  PasskeyControllerCompletePasskeyReplacementAction,
+  PasskeyControllerCancelPasskeyReplacementAction,
   PasskeyControllerGeneratePostRegistrationAuthenticationOptionsAction,
   PasskeyControllerGenerateAuthenticationOptionsAction,
   PasskeyControllerProtectVaultKeyWithPasskeyAction,

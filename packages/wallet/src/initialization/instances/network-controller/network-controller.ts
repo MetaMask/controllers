@@ -11,6 +11,7 @@ export const networkController: InitializationConfiguration<
   NetworkControllerMessenger
 > = {
   name: 'NetworkController',
+  reference: NetworkController,
   init: ({ state, messenger, options }) =>
     new NetworkController({
       state,
@@ -31,12 +32,15 @@ export const networkController: InitializationConfiguration<
       actions: [
         'AnalyticsController:getState',
         'AnalyticsController:trackEvent',
+        'ConfigRegistryController:getState',
+        'ConfigRegistryController:getNetworkConfigByCaip2ChainId',
         'ConnectivityController:getState',
         'RemoteFeatureFlagController:getState',
       ],
 
       events: [
-        // eslint-disable-next-line no-restricted-syntax
+        'ConfigRegistryController:stateChanged',
+
         'RemoteFeatureFlagController:stateChange',
       ],
     });

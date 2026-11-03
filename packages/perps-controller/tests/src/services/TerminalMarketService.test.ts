@@ -1,10 +1,82 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mocked } from 'vitest';
+
 import { TERMINAL_API_CONFIG } from '../../../src/constants/perpsConfig.js';
+import { MarketDataService } from '../../../src/services/MarketDataService.js';
 import { TerminalMarketService } from '../../../src/services/TerminalMarketService.js';
 import type { PerpsPlatformDependencies } from '../../../src/types/index.js';
+import { createMockHyperLiquidProvider } from '../../helpers/providerMocks.js';
 import { createMockInfrastructure } from '../../helpers/serviceMocks.js';
 
+const SNAPSHOT_NOW = 1_700_000_030_000;
+const HUGE_FINITE_DECIMAL = `1${'0'.repeat(308)}`;
+
+const createSnapshotMarket = (
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  id: 'btc-hyperliquid-mainnet',
+  symbol: 'BTC',
+  network: 'mainnet',
+  provider: 'hyperliquid',
+  dex: 'main',
+  name: 'Bitcoin',
+  description: 'Original cryptocurrency',
+  iconUrl: 'https://example.com/btc.png',
+  szDecimals: 5,
+  maxLeverage: 50,
+  markPrice: '50000',
+  price: '50000',
+  midPrice: '50001',
+  oraclePrice: '49999',
+  change24h: '125',
+  changePercent24h: 0.25,
+  change5m: '10',
+  changePercent5m: 1.5,
+  change1h: '-4',
+  changePercent1h: -0.5,
+  funding: '0.0001',
+  volume24h: '1000000',
+  openInterest: '1000000',
+  category: 'crypto',
+  keywords: ['bitcoin'],
+  tags: ['top-10'],
+  listedAt: 1_600_000_000_000,
+  trend: [
+    [SNAPSHOT_NOW - 3_600_000, '49000'],
+    [SNAPSHOT_NOW - 1_000, '50000'],
+  ],
+  ...overrides,
+});
+
+const createGlobalSnapshot = (
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  schemaVersion: 4,
+  provider: 'hyperliquid',
+  network: 'mainnet',
+  enabledDexes: ['main'],
+  fingerprint:
+    'sha256:21c2aec213ce0cf6c0d8624570abfe1a07dd68f7ee2f4e07e9fe2785d3d0212c',
+  generatedAt: SNAPSHOT_NOW - 1_000,
+  receivedAt: SNAPSHOT_NOW - 2_000,
+  maxAgeMs: 60_000,
+  complete: true,
+  perDexErrors: [],
+  markets: [createSnapshotMarket()],
+  ...overrides,
+});
+
+const okJsonResponse = (body: unknown): Response =>
+  ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+  }) as Response;
+
 describe('TerminalMarketService', () => {
-  let mockDeps: jest.Mocked<PerpsPlatformDependencies>;
+  let mockDeps: Mocked<PerpsPlatformDependencies>;
   let service: TerminalMarketService;
 
   const mockApiResponse = [
@@ -44,16 +116,16 @@ describe('TerminalMarketService', () => {
   beforeEach(() => {
     mockDeps = createMockInfrastructure();
     service = new TerminalMarketService(mockDeps);
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('fetchMarkets', () => {
     it('fetches and maps markets successfully', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -106,11 +178,12 @@ describe('TerminalMarketService', () => {
       });
     });
 
-    it('uses the full terminalApiUrl without path concatenation', async () => {
-      (mockDeps as Record<string, unknown>).terminalApiUrl =
-        'https://terminal.api.cx.metamask.io/v1/perpetuals';
+    it('uses the full marketDataUrl without path concatenation', async () => {
+      mockDeps.terminalApi = {
+        marketDataUrl: 'https://terminal.api.cx.metamask.io/v1/perpetuals',
+      };
 
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -126,7 +199,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('throws on non-2xx response', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -139,7 +212,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('throws on non-array response body', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -152,9 +225,9 @@ describe('TerminalMarketService', () => {
     });
 
     it('throws on network error', async () => {
-      jest
-        .spyOn(globalThis, 'fetch')
-        .mockRejectedValue(new Error('Network request failed'));
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+        new Error('Network request failed'),
+      );
 
       await expect(service.fetchMarkets()).rejects.toThrow(
         'Network request failed',
@@ -162,9 +235,9 @@ describe('TerminalMarketService', () => {
     });
 
     it('aborts fetch when timeout elapses', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
-      jest.spyOn(globalThis, 'fetch').mockImplementation(
+      vi.spyOn(globalThis, 'fetch').mockImplementation(
         (_url, init) =>
           new Promise((_resolve, reject) => {
             (init?.signal as AbortSignal)?.addEventListener('abort', () => {
@@ -178,15 +251,15 @@ describe('TerminalMarketService', () => {
 
       const promise = service.fetchMarkets();
 
-      jest.advanceTimersByTime(TERMINAL_API_CONFIG.FetchTimeoutMs);
+      vi.advanceTimersByTime(TERMINAL_API_CONFIG.FetchTimeoutMs);
 
       await expect(promise).rejects.toThrow('Terminal API fetch timed out');
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('returns empty arrays for empty API response', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -200,7 +273,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('filters out items with missing or empty symbol', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -220,7 +293,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('filters out items that fail schema validation and logs errors', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -253,7 +326,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('accepts items with extra properties returned by the backend', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -289,7 +362,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('accepts only known MarketCategory values as marketType', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -311,7 +384,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('uses defaults for missing numeric fields', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -329,7 +402,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('omits name from metadata when Terminal does not supply one', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -342,7 +415,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('captures description when Terminal supplies one', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -364,7 +437,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('omits description when Terminal supplies null or empty', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -386,7 +459,7 @@ describe('TerminalMarketService', () => {
     describe('listedAt handling', () => {
       it('passes through a numeric listedAt as-is', async () => {
         const epochMs = 1_700_000_000_000;
-        jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
           ok: true,
           status: 200,
           statusText: 'OK',
@@ -404,7 +477,7 @@ describe('TerminalMarketService', () => {
       it('parses an ISO string listedAt to epoch ms', async () => {
         const isoString = '2023-11-14T22:13:20.000Z';
         const expectedMs = Date.parse(isoString);
-        jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
           ok: true,
           status: 200,
           statusText: 'OK',
@@ -420,7 +493,7 @@ describe('TerminalMarketService', () => {
       });
 
       it('omits listedAt when the string is not a valid date', async () => {
-        jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
           ok: true,
           status: 200,
           statusText: 'OK',
@@ -436,7 +509,7 @@ describe('TerminalMarketService', () => {
       });
 
       it('omits listedAt when the value is null', async () => {
-        jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
           ok: true,
           status: 200,
           statusText: 'OK',
@@ -449,7 +522,7 @@ describe('TerminalMarketService', () => {
       });
 
       it('omits listedAt when the field is absent', async () => {
-        jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
           ok: true,
           status: 200,
           statusText: 'OK',
@@ -463,9 +536,957 @@ describe('TerminalMarketService', () => {
     });
   });
 
+  describe('fetchGlobalSnapshot', () => {
+    beforeEach(() => {
+      vi.spyOn(Date, 'now').mockReturnValue(SNAPSHOT_NOW);
+      mockDeps.terminalApi = {
+        ...mockDeps.terminalApi,
+        globalSnapshotUrl:
+          'https://terminal.test-api.cx.metamask.io/v4/perpetuals',
+      };
+    });
+
+    it('validates and maps a fresh v4 snapshot', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(createGlobalSnapshot()),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result).toStrictEqual({
+        markets: [
+          {
+            id: 'btc-hyperliquid-mainnet',
+            symbol: 'BTC',
+            name: 'Bitcoin',
+            description: 'Original cryptocurrency',
+            maxLeverage: '50x',
+            price: '$50000.00',
+            change24h: '+$125.00',
+            change24hPercent: '0.25%',
+            change5m: '+$10.00',
+            changePercent5m: '1.50%',
+            change1h: '-$4.00',
+            changePercent1h: '-0.50%',
+            volume: '$1000000',
+            openInterest: '$1000000',
+            fundingRate: 0.0001,
+            marketSource: undefined,
+            marketType: 'crypto',
+            isHip3: false,
+            isNewMarket: false,
+            keywords: ['bitcoin'],
+            tags: ['top-10'],
+            categories: ['crypto'],
+            listedAt: 1_600_000_000_000,
+            trend: [
+              [SNAPSHOT_NOW - 3_600_000, '49000'],
+              [SNAPSHOT_NOW - 1_000, '50000'],
+            ],
+            dataSource: 'terminal-global-snapshot-mark',
+            sourceExpiresAt: SNAPSHOT_NOW + 28_000,
+          },
+        ],
+        marketInfos: [
+          {
+            name: 'BTC',
+            szDecimals: 5,
+            maxLeverage: 50,
+            marginTableId: 0,
+          },
+        ],
+        expiresAt: SNAPSHOT_NOW + 28_000,
+      });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://terminal.test-api.cx.metamask.io/v4/perpetuals?provider=hyperliquid&network=mainnet&dexes=main',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('keeps main first when canonicalizing requested DEXes', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+      } as Response);
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['flx', 'main'],
+        }),
+      ).rejects.toThrow('Terminal global snapshot returned 503');
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://terminal.test-api.cx.metamask.io/v4/perpetuals?provider=hyperliquid&network=mainnet&dexes=main%2Cflx',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('maps a snapshot with unknown envelope and market fields', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            futureEnvelope: true,
+            markets: [createSnapshotMarket({ futureMarket: true })],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result.markets[0]).toMatchObject({
+        id: 'btc-hyperliquid-mainnet',
+        symbol: 'BTC',
+        change5m: '+$10.00',
+        changePercent5m: '1.50%',
+      });
+      expect(result.markets[0]).not.toHaveProperty('futureMarket');
+      expect(result).not.toHaveProperty('futureEnvelope');
+    });
+
+    it('maps isolated-only margin metadata into market info', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [
+              createSnapshotMarket({ onlyIsolated: null, marginMode: null }),
+              createSnapshotMarket({
+                id: 'hype-hyperliquid-mainnet',
+                symbol: 'HYPE',
+                onlyIsolated: true,
+                marginMode: 'strictIsolated',
+              }),
+              createSnapshotMarket({
+                id: 'purr-hyperliquid-mainnet',
+                symbol: 'PURR',
+                onlyIsolated: false,
+                marginMode: 'noCross',
+              }),
+            ],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result.marketInfos).toStrictEqual([
+        { name: 'BTC', szDecimals: 5, maxLeverage: 50, marginTableId: 0 },
+        {
+          name: 'HYPE',
+          szDecimals: 5,
+          maxLeverage: 50,
+          marginTableId: 0,
+          onlyIsolated: true,
+          marginMode: 'strictIsolated',
+        },
+        {
+          name: 'PURR',
+          szDecimals: 5,
+          maxLeverage: 50,
+          marginTableId: 0,
+          marginMode: 'noCross',
+        },
+      ]);
+    });
+
+    it('rejects an unknown margin mode', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [createSnapshotMarket({ marginMode: 'crossOnly' })],
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('failed schema validation');
+    });
+
+    it('maps a null rolling pair as unavailable', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [
+              createSnapshotMarket({
+                change1h: null,
+                changePercent1h: null,
+              }),
+            ],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result.markets[0]).toMatchObject({
+        change5m: '+$10.00',
+        changePercent5m: '1.50%',
+        change1h: '--',
+        changePercent1h: '--%',
+      });
+    });
+
+    it('maps a null 5m rolling pair as unavailable', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [
+              createSnapshotMarket({
+                change5m: null,
+                changePercent5m: null,
+              }),
+            ],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result.markets[0]).toMatchObject({
+        change5m: '--',
+        changePercent5m: '--%',
+        change1h: '-$4.00',
+        changePercent1h: '-0.50%',
+      });
+    });
+
+    it.each([
+      [
+        'incoherent mark-based percent',
+        createGlobalSnapshot({
+          markets: [createSnapshotMarket({ changePercent24h: 9 })],
+        }),
+      ],
+      [
+        'incoherent deprecated price alias',
+        createGlobalSnapshot({
+          markets: [createSnapshotMarket({ price: '50001' })],
+        }),
+      ],
+      [
+        'overflowing mark/change subtraction',
+        createGlobalSnapshot({
+          markets: [
+            createSnapshotMarket({
+              markPrice: HUGE_FINITE_DECIMAL,
+              change24h: `-${HUGE_FINITE_DECIMAL}`,
+              changePercent24h: 0,
+            }),
+          ],
+        }),
+      ],
+      [
+        'unordered trend timestamps',
+        createGlobalSnapshot({
+          markets: [
+            createSnapshotMarket({
+              trend: [
+                [SNAPSHOT_NOW - 1_000, '50000'],
+                [SNAPSHOT_NOW - 2_000, '49999'],
+              ],
+            }),
+          ],
+        }),
+      ],
+      [
+        'future trend timestamp',
+        createGlobalSnapshot({
+          markets: [
+            createSnapshotMarket({
+              trend: [[SNAPSHOT_NOW + 1, '50000']],
+            }),
+          ],
+        }),
+      ],
+      [
+        'seconds-based listedAt timestamp',
+        createGlobalSnapshot({
+          markets: [createSnapshotMarket({ listedAt: 1_700_000_000 })],
+        }),
+      ],
+    ])('rejects %s', async (_name, snapshot) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(okJsonResponse(snapshot));
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('Terminal global snapshot');
+    });
+
+    it.each([
+      ['empty', []],
+      ['single-point', [[SNAPSHOT_NOW - 1_000, '50000']]],
+      [
+        'irregular or stale',
+        [
+          [SNAPSHOT_NOW - 10_800_000, '49000'],
+          [SNAPSHOT_NOW - 1_000, '50000'],
+        ],
+      ],
+    ])('accepts %s optional trend data', async (_name, trend) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [createSnapshotMarket({ trend })],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result).toMatchObject({ markets: [{ trend }] });
+    });
+
+    it('rejects a response larger than the snapshot payload limit', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: () => Promise.resolve('x'.repeat(1_048_577)),
+      } as Response);
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('payload exceeds');
+    });
+
+    it('rejects an oversized Content-Length before allocating response text', async () => {
+      const text = vi.fn().mockRejectedValue(new Error('must not read'));
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          get: vi.fn().mockReturnValue('1048577'),
+        } as unknown as Headers,
+        text,
+      } as Response);
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('payload exceeds');
+      expect(text).not.toHaveBeenCalled();
+    });
+
+    it('aborts when the response body stalls', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+        const signal = init?.signal as AbortSignal;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: { get: () => null } as unknown as Headers,
+          text: () =>
+            new Promise((_resolve, reject) => {
+              signal.addEventListener('abort', () => {
+                reject(
+                  signal.reason instanceof Error
+                    ? signal.reason
+                    : new Error(String(signal.reason)),
+                );
+              });
+            }),
+        } as Response);
+      });
+
+      const pending = service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+      await Promise.resolve();
+
+      vi.advanceTimersByTime(TERMINAL_API_CONFIG.FetchTimeoutMs);
+
+      await expect(pending).rejects.toThrow(
+        'Terminal global snapshot timed out',
+      );
+      vi.useRealTimers();
+    });
+
+    it.each([
+      ['version 1', { schemaVersion: 1 }],
+      ['version 2', { schemaVersion: 2 }],
+      ['version 3', { schemaVersion: 3 }],
+      ['provider', { provider: 'other' }],
+      ['network', { network: 'testnet' }],
+      ['DEX set', { enabledDexes: ['main', 'xyz'] }],
+      ['fingerprint', { fingerprint: 'sha256:wrong' }],
+      ['empty markets', { markets: [] }],
+      ['incomplete', { complete: false }],
+      ['per-DEX error', { perDexErrors: [{ dex: 'main', error: 'TIMEOUT' }] }],
+      ['future generatedAt', { generatedAt: SNAPSHOT_NOW + 5_001 }],
+      ['future receivedAt', { receivedAt: SNAPSHOT_NOW + 5_001 }],
+      [
+        'stale source age',
+        {
+          generatedAt: SNAPSHOT_NOW - 31_000,
+          receivedAt: SNAPSHOT_NOW - 31_000,
+          maxAgeMs: 60_000,
+        },
+      ],
+    ])('rejects a snapshot with invalid %s', async (_name, overrides) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(createGlobalSnapshot(overrides)),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('Terminal global snapshot');
+    });
+
+    it('rejects a market missing a required rolling field', async () => {
+      const snapshotMarket = createSnapshotMarket();
+      delete snapshotMarket.change5m;
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(createGlobalSnapshot({ markets: [snapshotMarket] })),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('failed schema validation');
+    });
+
+    it('rejects a rolling field with the wrong type', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [createSnapshotMarket({ changePercent5m: '1.5' })],
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('failed schema validation');
+    });
+
+    it('rejects a rolling pair that is only half null', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [
+              createSnapshotMarket({
+                change1h: null,
+                changePercent1h: -0.5,
+              }),
+            ],
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('change1h pair');
+    });
+
+    it('rejects a malformed present change5m absolute', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [createSnapshotMarket({ change5m: 'abc' })],
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('invalid change5m');
+    });
+
+    it('rejects a non-finite rolling percent', async () => {
+      // JSON.stringify turns Infinity into null, so the body has to stay raw text.
+      const raw = JSON.stringify(
+        createGlobalSnapshot({
+          markets: [createSnapshotMarket({ changePercent1h: 0 })],
+        }),
+      ).replace('"changePercent1h":0', '"changePercent1h":1e999');
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: () => Promise.resolve(raw),
+      } as Response);
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('change1h pair');
+    });
+
+    it('accepts timestamps within the producer clock-skew allowance', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            generatedAt: SNAPSHOT_NOW + 5_000,
+            receivedAt: SNAPSHOT_NOW + 5_000,
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result.markets).toStrictEqual(expect.any(Array));
+    });
+
+    it.each([
+      ['oracle price', { oraclePrice: '0' }],
+      ['mid price', { midPrice: '0' }],
+    ])('rejects a non-positive %s', async (_name, marketOverrides) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [createSnapshotMarket(marketOverrides)],
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main'],
+        }),
+      ).rejects.toThrow('reference price');
+    });
+
+    it.each([
+      ['duplicate market', [createSnapshotMarket(), createSnapshotMarket()]],
+      [
+        'missing requested DEX',
+        [
+          createSnapshotMarket(),
+          createSnapshotMarket({
+            symbol: 'BTC2',
+          }),
+        ],
+      ],
+      ['invalid open interest', [createSnapshotMarket({ openInterest: '-1' })]],
+      ['empty non-null name', [createSnapshotMarket({ name: '' })]],
+      ['empty id', [createSnapshotMarket({ id: '' })]],
+      ['wrong network', [createSnapshotMarket({ network: 'testnet' })]],
+    ])('rejects %s', async (_name, markets) => {
+      const needsXyz = _name === 'missing requested DEX';
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            ...(needsXyz && {
+              enabledDexes: ['main', 'xyz'],
+              fingerprint:
+                'sha256:2680c000d74e6b46aaddfc5f944442d235961fcdf1d9063af15989285be39bb7',
+            }),
+            markets,
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: needsXyz ? ['main', 'xyz'] : ['main'],
+        }),
+      ).rejects.toThrow('Terminal global snapshot');
+    });
+
+    it('accepts HIP-3 markets whose provider is the Hyperliquid venue', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            enabledDexes: ['main', 'xyz'],
+            fingerprint:
+              'sha256:2680c000d74e6b46aaddfc5f944442d235961fcdf1d9063af15989285be39bb7',
+            markets: [
+              createSnapshotMarket(),
+              createSnapshotMarket({
+                id: 'xyz:aaoi-hyperliquid-mainnet',
+                symbol: 'xyz:AAOI',
+                provider: 'hyperliquid',
+                dex: 'xyz',
+                name: 'Applied Optoelectronics',
+                category: 'stocks',
+                maxLeverage: 10,
+                markPrice: '110',
+                price: '110',
+                midPrice: '110.1',
+                oraclePrice: '109.9',
+                change24h: '10',
+                changePercent24h: 10,
+                tags: ['memecoin'],
+              }),
+            ],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main', 'xyz'],
+      });
+
+      expect(result.markets).toHaveLength(2);
+      expect(result.markets[1]).toMatchObject({
+        id: 'xyz:aaoi-hyperliquid-mainnet',
+        symbol: 'xyz:AAOI',
+        isHip3: true,
+        marketSource: 'xyz',
+        marketType: 'stock',
+        tags: ['memecoin'],
+      });
+      expect(result.marketInfos[1]).toStrictEqual({
+        name: 'xyz:AAOI',
+        szDecimals: 5,
+        maxLeverage: 10,
+        marginTableId: 0,
+      });
+    });
+
+    it('rejects HIP-3 markets whose provider does not match the snapshot venue', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            enabledDexes: ['main', 'xyz'],
+            fingerprint:
+              'sha256:2680c000d74e6b46aaddfc5f944442d235961fcdf1d9063af15989285be39bb7',
+            markets: [
+              createSnapshotMarket(),
+              createSnapshotMarket({
+                id: 'xyz:aaoi-hyperliquid-mainnet',
+                symbol: 'xyz:AAOI',
+                provider: 'xyz',
+                dex: 'xyz',
+                name: 'Applied Optoelectronics',
+                category: 'stocks',
+                maxLeverage: 10,
+                markPrice: '110',
+                price: '110',
+                midPrice: '110.1',
+                oraclePrice: '109.9',
+                change24h: '10',
+                changePercent24h: 10,
+              }),
+            ],
+          }),
+        ),
+      );
+
+      await expect(
+        service.fetchGlobalSnapshot({
+          provider: 'hyperliquid',
+          network: 'mainnet',
+          enabledDexes: ['main', 'xyz'],
+        }),
+      ).rejects.toThrow('invalid provider');
+    });
+
+    it('maps id from the v3 snapshot market to PerpsMarketData', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        okJsonResponse(
+          createGlobalSnapshot({
+            markets: [createSnapshotMarket({ id: 'btc-hyperliquid-mainnet' })],
+          }),
+        ),
+      );
+
+      const result = await service.fetchGlobalSnapshot({
+        provider: 'hyperliquid',
+        network: 'mainnet',
+        enabledDexes: ['main'],
+      });
+
+      expect(result.markets[0]?.id).toBe('btc-hyperliquid-mainnet');
+    });
+
+    it('coalesces same-key requests and isolates different identities', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(okJsonResponse(createGlobalSnapshot()))
+        .mockResolvedValueOnce(
+          okJsonResponse(
+            createGlobalSnapshot({
+              network: 'testnet',
+              fingerprint:
+                'sha256:0077720707e8b99ea78df074cdaa58522d331b47f7dcd9bd7cff6f706ffd44db',
+              markets: [createSnapshotMarket({ network: 'testnet' })],
+            }),
+          ),
+        );
+      const request = {
+        provider: 'hyperliquid' as const,
+        network: 'mainnet' as const,
+        enabledDexes: ['main'],
+      };
+
+      await Promise.all([
+        service.fetchGlobalSnapshot(request),
+        service.fetchGlobalSnapshot(request),
+      ]);
+      await service.fetchGlobalSnapshot({
+        ...request,
+        network: 'testnet',
+      });
+
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('bounds cache TTL by source age and the 30-second consumer cap', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(okJsonResponse(createGlobalSnapshot()));
+      const request = {
+        provider: 'hyperliquid' as const,
+        network: 'mainnet' as const,
+        enabledDexes: ['main'],
+      };
+
+      await service.fetchGlobalSnapshot(request);
+      vi.spyOn(Date, 'now').mockReturnValue(SNAPSHOT_NOW + 27_999);
+      await service.fetchGlobalSnapshot(request);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      vi.spyOn(Date, 'now').mockReturnValue(SNAPSHOT_NOW + 28_000);
+      await expect(service.fetchGlobalSnapshot(request)).rejects.toThrow(
+        'stale',
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache rejected data', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          okJsonResponse(createGlobalSnapshot({ fingerprint: 'invalid' })),
+        );
+      const request = {
+        provider: 'hyperliquid' as const,
+        network: 'mainnet' as const,
+        enabledDexes: ['main'],
+      };
+
+      await expect(service.fetchGlobalSnapshot(request)).rejects.toThrow(
+        'Terminal global snapshot',
+      );
+      await expect(service.fetchGlobalSnapshot(request)).rejects.toThrow(
+        'Terminal global snapshot',
+      );
+
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the legacy cache separate and clears both accepted caches', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(okJsonResponse(createGlobalSnapshot()))
+        .mockResolvedValueOnce(okJsonResponse(mockApiResponse))
+        .mockResolvedValueOnce(okJsonResponse(createGlobalSnapshot()));
+      const request = {
+        provider: 'hyperliquid' as const,
+        network: 'mainnet' as const,
+        enabledDexes: ['main'],
+      };
+
+      await service.fetchGlobalSnapshot(request);
+      await service.fetchMarkets();
+      service.clearCache();
+      await service.fetchGlobalSnapshot(request);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not reuse or recache an in-flight response after clearCache', async () => {
+      let resolveFirst: ((response: Response) => void) | undefined;
+      let resolveSecond: ((response: Response) => void) | undefined;
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((resolve) => {
+              resolveFirst = resolve;
+            }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((resolve) => {
+              resolveSecond = resolve;
+            }),
+        );
+      const request = {
+        provider: 'hyperliquid' as const,
+        network: 'mainnet' as const,
+        enabledDexes: ['main'],
+      };
+
+      const oldRequest = service.fetchGlobalSnapshot(request);
+      service.clearCache();
+      const newRequest = service.fetchGlobalSnapshot(request);
+      resolveFirst?.(okJsonResponse(createGlobalSnapshot()));
+      await oldRequest;
+      resolveSecond?.(okJsonResponse(createGlobalSnapshot()));
+      const fresh = await newRequest;
+      const cached = await service.fetchGlobalSnapshot(request);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(cached).toStrictEqual(fresh);
+      expect(cached).not.toBe(fresh);
+    });
+
+    it('does not expose mutable references from the validated cache', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(okJsonResponse(createGlobalSnapshot()));
+      const request = {
+        provider: 'hyperliquid' as const,
+        network: 'mainnet' as const,
+        enabledDexes: ['main'],
+      };
+
+      const first = await service.fetchGlobalSnapshot(request);
+      first.markets[0].trend?.push([SNAPSHOT_NOW, '1']);
+      first.markets.splice(0);
+      first.marketInfos.splice(0);
+      const second = await service.fetchGlobalSnapshot(request);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(second.markets).toHaveLength(1);
+      expect(second.markets[0].trend).toHaveLength(2);
+      expect(second.marketInfos).toHaveLength(1);
+    });
+
+    it('serves getMarkets and market data from one snapshot request', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(okJsonResponse(createGlobalSnapshot()));
+      const marketData = new MarketDataService({
+        ...mockDeps,
+        terminalMarketService: service,
+      });
+      const context = {
+        tracingContext: { provider: 'hyperliquid', isTestnet: false },
+        errorContext: { controller: 'PerpsController', method: 'getMarkets' },
+        globalSnapshot: {
+          request: {
+            provider: 'hyperliquid' as const,
+            network: 'mainnet' as const,
+            enabledDexes: ['main'],
+          },
+          isCurrent: (): boolean => true,
+          isMarketAllowed: (): boolean => true,
+        },
+      };
+      const provider = createMockHyperLiquidProvider();
+      const getMarkets = vi.spyOn(provider, 'getMarkets');
+      const getMarketDataWithPrices = vi.spyOn(
+        provider,
+        'getMarketDataWithPrices',
+      );
+
+      const markets = await marketData.getMarkets({
+        provider,
+        params: { useTerminalApi: true },
+        context,
+      });
+      const prices = await marketData.getMarketDataWithPrices({
+        provider,
+        params: { useTerminalApi: true },
+        context,
+      });
+
+      expect(markets).toStrictEqual([
+        { name: 'BTC', szDecimals: 5, maxLeverage: 50, marginTableId: 0 },
+      ]);
+      expect(prices.map((market) => market.symbol)).toStrictEqual(['BTC']);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const urls = fetchSpy.mock.calls.map((call): string => {
+        const input = call[0];
+        if (typeof input === 'string') {
+          return input;
+        }
+        if (input instanceof URL) {
+          return input.href;
+        }
+        return '';
+      });
+      expect(urls.some((url) => url.includes('/v1/perpetuals'))).toBe(false);
+      expect(urls[0]).toContain('/v4/perpetuals');
+      expect(getMarkets).not.toHaveBeenCalled();
+      expect(getMarketDataWithPrices).not.toHaveBeenCalled();
+    });
+  });
+
   describe('cache behavior', () => {
     it('returns cached data on second call within TTL', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -481,7 +1502,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('fetches again after cache is cleared', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -496,7 +1517,7 @@ describe('TerminalMarketService', () => {
     });
 
     it('fetches again after TTL expires', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -506,7 +1527,7 @@ describe('TerminalMarketService', () => {
       await service.fetchMarkets();
 
       // Advance time past TTL (5 minutes)
-      jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 6 * 60 * 1000);
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 6 * 60 * 1000);
 
       await service.fetchMarkets();
 

@@ -380,6 +380,10 @@ export type TokenRwaData = {
     start?: string;
     end?: string;
   };
+  offhours?: {
+    nextOpen?: string;
+    nextClose?: string;
+  };
   ticker?: string;
   instrumentType?: string;
 };
@@ -401,6 +405,10 @@ export type RwaTokenData = {
   industry: string[];
   market?: RwaMarket;
   nextPause?: Record<string, unknown>;
+  offhours?: {
+    nextOpen?: string;
+    nextClose?: string;
+  };
   sharesOutstanding?: number;
   restrictedCountries?: string[];
   updatedAt?: string;
@@ -414,6 +422,7 @@ export type RwaToken = {
   decimals: number;
   name: string;
   rwaData: RwaTokenData;
+  securityData?: TokenSecurityData;
 };
 
 export type RwasResponse = {
@@ -453,6 +462,7 @@ export type FetchRwasParams = {
     | 'utilities'
     | 'energy'
     | 'real estate';
+  includeTokenSecurityData?: boolean;
   [key: string]: string | number | boolean | string[] | undefined;
 };
 

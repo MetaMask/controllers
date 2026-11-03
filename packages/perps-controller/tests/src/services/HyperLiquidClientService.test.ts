@@ -7,29 +7,45 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import * as hyperliquidModule from '@nktkas/hyperliquid';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import type { Mock } from 'vitest';
+
 import { CandlePeriod } from '../../../src/constants/chartConfig.js';
-import { HyperLiquidClientService } from '../../../src/services/HyperLiquidClientService.js';
+import {
+  HyperLiquidClientService,
+  WebSocketConnectionState,
+} from '../../../src/services/HyperLiquidClientService.js';
 import type { ValidCandleInterval } from '../../../src/services/HyperLiquidClientService.js';
 import { resetPerpsRestCacheForTests } from '../../../src/utils/coalescePerpsRestRequest.js';
 import { createMockInfrastructure } from '../../helpers/serviceMocks.js';
 
 // Mock WebSocket for Jest environment (React Native provides this globally)
-(global as any).WebSocket = jest.fn();
+(global as any).WebSocket = vi.fn();
 
 // Mock HyperLiquid SDK - using 'mock' prefix for Jest compatibility
 const mockExchangeClient = { initialized: true };
 const mockInfoClientWs = {
   initialized: true,
   transport: 'websocket',
-  candleSnapshot: jest.fn(),
-  historicalOrders: jest.fn(),
+  candleSnapshot: vi.fn(),
+  historicalOrders: vi.fn(),
 };
 const mockInfoClientHttp = {
   initialized: true,
   transport: 'http',
-  candleSnapshot: jest.fn(),
+  candleSnapshot: vi.fn(),
 };
-const mockWsTransportReady = jest.fn().mockResolvedValue(undefined);
+const mockWsTransportReady = vi.fn().mockResolvedValue(undefined);
 const mockSubscriptionClient = {
   initialized: true,
   config_: {
@@ -39,12 +55,12 @@ const mockSubscriptionClient = {
   },
 };
 const mockSocket = {
-  addEventListener: jest.fn(),
-  removeEventListener: jest.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
 };
 const mockWsTransport = {
   url: 'ws://mock',
-  close: jest.fn().mockResolvedValue(undefined),
+  close: vi.fn().mockResolvedValue(undefined),
   ready: mockWsTransportReady,
   socket: mockSocket,
 };
@@ -54,22 +70,30 @@ const mockHttpTransport = {
 
 // Counter for InfoClient mock - using 'mock' prefix so Jest allows it
 let mockInfoClientCallCount = 0;
-jest.mock('@nktkas/hyperliquid', () => ({
-  ExchangeClient: jest.fn(() => mockExchangeClient),
-  InfoClient: jest.fn(() => {
+vi.mock('@nktkas/hyperliquid', () => ({
+  ExchangeClient: vi.fn(function () {
+    return mockExchangeClient;
+  }),
+  InfoClient: vi.fn(function () {
     mockInfoClientCallCount++;
     // First call is WebSocket (default), second is HTTP (fallback)
     return mockInfoClientCallCount % 2 === 1
       ? mockInfoClientWs
       : mockInfoClientHttp;
   }),
-  SubscriptionClient: jest.fn(() => mockSubscriptionClient),
-  WebSocketTransport: jest.fn(() => mockWsTransport),
-  HttpTransport: jest.fn(() => mockHttpTransport),
+  SubscriptionClient: vi.fn(function () {
+    return mockSubscriptionClient;
+  }),
+  WebSocketTransport: vi.fn(function () {
+    return mockWsTransport;
+  }),
+  HttpTransport: vi.fn(function () {
+    return mockHttpTransport;
+  }),
 }));
 
 // Mock configuration
-jest.mock('../../../src/constants/hyperLiquidConfig', () => ({
+vi.mock('../../../src/constants/hyperLiquidConfig', () => ({
   HYPERLIQUID_TRANSPORT_CONFIG: {
     timeout: 10_000,
     keepAlive: { interval: 30_000 },
@@ -81,15 +105,11 @@ jest.mock('../../../src/constants/hyperLiquidConfig', () => ({
 }));
 
 // Mock DevLogger
-jest.mock(
-  '../../../../core/SDKConnect/utils/DevLogger',
-  () => ({
-    DevLogger: {
-      log: jest.fn(),
-    },
-  }),
-  { virtual: true },
-);
+vi.mock('../../../../core/SDKConnect/utils/DevLogger', () => ({
+  DevLogger: {
+    log: vi.fn(),
+  },
+}));
 
 describe('HyperLiquidClientService', () => {
   let service: HyperLiquidClientService;
@@ -98,34 +118,40 @@ describe('HyperLiquidClientService', () => {
 
   // Use fake timers globally to ensure all intervals/timeouts can be cleared
   beforeAll(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterAll(() => {
     // Final cleanup - ensure all mocks and timers are reset
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.clearAllTimers();
+    vi.clearAllMocks();
+    vi.clearAllTimers();
     resetPerpsRestCacheForTests();
     mockInfoClientCallCount = 0; // Reset InfoClient call counter
 
-    const hyperLiquid = jest.requireMock('@nktkas/hyperliquid');
-    hyperLiquid.ExchangeClient.mockImplementation(() => mockExchangeClient);
-    hyperLiquid.InfoClient.mockImplementation(() => {
+    const hyperLiquid = hyperliquidModule as unknown as Record<string, Mock>;
+    hyperLiquid.ExchangeClient.mockImplementation(function () {
+      return mockExchangeClient;
+    });
+    hyperLiquid.InfoClient.mockImplementation(function () {
       mockInfoClientCallCount++;
       return mockInfoClientCallCount % 2 === 1
         ? mockInfoClientWs
         : mockInfoClientHttp;
     });
-    hyperLiquid.SubscriptionClient.mockImplementation(
-      () => mockSubscriptionClient,
-    );
-    hyperLiquid.WebSocketTransport.mockImplementation(() => mockWsTransport);
-    hyperLiquid.HttpTransport.mockImplementation(() => mockHttpTransport);
+    hyperLiquid.SubscriptionClient.mockImplementation(function () {
+      return mockSubscriptionClient;
+    });
+    hyperLiquid.WebSocketTransport.mockImplementation(function () {
+      return mockWsTransport;
+    });
+    hyperLiquid.HttpTransport.mockImplementation(function () {
+      return mockHttpTransport;
+    });
 
     // Restore default mock for transport ready
     mockWsTransportReady.mockResolvedValue(undefined);
@@ -135,7 +161,7 @@ describe('HyperLiquidClientService', () => {
     mockSocket.addEventListener.mockClear();
 
     mockWallet = {
-      request: jest.fn().mockResolvedValue('0x123'),
+      request: vi.fn().mockResolvedValue('0x123'),
     };
 
     mockDeps = createMockInfrastructure();
@@ -150,7 +176,7 @@ describe('HyperLiquidClientService', () => {
       // Ignore disconnect errors in cleanup
     }
     // Clear all pending timers to prevent open handles
-    jest.clearAllTimers();
+    vi.clearAllTimers();
   });
 
   describe('Constructor and Configuration', () => {
@@ -188,7 +214,7 @@ describe('HyperLiquidClientService', () => {
         SubscriptionClient,
         WebSocketTransport,
         HttpTransport,
-      } = require('@nktkas/hyperliquid');
+      } = hyperliquidModule as unknown as Record<string, Mock>;
 
       // Verify HTTP transport uses isTestnet flag (SDK handles endpoint selection)
       expect(HttpTransport).toHaveBeenCalledWith({
@@ -228,9 +254,102 @@ describe('HyperLiquidClientService', () => {
       });
     });
 
+    describe('with onExchangeRequest', () => {
+      const answer = { status: 'ok', response: { type: 'default' } };
+      let transport: { isTestnet: boolean; request: Mock };
+      let onExchangeRequest: Mock;
+
+      beforeEach(async () => {
+        const { HttpTransport } = hyperliquidModule as unknown as Record<
+          string,
+          Mock
+        >;
+        transport = { isTestnet: true, request: vi.fn() };
+        HttpTransport.mockImplementation(function () {
+          return transport;
+        });
+        onExchangeRequest = vi.fn();
+        await new HyperLiquidClientService(mockDeps, {
+          isTestnet: true,
+          onExchangeRequest,
+        }).initialize(mockWallet);
+      });
+
+      /**
+       * The transport the exchange client was built with.
+       *
+       * @returns The transport.
+       */
+      function exchangeTransport(): {
+        isTestnet: boolean;
+        request: (endpoint: string, payload: unknown) => Promise<unknown>;
+      } {
+        const { ExchangeClient } = hyperliquidModule as unknown as Record<
+          string,
+          Mock
+        >;
+        return ExchangeClient.mock.calls.at(-1)?.[0].transport;
+      }
+
+      it('reports each exchange request with the answer and the wallet before returning it', async () => {
+        transport.request.mockResolvedValue(answer);
+        const payload = { action: { type: 'order' } };
+
+        const returned = await exchangeTransport().request('exchange', payload);
+
+        expect(returned).toBe(answer);
+        expect(exchangeTransport().isTestnet).toBe(true);
+        expect(transport.request.mock.calls).toStrictEqual([
+          ['exchange', payload, undefined],
+        ]);
+        expect(onExchangeRequest.mock.calls).toStrictEqual([
+          [payload, answer, mockWallet],
+        ]);
+      });
+
+      it('reports an exchange request that failed without an answer', async () => {
+        const failure = new Error('fetch failed');
+        transport.request.mockRejectedValue(failure);
+        const payload = { action: { type: 'order' } };
+
+        await expect(
+          exchangeTransport().request('exchange', payload),
+        ).rejects.toBe(failure);
+        expect(onExchangeRequest.mock.calls).toStrictEqual([
+          [payload, undefined, mockWallet],
+        ]);
+      });
+
+      it('does not report info requests', async () => {
+        transport.request.mockResolvedValue([]);
+
+        await exchangeTransport().request('info', { type: 'meta' });
+
+        expect(onExchangeRequest).not.toHaveBeenCalled();
+      });
+    });
+
+    it('signs user-signed actions for the chain the wallet names', async () => {
+      const signatureChainId = vi.fn().mockResolvedValue('0xaa36a7');
+      const wallet = { ...mockWallet, signatureChainId };
+
+      await service.initialize(wallet);
+
+      const { ExchangeClient } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+      expect(ExchangeClient.mock.calls).toStrictEqual([
+        [{ wallet, transport: mockHttpTransport, signatureChainId }],
+      ]);
+    });
+
     it('handles initialization errors', async () => {
-      const { ExchangeClient } = require('@nktkas/hyperliquid');
-      ExchangeClient.mockImplementationOnce(() => {
+      const { ExchangeClient } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+      ExchangeClient.mockImplementationOnce(function () {
         throw new Error('Client initialization failed');
       });
 
@@ -245,11 +364,8 @@ describe('HyperLiquidClientService', () => {
       });
       await testnetService.initialize(mockWallet);
 
-      const {
-        ExchangeClient,
-        WebSocketTransport,
-        HttpTransport,
-      } = require('@nktkas/hyperliquid');
+      const { ExchangeClient, WebSocketTransport, HttpTransport } =
+        hyperliquidModule as unknown as Record<string, Mock>;
 
       // Verify testnet flag is passed (SDK auto-selects testnet endpoints)
       expect(HttpTransport).toHaveBeenCalledWith({
@@ -453,8 +569,11 @@ describe('HyperLiquidClientService', () => {
 
   describe('Error Handling', () => {
     it('handles transport creation errors', async () => {
-      const { WebSocketTransport } = require('@nktkas/hyperliquid');
-      WebSocketTransport.mockImplementationOnce(() => {
+      const { WebSocketTransport } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+      WebSocketTransport.mockImplementationOnce(function () {
         throw new Error('Transport creation failed');
       });
 
@@ -467,8 +586,11 @@ describe('HyperLiquidClientService', () => {
       service.setTestnetMode(true);
 
       try {
-        const { ExchangeClient } = require('@nktkas/hyperliquid');
-        ExchangeClient.mockImplementationOnce(() => {
+        const { ExchangeClient } = hyperliquidModule as unknown as Record<
+          string,
+          Mock
+        >;
+        ExchangeClient.mockImplementationOnce(function () {
           throw new Error('Initialization failed');
         });
         await service.initialize(mockWallet);
@@ -542,7 +664,7 @@ describe('HyperLiquidClientService', () => {
         { t: 1700003600000, o: 50500, h: 51500, l: 50000, c: 51000, v: 150 },
       ];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockResponse);
 
@@ -586,7 +708,7 @@ describe('HyperLiquidClientService', () => {
 
     it('uses the default limit and forwards an explicit abort signal', async () => {
       const abortController = new AbortController();
-      mockInfoClientHttp.candleSnapshot = jest.fn().mockResolvedValue([]);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
 
       await service.fetchHistoricalCandles({
         symbol: 'BTC',
@@ -610,7 +732,7 @@ describe('HyperLiquidClientService', () => {
     it('throws AbortError and skips the REST call when signal is already aborted', async () => {
       const abortController = new AbortController();
       abortController.abort();
-      mockInfoClientHttp.candleSnapshot = jest.fn().mockResolvedValue([]);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
 
       await expect(
         service.fetchHistoricalCandles({
@@ -626,7 +748,7 @@ describe('HyperLiquidClientService', () => {
     it('forwards AbortSignal for non-coalesced paginated fetches', async () => {
       const abortController = new AbortController();
       const endTime = 1700000000000;
-      mockInfoClientHttp.candleSnapshot = jest.fn().mockResolvedValue([]);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
 
       await service.fetchHistoricalCandles({
         symbol: 'BTC',
@@ -648,7 +770,7 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('coalesces concurrent identical fetches into one REST call', async () => {
-      mockInfoClientHttp.candleSnapshot = jest.fn().mockResolvedValue([]);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
 
       await Promise.all([
         service.fetchHistoricalCandles({
@@ -670,7 +792,7 @@ describe('HyperLiquidClientService', () => {
       // Arrange
       const mockResponse: any[] = [];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockResponse);
 
@@ -692,7 +814,7 @@ describe('HyperLiquidClientService', () => {
     it('handles API errors gracefully', async () => {
       // Arrange
       const errorMessage = 'API request failed';
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockRejectedValue(new Error(errorMessage));
 
@@ -714,7 +836,7 @@ describe('HyperLiquidClientService', () => {
         candles: [],
       };
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockResponse);
 
@@ -752,8 +874,8 @@ describe('HyperLiquidClientService', () => {
         const mockResponse: any[] = [];
 
         // Reset mock before each iteration
-        jest.clearAllMocks();
-        mockInfoClientHttp.candleSnapshot = jest
+        vi.clearAllMocks();
+        mockInfoClientHttp.candleSnapshot = vi
           .fn()
           .mockResolvedValue(mockResponse);
 
@@ -780,7 +902,7 @@ describe('HyperLiquidClientService', () => {
 
       const mockResponse: any[] = [];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockResponse);
 
@@ -815,12 +937,12 @@ describe('HyperLiquidClientService', () => {
       const mockResponse = [
         { t: 1700000000000, o: 50000, h: 51000, l: 49000, c: 50500, v: 100 },
       ];
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockResponse);
 
       // Spy on getInfoClient to verify useHttp option
-      const getInfoClientSpy = jest.spyOn(service, 'getInfoClient');
+      const getInfoClientSpy = vi.spyOn(service, 'getInfoClient');
 
       // Act
       await service.fetchHistoricalCandles({
@@ -842,7 +964,7 @@ describe('HyperLiquidClientService', () => {
 
     beforeEach(async () => {
       await service.initialize(mockWallet);
-      jest.clearAllMocks();
+      vi.clearAllMocks();
       resetPerpsRestCacheForTests();
     });
 
@@ -885,7 +1007,7 @@ describe('HyperLiquidClientService', () => {
   describe('subscribeToCandles', () => {
     beforeEach(async () => {
       await service.initialize(mockWallet);
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it('throws error when service not initialized', () => {
@@ -897,7 +1019,7 @@ describe('HyperLiquidClientService', () => {
         uninitializedService.subscribeToCandles({
           symbol: 'BTC',
           interval: '1h' as ValidCandleInterval,
-          callback: jest.fn(),
+          callback: vi.fn(),
         }),
       ).toThrow('CLIENT_NOT_INITIALIZED');
     });
@@ -907,16 +1029,16 @@ describe('HyperLiquidClientService', () => {
       const serviceWithNoSubClient = new HyperLiquidClientService(mockDeps);
       await serviceWithNoSubClient.initialize(mockWallet);
       // Mock public getter to return undefined
-      jest
-        .spyOn(serviceWithNoSubClient, 'getSubscriptionClient')
-        .mockReturnValue(undefined);
+      vi.spyOn(serviceWithNoSubClient, 'getSubscriptionClient').mockReturnValue(
+        undefined,
+      );
 
       // Act & Assert
       expect(() =>
         serviceWithNoSubClient.subscribeToCandles({
           symbol: 'BTC',
           interval: '1h' as ValidCandleInterval,
-          callback: jest.fn(),
+          callback: vi.fn(),
         }),
       ).toThrow('SUBSCRIPTION_CLIENT_NOT_AVAILABLE');
     });
@@ -942,19 +1064,19 @@ describe('HyperLiquidClientService', () => {
         },
       ];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockHistoricalData);
 
-      const mockUnsubscribe = jest.fn();
+      const mockUnsubscribe = vi.fn();
       const mockCandleSubscription = Promise.resolve({
         unsubscribe: mockUnsubscribe,
       });
-      (mockSubscriptionClient as any).candle = jest
+      (mockSubscriptionClient as any).candle = vi
         .fn()
         .mockReturnValue(mockCandleSubscription);
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act
       const unsubscribe = service.subscribeToCandles({
@@ -964,7 +1086,7 @@ describe('HyperLiquidClientService', () => {
       });
 
       // Wait for async operations
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Assert - should have fetched historical data (SDK uses 'coin' terminology)
       // Signal is intentionally dropped inside the coalesced fetch path.
@@ -1013,15 +1135,15 @@ describe('HyperLiquidClientService', () => {
         },
       ];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockHistoricalData);
 
-      (mockSubscriptionClient as any).candle = jest
+      (mockSubscriptionClient as any).candle = vi
         .fn()
-        .mockResolvedValue({ unsubscribe: jest.fn() });
+        .mockResolvedValue({ unsubscribe: vi.fn() });
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act
       service.subscribeToCandles({
@@ -1030,7 +1152,7 @@ describe('HyperLiquidClientService', () => {
         callback,
       });
 
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Assert - numbers converted to strings
       expect(callback).toHaveBeenCalledWith(
@@ -1062,19 +1184,19 @@ describe('HyperLiquidClientService', () => {
         },
       ];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockHistoricalData);
 
       let wsCallback: any;
-      (mockSubscriptionClient as any).candle = jest
+      (mockSubscriptionClient as any).candle = vi
         .fn()
         .mockImplementation((_params, callback) => {
           wsCallback = callback;
-          return Promise.resolve({ unsubscribe: jest.fn() });
+          return Promise.resolve({ unsubscribe: vi.fn() });
         });
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act
       service.subscribeToCandles({
@@ -1083,7 +1205,7 @@ describe('HyperLiquidClientService', () => {
         callback,
       });
 
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Clear previous callback invocations
       callback.mockClear();
@@ -1130,19 +1252,19 @@ describe('HyperLiquidClientService', () => {
         },
       ];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockHistoricalData);
 
       let wsCallback: any;
-      (mockSubscriptionClient as any).candle = jest
+      (mockSubscriptionClient as any).candle = vi
         .fn()
         .mockImplementation((_params, callback) => {
           wsCallback = callback;
-          return Promise.resolve({ unsubscribe: jest.fn() });
+          return Promise.resolve({ unsubscribe: vi.fn() });
         });
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act
       service.subscribeToCandles({
@@ -1151,7 +1273,7 @@ describe('HyperLiquidClientService', () => {
         callback,
       });
 
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Clear previous callback invocations
       callback.mockClear();
@@ -1206,19 +1328,19 @@ describe('HyperLiquidClientService', () => {
         },
       ];
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockResolvedValue(mockHistoricalData);
 
       let wsCallback: any;
-      (mockSubscriptionClient as any).candle = jest
+      (mockSubscriptionClient as any).candle = vi
         .fn()
         .mockImplementation((_params, callback) => {
           wsCallback = callback;
-          return Promise.resolve({ unsubscribe: jest.fn() });
+          return Promise.resolve({ unsubscribe: vi.fn() });
         });
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act
       service.subscribeToCandles({
@@ -1227,7 +1349,7 @@ describe('HyperLiquidClientService', () => {
         callback,
       });
 
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       const firstCallCandles = callback.mock.calls[0][0].candles;
 
@@ -1249,13 +1371,13 @@ describe('HyperLiquidClientService', () => {
 
     it('handles empty historical data', async () => {
       // Arrange
-      mockInfoClientHttp.candleSnapshot = jest.fn().mockResolvedValue([]);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
 
-      (mockSubscriptionClient as any).candle = jest
+      (mockSubscriptionClient as any).candle = vi
         .fn()
-        .mockResolvedValue({ unsubscribe: jest.fn() });
+        .mockResolvedValue({ unsubscribe: vi.fn() });
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act
       service.subscribeToCandles({
@@ -1264,7 +1386,7 @@ describe('HyperLiquidClientService', () => {
         callback,
       });
 
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Assert - callback invoked with empty candles
       expect(callback).toHaveBeenCalledWith({
@@ -1276,14 +1398,14 @@ describe('HyperLiquidClientService', () => {
 
     it('invokes unsubscribe when cleanup function called', async () => {
       // Arrange
-      mockInfoClientHttp.candleSnapshot = jest.fn().mockResolvedValue([]);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
 
-      const mockWsUnsubscribe = jest.fn();
-      (mockSubscriptionClient as any).candle = jest
+      const mockWsUnsubscribe = vi.fn();
+      (mockSubscriptionClient as any).candle = vi
         .fn()
         .mockResolvedValue({ unsubscribe: mockWsUnsubscribe });
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act
       const unsubscribe = service.subscribeToCandles({
@@ -1293,7 +1415,7 @@ describe('HyperLiquidClientService', () => {
       });
 
       // Wait for subscription to complete
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Call unsubscribe
       unsubscribe();
@@ -1311,14 +1433,14 @@ describe('HyperLiquidClientService', () => {
         resolveSnapshot = resolve;
       });
 
-      mockInfoClientHttp.candleSnapshot = jest
+      mockInfoClientHttp.candleSnapshot = vi
         .fn()
         .mockReturnValue(delayedPromise);
 
-      const mockCandleSubscription = jest.fn();
+      const mockCandleSubscription = vi.fn();
       (mockSubscriptionClient as any).candle = mockCandleSubscription;
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act - subscribe and immediately unsubscribe
       const unsubscribe = service.subscribeToCandles({
@@ -1334,7 +1456,7 @@ describe('HyperLiquidClientService', () => {
       resolveSnapshot([]);
 
       // Wait for async operations to complete
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Assert - WebSocket subscription should not be created because
       // we already unsubscribed before the async chain completed
@@ -1346,12 +1468,10 @@ describe('HyperLiquidClientService', () => {
       // Arrange - make snapshot reject with abort error
       const abortError = new Error('AbortError');
       abortError.name = 'AbortError';
-      mockInfoClientHttp.candleSnapshot = jest
-        .fn()
-        .mockRejectedValue(abortError);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockRejectedValue(abortError);
 
-      const onError = jest.fn();
-      const callback = jest.fn();
+      const onError = vi.fn();
+      const callback = vi.fn();
 
       // Act - subscribe then immediately unsubscribe (triggers abort)
       const unsubscribe = service.subscribeToCandles({
@@ -1364,7 +1484,7 @@ describe('HyperLiquidClientService', () => {
       unsubscribe();
 
       // Wait for async rejection to propagate
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Assert - error suppressed (abort is intentional), callback not invoked
       expect(onError).not.toHaveBeenCalled();
@@ -1373,7 +1493,7 @@ describe('HyperLiquidClientService', () => {
 
     it('cleans up WebSocket when unsubscribed during subscription establishment', async () => {
       // Arrange - fast snapshot, slow WebSocket subscription
-      mockInfoClientHttp.candleSnapshot = jest.fn().mockResolvedValue([]);
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
 
       let resolveWsSubscription: (value: any) => void = () => {
         /* noop */
@@ -1382,12 +1502,12 @@ describe('HyperLiquidClientService', () => {
         resolveWsSubscription = resolve;
       });
 
-      const mockWsUnsubscribe = jest.fn();
-      (mockSubscriptionClient as any).candle = jest
+      const mockWsUnsubscribe = vi.fn();
+      (mockSubscriptionClient as any).candle = vi
         .fn()
         .mockReturnValue(delayedWsPromise);
 
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       // Act - subscribe
       const unsubscribe = service.subscribeToCandles({
@@ -1397,7 +1517,7 @@ describe('HyperLiquidClientService', () => {
       });
 
       // Wait for snapshot to complete
-      await jest.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(50);
 
       // Unsubscribe while WebSocket is still being established
       unsubscribe();
@@ -1406,25 +1526,96 @@ describe('HyperLiquidClientService', () => {
       resolveWsSubscription({ unsubscribe: mockWsUnsubscribe });
 
       // Wait for async cleanup to complete
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Assert - WebSocket should be cleaned up immediately after establishing
       expect(mockWsUnsubscribe).toHaveBeenCalled();
+    });
+
+    it('consumes a rejected unsubscribe after the subscription resolves', async () => {
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
+      const unsubscribeError = new Error('Unsubscribe request failed');
+      const mockWsUnsubscribe = vi.fn().mockRejectedValue(unsubscribeError);
+      const unhandledRejectionListener = vi.fn();
+      process.on('unhandledRejection', unhandledRejectionListener);
+      (mockSubscriptionClient as any).candle = vi
+        .fn()
+        .mockResolvedValue({ unsubscribe: mockWsUnsubscribe });
+
+      const unsubscribe = service.subscribeToCandles({
+        symbol: 'BTC',
+        interval: '1h' as ValidCandleInterval,
+        callback: vi.fn(),
+      });
+      await vi.advanceTimersByTimeAsync(100);
+      mockDeps.logger.error.mockClear();
+
+      unsubscribe();
+      await vi.advanceTimersByTimeAsync(100);
+      process.off('unhandledRejection', unhandledRejectionListener);
+
+      expect(unhandledRejectionListener).not.toHaveBeenCalled();
+      expect(mockDeps.logger.error).toHaveBeenCalledWith(
+        unsubscribeError,
+        expect.objectContaining({
+          context: expect.objectContaining({
+            name: 'websocket_unsubscription',
+          }),
+        }),
+      );
+    });
+
+    it('treats an Already unsubscribed rejection as idempotent during late cleanup', async () => {
+      mockInfoClientHttp.candleSnapshot = vi.fn().mockResolvedValue([]);
+      let resolveWsSubscription: (value: any) => void = () => {
+        // Intentionally empty until the test captures the resolver.
+      };
+      const delayedWsPromise = new Promise((resolve) => {
+        resolveWsSubscription = resolve;
+      });
+      const mockWsUnsubscribe = vi
+        .fn()
+        .mockRejectedValue(new Error('Already unsubscribed from candle feed'));
+      const unhandledRejectionListener = vi.fn();
+      process.on('unhandledRejection', unhandledRejectionListener);
+      (mockSubscriptionClient as any).candle = vi
+        .fn()
+        .mockReturnValue(delayedWsPromise);
+
+      const unsubscribe = service.subscribeToCandles({
+        symbol: 'BTC',
+        interval: '1h' as ValidCandleInterval,
+        callback: vi.fn(),
+      });
+      await vi.advanceTimersByTimeAsync(50);
+      unsubscribe();
+      mockDeps.logger.error.mockClear();
+
+      resolveWsSubscription({ unsubscribe: mockWsUnsubscribe });
+      await vi.advanceTimersByTimeAsync(100);
+      process.off('unhandledRejection', unhandledRejectionListener);
+
+      expect(mockWsUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(unhandledRejectionListener).not.toHaveBeenCalled();
+      expect(mockDeps.logger.error).not.toHaveBeenCalled();
     });
   });
 
   describe('Reconnection and Terminate Event', () => {
     afterEach(() => {
       // Restore default mock implementations that may have been changed by tests
-      const { WebSocketTransport } = require('@nktkas/hyperliquid');
-      (WebSocketTransport as jest.Mock).mockImplementation(
-        () => mockWsTransport,
-      );
+      const { WebSocketTransport } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+      (WebSocketTransport as Mock).mockImplementation(function () {
+        return mockWsTransport;
+      });
       mockWsTransportReady.mockResolvedValue(undefined);
     });
 
     it('sets reconnection callback', () => {
-      const callback = jest.fn().mockResolvedValue(undefined);
+      const callback = vi.fn().mockResolvedValue(undefined);
 
       service.setOnReconnectCallback(callback);
 
@@ -1433,7 +1624,7 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('sets terminate callback', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       service.setOnTerminateCallback(callback);
 
@@ -1442,7 +1633,7 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('clears terminate callback when set to null', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
 
       service.setOnTerminateCallback(callback);
       service.setOnTerminateCallback(null);
@@ -1461,15 +1652,127 @@ describe('HyperLiquidClientService', () => {
       );
     });
 
+    describe('connection epoch', () => {
+      /**
+       * Fire the raw socket close handler the service registered.
+       */
+      const fireSocketClose = () => {
+        const closeHandler = mockSocket.addEventListener.mock.calls.find(
+          (call: unknown[]) => call[0] === 'close',
+        )?.[1] as (event: Event) => void;
+
+        expect(closeHandler).toBeDefined();
+        closeHandler({} as Event);
+      };
+
+      it('registers a close listener on the WebSocket transport', () => {
+        service.initialize(mockWallet);
+
+        // Attached once at transport creation. rews listeners survive
+        // reconnections, so this observes every later close — including the
+        // SDK's own automatic reconnects, which fire no other callback.
+        expect(mockSocket.addEventListener).toHaveBeenCalledWith(
+          'close',
+          expect.any(Function),
+        );
+      });
+
+      it('starts at a non-zero epoch so an unstamped default never matches', () => {
+        service.initialize(mockWallet);
+
+        expect(service.getConnectionEpoch()).toBeGreaterThan(0);
+      });
+
+      it('advances the epoch on every raw socket close', () => {
+        service.initialize(mockWallet);
+        const initial = service.getConnectionEpoch();
+
+        fireSocketClose();
+        const afterFirst = service.getConnectionEpoch();
+        expect(afterFirst).not.toBe(initial);
+
+        // An SDK automatic reconnect can close more than once; each retires the
+        // previous epoch rather than toggling between two values.
+        fireSocketClose();
+        expect(service.getConnectionEpoch()).not.toBe(afterFirst);
+        expect(service.getConnectionEpoch()).not.toBe(initial);
+      });
+
+      it('does not advance the epoch while the socket stays open', () => {
+        service.initialize(mockWallet);
+        const initial = service.getConnectionEpoch();
+
+        // No close event: a webData3 retry or any other same-connection work
+        // must leave cached per-connection data valid.
+        expect(service.getConnectionEpoch()).toBe(initial);
+      });
+
+      it('retires the epoch when the transport is discarded, without waiting for close', async () => {
+        // Teardown is asynchronous: the socket's own close may arrive long
+        // after the transport is gone, or never. Discarding the transport must
+        // retire the epoch by itself, or data cached against the dead
+        // connection would keep reading as live.
+        service.initialize(mockWallet);
+        const initial = service.getConnectionEpoch();
+
+        await service.disconnect();
+
+        expect(service.getConnectionEpoch()).not.toBe(initial);
+      });
+
+      it('ignores a delayed close from a transport that has been replaced', async () => {
+        // The close listener is bound to the transport it was attached to. A
+        // retired transport can still emit close after teardown; acting on it
+        // would retire the CURRENT connection's epoch and discard live
+        // positions for a connection that is perfectly healthy.
+        await service.initialize(mockWallet);
+
+        // Capture the first transport's close handler, then discard it.
+        const staleCloseHandler = mockSocket.addEventListener.mock.calls.find(
+          (call: unknown[]) => call[0] === 'close',
+        )?.[1] as (event: Event) => void;
+        expect(staleCloseHandler).toBeDefined();
+
+        await service.disconnect();
+
+        // Production creates a NEW transport on reconnect; the shared mock
+        // returns a singleton, which would make the stale handler
+        // indistinguishable from the live one.
+        const replacementSocket = {
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        };
+        const { WebSocketTransport } = hyperliquidModule as unknown as Record<
+          string,
+          Mock
+        >;
+        (WebSocketTransport as Mock).mockImplementationOnce(function () {
+          return {
+            url: 'ws://mock-2',
+            close: vi.fn().mockResolvedValue(undefined),
+            ready: vi.fn().mockResolvedValue(undefined),
+            socket: replacementSocket,
+          };
+        });
+
+        await service.initialize(mockWallet);
+        const currentEpoch = service.getConnectionEpoch();
+
+        // The dead transport's socket finally reports its close
+        staleCloseHandler({} as Event);
+
+        expect(service.getConnectionEpoch()).toBe(currentEpoch);
+      });
+    });
+
     it('calls terminate callback when terminate event is fired', () => {
-      const terminateCallback = jest.fn();
+      const terminateCallback = vi.fn();
       service.initialize(mockWallet);
       service.setOnTerminateCallback(terminateCallback);
 
       // Get the terminate event handler that was registered
       const terminateHandler = mockSocket.addEventListener.mock.calls.find(
-        (call: [string, (...args: unknown[]) => unknown]) =>
-          call[0] === 'terminate',
+        (call: unknown[]) => call[0] === 'terminate',
       )?.[1] as (event: Event) => void;
 
       expect(terminateHandler).toBeDefined();
@@ -1489,14 +1792,13 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('calls terminate callback with Error instance when detail is Error', () => {
-      const terminateCallback = jest.fn();
+      const terminateCallback = vi.fn();
       service.initialize(mockWallet);
       service.setOnTerminateCallback(terminateCallback);
 
       // Get the terminate event handler
       const terminateHandler = mockSocket.addEventListener.mock.calls.find(
-        (call: [string, (...args: unknown[]) => unknown]) =>
-          call[0] === 'terminate',
+        (call: unknown[]) => call[0] === 'terminate',
       )?.[1] as (event: Event) => void;
 
       // Simulate terminate event with Error detail
@@ -1512,9 +1814,6 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('updates connection state to DISCONNECTED when terminate event fires', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
       // Verify initial state is CONNECTED
@@ -1524,8 +1823,7 @@ describe('HyperLiquidClientService', () => {
 
       // Get the terminate event handler
       const terminateHandler = mockSocket.addEventListener.mock.calls.find(
-        (call: [string, (...args: unknown[]) => unknown]) =>
-          call[0] === 'terminate',
+        (call: unknown[]) => call[0] === 'terminate',
       )?.[1] as (event: Event) => void;
 
       // Fire terminate event
@@ -1542,8 +1840,7 @@ describe('HyperLiquidClientService', () => {
 
       // Get the terminate event handler
       const terminateHandler = mockSocket.addEventListener.mock.calls.find(
-        (call: [string, (...args: unknown[]) => unknown]) =>
-          call[0] === 'terminate',
+        (call: unknown[]) => call[0] === 'terminate',
       )?.[1] as (event: Event) => void;
 
       // Fire terminate event without setting callback
@@ -1553,7 +1850,7 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('clears terminate callback on disconnect', async () => {
-      const terminateCallback = jest.fn();
+      const terminateCallback = vi.fn();
       service.initialize(mockWallet);
       service.setOnTerminateCallback(terminateCallback);
 
@@ -1565,10 +1862,7 @@ describe('HyperLiquidClientService', () => {
 
       // Get the new terminate event handler
       const terminateHandler = mockSocket.addEventListener.mock.calls
-        .filter(
-          (call: [string, (...args: unknown[]) => unknown]) =>
-            call[0] === 'terminate',
-        )
+        .filter((call: unknown[]) => call[0] === 'terminate')
         .pop()?.[1] as (event: Event) => void;
 
       // Fire terminate event
@@ -1582,17 +1876,17 @@ describe('HyperLiquidClientService', () => {
   describe('Reconnection Logic', () => {
     afterEach(() => {
       // Restore default mock implementations that may have been changed by tests
-      const { WebSocketTransport } = require('@nktkas/hyperliquid');
-      (WebSocketTransport as jest.Mock).mockImplementation(
-        () => mockWsTransport,
-      );
+      const { WebSocketTransport } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+      (WebSocketTransport as Mock).mockImplementation(function () {
+        return mockWsTransport;
+      });
       mockWsTransportReady.mockResolvedValue(undefined);
     });
 
     it('reconnect() triggers reconnection and maintains CONNECTED state on success', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
       // Verify initial state is CONNECTED
@@ -1621,28 +1915,115 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('reconnect() creates new clients after reconnection', async () => {
-      const { InfoClient, SubscriptionClient } = require('@nktkas/hyperliquid');
+      const { InfoClient, SubscriptionClient } =
+        hyperliquidModule as unknown as Record<string, Mock>;
       await service.initialize(mockWallet);
 
-      const infoClientCallsBefore = (InfoClient as jest.Mock).mock.calls.length;
-      const subscriptionClientCallsBefore = (SubscriptionClient as jest.Mock)
-        .mock.calls.length;
+      const infoClientCallsBefore = (InfoClient as Mock).mock.calls.length;
+      const subscriptionClientCallsBefore = (SubscriptionClient as Mock).mock
+        .calls.length;
 
       await service.reconnect();
 
       // New clients should have been created
-      expect((InfoClient as jest.Mock).mock.calls.length).toBeGreaterThan(
+      expect((InfoClient as Mock).mock.calls.length).toBeGreaterThan(
         infoClientCallsBefore,
       );
-      expect(
-        (SubscriptionClient as jest.Mock).mock.calls.length,
-      ).toBeGreaterThan(subscriptionClientCallsBefore);
+      expect((SubscriptionClient as Mock).mock.calls.length).toBeGreaterThan(
+        subscriptionClientCallsBefore,
+      );
+    });
+
+    it('reconnect() recreates exchangeClient and isInitialized() returns true', async () => {
+      const { ExchangeClient, InfoClient } =
+        hyperliquidModule as unknown as Record<string, Mock>;
+      await service.initialize(mockWallet);
+
+      expect(service.isInitialized()).toBe(true);
+
+      const exchangeCallsBefore = (ExchangeClient as Mock).mock.calls.length;
+      const infoCallsBefore = (InfoClient as Mock).mock.calls.length;
+
+      await service.reconnect();
+
+      // ExchangeClient should have been recreated with HTTP transport
+      expect((ExchangeClient as Mock).mock.calls.length).toBeGreaterThan(
+        exchangeCallsBefore,
+      );
+      // InfoClient should have additional calls (WS + HTTP fallback)
+      expect((InfoClient as Mock).mock.calls.length).toBeGreaterThan(
+        infoCallsBefore,
+      );
+      // isInitialized() must return true after reconnection
+      expect(service.isInitialized()).toBe(true);
+    });
+
+    it('reconnect() skips exchangeClient when wallet was never provided', async () => {
+      const { ExchangeClient } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+
+      // Create a fresh service without calling initialize() — no wallet stored
+      const freshService = new HyperLiquidClientService(mockDeps);
+      const exchangeCallsBefore = (ExchangeClient as Mock).mock.calls.length;
+
+      await freshService.reconnect();
+
+      // ExchangeClient should NOT be created since no wallet params exist
+      expect((ExchangeClient as Mock).mock.calls.length).toBe(
+        exchangeCallsBefore,
+      );
+      // isInitialized() must be false — exchangeClient was never created
+      expect(freshService.isInitialized()).toBe(false);
+    });
+
+    it('reports uninitialized when reconnect readiness fails', async () => {
+      await service.initialize(mockWallet);
+      expect(service.isInitialized()).toBe(true);
+
+      // Clients are constructed before the transport reports ready, so a
+      // rejected ready() must not leave a session that looks usable.
+      mockWsTransportReady.mockRejectedValueOnce(new Error('ws never opened'));
+      await service.reconnect();
+
+      expect(service.isInitialized()).toBe(false);
+      expect(service.getSubscriptionClient()).toBeUndefined();
+      expect(() => service.getInfoClient()).toThrow('CLIENT_NOT_INITIALIZED');
+      expect(service.getInfoClient({ useHttp: true })).toBe(mockInfoClientHttp);
+      expect(service.getExchangeClient()).toBe(mockExchangeClient);
+    });
+
+    it('reports uninitialized when reconnect readiness fails after a disconnect', async () => {
+      await service.initialize(mockWallet);
+      await service.disconnect();
+
+      mockWsTransportReady.mockRejectedValueOnce(new Error('ws never opened'));
+      await service.reconnect();
+
+      expect(service.isInitialized()).toBe(false);
+    });
+
+    it('does not initialize a competing subscription client during retry backoff', async () => {
+      const { WebSocketTransport } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+      await service.initialize(mockWallet);
+
+      mockWsTransportReady.mockRejectedValueOnce(new Error('ws never opened'));
+      await service.reconnect();
+      const transportCalls = (WebSocketTransport as Mock).mock.calls.length;
+
+      await service.ensureSubscriptionClient(mockWallet);
+
+      expect((WebSocketTransport as Mock).mock.calls).toHaveLength(
+        transportCalls,
+      );
+      expect(service.getSubscriptionClient()).toBeUndefined();
     });
 
     it('performDisconnection resets isReconnecting flag', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
       // Disconnect (which calls performDisconnection internally)
@@ -1670,20 +2051,20 @@ describe('HyperLiquidClientService', () => {
   describe('Connection State Listeners', () => {
     afterEach(() => {
       // Restore default mock implementations
-      const { WebSocketTransport } = require('@nktkas/hyperliquid');
-      (WebSocketTransport as jest.Mock).mockImplementation(
-        () => mockWsTransport,
-      );
+      const { WebSocketTransport } = hyperliquidModule as unknown as Record<
+        string,
+        Mock
+      >;
+      (WebSocketTransport as Mock).mockImplementation(function () {
+        return mockWsTransport;
+      });
       mockWsTransportReady.mockResolvedValue(undefined);
     });
 
     it('subscribeToConnectionState immediately notifies with current state', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
-      const listener = jest.fn();
+      const listener = vi.fn();
 
       service.subscribeToConnectionState(listener);
 
@@ -1695,12 +2076,9 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('listener receives state changes when connection state updates', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
-      const listener = jest.fn();
+      const listener = vi.fn();
       service.subscribeToConnectionState(listener);
 
       // Clear the initial call
@@ -1708,8 +2086,7 @@ describe('HyperLiquidClientService', () => {
 
       // Trigger a state change by firing terminate event
       const terminateHandler = mockSocket.addEventListener.mock.calls.find(
-        (call: [string, (...args: unknown[]) => unknown]) =>
-          call[0] === 'terminate',
+        (call: unknown[]) => call[0] === 'terminate',
       )?.[1] as (event: Event) => void;
 
       terminateHandler({ detail: { code: 1006 } } as unknown as Event);
@@ -1724,7 +2101,7 @@ describe('HyperLiquidClientService', () => {
     it('unsubscribe function removes listener', async () => {
       await service.initialize(mockWallet);
 
-      const listener = jest.fn();
+      const listener = vi.fn();
       const unsubscribe = service.subscribeToConnectionState(listener);
 
       // Clear the initial call
@@ -1735,8 +2112,7 @@ describe('HyperLiquidClientService', () => {
 
       // Trigger a state change
       const terminateHandler = mockSocket.addEventListener.mock.calls.find(
-        (call: [string, (...args: unknown[]) => unknown]) =>
-          call[0] === 'terminate',
+        (call: unknown[]) => call[0] === 'terminate',
       )?.[1] as (event: Event) => void;
 
       terminateHandler({ detail: { code: 1006 } } as unknown as Event);
@@ -1746,14 +2122,11 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('multiple listeners all receive notifications', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
-      const listener1 = jest.fn();
-      const listener2 = jest.fn();
-      const listener3 = jest.fn();
+      const listener1 = vi.fn();
+      const listener2 = vi.fn();
+      const listener3 = vi.fn();
 
       service.subscribeToConnectionState(listener1);
       service.subscribeToConnectionState(listener2);
@@ -1780,8 +2153,7 @@ describe('HyperLiquidClientService', () => {
 
       // Trigger state change
       const terminateHandler = mockSocket.addEventListener.mock.calls.find(
-        (call: [string, (...args: unknown[]) => unknown]) =>
-          call[0] === 'terminate',
+        (call: unknown[]) => call[0] === 'terminate',
       )?.[1] as (event: Event) => void;
 
       terminateHandler({ detail: { code: 1006 } } as unknown as Event);
@@ -1802,12 +2174,9 @@ describe('HyperLiquidClientService', () => {
     });
 
     it('reconnection triggers CONNECTING state notification', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
-      const listener = jest.fn();
+      const listener = vi.fn();
       service.subscribeToConnectionState(listener);
 
       // Clear initial call
@@ -1818,19 +2187,15 @@ describe('HyperLiquidClientService', () => {
 
       // Listener should have been called with CONNECTING state
       const connectingCall = listener.mock.calls.find(
-        (call: [string, number]) =>
-          call[0] === WebSocketConnectionState.Connecting,
+        (call: unknown[]) => call[0] === WebSocketConnectionState.Connecting,
       );
       expect(connectingCall).toBeDefined();
     });
 
     it('successful reconnection notifies listeners with CONNECTED state', async () => {
-      const {
-        WebSocketConnectionState,
-      } = require('../../../src/services/HyperLiquidClientService');
       await service.initialize(mockWallet);
 
-      const listener = jest.fn();
+      const listener = vi.fn();
       service.subscribeToConnectionState(listener);
 
       // Clear initial call
@@ -1841,8 +2206,7 @@ describe('HyperLiquidClientService', () => {
 
       // Find the CONNECTED call after reconnection
       const connectedCalls = listener.mock.calls.filter(
-        (call: [string, number]) =>
-          call[0] === WebSocketConnectionState.Connected,
+        (call: unknown[]) => call[0] === WebSocketConnectionState.Connected,
       );
 
       expect(connectedCalls.length).toBeGreaterThan(0);
@@ -1889,7 +2253,7 @@ describe('HyperLiquidClientService', () => {
         .catch((e) => e);
 
       // Advance timers to trigger the timeout
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Now check the result
       const error = await promiseResult;

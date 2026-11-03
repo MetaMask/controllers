@@ -1,9 +1,11 @@
-import { rpcErrors } from '@metamask/rpc-errors';
+import { JsonRpcError, providerErrors, rpcErrors } from '@metamask/rpc-errors';
 import type { Hex } from '@metamask/utils';
+import { describe, expect, it } from 'vitest';
 
 import { TransactionEnvelopeType, TransactionType } from '../types.js';
 import type { TransactionParams } from '../types.js';
 import {
+  ErrorCode,
   validateBatchRequest,
   validateParamTo,
   validateTransactionOrigin,
@@ -507,7 +509,7 @@ describe('validation', () => {
             maxFeePerGas: '0x01',
             gas: 'zzzzz',
             // TODO: Replace `any` with type
-          } as unknown as TransactionParams),
+          }),
         ).toThrow(
           rpcErrors.invalidParams(
             'Invalid transaction params: gas is not a valid hexadecimal string. got: (zzzzz)',
@@ -520,7 +522,7 @@ describe('validation', () => {
             maxFeePerGas: '0x01',
             gas: '0x0',
             // TODO: Replace `any` with type
-          } as unknown as TransactionParams),
+          }),
         ).not.toThrow();
       });
     });
@@ -642,7 +644,7 @@ describe('validation', () => {
             authorizationList: [
               {
                 address: FROM_MOCK,
-                yParity: '0x2' as never,
+                yParity: '0x2',
               },
             ],
             from: FROM_MOCK,
@@ -743,9 +745,7 @@ describe('validation', () => {
           txParams: {} as TransactionParams,
         }),
       ).rejects.toThrow(
-        rpcErrors.invalidParams(
-          'The requested account and/or method has not been authorized by the user.',
-        ),
+        providerErrors.unauthorized({ data: { origin: ORIGIN_MOCK } }),
       );
     });
 
@@ -789,7 +789,7 @@ describe('validation', () => {
           txParams: {
             authorizationList: [],
             from: TO_MOCK,
-          } as TransactionParams,
+          },
         }),
       ).rejects.toThrow(
         rpcErrors.invalidParams(
@@ -955,7 +955,12 @@ describe('validation', () => {
           ...VALIDATE_BATCH_REQUEST_MOCK,
           sizeLimit: 1,
         }),
-      ).toThrow(rpcErrors.invalidParams('Batch size cannot exceed 1. got: 2'));
+      ).toThrow(
+        new JsonRpcError(
+          ErrorCode.BundleTooLarge,
+          'Batch size cannot exceed 1. got: 2',
+        ),
+      );
     });
 
     it('does not throw if internal and transaction count is greater than limit', () => {

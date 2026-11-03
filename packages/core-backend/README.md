@@ -358,11 +358,12 @@ sequenceDiagram
 
 ### Connection Requirements
 
-The WebSocket connects when **ALL 3 conditions are true**:
+The WebSocket connects when **ALL 4 conditions are true**:
 
 1. ✅ **Feature enabled** - `isEnabled()` callback returns `true` (feature flag)
-2. ✅ **User signed in** - `AuthenticationController.isSignedIn = true`
-3. ✅ **Wallet unlocked** - `KeyringController.isUnlocked = true`
+2. ✅ **Basic functionality enabled** - `isBasicFunctionality()` callback returns `true` (defaults to true when omitted)
+3. ✅ **User signed in** - `AuthenticationController.isSignedIn = true`
+4. ✅ **Wallet unlocked** - `KeyringController.isUnlocked = true`
 
 **Plus:** Platform code must call `connect()` when app opens/foregrounds and `disconnect()` when app closes/backgrounds.
 
@@ -480,7 +481,7 @@ Handles price-related operations including spot prices, exchange rates, and hist
 
 | Method                                                                                                           | Description                                      |
 | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `fetchPriceV1SupportedNetworks(options?)`                                                                        | Get price-supported networks (v1)                |
+| `fetchPriceV1SupportedNetworks(options?)`                                                                        | Get price-supported networks (v1, decimal IDs)   |
 | `fetchPriceV2SupportedNetworks(options?)`                                                                        | Get price-supported networks in CAIP format (v2) |
 | `fetchV1ExchangeRates(baseCurrency, options?)`                                                                   | Get exchange rates for base currency             |
 | `fetchV1FiatExchangeRates(options?)`                                                                             | Get fiat exchange rates                          |
@@ -499,6 +500,8 @@ Handles price-related operations including spot prices, exchange rates, and hist
 | `fetchV1HistoricalPriceGraphByTokenAddress(chainId, address, queryOptions?, options?)`                           | Get price graph by token address                 |
 | `getPriceV1SupportedNetworksQueryOptions(options?)` … `getV1HistoricalPriceGraphByTokenAddressQueryOptions(...)` | Return TanStack Query options for each fetch     |
 | `invalidatePrices()`                                                                                             | Invalidate all price cache                       |
+
+> **Note:** For both supported-networks endpoints, `partialSupport` is an object keyed by spot-price endpoint, not a flat array: `/v1` returns `{ spotPricesV2: number[] }` and `/v2` returns `{ spotPricesV2: string[]; spotPricesV3: string[] }`. Pick the key that matches the spot-prices endpoint you call (e.g. `fullSupport` + `partialSupport.spotPricesV3` for `/v3/spot-prices`).
 
 #### TokenApiClient
 
@@ -618,7 +621,11 @@ interface BackendWebSocketServiceOptions {
   maxReconnectDelay?: number;
   requestTimeout?: number;
   enableAuthentication?: boolean;
-  enabledCallback?: () => boolean;
+  isEnabled?: () => boolean;
+  isBasicFunctionality?: () => boolean;
+  subscribeToBasicFunctionalityChange?: (
+    onChange: () => void,
+  ) => void | (() => void);
 }
 ```
 

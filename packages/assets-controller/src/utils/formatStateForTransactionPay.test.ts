@@ -1,3 +1,5 @@
+import { afterEach, describe, expect, it } from 'vitest';
+
 import type {
   AssetBalance,
   AssetMetadata,
@@ -125,13 +127,13 @@ describe('formatStateForTransactionPay', () => {
           decimals: 6,
           symbol: 'USDC',
           name: 'USD Coin',
-        } as AssetMetadata,
+        },
         [ETH_NATIVE_ID]: {
           type: 'native',
           decimals: 18,
           symbol: 'ETH',
           name: 'Ether',
-        } as AssetMetadata,
+        },
       },
       assetsPrice: {},
       selectedCurrency: 'usd',
@@ -398,7 +400,7 @@ describe('formatStateForTransactionPay', () => {
       accounts: [{ ...ACCOUNT_1 }],
       assetsBalance: {
         [ACCOUNT_1.id]: {
-          [USDC_ASSET_ID]: { amount: '1000000' } as AssetBalance,
+          [USDC_ASSET_ID]: { amount: '1000000' },
         },
       },
       assetsInfo: {},
@@ -428,7 +430,7 @@ describe('formatStateForTransactionPay', () => {
         ...params,
         assetsBalance: {
           [ACCOUNT_1.id]: {
-            [USDC_ASSET_ID]: { amount: '2000000' } as AssetBalance,
+            [USDC_ASSET_ID]: { amount: '2000000' },
           },
         },
       });

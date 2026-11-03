@@ -6,11 +6,21 @@ export type {
   RampsControllerState,
   RampsControllerStateChangeEvent,
   RampsControllerOrderStatusChangedEvent,
+  RampsControllerAutorampStatusChangedEvent,
+  AutorampTransactionStatusChangedPayload,
   RampsControllerOptions,
+  PaymentMethodsForContextResponse,
   UserRegion,
   ResourceState,
   TransakState,
   NativeProvidersState,
+  MoneyAccountWalletRegistration,
+  MoneyAccountWalletRegistrationResult,
+  KeyringControllerSignPersonalMessageAction,
+  VbaAutorampStatus,
+  VbaKycStatus,
+  VbaOnboardingSnapshot,
+  VbaProviderFlowStatus,
 } from './RampsController.js';
 export type {
   RampsControllerExecuteRequestAction,
@@ -18,19 +28,33 @@ export type {
   RampsControllerGetRequestStateAction,
   RampsControllerSetUserRegionAction,
   RampsControllerSetSelectedProviderAction,
+  RampsControllerSetSelectedProviderForAssetAction,
   RampsControllerInitAction,
   RampsControllerGetCountriesAction,
   RampsControllerGetTokensAction,
   RampsControllerSetSelectedTokenAction,
   RampsControllerGetProvidersAction,
   RampsControllerGetPaymentMethodsAction,
+  RampsControllerGetPaymentMethodsForContextAction,
   RampsControllerSetSelectedPaymentMethodAction,
   RampsControllerGetQuotesAction,
+  RampsControllerGetQuoteWithFeesAction,
   RampsControllerAddOrderAction,
   RampsControllerRemoveOrderAction,
+  RampsControllerAddAutorampAction,
+  RampsControllerCreateAutorampAction,
+  RampsControllerHydrateVbaOnboardingAction,
+  RampsControllerRemoveAutorampAction,
+  RampsControllerRegisterMoneyAccountWalletAction,
+  RampsControllerMarkAutorampAsNotifiedAction,
+  RampsControllerApplyAutorampStatusFromPushAction,
+  RampsControllerRefreshAutorampAction,
+  RampsControllerRefreshAutorampsAction,
+  RampsControllerRefreshAutorampTransactionsAction,
   RampsControllerStartOrderPollingAction,
   RampsControllerStopOrderPollingAction,
   RampsControllerGetBuyWidgetDataAction,
+  RampsControllerGetFallbackBuyWidgetDataAction,
   RampsControllerAddPrecreatedOrderAction,
   RampsControllerGetOrderAction,
   RampsControllerGetOrderFromCallbackAction,
@@ -60,12 +84,17 @@ export type {
   RampsControllerTransakCancelOrderAction,
   RampsControllerTransakCancelAllActiveOrdersAction,
   RampsControllerTransakGetActiveOrdersAction,
+  RampsControllerSyncOrdersWithUserStorageAction,
 } from './RampsController-method-action-types.js';
 export {
   RampsController,
+  VBA_AUTORAMP_STATUSES,
+  VBA_KYC_STATUSES,
+  VBA_PROVIDER_FLOW_STATUSES,
   getDefaultRampsControllerState,
   getInternalOrderCode,
   RAMPS_CONTROLLER_REQUIRED_SERVICE_ACTIONS,
+  RAMPS_CONTROLLER_REQUIRED_CONTROLLER_ACTIONS,
 } from './RampsController.js';
 export type {
   RampsServiceActions,
@@ -82,6 +111,8 @@ export type {
   ProviderLimit,
   ProviderFiatLimits,
   ProviderLimits,
+  ProviderSortOrder,
+  ProvidersResponse,
   RampAction,
   PaymentMethod,
   PaymentMethodsResponse,
@@ -96,6 +127,7 @@ export type {
   RampsToken,
   TokensResponse,
   BuyWidget,
+  BuyWidgetFallback,
   RampsOrder,
   RampsOrderNetwork,
   RampsOrderCryptoCurrency,
@@ -109,8 +141,16 @@ export {
   RampsApiService,
   RampsOrderStatus,
   RAMPS_SDK_VERSION,
+  getDefaultRedirectCallbackUrl,
 } from './RampsService.js';
+export type { RampsClientIdentity } from './client-identity.js';
+export {
+  addRampsClientIdentityParams,
+  RAMPS_CLIENT_PRODUCT_PARAM,
+  RAMPS_CLIENT_VERSION_PARAM,
+} from './client-identity.js';
 export type {
+  RampsServiceGetDefaultRedirectCallbackUrlAction,
   RampsServiceGetGeolocationAction,
   RampsServiceGetCountriesAction,
   RampsServiceGetPaymentMethodsAction,
@@ -148,6 +188,7 @@ export {
   isHeadlessAllProvidersEnabled,
 } from './featureFlags.js';
 export {
+  normalizeRampsAssetId,
   providerServesAsset,
   getProvidersServingAsset,
   regionHasProviderForAsset,
@@ -157,13 +198,42 @@ export {
   isExternalBrowserQuote,
   isCustomActionQuote,
   isInAppOnlyQuote,
+  getBuyWidgetFallback,
 } from './quoteClassification.js';
+export {
+  TERMINAL_ORDER_STATUSES,
+  isTerminalOrderStatus,
+} from './orderStatus.js';
 export type { TypedError } from './errorNormalization.js';
 export {
   getErrorMessage,
   extractExplicitTypedError,
   normalizeToTypedError,
 } from './errorNormalization.js';
+export type {
+  UserStorageRampsOrderEntry,
+  SyncRampsOrder,
+  OrderSyncingController,
+  OrderSyncingOptions,
+  SyncOrdersWithUserStorageConfig,
+} from './order-syncing/index.js';
+export {
+  USER_STORAGE_RAMPS_ORDERS_FEATURE,
+  USER_STORAGE_VERSION,
+  USER_STORAGE_VERSION_KEY,
+  createOrderStorageKey,
+  isSyncableOrder,
+  mapRampsOrderToUserStorageEntry,
+  mapUserStorageEntryToRampsOrder,
+  stripPaymentDetailsForRemoteStorage,
+  stripSyncMetadata,
+  stripDeletedAt,
+  areOrdersEqual,
+  canPerformOrderSyncing,
+  syncOrdersWithUserStorage,
+  updateOrderInUserStorage,
+  deleteOrderInUserStorage,
+} from './order-syncing/index.js';
 export type {
   TransakServiceActions,
   TransakServiceEvents,
@@ -213,3 +283,77 @@ export type {
   TransakServiceGeneratePaymentWidgetUrlAction,
   TransakServiceCreateWidgetUrlAction,
 } from './TransakService-method-action-types.js';
+export type {
+  AutorampAccount,
+  ApplyAutorampRemoteStatusResult,
+  CreateAutorampRequest,
+} from './autorampAccount.js';
+export {
+  AutorampStatus,
+  TERMINAL_AUTORAMP_STATUSES,
+  NOTABLE_AUTORAMP_STATUSES,
+  isTerminalAutorampStatus,
+  normalizeAutorampStatus,
+  createAutorampAccount,
+  applyAutorampRemoteStatus,
+  markAutorampNotified,
+  buildMusdAutorampRequest,
+  buildBrazilMusdAutorampRequest,
+} from './autorampAccount.js';
+export { buildOwnershipMessage } from './ownership-message.js';
+export type {
+  AutorampTransactionRecord,
+  AutorampTransactionRecords,
+  AutorampTransactionChange,
+} from './diffAutorampTransactions.js';
+export { diffAutorampTransactions } from './diffAutorampTransactions.js';
+export type {
+  AutorampDepositInstructions,
+  AutorampDepositRailsSummary,
+  AutorampRemoteSnapshot,
+  AutorampTransactionSummary,
+  PixDepositInstructions,
+  UsBankDepositInstructions,
+  UsBankDepositRail,
+} from './autoramp-types.js';
+export type {
+  NeoBankServiceActions,
+  NeoBankServiceEvents,
+  NeoBankServiceMessenger,
+  NeoBankAutorampResponse,
+  NeoBankRequestOptions,
+  NeoBankQueryParams,
+  GetWalletRegistrationStatusParams,
+  RegisterSelfHostedWalletParams,
+} from './NeoBankService.js';
+export type {
+  NeoBankServiceGetAutorampAction,
+  NeoBankServiceGetAutorampsAction,
+  NeoBankServiceGetPixDepositInstructionsAction,
+  NeoBankServiceGetDepositInstructionsAction,
+  NeoBankServiceListAutorampTransactionsAction,
+  NeoBankServiceRegisterPixAddressAction,
+  NeoBankServiceGetAutorampQuoteAction,
+  NeoBankServiceCreateAutorampAction,
+  NeoBankServiceGetAutorampQuoteForAutorampAction,
+  NeoBankServiceAttachAutorampQuoteAction,
+  NeoBankServiceGetCustomerByExternalIdAction,
+  NeoBankServiceGetMoonpayCustomerIdAction,
+  NeoBankServiceGetWalletRegistrationStatusAction,
+  NeoBankServiceRegisterSelfHostedWalletAction,
+} from './NeoBankService-method-action-types.js';
+export {
+  NeoBankService,
+  serviceName as neoBankServiceName,
+  mapNeoBankAutorampToRemoteSnapshot,
+  extractPixDepositInstructions,
+  extractUsBankDepositInstructions,
+} from './NeoBankService.js';
+export type {
+  Blockchain,
+  RegistrationOutcome,
+  RegistrationStatus,
+  SelfHostedRegistration,
+  WalletRegistrationErrorKind,
+} from './wallet-registration-service.js';
+export { WalletRegistrationError } from './wallet-registration-service.js';

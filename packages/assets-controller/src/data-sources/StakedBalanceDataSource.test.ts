@@ -1,19 +1,16 @@
 import type { InternalAccount } from '@metamask/keyring-internal-api';
 import { TransactionStatus } from '@metamask/transaction-controller';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock, MockInstance } from 'vitest';
 
 import {
   MockRootMessenger,
-  createMockAssetControllerMessenger,
+  createMockMessengers,
   createMockWeb3Provider,
   registerStakedMessengerActions,
 } from '../__fixtures__/MockAssetControllerMessenger.js';
 import type { AssetsControllerMessenger } from '../AssetsController.js';
-import type {
-  AssetsControllerStateInternal,
-  ChainId,
-  Context,
-  DataRequest,
-} from '../types.js';
+import type { ChainId, Context, DataRequest } from '../types.js';
 import type { StakedBalanceDataSourceOptions } from './StakedBalanceDataSource.js';
 import { StakedBalanceDataSource } from './StakedBalanceDataSource.js';
 
@@ -40,7 +37,7 @@ function createMockInternalAccount(
       lastSelected: Date.now(),
     },
     ...overrides,
-  } as InternalAccount;
+  };
 }
 
 function createDataRequest(
@@ -60,21 +57,10 @@ function createDataRequest(
   };
 }
 
-function getMockAssetsState(): AssetsControllerStateInternal {
-  return {
-    assetsInfo: {},
-    assetsBalance: {},
-    assetsPrice: {},
-    customAssets: {},
-    assetPreferences: {},
-  };
-}
-
 function createMiddlewareContext(overrides?: Partial<Context>): Context {
   return {
     request: createDataRequest(),
     response: {},
-    getAssetsState: getMockAssetsState,
     ...overrides,
   };
 }
@@ -93,9 +79,9 @@ type WithControllerCallback<ReturnValue> = ({
 }: {
   controller: StakedBalanceDataSource;
   messenger: AssetsControllerMessenger;
-  mockMessengerCall: jest.SpyInstance;
-  mockMessengerSubscribe: jest.SpyInstance;
-  mockMessengerUnsubscribe: jest.SpyInstance;
+  mockMessengerCall: MockInstance;
+  mockMessengerSubscribe: MockInstance;
+  mockMessengerUnsubscribe: MockInstance;
   rootMessenger: MockRootMessenger;
   onActiveChainsUpdated: (
     dataSourceName: string,
@@ -120,24 +106,25 @@ async function withController<ReturnValue>(
     }),
   } = controllerOptions;
 
-  const { assetsControllerMessenger, rootMessenger } =
-    createMockAssetControllerMessenger();
-  registerStakedMessengerActions(rootMessenger, {
-    enabledNetworkMap,
-    mockProvider,
+  const { rootMessenger, assetsControllerMessenger } = createMockMessengers({
+    registerCustomRootActions: (messenger) =>
+      registerStakedMessengerActions(messenger, {
+        enabledNetworkMap,
+        mockProvider,
+      }),
   });
 
   // spy on staked messenger calls, so we can inspect and assert
-  const mockStakedMessengerCall = jest.spyOn(assetsControllerMessenger, 'call');
+  const mockStakedMessengerCall = vi.spyOn(assetsControllerMessenger, 'call');
 
   // spy on staked messenger subscriptions, so we can inspect and assert
-  const mockStakedMessengerSubscribe = jest.spyOn(
+  const mockStakedMessengerSubscribe = vi.spyOn(
     assetsControllerMessenger,
     'subscribe',
   );
 
   // spy on staked messenger unsubscribe, so we can inspect and assert
-  const mockStakedMessengerUnsubscribe = jest.spyOn(
+  const mockStakedMessengerUnsubscribe = vi.spyOn(
     assetsControllerMessenger,
     'clearEventSubscriptions',
   );
@@ -147,7 +134,7 @@ async function withController<ReturnValue>(
       options as {
         onActiveChainsUpdated?: (n: string, c: ChainId[], p: ChainId[]) => void;
       }
-    ).onActiveChainsUpdated ?? jest.fn();
+    ).onActiveChainsUpdated ?? vi.fn();
 
   const controller = new StakedBalanceDataSource({
     messenger: assetsControllerMessenger,
@@ -174,7 +161,7 @@ async function withController<ReturnValue>(
 
 describe('StakedBalanceDataSource', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('constructor', () => {
@@ -285,11 +272,11 @@ describe('StakedBalanceDataSource', () => {
     it('returns empty response for unsupported chain', async () => {
       await withController(async ({ controller }) => {
         const request = createDataRequest({
-          chainIds: ['eip155:999' as ChainId],
+          chainIds: ['eip155:999'],
           accountsWithSupportedChains: [
             {
               account: createMockInternalAccount(),
-              supportedChains: ['eip155:999' as ChainId],
+              supportedChains: ['eip155:999'],
             },
           ],
         });
@@ -348,13 +335,12 @@ describe('StakedBalanceDataSource', () => {
   describe('subscribe', () => {
     it('stores subscription and calls onAssetsUpdate after initial fetch', async () => {
       await withController(async ({ controller }) => {
-        const onAssetsUpdate = jest.fn();
+        const onAssetsUpdate = vi.fn();
         await controller.subscribe({
           request: createDataRequest(),
           subscriptionId: 'test-sub',
           isUpdate: false,
           onAssetsUpdate,
-          getAssetsState: getMockAssetsState,
         });
         await new Promise((resolve) => {
           setTimeout(resolve, 100);
@@ -370,13 +356,12 @@ describe('StakedBalanceDataSource', () => {
       await withController(
         { enabledNetworkMap: { eip155: {} } },
         async ({ controller }) => {
-          const onAssetsUpdate = jest.fn();
+          const onAssetsUpdate = vi.fn();
           await controller.subscribe({
             request: createDataRequest(),
             subscriptionId: 'test-sub',
             isUpdate: false,
             onAssetsUpdate,
-            getAssetsState: getMockAssetsState,
           });
           expect(onAssetsUpdate).not.toHaveBeenCalled();
         },
@@ -391,8 +376,7 @@ describe('StakedBalanceDataSource', () => {
           request: createDataRequest(),
           subscriptionId: 'test-sub',
           isUpdate: false,
-          onAssetsUpdate: jest.fn(),
-          getAssetsState: getMockAssetsState,
+          onAssetsUpdate: vi.fn(),
         });
         await controller.unsubscribe('test-sub');
         const chains = await controller.getActiveChains();
@@ -404,15 +388,14 @@ describe('StakedBalanceDataSource', () => {
   describe('transaction events', () => {
     const arrange = async (props: {
       controller: StakedBalanceDataSource;
-    }): Promise<jest.Mock> => {
+    }): Promise<Mock> => {
       // subscribe and wait ensure polling finishes before we start test
-      const onAssetsUpdate = jest.fn();
+      const onAssetsUpdate = vi.fn();
       await props.controller.subscribe({
         request: createDataRequest(),
         subscriptionId: 'test-sub',
         isUpdate: false,
         onAssetsUpdate,
-        getAssetsState: getMockAssetsState,
       });
       await new Promise((resolve) => setTimeout(resolve, 100));
       onAssetsUpdate.mockClear();
@@ -493,13 +476,12 @@ describe('StakedBalanceDataSource', () => {
   describe('refreshStakedBalance', () => {
     it('pushes updates for all subscribed accounts and chains', async () => {
       await withController(async ({ controller }) => {
-        const onAssetsUpdate = jest.fn();
+        const onAssetsUpdate = vi.fn();
         await controller.subscribe({
           request: createDataRequest(),
           subscriptionId: 'test-sub',
           isUpdate: false,
           onAssetsUpdate,
-          getAssetsState: getMockAssetsState,
         });
         onAssetsUpdate.mockClear();
         expect(await controller.refreshStakedBalance()).toBeUndefined();
@@ -521,7 +503,7 @@ describe('StakedBalanceDataSource', () => {
       await withController(
         { options: { enabled: false }, enabledNetworkMap: {} },
         async ({ controller }) => {
-          const next = jest.fn().mockResolvedValue(undefined);
+          const next = vi.fn().mockResolvedValue(undefined);
           const context = createMiddlewareContext();
           await controller.assetsMiddleware(context, next);
           expect(next).toHaveBeenCalledWith(context);
@@ -532,7 +514,7 @@ describe('StakedBalanceDataSource', () => {
 
     it('merges staked balance into response when balance data type requested', async () => {
       await withController(async ({ controller }) => {
-        const next = jest.fn().mockResolvedValue(undefined);
+        const next = vi.fn().mockResolvedValue(undefined);
         const context = createMiddlewareContext();
         await controller.assetsMiddleware(context, next);
         expect(next).toHaveBeenCalledWith(context);
@@ -547,7 +529,7 @@ describe('StakedBalanceDataSource', () => {
 
     it('passes through without fetching when dataTypes does not include balance', async () => {
       await withController(async ({ controller }) => {
-        const next = jest.fn().mockResolvedValue(undefined);
+        const next = vi.fn().mockResolvedValue(undefined);
         const request = createDataRequest();
         request.dataTypes = ['price'];
         const context = createMiddlewareContext({ request, response: {} });

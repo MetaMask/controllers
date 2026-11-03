@@ -1,31 +1,35 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
+
 import type { PayStrategiesConfig } from '../../utils/feature-flags.js';
 import { getPayStrategiesConfig } from '../../utils/feature-flags.js';
+import { TradeType } from '../../utils/trade-type.js';
 import {
   fetchServerQuote,
   getServerStatus,
   submitServerIntent,
 } from './server-api.js';
-import { ServerProviderName, ServerStatus, ServerTradeType } from './types.js';
+import { ServerStatus } from './types.js';
 import type { ServerQuoteRequest, ServerSubmitRequest } from './types.js';
 
-jest.mock('../../utils/feature-flags');
+vi.mock(import('../../utils/feature-flags.js'));
 
-const getPayStrategiesConfigMock = jest.mocked(getPayStrategiesConfig);
+const getPayStrategiesConfigMock = vi.mocked(getPayStrategiesConfig);
 
-let fetchMock: jest.SpyInstance;
+let fetchMock: MockInstance;
 
-const mockOkResponse = (body: unknown): jest.SpyInstance =>
+const mockOkResponse = (body: unknown): MockInstance =>
   fetchMock.mockResolvedValueOnce({
     ok: true,
     json: async () => body,
-  } as Response);
+  });
 
-const mockErrorResponse = (status: number, body: unknown): jest.SpyInstance =>
+const mockErrorResponse = (status: number, body: unknown): MockInstance =>
   fetchMock.mockResolvedValueOnce({
     ok: false,
     status,
     json: async () => body,
-  } as Response);
+  });
 
 const BASE_URL_MOCK = 'https://proxy.test/server';
 
@@ -33,7 +37,7 @@ const MESSENGER_MOCK = {} as Parameters<typeof fetchServerQuote>[0];
 
 describe('server-api', () => {
   beforeEach(() => {
-    fetchMock = jest.spyOn(global, 'fetch');
+    fetchMock = vi.spyOn(global, 'fetch');
 
     getPayStrategiesConfigMock.mockReturnValue({
       server: {
@@ -53,7 +57,7 @@ describe('server-api', () => {
       source: { chainId: 137, token: '0xbbb' },
       target: { chainId: 1, token: '0xaaa' },
       amount: '1000000',
-      tradeType: ServerTradeType.ExpectedOutput,
+      tradeType: TradeType.ExpectedOutput,
       sender: '0xccc',
       recipient: '0xccc',
     };
@@ -61,7 +65,7 @@ describe('server-api', () => {
     const QUOTE_RESPONSE_MOCK = {
       results: [
         {
-          provider: ServerProviderName.Relay,
+          provider: 'relay',
           quote: {
             id: '0xid',
             input: {
@@ -146,7 +150,7 @@ describe('server-api', () => {
         json: async () => {
           throw new Error('not json');
         },
-      } as unknown as Response);
+      });
 
       await expect(
         fetchServerQuote(MESSENGER_MOCK, QUOTE_REQUEST_MOCK),
@@ -159,7 +163,7 @@ describe('server-api', () => {
       chainId: 1,
       data: '0xbbb',
       id: '0xid',
-      provider: ServerProviderName.Relay,
+      provider: 'relay',
       to: '0xaaa',
       value: '0',
     };
@@ -194,7 +198,7 @@ describe('server-api', () => {
 
   describe('getServerStatus', () => {
     const STATUS_PARAMS_MOCK = {
-      provider: ServerProviderName.Relay,
+      provider: 'relay',
       id: '0xabc',
     };
 

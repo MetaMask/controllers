@@ -3,6 +3,7 @@ export type {
   ConfigRegistryControllerOptions,
   ConfigRegistryControllerActions,
   ConfigRegistryControllerGetStateAction,
+  ConfigRegistryControllerStateChangedEvent,
   ConfigRegistryControllerEvents,
   ConfigRegistryControllerMessenger,
 } from './ConfigRegistryController.js';
@@ -15,12 +16,19 @@ export {
   ConfigRegistryController,
   DEFAULT_POLLING_INTERVAL,
 } from './ConfigRegistryController.js';
-export { selectFeaturedNetworks, selectNetworks } from './selectors.js';
+export {
+  selectFeaturedNetworks,
+  selectNetworks,
+  selectEvmAutoEnabledNetworksChainIds,
+} from './selectors.js';
 export type {
   FetchConfigOptions,
   FetchConfigResult,
+  FetchEventsConfigResult,
   RegistryNetworkConfig,
   RegistryConfigApiResponse,
+  RegistryEventsConfig,
+  RegistryEventsConfigApiResponse,
 } from './config-registry-api-service/types.js';
 export type {
   ConfigRegistryApiServiceOptions,
@@ -30,8 +38,12 @@ export type {
 } from './config-registry-api-service/config-registry-api-service.js';
 export type {
   ConfigRegistryApiServiceFetchConfigAction,
+  ConfigRegistryApiServiceFetchEventsConfigAction,
   ConfigRegistryApiServiceMethodActions,
 } from './config-registry-api-service/config-registry-api-service-method-action-types.js';
 export type { NetworkFilterOptions } from './config-registry-api-service/filters.js';
-export { ConfigRegistryApiService } from './config-registry-api-service/config-registry-api-service.js';
+export {
+  ConfigRegistryApiService,
+  ConfigRegistryApiEnv,
+} from './config-registry-api-service/config-registry-api-service.js';
 export { filterNetworks } from './config-registry-api-service/filters.js';

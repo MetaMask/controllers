@@ -35,11 +35,50 @@ Options:
   --build                  Generate docs and build static site
   --serve                  Generate docs, build, and serve static site
   --dev                    Generate docs and start dev server with hot reload
-  --scan-dir <dir>         Extra source directory to scan (repeatable)
+  --strategy <name>        How to find actions and events: "scan" (default) or
+                           "root-messenger" (see below)
+  --scan-dir <dir>         Extra source directory to scan (repeatable; --strategy scan only)
+  --root-actions <ref>     Type aliasing the union of every action, as "<file>#<TypeName>"
+                           (required with --strategy root-messenger)
+  --root-events <ref>      Type aliasing the union of every event, as "<file>#<TypeName>"
+                           (required with --strategy root-messenger)
   --output <dir>           Output directory (default: <project-path>/.platform-api-docs)
   --project-label <label>  Short label identifying the project (e.g. "Core", "Extension")
+  --site-url <url>         Absolute URL the built site will be served from
+                           (e.g. https://metamask.github.io)
+  --site-base-url <path>   Path prefix the built site will be served under
+                           (e.g. /core/platform-api/)
   --help                   Show this help message
 ```
+
+`--site-url` and `--site-base-url` matter when the site is published somewhere other than the root of a domain, such as a GitHub Pages project site. Leave them unset and the site is built for `https://metamask.github.io/`, which makes its asset paths wrong under any other prefix.
+
+## Strategies
+
+Which strategy to use depends on whether the project has a single messenger carrying every action and event.
+
+### `scan` (default)
+
+Parses every TypeScript source and declaration file it can find — the scan directories, `packages/*/src`, and `node_modules/@metamask/*/dist` — and reads every `*Messenger` type alias it encounters.
+
+Use this when no single messenger aggregates every capability, as in a monorepo of independently published packages.
+
+### `root-messenger`
+
+Resolves the two types the project declares for its root messenger capabilities — the collection of every action and the collection of every event — and lets the TypeScript type checker walk them. Only the files named on the command line are opened.
+
+Use this when the project has one root messenger carrying every action and event, as a client application built on these packages does. It is substantially faster than `scan`, because it reads what the project already declares instead of re-deriving it, and it documents only what is reachable through that messenger.
+
+```
+platform-api-docs \
+  --strategy root-messenger \
+  --root-actions 'src/messenger.ts#RootActions' \
+  --root-events 'src/messenger.ts#RootEvents'
+```
+
+Each reference names a type alias, written by hand or computed — the type checker resolves either.
+
+The docs contain exactly what the named types contain, so those types should be the ones carrying every capability rather than a narrowed subset. Capability types that can't be documented are reported rather than dropped silently: those declared inline in the capability collection type (with no name or JSDoc to document), and those whose shape can't be read (most often a `type` property that isn't a namespaced string literal).
 
 ## Contributing
 

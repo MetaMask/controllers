@@ -7,6 +7,212 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add optional `sourceLanguage` (`string | null`) and `translations` (`Record<string, string>`) to `AuthorComment` and `AuthorCommentStruct`. Feed validation and the realtime feed parser keep both when social-api sends them, and responses that omit them still validate ([#11137](https://github.com/MetaMask/core/pull/11137))
+- Add `translateComment` to `SocialController` and `SocialService` (`SocialController:translateComment`, `SocialService:translateComment`). Calls `POST /swap-comment/:commentId/translate` with `{ targetLanguage }`. social-api does not expose that route yet: a 404 is logged as `Translation endpoint does not exist yet` and rethrown ([#11137](https://github.com/MetaMask/core/pull/11137))
+- Add optional `flags` to `Position`, so open positions, closed positions, position-by-id, and feed items (including realtime hydration) can carry an open list of server flags. `insider` (`INSIDER_POSITION_FLAG`) marks a Codex insider wallet/token pair that is excluded from the trader's realized PnL and must not be copy-traded. `developer` (`DEVELOPER_POSITION_FLAG`) is also a known flag. Unrecognized flag strings are preserved, `null` is accepted, and responses that omit `flags` still validate ([#11097](https://github.com/MetaMask/core/pull/11097))
+
+### Changed
+
+- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
+
+## [3.12.1]
+
+### Changed
+
+- Bump `@metamask/profile-sync-controller` from `^35.0.0` to `^36.0.0` ([#11092](https://github.com/MetaMask/core/pull/11092))
+
+## [3.12.0]
+
+### Added
+
+- Add `assetIds`, `profileId` and `commentedOnly` to `FetchFeedOptions`, sent as repeated `assetIds` params and as `profileId` and `commentedOnly=true` on `GET /v1/feed`, matching the filters social-api now accepts ([#11059](https://github.com/MetaMask/core/pull/11059))
+- Add optional `volumeUsd30d` and `volumeUsd7d` to `FeedActorSummary` and `LeaderboardEntry`. Feed actors carry all-chain totals from profile metadata, including realtime feed normalization. Leaderboard entries carry the chain-scoped totals returned by social-api ([#11042](https://github.com/MetaMask/core/pull/11042))
+
+## [3.11.0]
+
+### Added
+
+- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
+
+### Changed
+
+- Normalize full hydrated Social feed events into `FeedItem` data for direct client hydration. ([#10986](https://github.com/MetaMask/core/pull/10986))
+
+## [3.10.0]
+
+### Added
+
+- Allow `createSwapComment` to identify an in-flight Hyperliquid order with `tradeInFlight.orderId` (the exchange `oid`) instead of `transactionHash`. `tokenAddress` is the coin, and the response `transactionHash` is empty until the fill is indexed ([#10966](https://github.com/MetaMask/core/pull/10966))
+
+## [3.9.0]
+
+### Added
+
+- Add optional `createdAt` to `TraderProfile`. `fetchTraderProfile` accepts an ISO-8601 timestamp, or `null`, on `GET /traders/:addressOrId/profile` and still accepts responses that omit it ([#10877](https://github.com/MetaMask/core/pull/10877))
+- Add the shared `all` feed scope to `FetchFeedOptions` and export `FeedScope`. Preserve optional `eventId`, `revision`, and `occurredAt` projection metadata on `FeedItem` ([#10865](https://github.com/MetaMask/core/pull/10865))
+- Add the `trending` feed scope to `FetchFeedOptions` and export `FeedScope` for policy-filtered trending feed reads ([#10895](https://github.com/MetaMask/core/pull/10895))
+- Add explicit `all` and `trending` scope subscriptions to `SocialRealtimeService` and validate hydrated realtime feed events before forwarding them ([#10924](https://github.com/MetaMask/core/pull/10924))
+
+### Changed
+
+- Bump `@metamask/core-backend` from `^12.1.0` to `^12.3.0` ([#10857](https://github.com/MetaMask/core/pull/10857), [#10876](https://github.com/MetaMask/core/pull/10876))
+- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
+- Bump `@metamask/profile-sync-controller` from `^34.0.3` to `^35.0.0` ([#10905](https://github.com/MetaMask/core/pull/10905), [#10925](https://github.com/MetaMask/core/pull/10925))
+
+## [3.8.0]
+
+### Added
+
+- Add `createCopyTradeIntent` method to `SocialService` (and the `SocialService:createCopyTradeIntent` messenger action). Calls `POST /v1/copy-trade-intents` with the comment origin, the copier's CAIP-10 account, and the execution (a swaps `quoteId` or a perps `oid`), and returns the validated `CopyTradeIntentResponse`. Both 201 (created) and 200 (existing intent) resolve ([#10823](https://github.com/MetaMask/core/pull/10823))
+  - Export the `CreateCopyTradeIntentOptions`, `CopyTradeIntentResponse`, `CopyTradeOrigin`, `CopyTradeExecution`, `CopyTradeAccount`, and `CopyTradePayoutEligibility` types
+
+### Changed
+
+- Preserve optional per-position copy counts from Social API responses ([#10801](https://github.com/MetaMask/core/pull/10801))
+- Bump `@metamask/core-backend` from `^12.0.1` to `^12.1.0` ([#10788](https://github.com/MetaMask/core/pull/10788))
+
+### Fixed
+
+- Set `staleTime: 0` on `fetchFollowers` and `fetchTraderFollowing` so follow-list refetches after follow/unfollow are not served from the 1-minute `BaseDataService` cache ([#10789](https://github.com/MetaMask/core/pull/10789))
+
+## [3.7.0]
+
+### Added
+
+- Add optional `mutuals` flag to `fetchFollowers` (`FetchFollowersOptions`). When `true`, calls bearer-authenticated `GET /traders/:addressOrId/followers?mutuals=true` (social-api [#386](https://github.com/consensys-vertical-apps/va-mmcx-social-api/pull/386)); `count` is the mutual total. Omitted or `false` keeps the full follower list ([#10770](https://github.com/MetaMask/core/pull/10770))
+- Add `fetchMyFollowing` method to `SocialService` (and the `SocialService:fetchMyFollowing` messenger action) as an alias of `fetchFollowing`. Both call `GET /users/me/following`. Prefer `fetchMyFollowing` in new code so it pairs with `fetchMyFollowers`; `fetchFollowing` is unchanged ([#10701](https://github.com/MetaMask/core/pull/10701))
+- Add `fetchTraderFollowing` method to `SocialService` (and the `SocialService:fetchTraderFollowing` messenger action) for another trader's outbound follows. Calls bearer-authenticated `GET /traders/:addressOrId/following` (social-api [#380](https://github.com/consensys-vertical-apps/va-mmcx-social-api/pull/380)) and returns `FollowingResponse` (`following` profile summaries plus total `count`). Distinct from `fetchFollowing`, which loads the **current user's** list via `GET /users/me/following`. `fetchFollowers` uses the same auth model for `GET /traders/:addressOrId/followers` ([#10689](https://github.com/MetaMask/core/pull/10689))
+- Add `fetchMyFollowers` method to `SocialService` (and the `SocialService:fetchMyFollowers` messenger action) for the authenticated user's inbound followers. Calls `GET /users/me/followers` and returns `FollowersResponse` (`followers` profile summaries plus total `count`) ([#10649](https://github.com/MetaMask/core/pull/10649))
+
+### Changed
+
+- Allow `boughtUsd`, `soldUsd`, `realizedPnl`, and `costBasis` to be `null` on `Position` / feed items, matching incomplete Clicker metrics the social-api may serialize as JSON `null` ([#10753](https://github.com/MetaMask/core/pull/10753))
+- Drop individual `fetchFeed`, `fetchTraderFeed`, and `fetchTokenFeed` items that fail validation instead of rejecting the whole page ([#10753](https://github.com/MetaMask/core/pull/10753))
+- Update `SocialRealtimeService` to subscribe to the trending Social feed channel and forward every valid event from batched notifications ([#10751](https://github.com/MetaMask/core/pull/10751))
+- Bump `@metamask/profile-sync-controller` from `^34.0.0` to `^34.0.3` ([#10752](https://github.com/MetaMask/core/pull/10752), [#10756](https://github.com/MetaMask/core/pull/10756), [#10761](https://github.com/MetaMask/core/pull/10761))
+
+## [3.6.0]
+
+### Added
+
+- Add `block`, `fetchBlockedProfiles`, and `fetchBlockedContent` methods to `SocialService` (and the matching `SocialService:block`, `SocialService:fetchBlockedProfiles`, and `SocialService:fetchBlockedContent` messenger actions) for the social-api moderation block endpoints ([#10656](https://github.com/MetaMask/core/pull/10656))
+  - `block` calls `PUT /moderation/block` with exactly one of `profileId`, `commentId`, or `replyId`, plus an optional `reason`. The endpoint returns 204.
+  - `fetchBlockedProfiles` calls `GET /moderation/blocks/profiles` and returns traders the caller has blocked, most recently blocked first. Pass `cursor` from the previous page; `cursor` is `null` on the last page.
+  - `fetchBlockedContent` calls `GET /moderation/blocks/content` and returns comments and replies the caller has blocked, most recently blocked first, with the same cursor pagination.
+
+### Changed
+
+- Bump `@metamask/core-backend` from `^12.0.0` to `^12.0.1` ([#10662](https://github.com/MetaMask/core/pull/10662))
+- Bump `@metamask/profile-sync-controller` from `^33.0.0` to `^34.0.0` ([#10662](https://github.com/MetaMask/core/pull/10662))
+
+## [3.5.0]
+
+### Added
+
+- Add `SocialRealtimeService` for subscribing to Social realtime feed events through the shared backend WebSocket connection ([#10561](https://github.com/MetaMask/core/pull/10561))
+
+### Changed
+
+- Bump `@metamask/base-data-service` from `^2.0.0` to `^2.1.0` ([#10502](https://github.com/MetaMask/core/pull/10502))
+- Bump `@metamask/core-backend` from `^11.0.0` to `^12.0.0` ([#10648](https://github.com/MetaMask/core/pull/10648))
+
+## [3.4.0]
+
+### Added
+
+- Add `createSwapComment` method to `SocialService` (and the `SocialService:createSwapComment` messenger action) to create an author Call (user post) on the caller's own swap. Calls `POST /swap-comments` with `commentText` and exactly one of `positionUid` or `tradeInFlight`, plus optional `source`. `commentText` may include a `https://static.klipy.com/...gif` file URL (allowlisted by social-api). Returns `SwapCommentResponse` ([#10471](https://github.com/MetaMask/core/pull/10471))
+
+## [3.3.0]
+
+### Added
+
+- Add `fetchTokenFeed` method to `SocialService` (and the `SocialService:fetchTokenFeed` messenger action) for one token's positions as feed items. Calls `GET /tokens/:chain/:contractAddress/feed`, where `chain` is `TokenFeedChain` (`base`, `bsc`, `ethereum`, `hyperliquid`, `robinhood`, or `solana`), with optional `status` (`open` or `closed`; omit for both), `limit`, and cursor pagination (`olderThan`/`newerThan`). Reuses existing `FeedResponse` / `FeedItem` validation ([#10458](https://github.com/MetaMask/core/pull/10458))
+
+## [3.2.0]
+
+### Added
+
+- Add `fetchTraderFeed` method to `SocialService` (and the `SocialService:fetchTraderFeed` messenger action) for one trader's activity as feed items. Calls `GET /traders/:addressOrId/feed` with optional `commentedOnly`, `limit`, and cursor pagination (`olderThan`/`newerThan`). Reuses existing `FeedResponse` / `FeedItem` validation ([#10408](https://github.com/MetaMask/core/pull/10408))
+- Add optional `volumeUsd30d` on `TraderStats` and required `copytradedAllTime` (`count`, `volumeUSD`, `distinctActors`) on `TraderProfileResponse` for the trader stats sheet ([#10389](https://github.com/MetaMask/core/pull/10389))
+
+### Changed
+
+- Bump `@metamask/profile-sync-controller` from `^32.2.0` to `^33.0.0` ([#10409](https://github.com/MetaMask/core/pull/10409), [#10418](https://github.com/MetaMask/core/pull/10418), [#10459](https://github.com/MetaMask/core/pull/10459))
+
+## [3.1.0]
+
+### Added
+
+- Add optional feed-card stats on `FeedItem`: `actor.winRate30d`, `actor.pnl30d`, `actor.tradeCount30d`, `actor.followerCount`, `commentCount`, `replyCount`, `firstTradeAt`, `holdTimeMs`, and `entryPriceUsd`. Older social-api responses that omit them still validate ([#10352](https://github.com/MetaMask/core/pull/10352), [#10387](https://github.com/MetaMask/core/pull/10387))
+  - `holdTimeMs` is the final hold and is only set once a position is closed. While a position is still open it is `null`, because that span grows every second; count from `firstTradeAt` (Unix seconds of the first fill) to render a live hold.
+- Add optional `authorComment` on `FeedItem` (uid, text, timestamp, `engagement.reactions` / `userReaction`) so clients can render Call-backed feed reactions ([#10345](https://github.com/MetaMask/core/pull/10345))
+- Add `reactToComment` and `removeCommentReaction` methods on `SocialService` (and the matching messenger actions). Call `PUT` / `DELETE /swap-comment/:id/reaction` and return per-emotion counts plus `userReaction`. Deprecated `likeCount` / `isLikedByUser` on the social-api wire are ignored ([#10345](https://github.com/MetaMask/core/pull/10345))
+
+### Changed
+
+- Bump `@metamask/profile-sync-controller` from `^32.1.1` to `^32.2.0` ([#10348](https://github.com/MetaMask/core/pull/10348))
+
+## [3.0.2]
+
+### Added
+
+- Add optional `rankingTag` on `TraderProfileResponse` for social-api trader profile tier (`shrimp` | `dolphin` | `whale`) ([#10309](https://github.com/MetaMask/core/pull/10309))
+
+### Changed
+
+- Bump `@metamask/profile-sync-controller` from `^32.0.0` to `^32.1.1` ([#10184](https://github.com/MetaMask/core/pull/10184), [#10220](https://github.com/MetaMask/core/pull/10220))
+- Update lint:tsc to run against all packages & remove it from CI ([#10215](https://github.com/MetaMask/core/pull/10215))
+
+## [3.0.1]
+
+### Changed
+
+- Bump `@metamask/profile-sync-controller` from `^31.0.0` to `^32.0.0` ([#10166](https://github.com/MetaMask/core/pull/10166))
+
+## [3.0.0]
+
+### Changed
+
+- **BREAKING:** Drop CommonJS support ([#9536](https://github.com/MetaMask/core/pull/9536))
+  - This package is now ESM-only, but can still be used in CommonJS projects via `require(esm)` in modern Node.js versions (22+), or dynamic imports in older Node.js versions.
+- **BREAKING:** Bump minimum Node.js version to 22 ([#9976](https://github.com/MetaMask/core/pull/9976))
+- **BREAKING:** Bump TypeScript target to ES2022 ([#10019](https://github.com/MetaMask/core/pull/10019))
+  - This package now ships ES2022 code, requiring a compatible modern environment or bundler configuration to consume.
+- Bump `@metamask/base-controller` from `^9.1.0` to `^10.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/base-data-service` from `^1.0.0` to `^2.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/controller-utils` from `^12.3.0` to `^13.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/messenger` from `^2.0.0` to `^3.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/profile-sync-controller` from `^30.0.0` to `^31.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+
+## [2.8.1]
+
+### Changed
+
+- Bump `@metamask/profile-sync-controller` from `^29.0.0` to `^30.0.0` ([#10139](https://github.com/MetaMask/core/pull/10139))
+
+## [2.8.0]
+
+### Added
+
+- Add optional `action` to `Trade` and optional `isOpen` to `Position`, plus the `TradeAction` type ([#9871](https://github.com/MetaMask/core/pull/9871))
+  - `action` is the fill's position-lifecycle stage (`opened` / `added` / `reduced` / `closed`), computed by the social-api. Unlike `intent`, it separates a partial exit from a full close.
+  - Both are optional so responses from a social-api deployment that predates them still validate.
+
+## [2.7.2]
+
+### Changed
+
+- Bump `@metamask/superstruct` from `^3.1.0` to `^3.4.1` ([#9754](https://github.com/MetaMask/core/pull/9754))
+- Bump `@metamask/base-data-service` from `^0.1.3` to `^1.0.0` ([#9972](https://github.com/MetaMask/core/pull/9972))
+
+## [2.7.1]
+
+### Changed
+
+- Bump `@metamask/profile-sync-controller` from `^28.3.0` to `^29.0.0` ([#9779](https://github.com/MetaMask/core/pull/9779))
+
 ## [2.7.0]
 
 ### Added
@@ -130,7 +336,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `unfollowTrader` — unfollows traders and removes addresses from state
     - `updateFollowing` — fetches following list and replaces addresses in state
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.7.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.12.1...HEAD
+[3.12.1]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.12.0...@metamask/social-controllers@3.12.1
+[3.12.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.11.0...@metamask/social-controllers@3.12.0
+[3.11.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.10.0...@metamask/social-controllers@3.11.0
+[3.10.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.9.0...@metamask/social-controllers@3.10.0
+[3.9.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.8.0...@metamask/social-controllers@3.9.0
+[3.8.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.7.0...@metamask/social-controllers@3.8.0
+[3.7.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.6.0...@metamask/social-controllers@3.7.0
+[3.6.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.5.0...@metamask/social-controllers@3.6.0
+[3.5.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.4.0...@metamask/social-controllers@3.5.0
+[3.4.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.3.0...@metamask/social-controllers@3.4.0
+[3.3.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.2.0...@metamask/social-controllers@3.3.0
+[3.2.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.1.0...@metamask/social-controllers@3.2.0
+[3.1.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.0.2...@metamask/social-controllers@3.1.0
+[3.0.2]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.0.1...@metamask/social-controllers@3.0.2
+[3.0.1]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.0.0...@metamask/social-controllers@3.0.1
+[3.0.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.8.1...@metamask/social-controllers@3.0.0
+[2.8.1]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.8.0...@metamask/social-controllers@2.8.1
+[2.8.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.7.2...@metamask/social-controllers@2.8.0
+[2.7.2]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.7.1...@metamask/social-controllers@2.7.2
+[2.7.1]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.7.0...@metamask/social-controllers@2.7.1
 [2.7.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.6.0...@metamask/social-controllers@2.7.0
 [2.6.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.5.0...@metamask/social-controllers@2.6.0
 [2.5.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@2.4.0...@metamask/social-controllers@2.5.0

@@ -14,6 +14,7 @@ import {
   create,
   enums,
   literal,
+  nullable,
   number,
   optional,
   record,
@@ -23,6 +24,8 @@ import {
 import type { Hex } from '@metamask/utils';
 import {
   bytesToHex,
+  hasProperty,
+  isObject,
   sha256,
   stringToBytes,
   StrictHexStruct,
@@ -31,21 +34,51 @@ import type { QueryClientConfig } from '@tanstack/query-core';
 
 import type { ChompApiServiceMethodActions } from './chomp-api-service-method-action-types.js';
 import type {
-  AssociateAddressParams,
+  AddressIdentityResponse,
   AssociateAddressResponse,
+  AssociateAddressV2Params,
+  CreateAddressChallengeParams,
+  CreateAddressChallengeResponse,
   ProfileAddressEntry,
+  ChompIntentType,
   CreateUpgradeParams,
   CreateUpgradeResponse,
   UpgradeEntry,
   CreateWithdrawalParams,
   CreateWithdrawalResponse,
+  DerivedIdentitiesResponse,
   IntentEntry,
+  MigrationStep,
   SendIntentParams,
   SendIntentResponse,
   ServiceDetailsResponse,
   VerifyDelegationParams,
   VerifyDelegationResponse,
 } from './types.js';
+
+const CHOMP_INTENT_TYPES: ChompIntentType[] = [
+  'cash-deposit',
+  'cash-withdrawal',
+  'cash-deposit-premium',
+  'cash-withdrawal-premium',
+  'cash-subscription',
+];
+
+const MIGRATION_STEPS: MigrationStep[] = [
+  'SUCCESSOR_DEPOSIT_INTENT',
+  'SUCCESSOR_WITHDRAWAL_INTENT',
+  'SUCCESSOR_SUBSCRIPTION_INTENT',
+  'SUCCESSOR_MONITORED',
+  'ROOT_DELEGATION',
+  'TRANSFER_INTENT_MUSD',
+  'TRANSFER_INTENT_VMUSD',
+  'TRANSFER_INTENT_PVMUSD',
+  'FUNDS_TRANSFERRED',
+];
+
+function isChompIntentType(value: string): value is ChompIntentType {
+  return (CHOMP_INTENT_TYPES as string[]).includes(value);
+}
 
 // === GENERAL ===
 
@@ -55,6 +88,52 @@ import type {
  */
 export const serviceName = 'ChompApiService';
 
+// === ERRORS ===
+
+/**
+ * Thrown when the CHOMP API responds with a non-2xx status.
+ */
+export class ChompApiError extends HttpError {
+  /**
+   * The CHOMP error code from the response body (e.g.
+   * `PREDECESSOR_HAS_OPEN_WITHDRAWALS`), if one was provided.
+   */
+  readonly code: string | undefined;
+
+  /**
+   * Construct a CHOMP API error.
+   *
+   * @param status - The HTTP response status.
+   * @param message - The error message.
+   * @param code - The CHOMP error code from the response body.
+   */
+  constructor(status: number, message: string, code?: string) {
+    super(status, message);
+    this.name = 'ChompApiError';
+    this.code = code;
+  }
+}
+
+/**
+ * Builds a {@link ChompApiError} from a non-2xx response, reading the CHOMP
+ * error code from the response body when there is one.
+ *
+ * @param response - The non-2xx response.
+ * @param message - The error message.
+ * @returns The error to throw.
+ */
+async function createChompApiError(
+  response: Response,
+  message: string,
+): Promise<ChompApiError> {
+  const body: unknown = await response.json().catch(() => undefined);
+  const code =
+    isObject(body) && hasProperty(body, 'code') && typeof body.code === 'string'
+      ? body.code
+      : undefined;
+  return new ChompApiError(response.status, message, code);
+}
+
 // === MESSENGER ===
 
 /**
@@ -62,7 +141,9 @@ export const serviceName = 'ChompApiService';
  * messenger.
  */
 const MESSENGER_EXPOSED_METHODS = [
-  'associateAddress',
+  'createAddressChallenge',
+  'associateAddressV2',
+  'disassociateAddress',
   'getAssociatedAddresses',
   'createUpgrade',
   'getUpgrades',
@@ -71,6 +152,8 @@ const MESSENGER_EXPOSED_METHODS = [
   'getIntentsByAddress',
   'createWithdrawal',
   'getServiceDetails',
+  'getDerivedIdentities',
+  'getDerivedIdentityByAddress',
 ] as const;
 
 /**
@@ -137,6 +220,12 @@ const AssociateAddressResponseStruct = type({
   status: enums(['active', 'created']),
 });
 
+const CreateAddressChallengeResponseStruct = type({
+  challengeId: string(),
+  message: string(),
+  expiresAt: string(),
+});
+
 /**
  * Parses addresses into canonical lowercase form. CHOMP stores and returns
  * addresses lowercased, but `StrictHexStruct` alone accepts any casing, so
@@ -154,6 +243,47 @@ const ProfileAddressEntryArrayStruct = array(
     status: enums(['active']),
   }),
 );
+
+const MigrationTransferStruct = nullable(
+  type({
+    requestId: string(),
+    status: string(),
+  }),
+);
+
+const DerivedIdentityStruct = type({
+  currentAddress: LowercaseHexAddressStruct,
+  previousAddresses: array(LowercaseHexAddressStruct),
+  status: enums(['NONE', 'MIGRATING', 'DONE']),
+  migration: nullable(
+    type({
+      from: LowercaseHexAddressStruct,
+      to: LowercaseHexAddressStruct,
+      steps: array(
+        type({
+          step: enums(MIGRATION_STEPS),
+          completed: boolean(),
+        }),
+      ),
+      transfer: MigrationTransferStruct,
+      premiumTransfer: MigrationTransferStruct,
+    }),
+  ),
+});
+
+const DerivedIdentitiesResponseStruct = type({
+  identities: array(DerivedIdentityStruct),
+});
+
+const AddressIdentityResponseStruct = type({
+  identity: DerivedIdentityStruct,
+  address: type({
+    address: LowercaseHexAddressStruct,
+    role: enums(['CURRENT', 'PREVIOUS', 'PENDING_SUCCESSOR']),
+    predecessor: nullable(LowercaseHexAddressStruct),
+    successor: nullable(LowercaseHexAddressStruct),
+  }),
+});
 
 const AccountUpgradeStatusStruct = enums(['pending', 'upgraded']);
 
@@ -200,7 +330,7 @@ const SendIntentResponseArrayStruct = array(
       allowance: StrictHexStruct,
       tokenSymbol: string(),
       tokenAddress: StrictHexStruct,
-      type: enums(['cash-deposit', 'cash-withdrawal']),
+      type: enums(CHOMP_INTENT_TYPES),
     }),
     createdAt: string(),
   }),
@@ -216,7 +346,7 @@ const IntentEntryArrayStruct = array(
       allowance: StrictHexStruct,
       tokenAddress: StrictHexStruct,
       tokenSymbol: string(),
-      type: enums(['cash-deposit', 'cash-withdrawal']),
+      type: string(),
     }),
   }),
 );
@@ -233,7 +363,11 @@ const ServiceDetailsProtocolStruct = type({
     }),
   ),
   adapterAddress: StrictHexStruct,
-  intentTypes: array(enums(['cash-deposit', 'cash-withdrawal'])),
+  intentTypes: coerce(
+    array(enums(CHOMP_INTENT_TYPES)),
+    array(string()),
+    (intentTypes) => intentTypes.filter(isChompIntentType),
+  ),
 });
 
 const ServiceDetailsResponseStruct = type({
@@ -244,7 +378,10 @@ const ServiceDetailsResponseStruct = type({
     StrictHexStruct,
     type({
       autoDepositDelegate: StrictHexStruct,
-      protocol: record(string(), ServiceDetailsProtocolStruct),
+      protocol: type({
+        vedaProtocol: ServiceDetailsProtocolStruct,
+        vedaPremiumProtocol: optional(ServiceDetailsProtocolStruct),
+      }),
     }),
   ),
 });
@@ -342,6 +479,27 @@ export class ChompApiService extends BaseDataService<
   }
 
   /**
+   * Fetches the bearer token along with a SHA-256 digest of it, for query
+   * keys of profile-scoped requests. The digest, not the token, goes in the
+   * key because query keys leave the service via the `cacheUpdated`
+   * messenger events.
+   *
+   * @returns The bearer token and its digest.
+   */
+  async #getProfileScopedToken(): Promise<{
+    token: string;
+    profileKey: Hex;
+  }> {
+    const token = await this.messenger.call(
+      'AuthenticationController:getBearerToken',
+    );
+    return {
+      token,
+      profileKey: bytesToHex(await sha256(stringToBytes(token))),
+    };
+  }
+
+  /**
    * Builds the standard headers for an authenticated CHOMP API request.
    *
    * @returns Headers including Authorization and Content-Type.
@@ -354,27 +512,31 @@ export class ChompApiService extends BaseDataService<
   }
 
   /**
-   * Associates an address with a CHOMP profile.
+   * Requests a single-use challenge for associating an address through the v2
+   * flow. Sign the returned `message` exactly as received, using
+   * `personal_sign` with the address being associated, then submit it with
+   * {@link ChompApiService.associateAddressV2} before `expiresAt`. Requesting
+   * a new challenge for the same address replaces the previous one.
    *
-   * POST /v1/auth/address
+   * POST /v2/auth/address/challenge
    *
-   * @param params - The association params containing signature, timestamp,
-   * and address.
-   * @returns The profile association result: `status: 'created'` for a new
-   * association, `status: 'active'` when the address was already associated
-   * with the authenticated profile. Throws on 409, which indicates the
-   * address is associated with a different profile.
+   * Each call issues a new challenge, so the result is never cached.
+   *
+   * @param params - The address to associate and the association purpose.
+   * `ASSOCIATE_SUCCESSOR` also requires the predecessor address.
+   * @returns The challenge ID, the message to sign, and when it expires.
    */
-  async associateAddress(
-    params: AssociateAddressParams,
-  ): Promise<AssociateAddressResponse> {
+  async createAddressChallenge(
+    params: CreateAddressChallengeParams,
+  ): Promise<CreateAddressChallengeResponse> {
     const jsonResponse = await this.fetchQuery({
-      queryKey: [`${this.name}:associateAddress`, params],
+      queryKey: [`${this.name}:createAddressChallenge`, params],
       staleTime: 0,
+      gcTime: 0,
       queryFn: async () => {
         const headers = await this.#authHeaders();
         const response = await fetch(
-          new URL('/v1/auth/address', this.#baseUrl),
+          new URL('/v2/auth/address/challenge', this.#baseUrl),
           {
             method: 'POST',
             headers,
@@ -383,9 +545,58 @@ export class ChompApiService extends BaseDataService<
         );
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
-            `POST /v1/auth/address failed with status '${response.status}'`,
+          throw await createChompApiError(
+            response,
+            `POST /v2/auth/address/challenge failed with status '${response.status}'`,
+          );
+        }
+
+        return response.json();
+      },
+    });
+
+    return create(jsonResponse, CreateAddressChallengeResponseStruct);
+  }
+
+  /**
+   * Associates an address with a CHOMP profile by submitting the signature of
+   * a challenge from {@link ChompApiService.createAddressChallenge}. The
+   * address, purpose and predecessor come from the challenge. For
+   * `ASSOCIATE_SUCCESSOR`, the association and the link to the predecessor
+   * are written atomically.
+   *
+   * POST /v2/auth/address
+   *
+   * @param params - The challenge ID and its signature.
+   * @returns The profile association result: `status: 'created'` when the
+   * association or link was written, `status: 'active'` when the address was
+   * already associated with the authenticated profile. Throws on 400
+   * `CHALLENGE_INVALID_OR_EXPIRED` (request a new challenge), on 409 when the
+   * address is associated with a different profile, and on link validation
+   * errors.
+   */
+  async associateAddressV2(
+    params: AssociateAddressV2Params,
+  ): Promise<AssociateAddressResponse> {
+    const jsonResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:associateAddressV2`, params],
+      staleTime: 0,
+      gcTime: 0,
+      queryFn: async () => {
+        const headers = await this.#authHeaders();
+        const response = await fetch(
+          new URL('/v2/auth/address', this.#baseUrl),
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(params),
+          },
+        );
+
+        if (!response.ok) {
+          throw await createChompApiError(
+            response,
+            `POST /v2/auth/address failed with status '${response.status}'`,
           );
         }
 
@@ -397,6 +608,45 @@ export class ChompApiService extends BaseDataService<
   }
 
   /**
+   * Removes an address association from the authenticated profile.
+   * When called with an addresses that is linked as successors it will only succeed
+   * if the chomp migration has not yet created a funds-transfer request. Otherwise
+   * CHOMP will reject the request with `LINK_COMPLETE`
+   *
+   * DELETE /v1/auth/address
+   *
+   * Executed as a mutation so it is never retried: a retry after a lost
+   * response would hit an already-removed address and fail with a 404.
+   *
+   * @param address - The address to disassociate.
+   */
+  async disassociateAddress(address: Hex): Promise<void> {
+    await this.executeMutation({
+      mutationKey: [`${this.name}:disassociateAddress`],
+      mutationFn: async () => {
+        const headers = await this.#authHeaders();
+        const response = await fetch(
+          new URL('/v1/auth/address', this.#baseUrl),
+          {
+            method: 'DELETE',
+            headers,
+            body: JSON.stringify({ address }),
+          },
+        );
+
+        if (!response.ok) {
+          throw await createChompApiError(
+            response,
+            `DELETE /v1/auth/address failed with status '${response.status}'`,
+          );
+        }
+
+        return null;
+      },
+    });
+  }
+
+  /**
    * Fetches the addresses associated with the authenticated profile.
    *
    * GET /v1/auth/address
@@ -404,7 +654,7 @@ export class ChompApiService extends BaseDataService<
    * The result is scoped to the authenticated profile and consumers use it
    * to decide whether an association already exists, so it is always fetched
    * fresh (`staleTime: 0`) and evicted as soon as the call settles
-   * (`cacheTime: 0`). The query key carries a SHA-256 digest of the bearer
+   * (`gcTime: 0`). The query key carries a SHA-256 digest of the bearer
    * token — the same token the request is made with — so concurrent calls
    * only share an in-flight request when they are for the same profile. The
    * digest, not the token, is used because query keys leave the service via
@@ -414,15 +664,12 @@ export class ChompApiService extends BaseDataService<
    * Addresses are lowercased.
    */
   async getAssociatedAddresses(): Promise<ProfileAddressEntry[]> {
-    const token = await this.messenger.call(
-      'AuthenticationController:getBearerToken',
-    );
-    const profileKey = bytesToHex(await sha256(stringToBytes(token)));
+    const { token, profileKey } = await this.#getProfileScopedToken();
 
     const jsonResponse = await this.fetchQuery({
       queryKey: [`${this.name}:getAssociatedAddresses`, profileKey],
       staleTime: 0,
-      cacheTime: 0,
+      gcTime: 0,
       queryFn: async () => {
         const response = await fetch(
           new URL('/v1/auth/address', this.#baseUrl),
@@ -430,8 +677,8 @@ export class ChompApiService extends BaseDataService<
         );
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `GET /v1/auth/address failed with status '${response.status}'`,
           );
         }
@@ -470,8 +717,8 @@ export class ChompApiService extends BaseDataService<
         );
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `POST /v1/account-upgrade failed with status '${response.status}'`,
           );
         }
@@ -503,8 +750,8 @@ export class ChompApiService extends BaseDataService<
         );
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `Get upgrades request failed with status '${response.status}'`,
           );
         }
@@ -542,8 +789,8 @@ export class ChompApiService extends BaseDataService<
         );
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `POST /v1/intent/verify-delegation failed with status '${response.status}'`,
           );
         }
@@ -578,8 +825,8 @@ export class ChompApiService extends BaseDataService<
         });
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `POST /v1/intent failed with status '${response.status}'`,
           );
         }
@@ -596,12 +843,17 @@ export class ChompApiService extends BaseDataService<
    *
    * GET /v1/intent/account/:address
    *
+   * Callers use the result to decide whether an intent already exists, so it
+   * is always fetched fresh (`staleTime: 0`).
+   *
    * @param address - The address to look up intents for.
-   * @returns The array of intents for the address.
+   * @returns The array of intents for the address, omitting any with an
+   * intent type this service does not recognise.
    */
   async getIntentsByAddress(address: Hex): Promise<IntentEntry[]> {
     const jsonResponse = await this.fetchQuery({
       queryKey: [`${this.name}:getIntentsByAddress`, address],
+      staleTime: 0,
       queryFn: async () => {
         const headers = await this.#authHeaders();
         const response = await fetch(
@@ -610,8 +862,8 @@ export class ChompApiService extends BaseDataService<
         );
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `Get intents request failed with status '${response.status}'`,
           );
         }
@@ -620,7 +872,10 @@ export class ChompApiService extends BaseDataService<
       },
     });
 
-    return create(jsonResponse, IntentEntryArrayStruct);
+    return create(jsonResponse, IntentEntryArrayStruct).filter(
+      (intent): intent is IntentEntry =>
+        isChompIntentType(intent.metadata.type),
+    );
   }
 
   /**
@@ -647,8 +902,8 @@ export class ChompApiService extends BaseDataService<
         });
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `POST /v1/withdrawal failed with status '${response.status}'`,
           );
         }
@@ -680,8 +935,8 @@ export class ChompApiService extends BaseDataService<
         const response = await fetch(url, { headers });
 
         if (!response.ok) {
-          throw new HttpError(
-            response.status,
+          throw await createChompApiError(
+            response,
             `GET /v1/chomp failed with status '${response.status}'`,
           );
         }
@@ -691,5 +946,101 @@ export class ChompApiService extends BaseDataService<
     });
 
     return create(jsonResponse, ServiceDetailsResponseStruct);
+  }
+
+  /**
+   * Fetches the Money Account identities of the authenticated profile, including
+   * status and migration steps information. Calling this will start migrations.
+   *
+   * GET /v1/money-account/identities
+   *
+   * Profile-scoped and used to drive migrations, so it is always fetched
+   * fresh and keyed by a digest of the bearer token, like
+   * {@link ChompApiService.getAssociatedAddresses}.
+   *
+   * @returns The identities; empty when the profile has no Money Account.
+   * Addresses are lowercased.
+   */
+  async getDerivedIdentities(): Promise<DerivedIdentitiesResponse> {
+    const { token, profileKey } = await this.#getProfileScopedToken();
+
+    const jsonResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:getDerivedIdentities`, profileKey],
+      staleTime: 0,
+      gcTime: 0,
+      queryFn: async () => {
+        const response = await fetch(
+          new URL('/v1/money-account/identities', this.#baseUrl),
+          { headers: this.#headersForToken(token) },
+        );
+
+        if (!response.ok) {
+          throw await createChompApiError(
+            response,
+            `GET /v1/money-account/identities failed with status '${response.status}'`,
+          );
+        }
+
+        return response.json();
+      },
+    });
+
+    return create(jsonResponse, DerivedIdentitiesResponseStruct);
+  }
+
+  /**
+   * Fetches the identity containing an address, along with where the address
+   * sits in it.
+   *
+   * GET /v1/money-account/identities/address/:address
+   *
+   * Always fetched fresh and keyed by a digest of the bearer token.
+   *
+   * @param address - The address to look up.
+   * @returns The identity and address details, or `null` when CHOMP responds
+   * with `ADDRESS_NOT_ASSOCIATED`
+   *
+   * Addresses are lowercased.
+   */
+  async getDerivedIdentityByAddress(
+    address: Hex,
+  ): Promise<AddressIdentityResponse | null> {
+    const { token, profileKey } = await this.#getProfileScopedToken();
+
+    const jsonResponse = await this.fetchQuery({
+      queryKey: [
+        `${this.name}:getDerivedIdentityByAddress`,
+        profileKey,
+        address,
+      ],
+      staleTime: 0,
+      gcTime: 0,
+      queryFn: async () => {
+        const response = await fetch(
+          new URL(
+            `/v1/money-account/identities/address/${address}`,
+            this.#baseUrl,
+          ),
+          { headers: this.#headersForToken(token) },
+        );
+
+        if (!response.ok) {
+          const error = await createChompApiError(
+            response,
+            `GET /v1/money-account/identities/address/${address} failed with status '${response.status}'`,
+          );
+          if (error.code === 'ADDRESS_NOT_ASSOCIATED') {
+            return null;
+          }
+          throw error;
+        }
+
+        return response.json();
+      },
+    });
+
+    return jsonResponse === null
+      ? null
+      : create(jsonResponse, AddressIdentityResponseStruct);
   }
 }

@@ -6,6 +6,7 @@ import type {
   ControllerGetStateAction,
   ControllerStateChangeEvent,
 } from '@metamask/base-controller';
+import type { TraceRequest } from '@metamask/controller-utils';
 import type { Messenger } from '@metamask/messenger';
 import type {
   NetworkControllerFindNetworkClientIdByChainIdAction,
@@ -26,9 +27,10 @@ import type {
 import type { BridgeControllerMethodActions } from './bridge-controller-method-action-types.js';
 import type { BridgeController } from './bridge-controller.js';
 import type { BRIDGE_CONTROLLER_NAME } from './constants/bridge.js';
+import { TraceFeatureTag } from './constants/traces.js';
+import type { TraceOperation } from './constants/traces.js';
 import type { SimulatedGasFeeLimitsSchema } from './validators/batch-sell.js';
 import type { BatchSellTradesResponseSchema } from './validators/batch-sell.js';
-import type { BridgeAssetSchema } from './validators/bridge-asset.js';
 import type {
   ChainConfigurationSchema,
   ChainRankingSchema,
@@ -36,12 +38,48 @@ import type {
 } from './validators/feature-flags.js';
 import type { IntentSchema } from './validators/intent.js';
 import type { QuoteResponseV1 } from './validators/quote-response-v1.js';
+import type { QuoteResponse } from './validators/quote-response.js';
 import type { QuoteStreamCompleteSchema } from './validators/quote-stream-complete.js';
 import type { TxFeeGasLimitsSchema } from './validators/quote.js';
 import type { FeeDataSchema } from './validators/quote.js';
 import type { GaslessPropertiesSchema } from './validators/quote.js';
 import type { StepSchema } from './validators/step.js';
 import type { TokenFeatureSchema } from './validators/token-feature.js';
+
+/**
+ * Filters the client-supplied trace names to only include swap/bridge/batch sell related names
+ */
+export type SwapRelatedTraceName<TNameEnum extends string> = {
+  [TName in TNameEnum]: `${TName}` extends
+    | `${string}Swap${string}`
+    | `${string}Bridge${string}`
+    | `${string}Batch Sell${string}`
+    ? TName
+    : never;
+}[TNameEnum];
+
+/**
+ * Trace request type for swap/bridge traces
+ */
+export type SwapTraceRequest<TTraceName> = Omit<
+  TraceRequest,
+  'name' | 'tags' | 'parentContext'
+> & {
+  name: TTraceName;
+  op?: TraceOperation;
+  tags: { feature: TraceFeatureTag };
+};
+
+/**
+ * Generic trace function type that supports both mobile and extension interfaces
+ */
+export type SwapTraceFunction<TTraceName extends string> = {
+  <TResult>(
+    request: SwapTraceRequest<TTraceName>,
+    fn: (args?: unknown) => TResult,
+  ): TResult;
+  (request: SwapTraceRequest<TTraceName>): unknown;
+};
 
 export type FetchFunction = (
   input: RequestInfo | URL | string,
@@ -98,12 +136,6 @@ export enum SortOrder {
   COST_ASC = 'cost_ascending',
   ETA_ASC = 'time_descending',
 }
-
-/**
- * This is the interface for the asset object returned by the bridge-api
- * This type is used in the QuoteResponse and in the fetchBridgeTokens response
- */
-export type BridgeAsset = Infer<typeof BridgeAssetSchema>;
 
 /**
  * This is the interface for the token object used in the extension client
@@ -267,7 +299,7 @@ export enum RequestStatus {
 
 export type BridgeControllerState = {
   quoteRequest: Partial<GenericQuoteRequest>[];
-  quotes: (QuoteResponseV1 & L1GasFees & NonEvmFees)[];
+  quotes: QuoteResponse[];
   /**
    * The time elapsed between the initial quote fetch and when the first valid quote was received
    */

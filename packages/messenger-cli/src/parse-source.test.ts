@@ -1,6 +1,7 @@
-import { createSandbox } from '@metamask/utils/node';
+import { createSandbox } from '@metamask/node-utils';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   findSourcesWithExposedMethods,
@@ -445,7 +446,9 @@ class BadTsconfigController {
         'utf8',
       );
 
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
       const result = await parseSourceFile(controllerFile);
 
       expect(result).toBeNull();
@@ -478,7 +481,9 @@ class NoTsconfigController {
         'utf8',
       );
 
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
       const result = await parseSourceFile(controllerFile);
 
       // Should return null because assert fails when type checker can't be created
@@ -492,7 +497,9 @@ class NoTsconfigController {
   it('returns null and logs error for invalid file', async () => {
     expect.assertions(2);
 
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
 
     const result = await parseSourceFile('/nonexistent/file.ts');
 
@@ -612,7 +619,7 @@ class HiddenController {
   });
 
   it('re-throws non-ENOENT errors from isDirectory', async () => {
-    const statSpy = jest
+    const statSpy = vi
       .spyOn(fs.promises, 'stat')
       .mockRejectedValue(
         Object.assign(new Error('EACCES'), { code: 'EACCES' }),

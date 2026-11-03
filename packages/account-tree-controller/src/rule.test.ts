@@ -12,6 +12,7 @@ import {
 } from '@metamask/keyring-api';
 import { KeyringTypes } from '@metamask/keyring-controller';
 import type { InternalAccount } from '@metamask/keyring-internal-api';
+import { describe, expect, it } from 'vitest';
 
 import {
   getAccountTreeControllerMessenger,
@@ -73,6 +74,7 @@ describe('BaseRule', () => {
         ),
         type: AccountGroupType.MultichainAccount,
         accounts: [MOCK_HD_ACCOUNT_1.id],
+        status: 'uninitialized',
         metadata: {
           name: MOCK_HD_ACCOUNT_1.metadata.name,
           entropy: {
@@ -104,6 +106,7 @@ describe('BaseRule', () => {
         ),
         type: AccountGroupType.MultichainAccount,
         accounts: [MOCK_HD_ACCOUNT_1.id],
+        status: 'uninitialized',
         metadata: {
           name: MOCK_HD_ACCOUNT_1.metadata.name,
           entropy: {

@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import type { TransactionParams } from '../../../transaction-controller/src/index.js';
 import {
   TransactionStatus,
@@ -209,7 +211,7 @@ describe('transation', () => {
       const metadata = {
         ...USER_OPERATION_METADATA_MOCK,
         chainId: '0x5',
-      } as UserOperationMetadata;
+      };
 
       const transactionMetadata = getTransactionMetadata(metadata);
 

@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
+
+### Changed
+
+- Bump `@metamask/keyring-controller` from `^28.0.0` to `^28.2.0` ([#10418](https://github.com/MetaMask/core/pull/10418), [#10851](https://github.com/MetaMask/core/pull/10851))
+- Bump `@noble/curves` from `^1.9.2` to `^1.9.7` ([#10720](https://github.com/MetaMask/core/pull/10720))
+- Bump `@levischuck/tiny-cbor` from `^0.3.3` to `^0.3.6` ([#10714](https://github.com/MetaMask/core/pull/10714))
+- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
+- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
+
+## [4.1.0]
+
+### Added
+
+- Add PRF migration methods for enrolled legacy `userHandle` passkeys ([#10310](https://github.com/MetaMask/core/pull/10310))
+  - `generatePasskeyReplacementRegistrationOptions` stages a PRF-only
+    replacement registration while retaining the existing record.
+  - `completePasskeyReplacement` verifies the replacement registration and PRF
+    assertion, re-wraps the vault key, and atomically commits the new record.
+  - `cancelPasskeyReplacement` removes the targeted replacement ceremony and
+    its linked post-registration authentication ceremony.
+
+### Changed
+
+- Use `@metamask/utils` SHA-256, SHA-384, and SHA-512 digests for asynchronous WebAuthn verification and RP ID matching, while retaining Noble SHA-256 for synchronous HKDF ([#10188](https://github.com/MetaMask/core/pull/10188))
+- Bump `@metamask/utils` from `^11.12.0` to `^12.0.0` ([#10192](https://github.com/MetaMask/core/pull/10192))
+
+### Fixed
+
+- Keep replacement ceremonies retryable after password and vault-key export failures ([#10310](https://github.com/MetaMask/core/pull/10310))
+
+## [4.0.0]
+
+### Changed
+
+- **BREAKING:** Drop CommonJS support ([#9536](https://github.com/MetaMask/core/pull/9536))
+  - This package is now ESM-only, but can still be used in CommonJS projects via `require(esm)` in modern Node.js versions (22+), or dynamic imports in older Node.js versions.
+- **BREAKING:** Bump minimum Node.js version to 22 ([#9976](https://github.com/MetaMask/core/pull/9976))
+- **BREAKING:** Bump TypeScript target to ES2022 ([#10019](https://github.com/MetaMask/core/pull/10019))
+  - This package now ships ES2022 code, requiring a compatible modern environment or bundler configuration to consume.
+- Bump `@metamask/utils` from `^11.11.0` to `^11.12.0` ([#10076](https://github.com/MetaMask/core/pull/10076))
+- Bump `@metamask/base-controller` from `^9.1.0` to `^10.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/keyring-controller` from `^27.1.1` to `^28.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+- Bump `@metamask/messenger` from `^2.0.0` to `^3.0.0` ([#10160](https://github.com/MetaMask/core/pull/10160))
+
+## [3.1.0]
+
+### Added
+
+- Added new util, `getAAGUIDFromRegistrationResponse` to read the authenticator AAGUID from a `navigator.credentials.create()` result. ([#9951](https://github.com/MetaMask/core/pull/9951))
+
+### Changed
+
+- Bump `@metamask/keyring-controller` from `^27.1.0` to `^27.1.1` ([#9791](https://github.com/MetaMask/core/pull/9791))
+
 ## [3.0.0]
 
 ### Added
@@ -102,7 +159,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Registration verification requires the credential `id`/`rawId` to match the credential id in authenticator data; vault wrapping key derivation uses that verified credential id so enrollment keys align with the stored credential.
 - Registration options request attestation conveyance `'none'` so clients are not asked for direct attestation formats the verifier does not implement (`none` and self-attested `packed` only).
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@3.0.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@4.1.0...HEAD
+[4.1.0]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@4.0.0...@metamask/passkey-controller@4.1.0
+[4.0.0]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@3.1.0...@metamask/passkey-controller@4.0.0
+[3.1.0]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@3.0.0...@metamask/passkey-controller@3.1.0
 [3.0.0]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@2.1.0...@metamask/passkey-controller@3.0.0
 [2.1.0]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@2.0.1...@metamask/passkey-controller@2.1.0
 [2.0.1]: https://github.com/MetaMask/core/compare/@metamask/passkey-controller@2.0.0...@metamask/passkey-controller@2.0.1

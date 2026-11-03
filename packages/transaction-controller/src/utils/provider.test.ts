@@ -2,24 +2,26 @@ import type { NetworkClientId, Provider } from '@metamask/network-controller';
 import { NetworkClientType } from '@metamask/network-controller';
 import { RpcEndpointType } from '@metamask/network-controller';
 import type { Hex } from '@metamask/utils';
+import type { Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TransactionControllerMessenger } from '../TransactionController.js';
 import { getProvider, rpcRequest } from './provider.js';
 
 describe('provider utils', () => {
-  const requestMock = jest.fn();
+  const requestMock = vi.fn();
   const mockProvider = {
     request: requestMock,
   } as unknown as Provider;
   const chainIdMock = '0xa4b1' as Hex;
 
-  let messengerCallMock: jest.Mock;
+  let messengerCallMock: Mock;
   let messengerMock: TransactionControllerMessenger;
 
   beforeEach(() => {
     requestMock.mockReset();
 
-    messengerCallMock = jest
+    messengerCallMock = vi
       .fn()
       .mockImplementation((action: string, ...args: unknown[]) => {
         if (action === 'NetworkController:getNetworkClientById') {
@@ -124,7 +126,7 @@ describe('provider utils', () => {
       await expect(
         rpcRequest({
           messenger: messengerMock,
-          networkClientId: 'networkClientIdA' as NetworkClientId,
+          networkClientId: 'networkClientIdA',
           method: 'eth_getBalance',
           params: ['0x123', 'latest'],
         }),
@@ -141,7 +143,7 @@ describe('provider utils', () => {
       await expect(
         rpcRequest({
           messenger: messengerMock,
-          networkClientId: 'infuraNetworkClientId' as NetworkClientId,
+          networkClientId: 'infuraNetworkClientId',
           method: 'eth_getBalance',
           params: ['0x123', 'latest'],
         }),
@@ -160,7 +162,7 @@ describe('provider utils', () => {
       await expect(
         rpcRequest({
           messenger: messengerMock,
-          networkClientId: 'networkClientIdA' as NetworkClientId,
+          networkClientId: 'networkClientIdA',
           method: 'eth_getBalance',
           params: ['0x123', 'latest'],
         }),
@@ -175,7 +177,7 @@ describe('provider utils', () => {
 
       const result = await rpcRequest({
         messenger: messengerMock,
-        networkClientId: 'networkClientIdA' as NetworkClientId,
+        networkClientId: 'networkClientIdA',
         method: 'eth_blockNumber',
       });
 

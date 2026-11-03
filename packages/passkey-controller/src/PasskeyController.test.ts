@@ -1,5 +1,8 @@
 import { Messenger } from '@metamask/messenger';
 import { Mutex } from 'async-mutex';
+import { setImmediate as realSetImmediate } from 'node:timers';
+import type { Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockPasskeyControllerMessenger } from '../tests/mocks/passkey-controller-messenger.js';
 import {
@@ -32,29 +35,36 @@ type ExtOutputsWithPrf = Record<string, unknown> & PrfClientExtensionResults;
 
 function prfResults(first: string, enabled?: boolean): ExtOutputsWithPrf {
   if (enabled === undefined) {
-    return { prf: { results: { first } } } as ExtOutputsWithPrf;
+    return { prf: { results: { first } } };
   }
-  return { prf: { enabled, results: { first } } } as ExtOutputsWithPrf;
+  return { prf: { enabled, results: { first } } };
 }
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockVerifyRegistrationResponse = jest.fn();
-const mockVerifyAuthenticationResponse = jest.fn();
+const { mockVerifyRegistrationResponse, mockVerifyAuthenticationResponse } =
+  vi.hoisted(() => ({
+    mockVerifyRegistrationResponse: vi.fn(),
+    mockVerifyAuthenticationResponse: vi.fn(),
+  }));
 
-jest.mock('./webauthn/verify-registration-response', () => ({
-  ...jest.requireActual('./webauthn/verify-registration-response'),
-  verifyRegistrationResponse: (...args: unknown[]): unknown =>
-    mockVerifyRegistrationResponse(...args),
-}));
+vi.mock(
+  import('./webauthn/verify-registration-response.js'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    verifyRegistrationResponse: mockVerifyRegistrationResponse,
+  }),
+);
 
-jest.mock('./webauthn/verify-authentication-response', () => ({
-  ...jest.requireActual('./webauthn/verify-authentication-response'),
-  verifyAuthenticationResponse: (...args: unknown[]): unknown =>
-    mockVerifyAuthenticationResponse(...args),
-}));
+vi.mock(
+  import('./webauthn/verify-authentication-response.js'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    verifyAuthenticationResponse: mockVerifyAuthenticationResponse,
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,12 +82,23 @@ const TEST_RP_ID = 'example.com';
 const TEST_ORIGIN = 'https://example.com';
 const TEST_CREDENTIAL_ID = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo';
 const TEST_PUBLIC_KEY = bytesToBase64URL(new Uint8Array(32).fill(0xaa));
+const TEST_REPLACEMENT_CREDENTIAL_ID = 'emV0YS1yZXBsYWNlbWVudC1jcmVkZW50aWFs';
+const TEST_REPLACEMENT_PUBLIC_KEY_BYTES = new Uint8Array(32).fill(0xbb);
+const TEST_REPLACEMENT_PUBLIC_KEY = bytesToBase64URL(
+  TEST_REPLACEMENT_PUBLIC_KEY_BYTES,
+);
+const TEST_REPLACEMENT_PRF_FIRST = bytesToBase64URL(
+  new Uint8Array(32).fill(0xcc),
+);
+const MIGRATION_NOT_REQUIRED_CODE = 'migration_not_required';
+const PRF_REQUIRED_CODE = 'prf_required';
+const REPLACEMENT_SOURCE_CHANGED_CODE = 'replacement_source_changed';
 const TEST_CHALLENGE = 'dGVzdC1jaGFsbGVuZ2U';
 
 function getPasskeyMessenger(): PasskeyControllerMessenger {
   return new Messenger({
     namespace: 'PasskeyController',
-  }) as PasskeyControllerMessenger;
+  });
 }
 
 const TEST_RP_NAME = 'Test RP';
@@ -85,7 +106,7 @@ const DEFAULT_TEST_VAULT_KEY = 'test-vault-key';
 
 type CreateControllerOptions = Partial<PasskeyControllerOptions> & {
   vaultKey?: string;
-  exportEncryptionKey?: jest.Mock;
+  exportEncryptionKey?: Mock;
 };
 
 function createController(
@@ -102,7 +123,7 @@ function createController(
     messenger ??
     createMockPasskeyControllerMessenger({
       exportEncryptionKey:
-        exportEncryptionKey ?? jest.fn().mockResolvedValue(vaultKey),
+        exportEncryptionKey ?? vi.fn().mockResolvedValue(vaultKey),
     }).messenger;
 
   return new PasskeyController({
@@ -111,7 +132,7 @@ function createController(
     rpId: TEST_RP_ID,
     rpName: TEST_RP_NAME,
     expectedOrigin: TEST_ORIGIN,
-    getIsOnboardingCompleted: jest.fn().mockReturnValue(false),
+    getIsOnboardingCompleted: vi.fn().mockReturnValue(false),
     ...rest,
   });
 }
@@ -139,7 +160,7 @@ function minimalRegistrationResponse(
     clientExtensionResults: {},
     authenticatorAttachment: 'platform',
     ...overrides,
-  } as PasskeyRegistrationResponse;
+  };
 }
 
 function minimalAuthenticationResponse(
@@ -168,15 +189,22 @@ function minimalAuthenticationResponse(
     clientExtensionResults: {},
     authenticatorAttachment: 'platform',
     ...overrides,
-  } as PasskeyAuthenticationResponse;
+  };
 }
 
-function setupRegistrationMocks(): void {
+function setupRegistrationMocks(options?: {
+  credentialId?: string;
+  publicKey?: Uint8Array;
+}): void {
+  const {
+    credentialId = TEST_CREDENTIAL_ID,
+    publicKey = new Uint8Array(32).fill(0xaa),
+  } = options ?? {};
   mockVerifyRegistrationResponse.mockResolvedValue({
     verified: true,
     registrationInfo: {
-      credentialId: TEST_CREDENTIAL_ID,
-      publicKey: new Uint8Array(32).fill(0xaa),
+      credentialId,
+      publicKey,
       counter: 0,
       transports: ['internal'],
       aaguid: '00000000-0000-0000-0000-000000000000',
@@ -186,17 +214,136 @@ function setupRegistrationMocks(): void {
   });
 }
 
-function setupAuthenticationMocks(): void {
+function setupAuthenticationMocks(options?: {
+  credentialId?: string;
+  newCounter?: number;
+}): void {
+  const { credentialId = TEST_CREDENTIAL_ID, newCounter = 0 } = options ?? {};
   mockVerifyAuthenticationResponse.mockResolvedValue({
     verified: true,
     authenticationInfo: {
-      credentialId: TEST_CREDENTIAL_ID,
-      newCounter: 0,
+      credentialId,
+      newCounter,
       userVerified: true,
       origin: TEST_ORIGIN,
       rpID: TEST_RP_ID,
     },
   });
+}
+
+async function enrollUserHandlePasskey(
+  controller: PasskeyController,
+): Promise<{ record: PasskeyRecord; userHandle: string }> {
+  const registrationOptions = controller.generateRegistrationOptions({
+    prfAvailable: false,
+  });
+  await enrollWithPostRegistrationAuth(controller, {
+    registrationResponse: minimalRegistrationResponse(
+      undefined,
+      registrationOptions.challenge,
+    ),
+    userHandle: registrationOptions.user.id,
+  });
+
+  const record = controller.state.passkeyRecord;
+  if (!record) {
+    throw new Error('Expected the userHandle passkey to be enrolled');
+  }
+  return { record, userHandle: registrationOptions.user.id };
+}
+
+function getReplacementCeremony(
+  controller: PasskeyController,
+  options?: {
+    authenticationClientExtensionResults?: Record<string, unknown>;
+    registrationClientExtensionResults?: Record<string, unknown>;
+  },
+): {
+  registrationOptions: ReturnType<
+    PasskeyController['generatePasskeyReplacementRegistrationOptions']
+  >;
+  registrationResponse: PasskeyRegistrationResponse;
+  authenticationOptions: ReturnType<
+    PasskeyController['generatePostRegistrationAuthenticationOptions']
+  >;
+  authenticationResponse: PasskeyAuthenticationResponse;
+} {
+  const registrationOptions =
+    controller.generatePasskeyReplacementRegistrationOptions();
+  const registrationResponse = minimalRegistrationResponse(
+    {
+      id: TEST_REPLACEMENT_CREDENTIAL_ID,
+      rawId: TEST_REPLACEMENT_CREDENTIAL_ID,
+      clientExtensionResults:
+        options?.registrationClientExtensionResults ??
+        prfResults(TEST_REPLACEMENT_PRF_FIRST, true),
+    },
+    registrationOptions.challenge,
+  );
+  const authenticationOptions =
+    controller.generatePostRegistrationAuthenticationOptions({
+      registrationResponse,
+    });
+  const authenticationResponse = minimalAuthenticationResponse(
+    undefined,
+    {
+      id: TEST_REPLACEMENT_CREDENTIAL_ID,
+      rawId: TEST_REPLACEMENT_CREDENTIAL_ID,
+      clientExtensionResults:
+        options?.authenticationClientExtensionResults ??
+        prfResults(TEST_REPLACEMENT_PRF_FIRST, true),
+    },
+    authenticationOptions.challenge,
+  );
+
+  return {
+    registrationOptions,
+    registrationResponse,
+    authenticationOptions,
+    authenticationResponse,
+  };
+}
+
+async function prepareUserHandleMigration(
+  controller: PasskeyController,
+  options?: Parameters<typeof getReplacementCeremony>[1],
+): Promise<
+  ReturnType<typeof getReplacementCeremony> & {
+    oldRecord: PasskeyRecord;
+    userHandle: string;
+  }
+> {
+  const { record: oldRecord, userHandle } =
+    await enrollUserHandlePasskey(controller);
+  setupRegistrationMocks({
+    credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+    publicKey: TEST_REPLACEMENT_PUBLIC_KEY_BYTES,
+  });
+  setupAuthenticationMocks({
+    credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+  });
+  return {
+    oldRecord,
+    userHandle,
+    ...getReplacementCeremony(controller, options),
+  };
+}
+
+async function expectUserHandlePasskeyUsable(
+  controller: PasskeyController,
+  userHandle: string,
+  vaultKey: string = DEFAULT_TEST_VAULT_KEY,
+): Promise<void> {
+  const authenticationOptions = controller.generateAuthenticationOptions();
+  expect(
+    await controller.retrieveVaultKeyWithPasskey(
+      minimalAuthenticationResponse(
+        userHandle,
+        undefined,
+        authenticationOptions.challenge,
+      ),
+    ),
+  ).toBe(vaultKey);
 }
 
 async function enrollWithPostRegistrationAuth(
@@ -239,7 +386,7 @@ async function enrollWithPostRegistrationAuth(
 
 describe('PasskeyController', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('getDefaultPasskeyControllerState', () => {
@@ -259,7 +406,7 @@ describe('PasskeyController', () => {
             expectedRPID: [],
             rpName: TEST_RP_NAME,
             expectedOrigin: TEST_ORIGIN,
-            getIsOnboardingCompleted: jest.fn().mockReturnValue(false),
+            getIsOnboardingCompleted: vi.fn().mockReturnValue(false),
           }),
       ).not.toThrow();
     });
@@ -289,12 +436,12 @@ describe('PasskeyController', () => {
   describe('messenger', () => {
     it('delegates allowed KeyringController actions from the restricted messenger', async () => {
       const { messenger, mocks } = createMockPasskeyControllerMessenger({
-        verifyPassword: jest.fn().mockResolvedValue(undefined),
-        exportEncryptionKey: jest.fn().mockResolvedValue('test-vault-key'),
-        submitEncryptionKey: jest.fn().mockResolvedValue(undefined),
-        changePassword: jest.fn().mockResolvedValue(undefined),
-        exportSeedPhrase: jest.fn().mockResolvedValue(new Uint8Array([1, 2])),
-        exportAccount: jest.fn().mockResolvedValue('0xdeadbeef'),
+        verifyPassword: vi.fn().mockResolvedValue(undefined),
+        exportEncryptionKey: vi.fn().mockResolvedValue('test-vault-key'),
+        submitEncryptionKey: vi.fn().mockResolvedValue(undefined),
+        changePassword: vi.fn().mockResolvedValue(undefined),
+        exportSeedPhrase: vi.fn().mockResolvedValue(new Uint8Array([1, 2])),
+        exportAccount: vi.fn().mockResolvedValue('0xdeadbeef'),
       });
 
       createController({ messenger });
@@ -592,7 +739,7 @@ describe('PasskeyController', () => {
     });
 
     it('verifies password when onboarding is complete', async () => {
-      const verifyPassword = jest.fn().mockResolvedValue(undefined);
+      const verifyPassword = vi.fn().mockResolvedValue(undefined);
       const { messenger } = createMockPasskeyControllerMessenger({
         verifyPassword,
       });
@@ -615,7 +762,7 @@ describe('PasskeyController', () => {
     it('fetches vault encryption key from KeyringController during enrollment', async () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
-      const exportEncryptionKey = jest
+      const exportEncryptionKey = vi
         .fn()
         .mockResolvedValue('keyring-vault-key');
       const { messenger } = createMockPasskeyControllerMessenger({
@@ -650,10 +797,10 @@ describe('PasskeyController', () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
       const callOrder: string[] = [];
-      const verifyPassword = jest.fn().mockImplementation(async () => {
+      const verifyPassword = vi.fn().mockImplementation(async () => {
         callOrder.push('verifyPassword');
       });
-      const exportEncryptionKey = jest.fn().mockImplementation(async () => {
+      const exportEncryptionKey = vi.fn().mockImplementation(async () => {
         callOrder.push('exportEncryptionKey');
         return 'k';
       });
@@ -951,7 +1098,7 @@ describe('PasskeyController', () => {
           {
             clientExtensionResults: {
               prf: { enabled: true },
-            } as ExtOutputsWithPrf,
+            },
           },
           regOptions.challenge,
         ),
@@ -973,6 +1120,651 @@ describe('PasskeyController', () => {
         ),
       );
       expect(retrieved).toBe(vaultKey);
+    });
+  });
+
+  describe('generatePasskeyReplacementRegistrationOptions', () => {
+    it('throws when no passkey is enrolled', () => {
+      const controller = createController();
+
+      expect(() =>
+        controller.generatePasskeyReplacementRegistrationOptions(),
+      ).toThrow(PasskeyControllerErrorMessage.NotEnrolled);
+    });
+
+    it('returns PRF registration options without changing the old record', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const { record: oldRecord } = await enrollUserHandlePasskey(controller);
+
+      const options =
+        controller.generatePasskeyReplacementRegistrationOptions();
+
+      expect(
+        (options.extensions as Record<string, unknown>)?.prf,
+      ).toBeDefined();
+      expect(options.excludeCredentials).toStrictEqual([
+        expect.objectContaining({ id: oldRecord.credential.id }),
+      ]);
+      expect(controller.state.passkeyRecord).toStrictEqual(oldRecord);
+    });
+
+    it('omits transports when the source credential has none', () => {
+      const record: PasskeyRecord = {
+        credential: {
+          id: TEST_CREDENTIAL_ID,
+          publicKey: TEST_PUBLIC_KEY,
+          counter: 0,
+          aaguid: '00000000-0000-0000-0000-000000000000',
+        },
+        encryptedVaultKey: {
+          ciphertext: 'YQ==',
+          iv: 'YWFhYWFhYWFhYQ==',
+        },
+        keyDerivation: { method: 'userHandle' },
+      };
+      const controller = createController({
+        state: { passkeyRecord: record },
+      });
+
+      const options =
+        controller.generatePasskeyReplacementRegistrationOptions();
+
+      expect(options.excludeCredentials).toStrictEqual([
+        { id: TEST_CREDENTIAL_ID, type: 'public-key' },
+      ]);
+    });
+
+    it('throws when the enrolled passkey is already PRF-backed', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const registrationOptions = controller.generateRegistrationOptions();
+      await enrollWithPostRegistrationAuth(controller, {
+        registrationResponse: minimalRegistrationResponse(
+          {
+            clientExtensionResults: prfResults(
+              TEST_REPLACEMENT_PRF_FIRST,
+              true,
+            ),
+          },
+          registrationOptions.challenge,
+        ),
+        authClientExtensionResults: prfResults(
+          TEST_REPLACEMENT_PRF_FIRST,
+          true,
+        ),
+      });
+
+      let thrownError: unknown;
+      try {
+        controller.generatePasskeyReplacementRegistrationOptions();
+      } catch (error) {
+        thrownError = error;
+      }
+
+      expect(thrownError).toMatchObject({
+        code: MIGRATION_NOT_REQUIRED_CODE,
+      });
+    });
+  });
+
+  describe('completePasskeyReplacement', () => {
+    it('throws when no passkey is enrolled', async () => {
+      const controller = createController();
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: minimalRegistrationResponse(),
+          authenticationResponse: minimalAuthenticationResponse(),
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.NotEnrolled,
+      });
+    });
+
+    it('replaces a userHandle record with a PRF record', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController({ vaultKey: 'migration-vault-key' });
+      const migration = await prepareUserHandleMigration(controller);
+
+      await controller.completePasskeyReplacement({
+        registrationResponse: migration.registrationResponse,
+        authenticationResponse: migration.authenticationResponse,
+      });
+
+      expect(controller.state.passkeyRecord).toMatchObject({
+        credential: {
+          id: TEST_REPLACEMENT_CREDENTIAL_ID,
+          publicKey: TEST_REPLACEMENT_PUBLIC_KEY,
+        },
+        keyDerivation: {
+          method: 'prf',
+          prfSalt: expect.any(String),
+        },
+      });
+      expect(controller.state.passkeyRecord).not.toStrictEqual(
+        migration.oldRecord,
+      );
+
+      const authenticationOptions = controller.generateAuthenticationOptions();
+      expect(authenticationOptions.allowCredentials?.[0]?.id).toBe(
+        TEST_REPLACEMENT_CREDENTIAL_ID,
+      );
+      expect(
+        (authenticationOptions.extensions as Record<string, unknown>)?.prf,
+      ).toBeDefined();
+
+      expect(
+        await controller.retrieveVaultKeyWithPasskey(
+          minimalAuthenticationResponse(
+            undefined,
+            {
+              id: TEST_REPLACEMENT_CREDENTIAL_ID,
+              rawId: TEST_REPLACEMENT_CREDENTIAL_ID,
+              clientExtensionResults: prfResults(
+                TEST_REPLACEMENT_PRF_FIRST,
+                true,
+              ),
+            },
+            authenticationOptions.challenge,
+          ),
+        ),
+      ).toBe('migration-vault-key');
+
+      await expect(
+        controller.retrieveVaultKeyWithPasskey(
+          migration.authenticationResponse,
+        ),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.NoAuthenticationCeremony,
+      });
+      expect(() =>
+        controller.generatePostRegistrationAuthenticationOptions({
+          registrationResponse: migration.registrationResponse,
+        }),
+      ).toThrow(PasskeyControllerErrorMessage.NoRegistrationCeremony);
+    });
+
+    it('does not require the wallet password when the keyring is unlocked after onboarding', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      let onboardingComplete = false;
+      const verifyPassword = vi.fn();
+      const isUnlocked = vi.fn().mockReturnValue(true);
+      const { messenger } = createMockPasskeyControllerMessenger({
+        isUnlocked,
+        verifyPassword,
+      });
+      const controller = createController({
+        messenger,
+        getIsOnboardingCompleted: () => onboardingComplete,
+      });
+      await enrollUserHandlePasskey(controller);
+      onboardingComplete = true;
+      setupRegistrationMocks({
+        credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+        publicKey: TEST_REPLACEMENT_PUBLIC_KEY_BYTES,
+      });
+      setupAuthenticationMocks({
+        credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+      });
+      const migration = getReplacementCeremony(controller);
+
+      await controller.completePasskeyReplacement({
+        registrationResponse: migration.registrationResponse,
+        authenticationResponse: migration.authenticationResponse,
+      });
+
+      expect(verifyPassword).not.toHaveBeenCalled();
+      expect(controller.state.passkeyRecord?.credential.id).toBe(
+        TEST_REPLACEMENT_CREDENTIAL_ID,
+      );
+    });
+
+    it('preserves the old record when registration verification fails', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      mockVerifyRegistrationResponse.mockResolvedValueOnce({
+        verified: false,
+      });
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.RegistrationVerificationFailed,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+      expect(() =>
+        controller.generatePostRegistrationAuthenticationOptions({
+          registrationResponse: migration.registrationResponse,
+        }),
+      ).toThrow(PasskeyControllerErrorMessage.NoRegistrationCeremony);
+    });
+
+    it('preserves the old record when authentication verification fails', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      mockVerifyAuthenticationResponse.mockResolvedValueOnce({
+        verified: false,
+      });
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.AuthenticationVerificationFailed,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+    });
+
+    it('rejects a replacement without PRF output', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller, {
+        authenticationClientExtensionResults: {},
+      });
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: PRF_REQUIRED_CODE,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+    });
+
+    it('preserves the old record when exporting the vault key fails', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const exportEncryptionKey = vi
+        .fn()
+        .mockResolvedValueOnce('old-vault-key')
+        .mockRejectedValueOnce(new Error('export failed'))
+        .mockResolvedValueOnce('old-vault-key');
+      const { messenger } = createMockPasskeyControllerMessenger({
+        exportEncryptionKey,
+      });
+      const controller = createController({ messenger });
+      const migration = await prepareUserHandleMigration(controller);
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toThrow('export failed');
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(
+        controller,
+        migration.userHandle,
+        'old-vault-key',
+      );
+
+      await controller.completePasskeyReplacement({
+        registrationResponse: migration.registrationResponse,
+        authenticationResponse: migration.authenticationResponse,
+      });
+      expect(controller.state.passkeyRecord?.credential.id).toBe(
+        TEST_REPLACEMENT_CREDENTIAL_ID,
+      );
+    });
+
+    it('preserves the old record when wrapping the vault key fails', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      const encryptSpy = vi
+        .spyOn(passkeyCrypto, 'encryptWithKey')
+        .mockImplementation(() => {
+          throw new Error('encrypt failed');
+        });
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toThrow('encrypt failed');
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+
+      encryptSpy.mockRestore();
+    });
+
+    it('cancels only the replacement ceremony', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+
+      controller.cancelPasskeyReplacement(
+        migration.registrationOptions.challenge,
+      );
+
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      expect(() =>
+        controller.generatePostRegistrationAuthenticationOptions({
+          registrationResponse: migration.registrationResponse,
+        }),
+      ).toThrow(PasskeyControllerErrorMessage.NoRegistrationCeremony);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+    });
+
+    it('does not cancel normal or missing registration ceremonies', () => {
+      const controller = createController();
+      const registrationOptions = controller.generateRegistrationOptions({
+        prfAvailable: false,
+      });
+      const registrationResponse = minimalRegistrationResponse(
+        undefined,
+        registrationOptions.challenge,
+      );
+
+      controller.cancelPasskeyReplacement(registrationOptions.challenge);
+      controller.cancelPasskeyReplacement('missing-challenge');
+
+      expect(() =>
+        controller.generatePostRegistrationAuthenticationOptions({
+          registrationResponse,
+        }),
+      ).not.toThrow();
+    });
+
+    it('rejects an invalid registration challenge without changing the old record', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const { record: oldRecord, userHandle } =
+        await enrollUserHandlePasskey(controller);
+      setupRegistrationMocks({
+        credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+        publicKey: TEST_REPLACEMENT_PUBLIC_KEY_BYTES,
+      });
+      setupAuthenticationMocks({
+        credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+      });
+      const registrationOptions =
+        controller.generatePasskeyReplacementRegistrationOptions();
+      const registrationResponse = minimalRegistrationResponse(
+        {
+          id: TEST_REPLACEMENT_CREDENTIAL_ID,
+          rawId: TEST_REPLACEMENT_CREDENTIAL_ID,
+        },
+        TEST_CHALLENGE,
+      );
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse,
+          authenticationResponse: minimalAuthenticationResponse(),
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.NoRegistrationCeremony,
+      });
+      expect(registrationOptions.challenge).not.toBe(TEST_CHALLENGE);
+      expect(controller.state.passkeyRecord).toStrictEqual(oldRecord);
+      await expectUserHandlePasskeyUsable(controller, userHandle);
+    });
+
+    it('preserves the old record when registration origin verification fails', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      mockVerifyRegistrationResponse.mockRejectedValueOnce(
+        new Error('Unexpected registration response origin'),
+      );
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.RegistrationVerificationFailed,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+    });
+
+    it('rejects an authentication response for the wrong credential ID', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      const wrongCredentialResponse = minimalAuthenticationResponse(
+        undefined,
+        {
+          id: TEST_CREDENTIAL_ID,
+          rawId: TEST_CREDENTIAL_ID,
+          clientExtensionResults: prfResults(TEST_REPLACEMENT_PRF_FIRST, true),
+        },
+        migration.authenticationOptions.challenge,
+      );
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: wrongCredentialResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.AuthenticationVerificationFailed,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+    });
+
+    it('rejects a registration response with a mismatched credential ID', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      const mismatchedRegistrationResponse = {
+        ...migration.registrationResponse,
+        id: TEST_CREDENTIAL_ID,
+        rawId: TEST_CREDENTIAL_ID,
+      };
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: mismatchedRegistrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.RegistrationVerificationFailed,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+    });
+
+    it('rejects a replacement that reuses the source credential ID', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      setupRegistrationMocks({ credentialId: TEST_CREDENTIAL_ID });
+      const reusedCredentialRegistrationResponse = {
+        ...migration.registrationResponse,
+        id: TEST_CREDENTIAL_ID,
+        rawId: TEST_CREDENTIAL_ID,
+      };
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: reusedCredentialRegistrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: PasskeyControllerErrorCode.RegistrationVerificationFailed,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(migration.oldRecord);
+      await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+    });
+
+    it('preserves the old record when the replacement ceremony expires', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(1_000_000);
+        setupRegistrationMocks();
+        setupAuthenticationMocks();
+        const controller = createController();
+        const migration = await prepareUserHandleMigration(controller);
+        vi.setSystemTime(1_000_000 + CEREMONY_MAX_AGE_MS + 1);
+
+        await expect(
+          controller.completePasskeyReplacement({
+            registrationResponse: migration.registrationResponse,
+            authenticationResponse: migration.authenticationResponse,
+          }),
+        ).rejects.toMatchObject({
+          code: PasskeyControllerErrorCode.NoRegistrationCeremony,
+        });
+        expect(controller.state.passkeyRecord).toStrictEqual(
+          migration.oldRecord,
+        );
+        await expectUserHandlePasskeyUsable(controller, migration.userHandle);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('acquires the operation mutex', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      const runExclusiveSpy = vi.spyOn(Mutex.prototype, 'runExclusive');
+      runExclusiveSpy.mockClear();
+
+      await controller.completePasskeyReplacement({
+        registrationResponse: migration.registrationResponse,
+        authenticationResponse: migration.authenticationResponse,
+      });
+
+      expect(runExclusiveSpy).toHaveBeenCalledTimes(1);
+      runExclusiveSpy.mockRestore();
+    });
+
+    it('does not allow a stale concurrent replacement to overwrite the new record', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      await enrollUserHandlePasskey(controller);
+      setupRegistrationMocks({
+        credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+        publicKey: TEST_REPLACEMENT_PUBLIC_KEY_BYTES,
+      });
+      setupAuthenticationMocks({
+        credentialId: TEST_REPLACEMENT_CREDENTIAL_ID,
+      });
+      const firstMigration = getReplacementCeremony(controller);
+      const secondMigration = getReplacementCeremony(controller);
+
+      await controller.completePasskeyReplacement({
+        registrationResponse: firstMigration.registrationResponse,
+        authenticationResponse: firstMigration.authenticationResponse,
+      });
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: secondMigration.registrationResponse,
+          authenticationResponse: secondMigration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: MIGRATION_NOT_REQUIRED_CODE,
+      });
+      expect(controller.state.passkeyRecord?.credential.id).toBe(
+        TEST_REPLACEMENT_CREDENTIAL_ID,
+      );
+    });
+
+    it('rejects a replacement when the source record changes', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      const changedRecord: PasskeyRecord = {
+        ...migration.oldRecord,
+        credential: {
+          ...migration.oldRecord.credential,
+          id: 'Y2hhbmdlZC1zb3VyY2UtY3JlZA',
+        },
+      };
+      (
+        controller as unknown as {
+          update: (callback: (state: PasskeyControllerState) => void) => void;
+        }
+      ).update((state) => {
+        state.passkeyRecord = changedRecord;
+      });
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: REPLACEMENT_SOURCE_CHANGED_CODE,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(changedRecord);
+    });
+
+    it('rejects a source change that occurs before the final commit', async () => {
+      setupRegistrationMocks();
+      setupAuthenticationMocks();
+      const controller = createController();
+      const migration = await prepareUserHandleMigration(controller);
+      const changedRecord: PasskeyRecord = {
+        ...migration.oldRecord,
+        credential: {
+          ...migration.oldRecord.credential,
+          id: 'Y2hhbmdlZC1zb3VyY2UtY3JlZA',
+        },
+      };
+      mockVerifyAuthenticationResponse.mockImplementationOnce(async () => {
+        (
+          controller as unknown as {
+            update: (callback: (state: PasskeyControllerState) => void) => void;
+          }
+        ).update((state) => {
+          state.passkeyRecord = changedRecord;
+        });
+        return {
+          verified: true,
+          authenticationInfo: {
+            newCounter: 0,
+          },
+        };
+      });
+
+      await expect(
+        controller.completePasskeyReplacement({
+          registrationResponse: migration.registrationResponse,
+          authenticationResponse: migration.authenticationResponse,
+        }),
+      ).rejects.toMatchObject({
+        code: REPLACEMENT_SOURCE_CHANGED_CODE,
+      });
+      expect(controller.state.passkeyRecord).toStrictEqual(changedRecord);
     });
   });
 
@@ -1110,7 +1902,7 @@ describe('PasskeyController', () => {
         authClientExtensionResults: prfResults(prfFirst),
       });
 
-      const decryptSpy = jest
+      const decryptSpy = vi
         .spyOn(passkeyCrypto, 'decryptWithKey')
         .mockImplementation(() => {
           // eslint-disable-next-line @typescript-eslint/only-throw-error -- exercise non-Error rejection normalization
@@ -1156,13 +1948,16 @@ describe('PasskeyController', () => {
         authClientExtensionResults: prfResults(prfFirst),
       });
 
-      const updateSpy = jest.spyOn(controller, 'update' as never);
-      (updateSpy as unknown as jest.Mock).mockImplementation(
+      const updateSpy = vi.spyOn(
+        controller,
+        'update' as never,
+      ) as unknown as Mock;
+      updateSpy.mockImplementation(
         (updater: (state: PasskeyControllerState) => void) => {
           updater({
             ...getDefaultPasskeyControllerState(),
             passkeyRecord: null,
-          } as PasskeyControllerState);
+          });
         },
       );
 
@@ -1234,9 +2029,9 @@ describe('PasskeyController', () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
       const vaultKey = 'unlock-vault-key';
-      const submitEncryptionKey = jest.fn().mockResolvedValue(undefined);
+      const submitEncryptionKey = vi.fn().mockResolvedValue(undefined);
       const { messenger } = createMockPasskeyControllerMessenger({
-        exportEncryptionKey: jest.fn().mockResolvedValue(vaultKey),
+        exportEncryptionKey: vi.fn().mockResolvedValue(vaultKey),
         submitEncryptionKey,
       });
       const controller = createController({ messenger, vaultKey });
@@ -1278,9 +2073,9 @@ describe('PasskeyController', () => {
       setupAuthenticationMocks();
       const vaultKey = 'export-seed-vault-key';
       const seedPhrase = new Uint8Array([1, 2, 3]);
-      const exportSeedPhrase = jest.fn().mockResolvedValue(seedPhrase);
+      const exportSeedPhrase = vi.fn().mockResolvedValue(seedPhrase);
       const { messenger } = createMockPasskeyControllerMessenger({
-        exportEncryptionKey: jest.fn().mockResolvedValue(vaultKey),
+        exportEncryptionKey: vi.fn().mockResolvedValue(vaultKey),
         exportSeedPhrase,
       });
       const controller = createController({ messenger, vaultKey });
@@ -1327,12 +2122,12 @@ describe('PasskeyController', () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
       const vaultKey = 'export-account-vault-key';
-      const exportAccount = jest
+      const exportAccount = vi
         .fn()
         .mockResolvedValueOnce('0xprivate1')
         .mockResolvedValueOnce('0xprivate2');
       const { messenger } = createMockPasskeyControllerMessenger({
-        exportEncryptionKey: jest.fn().mockResolvedValue(vaultKey),
+        exportEncryptionKey: vi.fn().mockResolvedValue(vaultKey),
         exportAccount,
       });
       const controller = createController({ messenger, vaultKey });
@@ -1683,7 +2478,7 @@ describe('PasskeyController', () => {
         authClientExtensionResults: prfResults(prfFirst),
       });
 
-      const decryptSpy = jest
+      const decryptSpy = vi
         .spyOn(passkeyCrypto, 'decryptWithKey')
         .mockImplementation(() => {
           throw new Error('decrypt failed');
@@ -1727,7 +2522,7 @@ describe('PasskeyController', () => {
         authClientExtensionResults: prfResults(prfFirst),
       });
 
-      const decryptSpy = jest
+      const decryptSpy = vi
         .spyOn(passkeyCrypto, 'decryptWithKey')
         .mockImplementation(() => {
           // eslint-disable-next-line @typescript-eslint/only-throw-error -- exercise non-Error rejection normalization
@@ -1773,13 +2568,16 @@ describe('PasskeyController', () => {
         authClientExtensionResults: prfResults(prfFirst),
       });
 
-      const updateSpy = jest.spyOn(controller, 'update' as never);
-      (updateSpy as unknown as jest.Mock).mockImplementation(
+      const updateSpy = vi.spyOn(
+        controller,
+        'update' as never,
+      ) as unknown as Mock;
+      updateSpy.mockImplementation(
         (updater: (state: PasskeyControllerState) => void) => {
           updater({
             ...getDefaultPasskeyControllerState(),
             passkeyRecord: null,
-          } as PasskeyControllerState);
+          });
         },
       );
 
@@ -1930,8 +2728,8 @@ describe('PasskeyController', () => {
       setupAuthenticationMocks();
       const beforeKey = 'vault-before-password';
       const afterKey = 'vault-after-password';
-      const changePassword = jest.fn().mockResolvedValue(undefined);
-      const exportEncryptionKey = jest
+      const changePassword = vi.fn().mockResolvedValue(undefined);
+      const exportEncryptionKey = vi
         .fn()
         .mockResolvedValueOnce(beforeKey)
         .mockResolvedValueOnce(beforeKey)
@@ -1978,10 +2776,10 @@ describe('PasskeyController', () => {
     it('removes passkey when renewVaultKeyProtection is false', async () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
-      const exportEncryptionKey = jest
+      const exportEncryptionKey = vi
         .fn()
         .mockResolvedValue(DEFAULT_TEST_VAULT_KEY);
-      const changePassword = jest.fn().mockResolvedValue(undefined);
+      const changePassword = vi.fn().mockResolvedValue(undefined);
       const { messenger } = createMockPasskeyControllerMessenger({
         changePassword,
         exportEncryptionKey,
@@ -2016,8 +2814,8 @@ describe('PasskeyController', () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
       const beforeKey = 'vault-before-password';
-      const changePassword = jest.fn().mockResolvedValue(undefined);
-      const exportEncryptionKey = jest
+      const changePassword = vi.fn().mockResolvedValue(undefined);
+      const exportEncryptionKey = vi
         .fn()
         .mockResolvedValueOnce(beforeKey)
         .mockResolvedValueOnce('wrong-before-key')
@@ -2060,8 +2858,8 @@ describe('PasskeyController', () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
       const beforeKey = 'vault-before-password';
-      const changePassword = jest.fn().mockResolvedValue(undefined);
-      const exportEncryptionKey = jest
+      const changePassword = vi.fn().mockResolvedValue(undefined);
+      const exportEncryptionKey = vi
         .fn()
         .mockResolvedValueOnce(beforeKey)
         .mockResolvedValueOnce(beforeKey)
@@ -2080,7 +2878,7 @@ describe('PasskeyController', () => {
         userHandle: regOpts.user.id,
       });
 
-      const encryptSpy = jest
+      const encryptSpy = vi
         .spyOn(passkeyCrypto, 'encryptWithKey')
         .mockImplementationOnce(() => {
           throw new Error('renew-error');
@@ -2109,8 +2907,8 @@ describe('PasskeyController', () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
       const beforeKey = 'vault-before-password';
-      const changePassword = jest.fn().mockResolvedValue(undefined);
-      const exportEncryptionKey = jest
+      const changePassword = vi.fn().mockResolvedValue(undefined);
+      const exportEncryptionKey = vi
         .fn()
         .mockResolvedValueOnce(beforeKey)
         .mockResolvedValueOnce(beforeKey)
@@ -2225,7 +3023,7 @@ describe('PasskeyController', () => {
     it('verifies password and removes the passkey', async () => {
       setupRegistrationMocks();
       setupAuthenticationMocks();
-      const verifyPassword = jest.fn().mockResolvedValue(undefined);
+      const verifyPassword = vi.fn().mockResolvedValue(undefined);
       const { messenger } = createMockPasskeyControllerMessenger({
         verifyPassword,
       });
@@ -2505,13 +3303,13 @@ describe('PasskeyController', () => {
       const exportBeforeHold = new Promise<void>((resolve) => {
         releaseExportBefore = resolve;
       });
-      const changePassword = jest.fn().mockImplementation(async () => {
+      const changePassword = vi.fn().mockImplementation(async () => {
         callOrder.push('changePassword');
       });
-      const submitEncryptionKey = jest.fn().mockImplementation(async () => {
+      const submitEncryptionKey = vi.fn().mockImplementation(async () => {
         callOrder.push('submitEncryptionKey');
       });
-      const exportEncryptionKey = jest.fn().mockImplementation(async () => {
+      const exportEncryptionKey = vi.fn().mockImplementation(async () => {
         const callCount = exportEncryptionKey.mock.calls.length;
         if (callCount === 2) {
           callOrder.push('export:before-await');
@@ -2562,7 +3360,7 @@ describe('PasskeyController', () => {
             resolve();
             return;
           }
-          setImmediate(waitForExportBlock);
+          realSetImmediate(waitForExportBlock);
         };
         waitForExportBlock();
       });
@@ -2581,7 +3379,7 @@ describe('PasskeyController', () => {
     });
 
     it('acquires the operation mutex for orchestrated methods', async () => {
-      const runExclusiveSpy = jest.spyOn(Mutex.prototype, 'runExclusive');
+      const runExclusiveSpy = vi.spyOn(Mutex.prototype, 'runExclusive');
       setupRegistrationMocks();
       setupAuthenticationMocks();
       const controller = createController();
@@ -2767,13 +3565,13 @@ describe('PasskeyController', () => {
 
   describe('ceremony TTL', () => {
     it('drops expired registration ceremonies before protectVaultKeyWithPasskey', async () => {
-      jest.useFakeTimers();
-      jest.setSystemTime(1_000_000);
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000_000);
       setupRegistrationMocks();
       const controller = createController();
       const regOpts = controller.generateRegistrationOptions();
 
-      jest.setSystemTime(1_000_000 + CEREMONY_MAX_AGE_MS + 1);
+      vi.setSystemTime(1_000_000 + CEREMONY_MAX_AGE_MS + 1);
 
       await expect(
         controller.protectVaultKeyWithPasskey({
@@ -2787,7 +3585,7 @@ describe('PasskeyController', () => {
         }),
       ).rejects.toThrow(PasskeyControllerErrorMessage.NoRegistrationCeremony);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('removes authentication ceremony entry when verification fails', async () => {

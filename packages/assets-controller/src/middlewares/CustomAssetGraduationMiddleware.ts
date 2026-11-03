@@ -5,10 +5,11 @@ import { forDataTypes } from '../types.js';
 import type {
   AccountId,
   AssetBalance,
+  AssetsControllerState,
   Caip19AssetId,
   Middleware,
 } from '../types.js';
-import { normalizeAssetId } from '../utils/index.js';
+import { safeNormalizeAssetId } from '../utils/index.js';
 
 const CONTROLLER_NAME = 'CustomAssetGraduationMiddleware';
 
@@ -17,6 +18,8 @@ const log = createModuleLogger(projectLogger, CONTROLLER_NAME);
 export type CustomAssetGraduationMiddlewareOptions = {
   getSelectedAccountId: () => AccountId | undefined;
   removeCustomAsset: (accountId: AccountId, assetId: Caip19AssetId) => void;
+  /** Current AssetsController state. Used to read customAssets for the selected account. */
+  getAssetsState: () => AssetsControllerState;
 };
 
 /**
@@ -48,9 +51,12 @@ export class CustomAssetGraduationMiddleware {
     assetId: Caip19AssetId,
   ) => void;
 
+  readonly #getAssetsState: () => AssetsControllerState;
+
   constructor(options: CustomAssetGraduationMiddlewareOptions) {
     this.#getSelectedAccountId = options.getSelectedAccountId;
     this.#removeCustomAsset = options.removeCustomAsset;
+    this.#getAssetsState = options.getAssetsState;
   }
 
   getName(): string {
@@ -69,7 +75,7 @@ export class CustomAssetGraduationMiddleware {
         return next(ctx);
       }
 
-      const state = ctx.getAssetsState();
+      const state = this.#getAssetsState();
       const customForAccount = state.customAssets?.[accountId] ?? [];
       if (customForAccount.length === 0) {
         return next(ctx);
@@ -94,7 +100,7 @@ export class CustomAssetGraduationMiddleware {
         if (!hasPositiveBalance(returnedBalances[rawAssetId])) {
           continue;
         }
-        const normalizedAssetId = safeNormalize(rawAssetId);
+        const normalizedAssetId = safeNormalizeAssetId(rawAssetId);
         if (!customSet.has(normalizedAssetId)) {
           continue;
         }
@@ -121,23 +127,6 @@ function isEvmAssetId(assetId: Caip19AssetId): boolean {
   // The chain namespace is always the segment before the first colon.
   const namespace = assetId.split(':')[0];
   return namespace === KnownCaipNamespace.Eip155;
-}
-
-/**
- * Normalize a CAIP-19 asset ID, returning the original on failure. Some
- * malformed IDs (e.g. an asset reference that fails address checksumming)
- * make `normalizeAssetId` throw — in that case we fall back to the raw ID
- * so the graduation pass can still proceed for other assets.
- *
- * @param assetId - The CAIP-19 asset ID to normalize.
- * @returns The normalized ID, or the original on failure.
- */
-function safeNormalize(assetId: Caip19AssetId): Caip19AssetId {
-  try {
-    return normalizeAssetId(assetId);
-  } catch {
-    return assetId;
-  }
 }
 
 /**

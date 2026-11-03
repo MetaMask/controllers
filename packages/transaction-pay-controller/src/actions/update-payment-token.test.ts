@@ -1,6 +1,8 @@
 import type { TransactionMeta } from '@metamask/transaction-controller';
-import { noop } from 'lodash';
+import { noop } from 'lodash-es';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockModuleExcept } from '../../tests/mock-module-except.js';
 import type { TransactionData, TransactionPaymentToken } from '../types.js';
 import {
   getTokenBalance,
@@ -10,15 +12,10 @@ import {
 import { getTransaction } from '../utils/transaction.js';
 import { updatePaymentToken } from './update-payment-token.js';
 
-jest.mock('../utils/token', () => ({
-  ...jest.createMockFromModule<typeof import('../utils/token.js')>(
-    '../utils/token',
-  ),
-  computeTokenAmounts:
-    jest.requireActual<typeof import('../utils/token.js')>('../utils/token')
-      .computeTokenAmounts,
-}));
-jest.mock('../utils/transaction');
+vi.mock(import('../utils/token.js'), async (importOriginal) =>
+  mockModuleExcept(await importOriginal(), ['computeTokenAmounts']),
+);
+vi.mock(import('../utils/transaction.js'));
 
 const TOKEN_ADDRESS_MOCK = '0x123';
 const CHAIN_ID_MOCK = '0x1';
@@ -42,18 +39,18 @@ function createMessengerMock(
   transactionData: Record<string, unknown> = {},
 ): never {
   return {
-    call: jest.fn().mockReturnValue({ transactionData }),
+    call: vi.fn().mockReturnValue({ transactionData }),
   } as never;
 }
 
 describe('Update Payment Token Action', () => {
-  const getTokenInfoMock = jest.mocked(getTokenInfo);
-  const getTokenFiatRateMock = jest.mocked(getTokenFiatRate);
-  const getTokenBalanceMock = jest.mocked(getTokenBalance);
-  const getTransactionMock = jest.mocked(getTransaction);
+  const getTokenInfoMock = vi.mocked(getTokenInfo);
+  const getTokenFiatRateMock = vi.mocked(getTokenFiatRate);
+  const getTokenBalanceMock = vi.mocked(getTokenBalance);
+  const getTransactionMock = vi.mocked(getTransaction);
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     getTokenInfoMock.mockReturnValue({
       decimals: PAYMENT_TOKEN_MOCK.decimals,
@@ -74,8 +71,15 @@ describe('Update Payment Token Action', () => {
   });
 
   it('updates payment token', () => {
-    const updateTransactionDataMock = jest.fn();
-    const messenger = createMessengerMock();
+    const updateTransactionDataMock = vi.fn();
+    const messenger = createMessengerMock({
+      [TRANSACTION_ID_MOCK]: {
+        quoteError: {
+          message: 'No route found',
+          reason: 'no-quotes',
+        },
+      },
+    });
 
     updatePaymentToken(
       {
@@ -98,7 +102,12 @@ describe('Update Payment Token Action', () => {
 
     expect(updateTransactionDataMock).toHaveBeenCalledTimes(1);
 
-    const transactionDataMock = {} as TransactionData;
+    const transactionDataMock = {
+      quoteError: {
+        message: 'No route found',
+        reason: 'no-quotes',
+      },
+    } as TransactionData;
     updateTransactionDataMock.mock.calls[0][1](transactionDataMock);
 
     expect(transactionDataMock.paymentToken).toStrictEqual({
@@ -113,10 +122,11 @@ describe('Update Payment Token Action', () => {
     });
 
     expect(transactionDataMock.fiatPayment).toStrictEqual({});
+    expect(transactionDataMock.quoteError).toBeUndefined();
   });
 
   it('uses accountOverride for balance lookup when set', () => {
-    const updateTransactionDataMock = jest.fn();
+    const updateTransactionDataMock = vi.fn();
     const messenger = createMessengerMock({
       [TRANSACTION_ID_MOCK]: { accountOverride: ACCOUNT_OVERRIDE_MOCK },
     });
@@ -180,7 +190,7 @@ describe('Update Payment Token Action', () => {
   it('resolves with zeroed fiat when rate not found and transaction is post-quote', () => {
     getTokenFiatRateMock.mockReturnValue(undefined);
 
-    const updateTransactionDataMock = jest.fn();
+    const updateTransactionDataMock = vi.fn();
     const messenger = createMessengerMock({
       [TRANSACTION_ID_MOCK]: { isPostQuote: true },
     });
@@ -215,7 +225,7 @@ describe('Update Payment Token Action', () => {
   });
 
   it('uses actual fiat rate when available and transaction is post-quote', () => {
-    const updateTransactionDataMock = jest.fn();
+    const updateTransactionDataMock = vi.fn();
     const messenger = createMessengerMock({
       [TRANSACTION_ID_MOCK]: { isPostQuote: true },
     });
