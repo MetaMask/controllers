@@ -42,7 +42,7 @@ export default defineConfig({
     },
 
     coverage: {
-      enabled: true,
+      enabled: false,
 
       // The files to include in the coverage report.
       include: ['src/**/*.ts'],

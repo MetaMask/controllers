@@ -39,7 +39,7 @@ export default defineConfig({
     restoreMocks: true,
 
     coverage: {
-      enabled: true,
+      enabled: false,
 
       // The files to include in the coverage report.
       include: ['scripts/**/*.ts'],
