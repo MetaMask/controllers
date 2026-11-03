@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Use SLIP-44 coin type 16661 for the 0G native asset ([#11221](https://github.com/MetaMask/core/pull/11221))
+- Bump `@metamask/assets-controllers` from `^113.0.1` to `^113.1.0` ([#11255](https://github.com/MetaMask/core/pull/11255))
 
 ## [20.1.0]
 
