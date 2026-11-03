@@ -36,7 +36,7 @@ jobs:
           if [[ "$ALL" == "true" ]]; then
             echo "node-versions=$supported" >> "$GITHUB_OUTPUT"
           else
-            echo "node-versions=$(jq --compact-output '[last]' <<< "$supported")" >> "$GITHUB_OUTPUT"
+            echo "node-versions=[\"$latest\"]" >> "$GITHUB_OUTPUT"
           fi
 
   prepare:
