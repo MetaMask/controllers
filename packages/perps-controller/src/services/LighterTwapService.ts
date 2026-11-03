@@ -9,7 +9,6 @@ import {
   optional,
 } from '@metamask/superstruct';
 import type { Infer } from '@metamask/superstruct';
-import { BigNumber } from 'bignumber.js';
 
 import {
   LIGHTER_MAX_MARKET_ID,
@@ -32,6 +31,7 @@ import type {
   LighterApiOrder,
   LighterRestTrade,
 } from '../types/lighter-types.js';
+import { LenientBigNumber } from '../utils/lenientBigNumber.js';
 import { reconcileLighterTwapObservation } from '../utils/lighterTwapReconciliation.js';
 import type { LighterTwapObservation } from '../utils/lighterTwapReconciliation.js';
 import type { LighterClientService } from './LighterClientService.js';
@@ -177,7 +177,7 @@ function validateIntent(intent: LighterTwapIntent): void {
     [intent.size, intent.sizeDecimals, LIGHTER_MAX_BASE_AMOUNT],
     [intent.price, intent.priceDecimals, LIGHTER_MAX_ORDER_PRICE],
   ] as const) {
-    const integer = new BigNumber(value).shiftedBy(decimals);
+    const integer = new LenientBigNumber(value).shiftedBy(decimals);
     if (
       !/^\d+(?:\.\d+)?$/u.test(value) ||
       !Number.isInteger(decimals) ||

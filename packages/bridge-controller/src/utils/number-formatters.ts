@@ -28,7 +28,7 @@ const toBigNumber = (value: string | number | BigNumber, base: number) =>
  * @returns The token amount in string format
  */
 export const calcNormalizedTokenAmount = (
-  value: string | BigNumber | undefined | null,
+  value: string | number | BigNumber | undefined | null,
   decimals: number | undefined,
   base: number = 10,
 ) => {
@@ -48,7 +48,7 @@ export const calcNormalizedTokenAmount = (
  * @returns The token value in string format
  */
 export const calcAtomicTokenAmount = (
-  value: string | BigNumber | undefined | null,
+  value: string | number | BigNumber | undefined | null,
   decimals: number | undefined,
   base: number = 10,
 ) => {

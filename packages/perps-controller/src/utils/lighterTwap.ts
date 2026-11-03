@@ -1,14 +1,13 @@
-import { BigNumber } from 'bignumber.js';
-
 import {
   LIGHTER_MAX_ORDER_PRICE,
   LIGHTER_MAX_BASE_AMOUNT,
   LIGHTER_MINUTE_MS,
   LIGHTER_TIME_IN_FORCE_GOOD_TILL_TIME,
 } from '../constants/lighterConfig.js';
+import { LenientBigNumber } from './lenientBigNumber.js';
 
-const MAX_ORDER_PRICE = new BigNumber(LIGHTER_MAX_ORDER_PRICE);
-const MAX_BASE_AMOUNT = new BigNumber(LIGHTER_MAX_BASE_AMOUNT);
+const MAX_ORDER_PRICE = new LenientBigNumber(LIGHTER_MAX_ORDER_PRICE);
+const MAX_BASE_AMOUNT = new LenientBigNumber(LIGHTER_MAX_BASE_AMOUNT);
 const MINUTE_MILLISECONDS = LIGHTER_MINUTE_MS;
 
 /** Inputs for native TWAP wire preparation; this does not authorize dispatch. */
@@ -92,9 +91,9 @@ export function prepareLighterTwapOrder(
   ) {
     throw new Error('Invalid Lighter native TWAP decimal');
   }
-  const size = new BigNumber(intent.size).shiftedBy(intent.sizeDecimals);
-  const reference = new BigNumber(intent.referencePrice);
-  const slippage = new BigNumber(intent.slippage);
+  const size = new LenientBigNumber(intent.size).shiftedBy(intent.sizeDecimals);
+  const reference = new LenientBigNumber(intent.referencePrice);
+  const slippage = new LenientBigNumber(intent.slippage);
   if (
     !size.isInteger() ||
     !size.isPositive() ||
@@ -109,9 +108,15 @@ export function prepareLighterTwapOrder(
     throw new Error('Invalid Lighter native TWAP amount or price protection');
   }
   const price = reference
-    .times(new BigNumber(1).plus(intent.isBuy ? slippage : slippage.negated()))
+    .times(
+      new LenientBigNumber(1).plus(
+        intent.isBuy ? slippage : slippage.negated(),
+      ),
+    )
     .shiftedBy(intent.priceDecimals)
-    .integerValue(intent.isBuy ? BigNumber.ROUND_FLOOR : BigNumber.ROUND_CEIL);
+    .integerValue(
+      intent.isBuy ? LenientBigNumber.ROUND_FLOOR : LenientBigNumber.ROUND_CEIL,
+    );
   if (!price.isFinite() || price.lt(1) || price.gt(MAX_ORDER_PRICE)) {
     throw new Error('Invalid Lighter native TWAP uint32 price bound');
   }

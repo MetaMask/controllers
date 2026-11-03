@@ -4585,6 +4585,85 @@ describe('LighterProvider', () => {
       },
     );
 
+    it.each(['garbage', 'NaN', '', '-1'])(
+      'rejects an independent pre-dispatch journal whose positionSize is %j without throwing',
+      async (positionSize) => {
+        const infra = createMockInfrastructure();
+        const built = buildProvider({
+          platformDependencies: infra,
+          registeredKey: '9c'.repeat(40),
+        });
+        setupTriggerVenue(built.clientInstance, built.bridge);
+        const execute = (
+          built.bridge.execute as Mock
+        ).getMockImplementation() as (
+          call: LighterWasmCall,
+        ) => Promise<unknown>;
+        (built.bridge.execute as Mock).mockImplementation(
+          async (call: LighterWasmCall) => {
+            if (call.function === '_signCreateOrder') {
+              throw new Error('interrupted');
+            }
+            const result = await execute?.(call);
+            if (!result) {
+              throw new Error('Missing fixture signer');
+            }
+            return result;
+          },
+        );
+        await built.provider.updatePositionTPSL({
+          symbol: 'BTC',
+          takeProfitPrice: '110000',
+          stopLossPrice: '85000',
+          takeProfitSize: '0.03',
+          stopLossSize: '0.04',
+          partialPairLinkage: 'independent',
+        });
+        const key = `${ACCOUNT.l1Address.toLowerCase()}:28:7:BTC`;
+        const writes = (infra.diskCache.setItem as Mock).mock.calls as [
+          string,
+          string,
+        ][];
+        const pointerWrite = writes.find(
+          ([name]) => name === `lighterTpslJournal:testnet:${key}`,
+        );
+        const payloadWrite = writes.find(([name]) =>
+          name.startsWith(`lighterTpslJournalOp:testnet:${key}:`),
+        );
+        if (!pointerWrite || !payloadWrite) {
+          throw new Error('Expected durable pre-dispatch snapshot');
+        }
+        await infra.diskCache.setItem(...pointerWrite);
+        await infra.diskCache.setItem(
+          'lighterTpslJournalIndex:testnet',
+          JSON.stringify([key]),
+        );
+        const payload = JSON.parse(payloadWrite[1]) as {
+          version: number;
+          partialIntent: { version: number; positionSize: string };
+        };
+        expect(payload.version).toBe(6);
+        expect(payload.partialIntent.version).toBe(2);
+        payload.partialIntent.positionSize = positionSize;
+        await infra.diskCache.setItem(payloadWrite[0], JSON.stringify(payload));
+
+        const restarted = buildProvider({
+          apiKeyIndex: 7,
+          platformDependencies: infra,
+          registeredKey: '9c'.repeat(40),
+        });
+        const error = await restarted.provider
+          .getPendingManualRecoveries()
+          .then(
+            () => undefined,
+            (caught: unknown) => String(caught),
+          );
+
+        expect(error).toContain('journal');
+        expect(error).not.toContain('BigNumber Error');
+      },
+    );
+
     it('refuses partial creation when position changes during cancellation without a caller precondition', async () => {
       const built = buildProvider({ registeredKey: '9c'.repeat(40) });
       const venue = setupTriggerVenue(built.clientInstance, built.bridge);

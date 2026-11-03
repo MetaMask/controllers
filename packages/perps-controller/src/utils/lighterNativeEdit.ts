@@ -9,7 +9,6 @@ import {
 } from '@metamask/superstruct';
 import type { Infer } from '@metamask/superstruct';
 import { base64ToBytes, bytesToBase64 } from '@metamask/utils';
-import { BigNumber } from 'bignumber.js';
 
 import {
   LIGHTER_MAX_BASE_AMOUNT,
@@ -25,6 +24,7 @@ import type {
   LighterOrderBookMeta,
   LighterSignModifyOrderWireParams,
 } from '../types/lighter-types.js';
+import { LenientBigNumber } from './lenientBigNumber.js';
 import { adaptOrderStatus } from './lighterAdapter.js';
 import { parseLighterLosslessJson } from './lighterLosslessJson.js';
 
@@ -75,7 +75,7 @@ function units(
   ) {
     throw new Error('Lighter edit grid or decimal is invalid');
   }
-  const result = new BigNumber(value).shiftedBy(decimals);
+  const result = new LenientBigNumber(value).shiftedBy(decimals);
   if (
     !result.isInteger() ||
     result.lt(1) ||
@@ -194,7 +194,7 @@ export function prepareLighterNativeEdit(
     (row.parentOrderIndex !== undefined &&
       String(row.parentOrderIndex) !== '0') ||
     (row.triggerPrice !== undefined &&
-      !new BigNumber(row.triggerPrice).isZero())
+      !new LenientBigNumber(row.triggerPrice).isZero())
   ) {
     throw new Error(
       'Lighter native edit cannot change linked or trigger protection',
@@ -203,9 +203,9 @@ export function prepareLighterNativeEdit(
   // The pinned ABI has no order-version input. Refuse prior fills rather than
   // guessing whether its amount would replace total or remaining exposure.
   if (
-    !new BigNumber(row.initialBaseAmount).eq(row.remainingBaseAmount) ||
+    !new LenientBigNumber(row.initialBaseAmount).eq(row.remainingBaseAmount) ||
     row.filledBaseAmount === undefined ||
-    !new BigNumber(row.filledBaseAmount).isZero()
+    !new LenientBigNumber(row.filledBaseAmount).isZero()
   ) {
     throw new Error('Lighter edit requires an unfilled resting order');
   }
@@ -222,16 +222,16 @@ export function prepareLighterNativeEdit(
     LIGHTER_MAX_BASE_AMOUNT,
   );
   if (
-    !new BigNumber(market.minBaseAmount).gt(0) ||
-    !new BigNumber(market.minQuoteAmount).gt(0) ||
-    new BigNumber(size).lt(market.minBaseAmount) ||
-    new BigNumber(size).times(price).lt(market.minQuoteAmount)
+    !new LenientBigNumber(market.minBaseAmount).gt(0) ||
+    !new LenientBigNumber(market.minQuoteAmount).gt(0) ||
+    new LenientBigNumber(size).lt(market.minBaseAmount) ||
+    new LenientBigNumber(size).times(price).lt(market.minQuoteAmount)
   ) {
     throw new Error('Lighter edited order is below venue minimums');
   }
   if (
-    new BigNumber(price).eq(row.price) &&
-    new BigNumber(size).eq(row.initialBaseAmount)
+    new LenientBigNumber(price).eq(row.price) &&
+    new LenientBigNumber(size).eq(row.initialBaseAmount)
   ) {
     throw new Error('Lighter native edit requires a changed price or size');
   }
@@ -239,8 +239,8 @@ export function prepareLighterNativeEdit(
     symbol: market.symbol,
     orderId,
     marketIndex: market.marketId,
-    price: new BigNumber(price).toFixed(),
-    size: new BigNumber(size).toFixed(),
+    price: new LenientBigNumber(price).toFixed(),
+    size: new LenientBigNumber(size).toFixed(),
     priceInt,
     sizeInt,
     isAsk: row.isAsk,
@@ -508,8 +508,8 @@ export function parseLighterNativeEditJournal(
   ]) {
     if (
       !/^\d+(?:\.\d+)?$/u.test(value) ||
-      !new BigNumber(value).gt(0) ||
-      !new BigNumber(value).isFinite()
+      !new LenientBigNumber(value).gt(0) ||
+      !new LenientBigNumber(value).isFinite()
     ) {
       throw new Error('Lighter native edit journal quantity is corrupt');
     }
@@ -540,8 +540,8 @@ export function parseLighterNativeEditJournal(
     ]) {
       if (
         !/^\d+(?:\.\d+)?$/u.test(value) ||
-        !new BigNumber(value).isFinite() ||
-        new BigNumber(value).isNegative()
+        !new LenientBigNumber(value).isFinite() ||
+        new LenientBigNumber(value).isNegative()
       ) {
         throw new Error('Lighter native edit observation is corrupt');
       }
@@ -566,10 +566,12 @@ export function parseLighterNativeEditJournal(
   if (
     (record.status === 'settled' &&
       (record.observation?.status !== 'open' ||
-        !new BigNumber(record.observation.price).eq(record.intent.price) ||
-        !new BigNumber(record.observation.size).eq(record.intent.size) ||
-        !new BigNumber(record.observation.filledSize).isZero() ||
-        !new BigNumber(record.observation.remainingSize).eq(
+        !new LenientBigNumber(record.observation.price).eq(
+          record.intent.price,
+        ) ||
+        !new LenientBigNumber(record.observation.size).eq(record.intent.size) ||
+        !new LenientBigNumber(record.observation.filledSize).isZero() ||
+        !new LenientBigNumber(record.observation.remainingSize).eq(
           record.intent.size,
         ))) ||
     (record.status === 'terminal' &&
@@ -616,7 +618,7 @@ export function observeLighterNativeEdit(
     (row.parentOrderIndex !== undefined &&
       String(row.parentOrderIndex) !== '0') ||
     (row.triggerPrice !== undefined &&
-      !new BigNumber(row.triggerPrice).isZero())
+      !new LenientBigNumber(row.triggerPrice).isZero())
   ) {
     throw new Error('Lighter native edit observation has a different identity');
   }
@@ -629,26 +631,28 @@ export function observeLighterNativeEdit(
     if (
       typeof value !== 'string' ||
       !/^\d+(?:\.\d+)?$/u.test(value) ||
-      !new BigNumber(value).isFinite() ||
-      new BigNumber(value).isNegative()
+      !new LenientBigNumber(value).isFinite() ||
+      new LenientBigNumber(value).isNegative()
     ) {
       throw new Error('Lighter native edit observation is incomplete');
     }
   }
   const status = adaptOrderStatus(row.status);
   if (
-    !new BigNumber(row.price).gt(0) ||
-    !new BigNumber(row.initialBaseAmount).gt(0) ||
-    new BigNumber(row.remainingBaseAmount)
+    !new LenientBigNumber(row.price).gt(0) ||
+    !new LenientBigNumber(row.initialBaseAmount).gt(0) ||
+    new LenientBigNumber(row.remainingBaseAmount)
       .plus(row.filledBaseAmount ?? '')
       .gt(row.initialBaseAmount) ||
     (status === 'open' &&
-      !new BigNumber(row.remainingBaseAmount)
+      !new LenientBigNumber(row.remainingBaseAmount)
         .plus(row.filledBaseAmount ?? '')
         .eq(row.initialBaseAmount)) ||
     (status === 'filled' &&
-      (!new BigNumber(row.remainingBaseAmount).isZero() ||
-        !new BigNumber(row.filledBaseAmount ?? '').eq(row.initialBaseAmount)))
+      (!new LenientBigNumber(row.remainingBaseAmount).isZero() ||
+        !new LenientBigNumber(row.filledBaseAmount ?? '').eq(
+          row.initialBaseAmount,
+        )))
   ) {
     throw new Error('Lighter native edit observation quantities disagree');
   }
@@ -692,9 +696,9 @@ export function lighterNativeEditResult(
     params.orderType === 'limit' &&
     params.isBuy === !record.intent.isAsk &&
     (params.price === undefined ||
-      new BigNumber(params.price).eq(record.intent.price)) &&
+      new LenientBigNumber(params.price).eq(record.intent.price)) &&
     (params.size === undefined ||
-      new BigNumber(params.size).eq(record.intent.size)) &&
+      new LenientBigNumber(params.size).eq(record.intent.size)) &&
     (params.reduceOnly === undefined ||
       params.reduceOnly === record.intent.reduceOnly) &&
     (params.timeInForce === undefined ||

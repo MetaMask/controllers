@@ -6,7 +6,7 @@ import type {
   UserAbstractionResponse,
 } from '@nktkas/hyperliquid';
 import { HyperliquidError } from '@nktkas/hyperliquid';
-import { BigNumber } from 'bignumber.js';
+import type { BigNumber } from 'bignumber.js';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { CandlePeriod } from '../constants/chartConfig.js';
@@ -234,6 +234,7 @@ import {
 } from '../utils/hyperLiquidValidation.js';
 import type { StrategyOrderValidationParams } from '../utils/hyperLiquidValidation.js';
 import { generatePerpsId } from '../utils/idUtils.js';
+import { LenientBigNumber } from '../utils/lenientBigNumber.js';
 import { transformMarketData } from '../utils/marketDataTransform.js';
 import {
   compileMarketPattern,
@@ -419,11 +420,11 @@ const parseScaleBulkOrderStatus = (
       Number.isSafeInteger(order.oid) &&
       order.oid >= 0 &&
       typeof order.avgPx === 'string' &&
-      new BigNumber(order.avgPx).isFinite() &&
-      new BigNumber(order.avgPx).gt(0) &&
+      new LenientBigNumber(order.avgPx).isFinite() &&
+      new LenientBigNumber(order.avgPx).gt(0) &&
       typeof order.totalSz === 'string' &&
-      new BigNumber(order.totalSz).isFinite() &&
-      new BigNumber(order.totalSz).gt(0)
+      new LenientBigNumber(order.totalSz).isFinite() &&
+      new LenientBigNumber(order.totalSz).gt(0)
     ) {
       return {
         kind: 'accepted',
@@ -7391,7 +7392,7 @@ export class HyperLiquidProvider implements PerpsProvider {
       );
     }
 
-    const resultFilledSize = new BigNumber(result.filledSize ?? 0);
+    const resultFilledSize = new LenientBigNumber(result.filledSize ?? 0);
     const hasVenueExposure =
       result.success === true ||
       result.orderId !== undefined ||
@@ -7965,11 +7966,12 @@ export class HyperLiquidProvider implements PerpsProvider {
     );
     const acceptedSize = acceptedRungs.reduce(
       (total, rung) => total.plus(rung.size),
-      new BigNumber(0),
+      new LenientBigNumber(0),
     );
     const acceptedNotional = acceptedRungs.reduce(
-      (total, rung) => total.plus(new BigNumber(rung.size).times(rung.price)),
-      new BigNumber(0),
+      (total, rung) =>
+        total.plus(new LenientBigNumber(rung.size).times(rung.price)),
+      new LenientBigNumber(0),
     );
     const filledRungs = acceptedRungs.flatMap((rung) =>
       rung.outcome.state === 'filled'
@@ -7978,16 +7980,16 @@ export class HyperLiquidProvider implements PerpsProvider {
     );
     const filledSize = filledRungs.reduce(
       (total, rung) => total.plus(rung.outcome.filledSize),
-      new BigNumber(0),
+      new LenientBigNumber(0),
     );
     const executedNotional = filledRungs.reduce(
       (total, rung) =>
         total.plus(
-          new BigNumber(rung.outcome.filledSize).times(
+          new LenientBigNumber(rung.outcome.filledSize).times(
             rung.outcome.averagePrice,
           ),
         ),
-      new BigNumber(0),
+      new LenientBigNumber(0),
     );
     const acceptedResult = {
       childOrderIds: restingChildOrderIds,
@@ -9317,9 +9319,9 @@ export class HyperLiquidProvider implements PerpsProvider {
       return null;
     }
 
-    const totalSize = new BigNumber(state.sz);
-    const executedSize = new BigNumber(state.executedSz);
-    const executedNotional = new BigNumber(state.executedNtl);
+    const totalSize = new LenientBigNumber(state.sz);
+    const executedSize = new LenientBigNumber(state.executedSz);
+    const executedNotional = new LenientBigNumber(state.executedNtl);
     if (
       !totalSize.isFinite() ||
       !executedSize.isFinite() ||
@@ -9332,14 +9334,14 @@ export class HyperLiquidProvider implements PerpsProvider {
     }
     let boundedExecutedSize = executedSize;
     if (executedSize.isLessThan(0)) {
-      boundedExecutedSize = new BigNumber(0);
+      boundedExecutedSize = new LenientBigNumber(0);
     } else if (executedSize.isGreaterThan(totalSize)) {
       boundedExecutedSize = totalSize;
     }
     const rawRemainingSize = totalSize.minus(boundedExecutedSize);
     const remainingSize = rawRemainingSize.isGreaterThan(0)
       ? rawRemainingSize
-      : new BigNumber(0);
+      : new LenientBigNumber(0);
     const status = resolveTwapOrderStatus(
       historyEntry,
       boundedExecutedSize,
@@ -9368,7 +9370,7 @@ export class HyperLiquidProvider implements PerpsProvider {
       ? boundedExecutedSize
           .dividedBy(totalSize)
           .multipliedBy(BASIS_POINTS_DIVISOR)
-          .integerValue(BigNumber.ROUND_FLOOR)
+          .integerValue(LenientBigNumber.ROUND_FLOOR)
           .toNumber()
       : 0;
     const timeProgressBps =

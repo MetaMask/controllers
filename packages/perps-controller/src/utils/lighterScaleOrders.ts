@@ -1,4 +1,4 @@
-import { BigNumber } from 'bignumber.js';
+import type { BigNumber } from 'bignumber.js';
 
 import {
   LIGHTER_MAX_WIRE_PRICE,
@@ -14,6 +14,7 @@ import type {
   ScaleOrderGroup,
 } from '../types/index.js';
 import type { LighterOrderBookMeta } from '../types/lighter-types.js';
+import { LenientBigNumber } from './lenientBigNumber.js';
 import {
   computeScalePriceLadder,
   splitScaleSizes,
@@ -90,7 +91,7 @@ export function parseScaleDecimal(raw: unknown): BigNumber {
   ) {
     throw new Error('Invalid Lighter Scale decimal');
   }
-  const value = new BigNumber(raw);
+  const value = new LenientBigNumber(raw);
   if (!value.isFinite() || !value.gt(0)) {
     throw new Error('Lighter Scale values must be positive');
   }
@@ -144,7 +145,7 @@ export function normalizeLighterScalePrices(
           .times(index)
           .div(count - 1),
       )
-      .decimalPlaces(decimals, BigNumber.ROUND_DOWN),
+      .decimalPlaces(decimals, LenientBigNumber.ROUND_DOWN),
   );
   const wire = prices.map((price) => price.shiftedBy(decimals));
   if (
@@ -328,24 +329,28 @@ export function buildLighterScaleLadder(
   } catch {
     throw new Error(PERPS_ERROR_CODES.ORDER_SIZE_POSITIVE);
   }
-  const units = rawSize.shiftedBy(decimals).integerValue(BigNumber.ROUND_DOWN);
+  const units = rawSize
+    .shiftedBy(decimals)
+    .integerValue(LenientBigNumber.ROUND_DOWN);
   if (units.gt(Number.MAX_SAFE_INTEGER) || units.lt(count)) {
     throw new Error(PERPS_ERROR_CODES.ORDER_SCALE_SIZE_TOO_SMALL);
   }
   const split = (total: number): string[] => {
     const sizes = splitScaleSizes({
-      totalSize: new BigNumber(total).shiftedBy(-decimals).toNumber(),
+      totalSize: new LenientBigNumber(total).shiftedBy(-decimals).toNumber(),
       count,
       szDecimals: decimals,
       skew: params.scaleSkew,
     });
     const sum = sizes.reduce(
       (value, size) => value.plus(size),
-      new BigNumber(0),
+      new LenientBigNumber(0),
     );
     if (
       !sum.shiftedBy(decimals).eq(total) ||
-      sizes.some((size) => !new BigNumber(size).shiftedBy(decimals).isInteger())
+      sizes.some(
+        (size) => !new LenientBigNumber(size).shiftedBy(decimals).isInteger(),
+      )
     ) {
       throw new Error('Lighter Scale size conservation failed');
     }
@@ -354,8 +359,8 @@ export function buildLighterScaleLadder(
   const quote = (sizes: string[]): BigNumber =>
     sizes.reduce(
       (total, size, index) =>
-        total.plus(new BigNumber(size).times(prices[index])),
-      new BigNumber(0),
+        total.plus(new LenientBigNumber(size).times(prices[index])),
+      new LenientBigNumber(0),
     );
   let total = units.toNumber();
   if (budget) {
@@ -387,17 +392,19 @@ export function buildLighterScaleLadder(
   const minimumBase = parseScaleDecimal(market.minBaseAmount);
   const minimumQuote = parseScaleDecimal(market.minQuoteAmount);
   for (const [index, size] of sizes.entries()) {
-    if (new BigNumber(size).shiftedBy(decimals).gt(LIGHTER_MAX_BASE_AMOUNT)) {
+    if (
+      new LenientBigNumber(size).shiftedBy(decimals).gt(LIGHTER_MAX_BASE_AMOUNT)
+    ) {
       throw new Error('Lighter Scale child exceeds native base amount');
     }
-    if (new BigNumber(size).lt(minimumBase)) {
+    if (new LenientBigNumber(size).lt(minimumBase)) {
       throw new Error(PERPS_ERROR_CODES.ORDER_SCALE_SIZE_TOO_SMALL);
     }
-    if (new BigNumber(size).times(prices[index]).lt(minimumQuote)) {
+    if (new LenientBigNumber(size).times(prices[index]).lt(minimumQuote)) {
       throw new Error(PERPS_ERROR_CODES.ORDER_SCALE_NOTIONAL_TOO_SMALL);
     }
   }
-  const normalized = new BigNumber(total).shiftedBy(-decimals);
+  const normalized = new LenientBigNumber(total).shiftedBy(-decimals);
   if (normalized.gt(rawSize) || (budget && quote(sizes).gt(budget))) {
     throw new Error('Lighter Scale exposure exceeds intent');
   }
@@ -435,7 +442,7 @@ export function toLighterScaleGroup(group: LighterScaleGroup): ScaleOrderGroup {
     ['accepted', 'resting', 'filled', 'canceled'].includes(rung.state),
   );
   const total = (rungs: LighterScaleRung[]): BigNumber =>
-    rungs.reduce((sum, rung) => sum.plus(rung.size), new BigNumber(0));
+    rungs.reduce((sum, rung) => sum.plus(rung.size), new LenientBigNumber(0));
   const acceptedSize = total(accepted);
   const acceptedChildren: NonNullable<OrderResult['acceptedChildren']> =
     accepted.map((rung) => {
@@ -456,7 +463,7 @@ export function toLighterScaleGroup(group: LighterScaleGroup): ScaleOrderGroup {
   const filledSize = accepted.reduce(
     (sum, rung) =>
       rung.filledSize === undefined ? sum : sum.plus(rung.filledSize),
-    new BigNumber(0),
+    new LenientBigNumber(0),
   );
   let state: ScaleOrderGroup['state'] = 'placing';
   if (group.placementStopped) {
@@ -491,8 +498,8 @@ export function toLighterScaleGroup(group: LighterScaleGroup): ScaleOrderGroup {
           weightedAverageLimitPrice: accepted
             .reduce(
               (sum, rung) =>
-                sum.plus(new BigNumber(rung.size).times(rung.price)),
-              new BigNumber(0),
+                sum.plus(new LenientBigNumber(rung.size).times(rung.price)),
+              new LenientBigNumber(0),
             )
             .div(acceptedSize)
             .toFixed(),
@@ -571,7 +578,7 @@ export function parseLighterScaleGroups(
         rung.priceInt > LIGHTER_MAX_WIRE_PRICE ||
         !integer(rung.sizeInt) ||
         rung.sizeInt < 1 ||
-        new BigNumber(rung.sizeInt).gt(LIGHTER_MAX_BASE_AMOUNT) ||
+        new LenientBigNumber(rung.sizeInt).gt(LIGHTER_MAX_BASE_AMOUNT) ||
         ![
           'prepared',
           'unknown',
@@ -676,7 +683,7 @@ export function parseLighterScaleGroups(
         rung.filledSize !== undefined &&
         (typeof rung.filledSize !== 'string' ||
           !/^\d+(?:\.\d+)?$/u.test(rung.filledSize) ||
-          new BigNumber(rung.filledSize).gt(rung.size))
+          new LenientBigNumber(rung.filledSize).gt(rung.size))
       ) {
         throw new Error('Invalid Lighter Scale fill');
       }
