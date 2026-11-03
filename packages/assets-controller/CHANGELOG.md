@@ -26,11 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AccountsApiDataSource` no longer starts its supported-network fetch, which calls `RemoteFeatureFlagController:getState`, from the constructor. Call `init()`.
 - When `AccountTreeController` actions are not registered, selected-account reads fall back to `AccountsController:getSelectedAccount`, and asset tracking does not wait for account-tree initialization ([#10885](https://github.com/MetaMask/core/pull/10885))
   - `AccountActivityDataSource` uses the same fallback when resolving the account for a balance update.
-- Use SLIP-44 coin type 16661 for the 0G native asset ([#11221](https://github.com/MetaMask/core/pull/11221))
 
 ### Fixed
 
 - Refresh the newly selected account after startup completes when it changes while the initial asset fetch is in progress ([#10885](https://github.com/MetaMask/core/pull/10885))
+
+## [20.2.0]
+
+### Changed
+
+- Use SLIP-44 coin type 16661 for the 0G native asset ([#11221](https://github.com/MetaMask/core/pull/11221))
+- Bump `@metamask/assets-controllers` from `^113.0.1` to `^113.1.0` ([#11255](https://github.com/MetaMask/core/pull/11255))
 
 ## [20.1.0]
 
@@ -1250,7 +1256,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor `RpcDataSource` to delegate polling to `BalanceFetcher` and `TokenDetector` services ([#7709](https://github.com/MetaMask/core/pull/7709))
 - Refactor `BalanceFetcher` and `TokenDetector` to extend `StaticIntervalPollingControllerOnly` for independent polling management ([#7709](https://github.com/MetaMask/core/pull/7709))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.1.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.2.0...HEAD
+[20.2.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.1.0...@metamask/assets-controller@20.2.0
 [20.1.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.2...@metamask/assets-controller@20.1.0
 [20.0.2]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.1...@metamask/assets-controller@20.0.2
 [20.0.1]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.0...@metamask/assets-controller@20.0.1
