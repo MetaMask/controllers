@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `TokenApiClient.fetchV2Assets` and `getV2AssetsQueryOptions` for Token API `GET /v2/assets`, supporting `includeLaunchpadData` and `includeTokenSecurityData`, along with `V2AssetResponse` and `V2AssetsQueryOptions` types ([#11251](https://github.com/MetaMask/core/pull/11251))
 - Add optional `subscriptionNamespace` to `OHLCVService` so callers can select the WebSocket channel namespace (default: `ohlcv.v1`) ([#11249](https://github.com/MetaMask/core/pull/11249))
 
 ### Changed
