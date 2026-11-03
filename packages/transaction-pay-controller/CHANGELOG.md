@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Support fiat payments for `membershipSubscription` transactions ([#0](https://github.com/MetaMask/core/pull/0))
+- Support fiat payments for `membershipSubscription` transactions ([#11256](https://github.com/MetaMask/core/pull/11256))
   - Add `membershipSubscription` to the default fiat-enabled transaction types and fiat asset map.
   - Treat `membershipSubscription` as a Money Account deposit, so it uses the direct mUSD on-ramp when `directMoneyMusdEnabled` is set, and CHOMP vault recovery on the second leg.
 
