@@ -404,6 +404,7 @@ const ServiceDetailsResponseStruct = type({
     StrictHexStruct,
     type({
       autoDepositDelegate: StrictHexStruct,
+      vaultMigrationHelperAddress: optional(StrictHexStruct),
       protocol: type({
         vedaProtocol: ServiceDetailsProtocolStruct,
         vedaPremiumProtocol: optional(ServiceDetailsProtocolStruct),

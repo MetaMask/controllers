@@ -389,6 +389,11 @@ export type ServiceDetailsProtocol = {
 
 export type ServiceDetailsChain = {
   autoDepositDelegate: Hex;
+  /**
+   * The VaultMigrationHelper contract, which redeems the premium migration
+   * transfer delegation. Not yet served on every environment.
+   */
+  vaultMigrationHelperAddress?: Hex;
   protocol: {
     vedaProtocol: ServiceDetailsProtocol;
     vedaPremiumProtocol?: ServiceDetailsProtocol;

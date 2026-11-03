@@ -1118,6 +1118,48 @@ describe('ChompApiService', () => {
       );
     });
 
+    it('accepts the vault migration helper address of a chain', async () => {
+      const response = {
+        ...serviceDetailsResponse,
+        chains: {
+          '0xa4b1': {
+            ...serviceDetailsResponse.chains['0xa4b1'],
+            vaultMigrationHelperAddress:
+              '0x1111111111111111111111111111111111111111',
+          },
+        },
+      };
+      nock(BASE_URL)
+        .get('/v1/chomp')
+        .query({ chainId: '0xa4b1' })
+        .reply(200, response);
+      const { service } = createService();
+
+      expect(await service.getServiceDetails(['0xa4b1'])).toStrictEqual(
+        response,
+      );
+    });
+
+    it('throws on a malformed vault migration helper address', async () => {
+      nock(BASE_URL)
+        .get('/v1/chomp')
+        .query({ chainId: '0xa4b1' })
+        .reply(200, {
+          ...serviceDetailsResponse,
+          chains: {
+            '0xa4b1': {
+              ...serviceDetailsResponse.chains['0xa4b1'],
+              vaultMigrationHelperAddress: 'not-an-address',
+            },
+          },
+        });
+      const { service } = createService();
+
+      await expect(service.getServiceDetails(['0xa4b1'])).rejects.toThrow(
+        'At path: chains.0xa4b1.vaultMigrationHelperAddress',
+      );
+    });
+
     it('omits unknown intent types from a protocol', async () => {
       const response = {
         ...serviceDetailsResponse,
