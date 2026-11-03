@@ -192,7 +192,7 @@ describe('aggregateAccountStates', () => {
     expect(parseFloat(result.unrealizedPnl)).toBeCloseTo(17, 0);
   });
 
-  it('emits canonical six-decimal balances when aggregating DEX states', () => {
+  it('preserves the exact subtotal when aggregating DEX states', () => {
     const stateA: AccountState = {
       spendableBalance: '0.0000009',
       withdrawableBalance: '0.0000009',
@@ -212,9 +212,9 @@ describe('aggregateAccountStates', () => {
 
     const result = aggregateAccountStates([stateA, stateB]);
 
-    expect(result.spendableBalance).toBe('0.000001');
-    expect(result.withdrawableBalance).toBe('0.000001');
-    expect(result.totalBalance).toBe('0.000001');
+    expect(result.spendableBalance).toBe('0.0000018');
+    expect(result.withdrawableBalance).toBe('0.0000018');
+    expect(result.totalBalance).toBe('0.0000018');
   });
 });
 
@@ -286,6 +286,29 @@ describe('spot balance helpers', () => {
 
     expect(getWithdrawableBalance('8.000006')).toBe('1.475183');
     expect(getWithdrawableBalance('8.000007')).toBe('1.475184');
+  });
+
+  it('rounds once after combining fractional perps and spot balances', () => {
+    const perpsState: AccountState = {
+      spendableBalance: '10.0000009',
+      withdrawableBalance: '10.0000009',
+      totalBalance: '10.0000009',
+      marginUsed: '0',
+      unrealizedPnl: '0',
+      returnOnEquity: '0',
+    };
+
+    const result = addSpotBalanceToAccountState(
+      aggregateAccountStates([perpsState]),
+      {
+        balances: [{ coin: 'USDC', total: '0.0000009', hold: '0' }],
+      } as never,
+      { foldIntoCollateral: true },
+    );
+
+    expect(result.spendableBalance).toBe('10.000001');
+    expect(result.withdrawableBalance).toBe('10.000001');
+    expect(result.totalBalance).toBe('10.000001');
   });
 
   it('bumps totalBalance, spendableBalance, and withdrawableBalance by spot USDC without mutating the input', () => {

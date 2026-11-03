@@ -246,12 +246,6 @@ export function addSpotBalanceToAccountState(
     return accountState;
   }
 
-  if (spotBalance.isZero()) {
-    // No spot wealth means no hold either in the HL payload shape, so the
-    // later totalBalance adjustment would also be a no-op.
-    return accountState;
-  }
-
   // Folding is gated strictly on the resolved abstraction mode (see callers'
   // `foldIntoCollateral` argument). Standard / DEX-abstraction users keep
   // perps and spot independent, so spot must NOT surface as a perps-
@@ -280,6 +274,14 @@ export function addSpotBalanceToAccountState(
     currentTotal.plus(spotBalance).minus(spotHold),
   );
 
+  if (
+    nextTotal === accountState.totalBalance &&
+    nextSpendable === accountState.spendableBalance &&
+    nextWithdrawable === accountState.withdrawableBalance
+  ) {
+    return accountState;
+  }
+
   return {
     ...accountState,
     totalBalance: nextTotal,
@@ -294,18 +296,17 @@ function resolveFoldedBalance(
   freeSpot: BigNumber,
   foldIntoCollateral: boolean,
 ): string {
-  if (!foldIntoCollateral) {
+  if (!currentNumeric.isFinite()) {
+    // Non-finite currentNumeric means the adapter passed a sentinel like
+    // `PERPS_CONSTANTS.FallbackDataDisplay` ("--") during loading. Preserve
+    // the sentinel rather than synthesising a numeric fold; the caller's
+    // UI treats "--" as "loading" and would otherwise show a misleading
+    // spot-only figure while the per-DEX perps fetch is still in flight.
     return currentRaw;
   }
-  if (currentNumeric.isFinite()) {
-    return canonicalizeUsdc(currentNumeric.plus(freeSpot));
-  }
-  // Non-finite currentNumeric means the adapter passed a sentinel like
-  // `PERPS_CONSTANTS.FallbackDataDisplay` ("--") during loading. Preserve
-  // the sentinel rather than synthesising a numeric fold; the caller's
-  // UI treats "--" as "loading" and would otherwise show a misleading
-  // spot-only figure while the per-DEX perps fetch is still in flight.
-  return currentRaw;
+
+  const spotAmount = foldIntoCollateral ? freeSpot : new BigNumber(0);
+  return canonicalizeUsdc(currentNumeric.plus(spotAmount));
 }
 
 function canonicalizeUsdc(value: BigNumber): string {
@@ -341,7 +342,9 @@ export function sumCrossMarginSummaries(
 }
 
 /**
- * Aggregate multiple per-DEX AccountState objects into one by summing numeric fields.
+ * Aggregate multiple per-DEX AccountState objects into one by summing numeric
+ * fields exactly. Collateral subtotals retain their full precision so spot
+ * collateral can be added before the final USDC canonicalization.
  * ROE is recalculated as (totalUnrealizedPnl / totalMarginUsed) * 100.
  *
  * @param states - The array of per-DEX account states to aggregate.
@@ -386,13 +389,13 @@ export function aggregateAccountStates(states: AccountState[]): AccountState {
     };
   }, fallback);
 
-  aggregated.spendableBalance = canonicalizeUsdcString(
+  aggregated.spendableBalance = normalizeDecimalString(
     aggregated.spendableBalance,
   );
-  aggregated.withdrawableBalance = canonicalizeUsdcString(
+  aggregated.withdrawableBalance = normalizeDecimalString(
     aggregated.withdrawableBalance,
   );
-  aggregated.totalBalance = canonicalizeUsdcString(aggregated.totalBalance);
+  aggregated.totalBalance = normalizeDecimalString(aggregated.totalBalance);
 
   // Recalculate ROE across all DEXs
   const totalMarginUsed = parseFloat(aggregated.marginUsed);
@@ -418,7 +421,7 @@ function addDecimalValues(left: string, right: string): string {
   return new BigNumber(left).plus(right).toFixed();
 }
 
-function canonicalizeUsdcString(value: string): string {
+function normalizeDecimalString(value: string): string {
   const amount = new BigNumber(value);
-  return amount.isFinite() ? canonicalizeUsdc(amount) : value;
+  return amount.isFinite() ? amount.toFixed() : value;
 }
