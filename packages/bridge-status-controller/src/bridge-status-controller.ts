@@ -67,7 +67,7 @@ import { SubmitStep } from './strategy/types.js';
 import type { SubmitStrategyParams } from './strategy/types.js';
 import type {
   BridgeStatusControllerState,
-  StartPollingForBridgeTxStatusArgsSerialized,
+  StartPollingForBridgeTxStatusArgs,
   FetchFunction,
   BridgeHistoryItem,
 } from './types.js';
@@ -895,7 +895,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
    * @param txHistoryMeta - The parameters for creating the history item
    */
   startPollingForBridgeTxStatus = (
-    txHistoryMeta: StartPollingForBridgeTxStatusArgsSerialized,
+    txHistoryMeta: StartPollingForBridgeTxStatusArgs,
   ): void => {
     const { bridgeTxMeta } = txHistoryMeta;
 
@@ -1481,7 +1481,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
     abTests,
     activeAbTests,
     tokenSecurityTypeDestination,
-    batchSellTrades,
+    batchSellTrades = null,
     inputPrimaryDenomination,
     migrationPhase,
   }: {
