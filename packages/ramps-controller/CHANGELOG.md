@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **BREAKING:** `RampsService` now extends `BaseDataService` from `@metamask/base-data-service` ([#11214](https://github.com/MetaMask/core/pull/11214))
+  - This is breaking because `RampsService` no longer has public `onRetry`, `onBreak` and `onDegraded` methods (see Removed), and `RampsServiceMessenger` has new required actions and events. Pass `policyOptions` to the constructor to configure retries and the circuit breaker.
   - `RampsServiceMessenger` now includes the `RampsService:invalidateQueries` action and the `RampsService:cacheUpdated` events. Messengers built from `RampsServiceActions` and `RampsServiceEvents` pick these up automatically.
-- Concurrent calls to the same `RampsService` method with identical arguments now share one request. Sequential calls still always hit the API ([#11214](https://github.com/MetaMask/core/pull/11214))
+- Concurrent identical `RampsService` calls are now deduplicated: while one request is in flight, calls with the same method and arguments reuse it instead of sending another. Sequential calls still always hit the API ([#11214](https://github.com/MetaMask/core/pull/11214))
 - Responses that do not match the expected shape now throw `Query function for "RampsService:<method>" returned an unexpected response: ...`, instead of `Malformed response received from <api name>` ([#11214](https://github.com/MetaMask/core/pull/11214))
 - **BREAKING:** `NeoBankService` now extends `BaseDataService` from `@metamask/base-data-service`, so reads and writes share one circuit breaker (previously each had its own) and repeated read failures can now block writes ([#10882](https://github.com/MetaMask/core/pull/10882))
   - `NeoBankServiceMessenger` now includes the `NeoBankService:invalidateQueries` action and `NeoBankService:cacheUpdated` events. Messengers built from `NeoBankServiceActions` / `NeoBankServiceEvents` pick these up automatically.
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **BREAKING:** Remove `onRetry`, `onBreak` and `onDegraded` from `RampsService` ([#11214](https://github.com/MetaMask/core/pull/11214))
+  - `BaseDataService` does not expose its policy, so there is no replacement for observing retries, circuit breaks or degraded responses. Retry and circuit-breaker behavior can still be configured through the `policyOptions` constructor option.
 - **BREAKING:** Remove `onRetry`, `onBreak` and `onDegraded` from `NeoBankService` ([#10882](https://github.com/MetaMask/core/pull/10882))
 
 ## [29.0.0]

@@ -814,18 +814,22 @@ const CountriesResponseStruct = array(
     states: optional(nullable(array(any()))),
   }),
 );
+type CountriesResponseBody = Infer<typeof CountriesResponseStruct>;
 
 const TokensResponseStruct = looseObject({
   topTokens: array(any()),
   allTokens: array(any()),
 });
+type TokensResponseBody = Infer<typeof TokensResponseStruct>;
 
 const ProvidersResponseStruct = looseObject({
   providers: array(any()),
   sorted: array(any()),
 });
+type ProvidersResponseBody = Infer<typeof ProvidersResponseStruct>;
 
 const PaymentMethodsResponseStruct = looseObject({ payments: array(any()) });
+type PaymentMethodsResponseBody = Infer<typeof PaymentMethodsResponseStruct>;
 
 const QuotesResponseStruct = looseObject({
   success: array(any()),
@@ -833,12 +837,16 @@ const QuotesResponseStruct = looseObject({
   error: array(any()),
   customActions: array(any()),
 });
+type QuotesResponseBody = Infer<typeof QuotesResponseStruct>;
 
 const BuyWidgetResponseStruct = looseObject({ url: nonempty(string()) });
+type BuyWidgetResponseBody = Infer<typeof BuyWidgetResponseStruct>;
 
 const OrderResponseStruct = looseObject({});
+type OrderResponseBody = Infer<typeof OrderResponseStruct>;
 
 const OrderCallbackResponseStruct = looseObject({ id: optional(string()) });
+type OrderCallbackResponseBody = Infer<typeof OrderCallbackResponseStruct>;
 
 // === SERVICE DEFINITION ===
 
@@ -1209,7 +1217,7 @@ export class RampsService extends BaseDataService<
       responseStruct: CountriesResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(url);
-        return (await response.json()) as Infer<typeof CountriesResponseStruct>;
+        return (await response.json()) as CountriesResponseBody;
       },
     })) as unknown as Country[];
 
@@ -1267,7 +1275,7 @@ export class RampsService extends BaseDataService<
       responseStruct: TokensResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(url);
-        return (await response.json()) as Infer<typeof TokensResponseStruct>;
+        return (await response.json()) as TokensResponseBody;
       },
     });
   }
@@ -1326,9 +1334,7 @@ export class RampsService extends BaseDataService<
       responseStruct: ProvidersResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(url);
-        const body = (await response.json()) as Infer<
-          typeof ProvidersResponseStruct
-        >;
+        const body = (await response.json()) as ProvidersResponseBody;
         // Keep the lenient handling of a missing `sorted` list.
         if (body && typeof body === 'object' && !Array.isArray(body.sorted)) {
           return { ...body, sorted: [] };
@@ -1372,9 +1378,7 @@ export class RampsService extends BaseDataService<
       responseStruct: PaymentMethodsResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(url);
-        return (await response.json()) as Infer<
-          typeof PaymentMethodsResponseStruct
-        >;
+        return (await response.json()) as PaymentMethodsResponseBody;
       },
     });
   }
@@ -1437,7 +1441,7 @@ export class RampsService extends BaseDataService<
       responseStruct: QuotesResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(url, { headers });
-        return (await response.json()) as Infer<typeof QuotesResponseStruct>;
+        return (await response.json()) as QuotesResponseBody;
       },
     });
   }
@@ -1463,7 +1467,7 @@ export class RampsService extends BaseDataService<
       responseStruct: BuyWidgetResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(url, { headers });
-        return (await response.json()) as Infer<typeof BuyWidgetResponseStruct>;
+        return (await response.json()) as BuyWidgetResponseBody;
       },
     });
   }
@@ -1511,7 +1515,7 @@ export class RampsService extends BaseDataService<
       responseStruct: OrderResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(url);
-        return (await response.json()) as Infer<typeof OrderResponseStruct>;
+        return (await response.json()) as OrderResponseBody;
       },
     });
   }
@@ -1554,9 +1558,7 @@ export class RampsService extends BaseDataService<
       responseStruct: OrderCallbackResponseStruct,
       queryFn: async () => {
         const response = await this.#fetchOk(callbackApiUrl);
-        return (await response.json()) as Infer<
-          typeof OrderCallbackResponseStruct
-        >;
+        return (await response.json()) as OrderCallbackResponseBody;
       },
     });
 
