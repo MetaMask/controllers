@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Quote Across perps deposits in the 6 decimals Across uses for HyperCore USDC-PERPS, instead of asking for 100 times the amount ([#TBD](https://github.com/MetaMask/core/pull/TBD))
+
 ## [30.3.3]
 
 ### Changed

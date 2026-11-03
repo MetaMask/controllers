@@ -1547,7 +1547,7 @@ describe('Across Quotes', () => {
       const [url] = successfulFetchMock.mock.calls[0];
       const params = new URL(url as string).searchParams;
 
-      expect(params.get('amount')).toBe('100000000');
+      expect(params.get('amount')).toBe('1000000');
       expect(params.get('destinationChainId')).toBe(
         String(parseInt(CHAIN_ID_HYPERCORE, 16)),
       );
