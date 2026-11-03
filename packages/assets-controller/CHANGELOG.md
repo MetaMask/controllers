@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Use SLIP-44 coin type 16661 for the 0G native asset ([#11221](https://github.com/MetaMask/core/pull/11221))
+
 ### Fixed
 
 - Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#11251](https://github.com/MetaMask/core/pull/11251))
