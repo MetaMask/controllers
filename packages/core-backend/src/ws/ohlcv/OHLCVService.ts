@@ -66,7 +66,10 @@ export type OHLCVSystemNotificationData = {
  * Configuration options for the OHLCV service.
  */
 export type OHLCVServiceOptions = {
-  /** Channel namespace for OHLCV subscriptions (default: 'ohlcv.v1'). */
+  /**
+   * Channel namespace (default: 'ohlcv.v1').
+   * Pass 'market-data.v1' to feature-flag the previous stream.
+   */
   subscriptionNamespace?: string;
   /** Optional callback to trace performance of OHLCV operations (default: no-op) */
   traceFn?: TraceCallback;
