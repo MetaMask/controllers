@@ -25,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `getAutoramps` fetches each cursor page as its own query, so a failed page is retried on its own and concurrent calls with the same `customerId` reuse each in flight page request.
 - Malformed NeoBank responses now throw `Query function for "NeoBankService:<method>" returned an unexpected response: …` (or `Mutation function for "NeoBankService:createAutoramp" …`) instead of `Malformed response received from neo-bank …` ([#10882](https://github.com/MetaMask/core/pull/10882))
   - This applies to `getAutoramp`, `getAutoramps`, `getPixDepositInstructions`, `getDepositInstructions`, `getMicrodeposits`, `getCustomerAbilities`, `listAutorampTransactions` and `createAutoramp`.
-- Add dependency `@metamask/base-data-service` ([#10882](https://github.com/MetaMask/core/pull/10882), [#11214](https://github.com/MetaMask/core/pull/11214))
-- Add dependency `@metamask/superstruct` ([#10882](https://github.com/MetaMask/core/pull/10882), [#11214](https://github.com/MetaMask/core/pull/11214))
+- Add dependency `@metamask/base-data-service` ([#10882](https://github.com/MetaMask/core/pull/10882))
+- Add dependency `@metamask/superstruct` ([#10882](https://github.com/MetaMask/core/pull/10882))
 
 ### Removed
 
