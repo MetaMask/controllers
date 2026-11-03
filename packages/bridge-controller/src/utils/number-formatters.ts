@@ -6,6 +6,20 @@ import type { QuoteResponse } from '../validators/quote-response.js';
 import { assetIdsMatch } from './assets.js';
 
 /**
+ * Parses a value into a BigNumber. bignumber.js v11 only accepts a base for
+ * plain strings, and rejects `0x` prefixes and exponent notation when one is
+ * supplied. Base 10 is the default, so it is parsed without a base.
+ *
+ * @param value - The value to parse.
+ * @param base - The base of the number system the value is written in.
+ * @returns The parsed BigNumber.
+ */
+const toBigNumber = (value: string | number | BigNumber, base: number) =>
+  typeof value === 'string' && base !== 10
+    ? new BigNumber(value.replace(/^0x/iu, ''), base)
+    : new BigNumber(value);
+
+/**
  * 1500000 -> 1.5
  *
  * @param value - The value to convert to token amount
@@ -22,7 +36,7 @@ export const calcNormalizedTokenAmount = (
     return;
   }
   const divisor = new BigNumber(base).pow(decimals ?? 0);
-  return new BigNumber(String(value), base).div(divisor).toFixed();
+  return toBigNumber(value, base).div(divisor).toFixed();
 };
 
 /**
@@ -42,7 +56,7 @@ export const calcAtomicTokenAmount = (
     return;
   }
   const divisor = new BigNumber(base).pow(decimals);
-  return new BigNumber(String(value), base).times(divisor).toFixed();
+  return toBigNumber(value, base).times(divisor).toFixed();
 };
 
 /**
