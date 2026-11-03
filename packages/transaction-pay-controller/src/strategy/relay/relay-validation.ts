@@ -23,9 +23,9 @@ import {
   build7702BatchSimulation,
   buildCallsSimulation,
   buildDelegationSimulation,
-  validateQuotes,
-} from '../../utils/quote-validation.js';
-import type { QuoteSimulation } from '../../utils/validation.js';
+} from '../../utils/simulation.js';
+import type { QuoteSimulation } from '../../utils/simulation.js';
+import { validateQuotes } from '../../utils/validation.js';
 import { getRelayDepositData } from './deposit-step.js';
 import { getRelayExecuteRequest } from './relay-submit-execute.js';
 import { getRelaySubmitCalls } from './relay-submit.js';

@@ -14,7 +14,8 @@ import { getMessengerMock } from '../../../tests/messenger-mock.js';
 import type { TransactionPayQuote } from '../../types.js';
 import { GasPaymentMode } from '../../utils/gas-payment.js';
 import { buildPolymarketDepositWalletSimulation } from '../../utils/polymarket/withdraw.js';
-import { QuoteError, validateQuoteExecution } from '../../utils/validation.js';
+import { validateQuoteExecution } from '../../utils/validation.js';
+import type { ValidateQuotesRequest } from '../../utils/validation.js';
 import {
   getServerExecuteDelegation,
   getServerGasPayment,
@@ -24,10 +25,31 @@ import { validateServerQuotes } from './server-validation.js';
 import type { ServerQuote } from './types.js';
 
 vi.mock(import('./server-submit.js'));
-vi.mock(import('../../utils/validation.js'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  validateQuoteExecution: vi.fn(),
-}));
+vi.mock(import('../../utils/validation.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  const validateQuoteExecutionFn =
+    vi.fn<typeof actual.validateQuoteExecution>();
+
+  return {
+    ...actual,
+    validateQuoteExecution: validateQuoteExecutionFn,
+    validateQuotes: vi.fn(
+      async ({
+        buildSimulation,
+        quotes,
+        ...rest
+      }: ValidateQuotesRequest<unknown>) => {
+        for (const quote of quotes) {
+          const simulation = await buildSimulation(quote);
+
+          if (simulation) {
+            await validateQuoteExecutionFn({ ...rest, quote, simulation });
+          }
+        }
+      },
+    ) as typeof actual.validateQuotes,
+  };
+});
 vi.mock(
   import('../../utils/polymarket/withdraw.js'),
   async (importOriginal) => ({
@@ -435,61 +457,5 @@ describe('validateServerQuotes', () => {
     });
 
     expect(validateQuoteExecutionMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('wraps simulation build errors as simulation failures', async () => {
-    getServerSubmitParamsMock.mockRejectedValue(new Error('build failed'));
-
-    await expect(
-      validateServerQuotes({
-        messenger,
-        quotes: [buildQuote()],
-        transaction: TRANSACTION_MOCK,
-      }),
-    ).rejects.toMatchObject({
-      info: {
-        detail: ['build failed'],
-        message: 'Quote simulation failed',
-        reason: 'simulation-failed',
-      },
-    });
-  });
-
-  it('attaches all quotes to insufficient source balance errors', async () => {
-    validateQuoteExecutionMock.mockRejectedValue(
-      new QuoteError({
-        message: 'Insufficient source balance for quote',
-        reason: 'insufficient-source-balance',
-      }),
-    );
-
-    const quotes = [buildQuote(), buildQuote()];
-
-    const error = await validateServerQuotes({
-      messenger,
-      quotes,
-      transaction: TRANSACTION_MOCK,
-    }).catch((caughtError: unknown) => caughtError);
-
-    expect((error as QuoteError).quotes).toStrictEqual(quotes);
-  });
-
-  it('rethrows errors unchanged when aborted', async () => {
-    const abortController = new AbortController();
-    const abortError = new Error('Quote validation aborted');
-
-    validateQuoteExecutionMock.mockImplementation(async () => {
-      abortController.abort();
-      throw abortError;
-    });
-
-    await expect(
-      validateServerQuotes({
-        messenger,
-        quotes: [buildQuote()],
-        signal: abortController.signal,
-        transaction: TRANSACTION_MOCK,
-      }),
-    ).rejects.toBe(abortError);
   });
 });
