@@ -715,6 +715,135 @@ describe('ChompApiService', () => {
     }
   });
 
+  describe('createIntentsV2', () => {
+    const intentParams = [
+      {
+        account: '0xabc' as const,
+        delegationHash: '0xdef' as const,
+        chainId: '0x1' as const,
+        intent: {
+          type: 'cash-migration-root' as const,
+          data: {
+            allowance: '0xff' as const,
+            tokenSymbol: 'mUSD',
+            tokenAddress: '0x123' as const,
+          },
+        },
+      },
+    ];
+
+    const intentResponse = [
+      {
+        delegationHash: '0xdef',
+        intent: {
+          type: 'cash-migration-root',
+          data: {
+            allowance: '0xff',
+            tokenSymbol: 'mUSD',
+            tokenAddress: '0x123',
+          },
+        },
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    it('sends a POST with auth headers and returns the response array', async () => {
+      nock(BASE_URL)
+        .post('/v2/intent', intentParams)
+        .matchHeader('Authorization', `Bearer ${MOCK_TOKEN}`)
+        .reply(201, intentResponse);
+      const { rootMessenger } = createService();
+
+      const result = await rootMessenger.call(
+        'ChompApiService:createIntentsV2',
+        intentParams,
+      );
+
+      expect(result).toStrictEqual(intentResponse);
+    });
+
+    for (const type of [
+      'cash-deposit',
+      'cash-withdrawal',
+      'cash-deposit-premium',
+      'cash-withdrawal-premium',
+      'cash-subscription',
+      'cash-migration-transfer',
+    ] as const) {
+      it(`accepts and returns the "${type}" intent type`, async () => {
+        const params = [
+          {
+            ...intentParams[0],
+            intent: { ...intentParams[0].intent, type },
+          },
+        ];
+        const response = [
+          {
+            ...intentResponse[0],
+            intent: { ...intentResponse[0].intent, type },
+          },
+        ];
+        nock(BASE_URL).post('/v2/intent', params).reply(201, response);
+        const { service } = createService();
+
+        expect(await service.createIntentsV2(params)).toStrictEqual(response);
+      });
+    }
+
+    it('sends and returns the user signature of a premium migration transfer', async () => {
+      const data = { ...intentParams[0].intent.data, userSignature: '0x99' };
+      const params = [
+        {
+          ...intentParams[0],
+          intent: {
+            type: 'cash-migration-premium-transfer' as const,
+            data: { ...data, userSignature: '0x99' as const },
+          },
+        },
+      ];
+      const response = [
+        {
+          ...intentResponse[0],
+          intent: { type: 'cash-migration-premium-transfer', data },
+        },
+      ];
+      nock(BASE_URL).post('/v2/intent', params).reply(201, response);
+      const { service } = createService();
+
+      expect(await service.createIntentsV2(params)).toStrictEqual(response);
+    });
+
+    it('throws a ChompApiError carrying the CHOMP error code', async () => {
+      nock(BASE_URL).post('/v2/intent').reply(409, {
+        statusCode: 409,
+        code: 'PREMIUM_ELIGIBILITY_NOT_TRANSFERRED',
+      });
+      const { service } = createService();
+
+      const error = await service
+        .createIntentsV2(intentParams)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ChompApiError);
+      expect(error).toMatchObject({
+        httpStatus: 409,
+        code: 'PREMIUM_ELIGIBILITY_NOT_TRANSFERRED',
+        message: "POST /v2/intent failed with status '409'",
+      });
+    });
+
+    it('throws on malformed response', async () => {
+      nock(BASE_URL)
+        .post('/v2/intent')
+        .reply(201, [{ ...intentResponse[0], intent: { type: 'unknown' } }]);
+      const { service } = createService();
+
+      await expect(service.createIntentsV2(intentParams)).rejects.toThrow(
+        'At path: 0.intent.type',
+      );
+    });
+  });
+
   describe('getIntentsByAddress', () => {
     const intentsResponse = [
       {

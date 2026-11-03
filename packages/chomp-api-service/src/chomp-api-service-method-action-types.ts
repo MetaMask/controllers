@@ -142,6 +142,23 @@ export type ChompApiServiceCreateIntentsAction = {
 };
 
 /**
+ * Submits one or more intents to the CHOMP API, including the Money Account
+ * migration intents that `POST /v1/intent` rejects.
+ *
+ * POST /v2/intent
+ *
+ * CHOMP accepts at most 10 intents per request. Their delegations must
+ * already be saved to the authenticated user storage.
+ *
+ * @param intents - The array of intents to submit.
+ * @returns The array of intent responses.
+ */
+export type ChompApiServiceCreateIntentsV2Action = {
+  type: `ChompApiService:createIntentsV2`;
+  handler: ChompApiService['createIntentsV2'];
+};
+
+/**
  * Fetches intents associated with a given address.
  *
  * GET /v1/intent/account/:address
@@ -236,6 +253,7 @@ export type ChompApiServiceMethodActions =
   | ChompApiServiceGetUpgradesAction
   | ChompApiServiceVerifyDelegationAction
   | ChompApiServiceCreateIntentsAction
+  | ChompApiServiceCreateIntentsV2Action
   | ChompApiServiceGetIntentsByAddressAction
   | ChompApiServiceCreateWithdrawalAction
   | ChompApiServiceGetServiceDetailsAction

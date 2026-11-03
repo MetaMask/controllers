@@ -41,6 +41,7 @@ import type {
   CreateAddressChallengeResponse,
   ProfileAddressEntry,
   ChompIntentType,
+  ChompMigrationIntentType,
   CreateUpgradeParams,
   CreateUpgradeResponse,
   UpgradeEntry,
@@ -51,6 +52,8 @@ import type {
   MigrationStep,
   SendIntentParams,
   SendIntentResponse,
+  SendIntentV2Params,
+  SendIntentV2Response,
   ServiceDetailsResponse,
   VerifyDelegationParams,
   VerifyDelegationResponse,
@@ -62,6 +65,12 @@ const CHOMP_INTENT_TYPES: ChompIntentType[] = [
   'cash-deposit-premium',
   'cash-withdrawal-premium',
   'cash-subscription',
+];
+
+const CHOMP_MIGRATION_INTENT_TYPES: ChompMigrationIntentType[] = [
+  'cash-migration-root',
+  'cash-migration-transfer',
+  'cash-migration-premium-transfer',
 ];
 
 const MIGRATION_STEPS: MigrationStep[] = [
@@ -149,6 +158,7 @@ const MESSENGER_EXPOSED_METHODS = [
   'getUpgrades',
   'verifyDelegation',
   'createIntents',
+  'createIntentsV2',
   'getIntentsByAddress',
   'createWithdrawal',
   'getServiceDetails',
@@ -331,6 +341,22 @@ const SendIntentResponseArrayStruct = array(
       tokenSymbol: string(),
       tokenAddress: StrictHexStruct,
       type: enums(CHOMP_INTENT_TYPES),
+    }),
+    createdAt: string(),
+  }),
+);
+
+const SendIntentV2ResponseArrayStruct = array(
+  type({
+    delegationHash: StrictHexStruct,
+    intent: type({
+      type: enums([...CHOMP_INTENT_TYPES, ...CHOMP_MIGRATION_INTENT_TYPES]),
+      data: type({
+        allowance: StrictHexStruct,
+        tokenSymbol: string(),
+        tokenAddress: StrictHexStruct,
+        userSignature: optional(StrictHexStruct),
+      }),
     }),
     createdAt: string(),
   }),
@@ -836,6 +862,46 @@ export class ChompApiService extends BaseDataService<
     });
 
     return create(jsonResponse, SendIntentResponseArrayStruct);
+  }
+
+  /**
+   * Submits one or more intents to the CHOMP API, including the Money Account
+   * migration intents that `POST /v1/intent` rejects.
+   *
+   * POST /v2/intent
+   *
+   * CHOMP accepts at most 10 intents per request. Their delegations must
+   * already be saved to the authenticated user storage.
+   *
+   * @param intents - The array of intents to submit.
+   * @returns The array of intent responses.
+   */
+  async createIntentsV2(
+    intents: SendIntentV2Params[],
+  ): Promise<SendIntentV2Response[]> {
+    const jsonResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:createIntentsV2`, intents],
+      staleTime: 0,
+      queryFn: async () => {
+        const headers = await this.#authHeaders();
+        const response = await fetch(new URL('/v2/intent', this.#baseUrl), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(intents),
+        });
+
+        if (!response.ok) {
+          throw await createChompApiError(
+            response,
+            `POST /v2/intent failed with status '${response.status}'`,
+          );
+        }
+
+        return response.json();
+      },
+    });
+
+    return create(jsonResponse, SendIntentV2ResponseArrayStruct);
   }
 
   /**
