@@ -72,11 +72,19 @@ function observeSignatureRegistry(): {
   // Patched manually rather than with `vi.spyOn`: Vitest keeps its own spy
   // bookkeeping in a `WeakMap`, so spying on `WeakMap.prototype.set` recurses
   // infinitely on Vitest 5.0.5+.
-  WeakMap.prototype.set = function (
+  /**
+   * Record the signature registry, then defer to the original `set`.
+   *
+   * @param this - The `WeakMap` being written to.
+   * @param key - The key being set.
+   * @param value - The value being set.
+   * @returns The `WeakMap`.
+   */
+  function observingSet(
     this: WeakMap<object, unknown>,
     key: object,
     value: unknown,
-  ) {
+  ): WeakMap<object, unknown> {
     if (
       typeof value === 'object' &&
       value !== null &&
@@ -86,7 +94,8 @@ function observeSignatureRegistry(): {
       registry = value.unansweredSignatures as Map<string, unknown>;
     }
     return originalSet.call(this, key, value);
-  };
+  }
+  Reflect.set(WeakMap.prototype, 'set', observingSet);
   return {
     registry: () => {
       if (!registry) {
@@ -95,7 +104,7 @@ function observeSignatureRegistry(): {
       return registry;
     },
     restore: () => {
-      WeakMap.prototype.set = originalSet;
+      Reflect.set(WeakMap.prototype, 'set', originalSet);
     },
   };
 }
