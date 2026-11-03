@@ -69,23 +69,24 @@ function observeSignatureRegistry(): {
     key: object,
     value: unknown,
   ) => WeakMap<object, unknown>;
-  const observer = vi
-    .spyOn(WeakMap.prototype, 'set')
-    .mockImplementation(function (
-      this: WeakMap<object, unknown>,
-      key: object,
-      value: unknown,
+  // Patched manually rather than with `vi.spyOn`: Vitest keeps its own spy
+  // bookkeeping in a `WeakMap`, so spying on `WeakMap.prototype.set` recurses
+  // infinitely on Vitest 5.0.5+.
+  WeakMap.prototype.set = function (
+    this: WeakMap<object, unknown>,
+    key: object,
+    value: unknown,
+  ) {
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      'unansweredSignatures' in value &&
+      value.unansweredSignatures instanceof Map
     ) {
-      if (
-        typeof value === 'object' &&
-        value !== null &&
-        'unansweredSignatures' in value &&
-        value.unansweredSignatures instanceof Map
-      ) {
-        registry = value.unansweredSignatures as Map<string, unknown>;
-      }
-      return originalSet.call(this, key, value);
-    });
+      registry = value.unansweredSignatures as Map<string, unknown>;
+    }
+    return originalSet.call(this, key, value);
+  };
   return {
     registry: () => {
       if (!registry) {
@@ -93,7 +94,9 @@ function observeSignatureRegistry(): {
       }
       return registry;
     },
-    restore: () => observer.mockRestore(),
+    restore: () => {
+      WeakMap.prototype.set = originalSet;
+    },
   };
 }
 
