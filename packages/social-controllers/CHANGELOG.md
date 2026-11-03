@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.15.0]
+
+### Added
+
+- Add `fetchModerationStatus` to `SocialService` (`SocialService:fetchModerationStatus`). Calls `GET /v1/moderation/status` and returns whether the moderation team has banned the current user, when, and the reason they may be shown. Export `ModerationStatusResponse` and `SocialServiceFetchModerationStatusAction` ([#11211](https://github.com/MetaMask/core/pull/11211))
+
 ## [3.14.2]
 
 ### Fixed
@@ -356,7 +362,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `unfollowTrader` — unfollows traders and removes addresses from state
     - `updateFollowing` — fetches following list and replaces addresses in state
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.2...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.15.0...HEAD
+[3.15.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.2...@metamask/social-controllers@3.15.0
 [3.14.2]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.1...@metamask/social-controllers@3.14.2
 [3.14.1]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.0...@metamask/social-controllers@3.14.1
 [3.14.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.13.0...@metamask/social-controllers@3.14.0

@@ -636,40 +636,27 @@ function expectCorrectWorkspaceExports(workspace) {
 
 /**
  * Expect that the workspace has "changelog:update" and "changelog:validate"
- * scripts, and that these package scripts call a common script by passing the
- * name of the package as the first argument.
+ * scripts, and that these package scripts call a common script. The update
+ * script is passed the name of the package as the first argument, whereas the
+ * validate script works out the package from the working directory.
  *
  * @param {Workspace} workspace - The workspace to check.
  */
 function expectCorrectWorkspaceChangelogScripts(workspace) {
-  /**
-   * @type {Record<string, { expectedStartString: string, script: string, match: RegExpMatchArray | null }>}
-   */
-  const scripts = ['update', 'validate'].reduce((obj, variant) => {
-    const expectedStartString = `../../scripts/${variant}-changelog.sh ${workspace.manifest.name}`;
+  const expectedStartStrings = {
+    update: `../../scripts/update-changelog.sh ${workspace.manifest.name}`,
+    validate: '../../scripts/validate-changelog.sh',
+  };
+
+  for (const [variant, expectedStartString] of Object.entries(
+    expectedStartStrings,
+  )) {
     /** @type {string} */
     const script = workspace.manifest.scripts[`changelog:${variant}`] ?? '';
-    const match = script.match(new RegExp(`^${expectedStartString}(.*)$`, 'u'));
-    return { ...obj, [variant]: { expectedStartString, script, match } };
-  }, {});
 
-  if (
-    scripts.update.match &&
-    scripts.validate.match &&
-    scripts.update.match[1] !== scripts.validate.match[1]
-  ) {
-    workspace.error(
-      'Expected package\'s "changelog:validate" and "changelog:update" scripts to pass the same arguments to their underlying scripts',
-    );
-  }
-
-  for (const [
-    variant,
-    { expectedStartString, script, match },
-  ] of Object.entries(scripts)) {
     expectWorkspaceField(workspace, `scripts.changelog:${variant}`);
 
-    if (script !== '' && !match) {
+    if (script !== '' && !script.startsWith(expectedStartString)) {
       workspace.error(
         `Expected package's "changelog:${variant}" script to be or start with "${expectedStartString}", but it was "${script}".`,
       );

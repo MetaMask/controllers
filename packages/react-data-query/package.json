@@ -38,7 +38,7 @@
     "build:docs": "typedoc",
     "build:only-clean": "rimraf './dist' './tsconfig.build.tsbuildinfo'",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/react-data-query",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/react-data-query",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",
     "since-latest-release": "../../scripts/since-latest-release.sh",
@@ -52,10 +52,10 @@
     "@metamask/utils": "^12.0.1",
     "@tanstack/query-core": "^5.103.2",
     "@tanstack/react-query": "^5.103.2",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@metamask/messenger": "^3.0.0",
     "@typescript/native": "npm:typescript@^7.0.2",
     "nock": "^15.0.5",
