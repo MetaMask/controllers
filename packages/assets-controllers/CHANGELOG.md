@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [113.1.0]
+
+### Added
+
+- Expose `startPolling` and `stopPollingByToken` through CurrencyRateController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `isNftOwner`, `addNftVerifyOwnership`, `addNft`, `removeNft`, `removeAndIgnoreNft`, `checkAndUpdateSingleNftOwnershipStatus`, and `checkAndUpdateAllNftsOwnershipStatus` through NftController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `detectNfts` through NftDetectionController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `startPolling` and `stopPollingByToken` through TokenDetectionController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `startPolling` and `stopPollingByToken` through DeFiPositionsController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+
+### Changed
+
+- Use SLIP-44 coin type 16661 for the 0G native asset price lookup ([#11221](https://github.com/MetaMask/core/pull/11221))
+- Bump `uuid` from `^14.0.0` to `^14.0.1` ([#11179](https://github.com/MetaMask/core/pull/11179))
+
 ## [113.0.1]
 
 ### Changed
@@ -3635,7 +3650,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use Ethers for AssetsContractController ([#845](https://github.com/MetaMask/core/pull/845))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controllers@113.0.1...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controllers@113.1.0...HEAD
+[113.1.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controllers@113.0.1...@metamask/assets-controllers@113.1.0
 [113.0.1]: https://github.com/MetaMask/core/compare/@metamask/assets-controllers@113.0.0...@metamask/assets-controllers@113.0.1
 [113.0.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controllers@112.2.0...@metamask/assets-controllers@113.0.0
 [112.2.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controllers@112.1.3...@metamask/assets-controllers@112.2.0

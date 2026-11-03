@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expose `updateBatchTransactions` method through the TransactionController messenger ([#11250](https://github.com/MetaMask/core/pull/11250))
+
+### Changed
+
+- Bump `uuid` from `^14.0.0` to `^14.0.1` ([#11179](https://github.com/MetaMask/core/pull/11179))
+
 ## [73.0.0]
 
 ### Changed
