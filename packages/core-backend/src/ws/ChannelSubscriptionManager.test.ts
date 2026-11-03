@@ -8,7 +8,6 @@ import type { BackendWebSocketServiceMethodActions } from './BackendWebSocketSer
 import type {
   BackendWebSocketServiceConnectionStateChangedEvent,
   ServerNotificationMessage,
-  WebSocketConnectionInfo,
 } from './BackendWebSocketService.js';
 import { WebSocketState } from './BackendWebSocketService.js';
 import { ChannelSubscriptionManager } from './ChannelSubscriptionManager.js';
@@ -196,21 +195,11 @@ describe('ChannelSubscriptionManager', () => {
       await manager.subscribe(CHANNEL);
 
       expect(mocks.connect).toHaveBeenCalledTimes(1);
-      expect(mocks.channelHasSubscription).toHaveBeenCalledWith(CHANNEL);
       expect(mocks.subscribe).toHaveBeenCalledWith({
         channels: [CHANNEL],
         channelType: CHANNEL_TYPE,
         callback: expect.any(Function),
       });
-    });
-
-    it('skips WS subscribe if the channel already has a subscription', async () => {
-      const { manager, mocks } = getManager();
-      mocks.channelHasSubscription.mockReturnValue(true);
-
-      await manager.subscribe(CHANNEL);
-
-      expect(mocks.subscribe).not.toHaveBeenCalled();
     });
 
     it('increments refCount on duplicate subscribe without WS traffic', async () => {
@@ -223,6 +212,59 @@ describe('ChannelSubscriptionManager', () => {
 
       expect(mocks.connect).not.toHaveBeenCalled();
       expect(mocks.subscribe).not.toHaveBeenCalled();
+    });
+
+    it('sends a deferred subscribe once the socket connects', async () => {
+      const { manager, mocks, options, rootMessenger } = getManager();
+      mocks.subscribe.mockRejectedValueOnce(
+        new Error(
+          'Cannot create subscription(s) test.v1.chan-a: WebSocket is DISCONNECTED',
+        ),
+      );
+
+      await manager.subscribe(CHANNEL);
+
+      expect(options.onSubscriptionError).not.toHaveBeenCalled();
+      expect(mocks.subscribe).toHaveBeenCalledTimes(1);
+
+      mocks.subscribe.mockResolvedValue(undefined);
+      mocks.subscribe.mockClear();
+      rootMessenger.publish('BackendWebSocketService:connectionStateChanged', {
+        ...BASE_CONNECTION_INFO,
+        state: WebSocketState.CONNECTED,
+      });
+      await completeAsyncOperations();
+
+      expect(mocks.subscribe).toHaveBeenCalledWith({
+        channels: [CHANNEL],
+        channelType: CHANNEL_TYPE,
+        callback: expect.any(Function),
+      });
+    });
+
+    it('sends a subscribe that failed before sign-in once the socket connects', async () => {
+      const { manager, mocks, options, rootMessenger } = getManager();
+      mocks.subscribe.mockRejectedValueOnce(
+        new Error('Authentication required: user not signed in'),
+      );
+
+      await manager.subscribe(CHANNEL);
+
+      expect(options.onSubscriptionError).not.toHaveBeenCalled();
+
+      mocks.subscribe.mockResolvedValue(undefined);
+      mocks.subscribe.mockClear();
+      rootMessenger.publish('BackendWebSocketService:connectionStateChanged', {
+        ...BASE_CONNECTION_INFO,
+        state: WebSocketState.CONNECTED,
+      });
+      await completeAsyncOperations();
+
+      expect(mocks.subscribe).toHaveBeenCalledWith({
+        channels: [CHANNEL],
+        channelType: CHANNEL_TYPE,
+        callback: expect.any(Function),
+      });
     });
 
     it('invokes onSubscriptionError when subscribe fails', async () => {
@@ -327,7 +369,7 @@ describe('ChannelSubscriptionManager', () => {
       rootMessenger.publish('BackendWebSocketService:connectionStateChanged', {
         ...BASE_CONNECTION_INFO,
         state: WebSocketState.CONNECTED,
-      } as WebSocketConnectionInfo);
+      });
       await completeAsyncOperations();
 
       expect(mocks.subscribe).toHaveBeenCalledWith({
@@ -343,7 +385,7 @@ describe('ChannelSubscriptionManager', () => {
       rootMessenger.publish('BackendWebSocketService:connectionStateChanged', {
         ...BASE_CONNECTION_INFO,
         state: WebSocketState.DISCONNECTED,
-      } as WebSocketConnectionInfo);
+      });
       await completeAsyncOperations();
 
       expect(options.onConnectionStateChange).toHaveBeenCalledWith(

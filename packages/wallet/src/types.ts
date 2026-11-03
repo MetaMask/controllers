@@ -14,6 +14,7 @@ import type { ConnectivityControllerInstanceOptions } from './initialization/ins
 import type { GasFeeControllerInstanceOptions } from './initialization/instances/gas-fee-controller/types.js';
 import type { GeolocationApiServiceInstanceOptions } from './initialization/instances/geolocation-api-service/types.js';
 import type { KeyringControllerInstanceOptions } from './initialization/instances/keyring-controller/types.js';
+import type { MarketStatsServiceInstanceOptions } from './initialization/instances/market-stats-service/types.js';
 import type { NetworkControllerInstanceOptions } from './initialization/instances/network-controller/types.js';
 import type { PasskeyControllerInstanceOptions } from './initialization/instances/passkey-controller/types.js';
 import type { PermissionControllerInstanceOptions } from './initialization/instances/permission-controller/types.js';
@@ -45,6 +46,7 @@ export type InstanceSpecificOptions = {
   gasFeeController: GasFeeControllerInstanceOptions;
   geolocationApiService?: GeolocationApiServiceInstanceOptions;
   keyringController?: KeyringControllerInstanceOptions;
+  marketStatsService?: MarketStatsServiceInstanceOptions;
   networkController: NetworkControllerInstanceOptions;
   remoteFeatureFlagController: RemoteFeatureFlagControllerInstanceOptions;
   storageService: StorageServiceInstanceOptions;

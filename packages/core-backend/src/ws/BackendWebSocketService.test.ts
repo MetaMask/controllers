@@ -1346,6 +1346,71 @@ describe('BackendWebSocketService', () => {
       });
     });
 
+    it('omits a channel the socket already tracks and sends no frame when nothing is new', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const firstCallback = vi.fn();
+
+        await createSubscription(service, mockWs, {
+          channels: ['channel-a', 'channel-b'],
+          callback: firstCallback,
+          requestId: 'first-subscribe',
+          subscriptionId: 'sub-first',
+        });
+
+        const sendsBefore = mockWs.send.mock.calls.length;
+        const second = service.subscribe({
+          channels: ['channel-a', 'channel-c'],
+          channelType: 'test-channel.v1',
+          callback: vi.fn(),
+          requestId: 'second-subscribe',
+        });
+        mockWs.simulateMessage({
+          id: 'second-subscribe',
+          data: {
+            requestId: 'second-subscribe',
+            subscriptionId: 'sub-second',
+            succeeded: ['channel-c'],
+            failed: [],
+          },
+        });
+        const secondSubscription = await second;
+        const subscribeFrames = mockWs.send.mock.calls
+          .slice(sendsBefore)
+          .map(
+            (call) =>
+              JSON.parse(call[0] as string) as {
+                event: string;
+                data: { channels: string[] };
+              },
+          )
+          .filter((message) => message.event === 'subscribe');
+
+        expect(subscribeFrames).toStrictEqual([
+          expect.objectContaining({
+            data: expect.objectContaining({ channels: ['channel-c'] }),
+          }),
+        ]);
+        expect(secondSubscription.channels).toStrictEqual(['channel-c']);
+
+        const sendsBeforeRepeat = mockWs.send.mock.calls.length;
+        const repeat = await service.subscribe({
+          channels: ['channel-a'],
+          channelType: 'test-channel.v1',
+          callback: vi.fn(),
+          requestId: 'repeat-subscribe',
+        });
+
+        expect(repeat.channels).toStrictEqual([]);
+        expect(repeat.subscriptionId).toBe('');
+        expect(mockWs.send.mock.calls.length).toBe(sendsBeforeRepeat);
+
+        await repeat.unsubscribe();
+        expect(service.channelHasSubscription('channel-a')).toBe(true);
+      });
+    });
+
     it('should handle various error scenarios including connection failures and invalid responses', async () => {
       await withService(async ({ service, getMockWebSocket }) => {
         await service.connect();
@@ -1378,6 +1443,56 @@ describe('BackendWebSocketService', () => {
         await expect(subscriptionPromise).rejects.toThrow(
           'Request failed: test-channel-error',
         );
+      });
+    });
+
+    it('fails only the market-stats subscribe named by an error with no request id', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const btcChannel =
+          'market-stats.v1.bip122:000000000019d6689c085ae165831e93/slip44:0.usd';
+        const ethChannel = 'market-stats.v1.eip155:1/slip44:60.usd';
+
+        const btc = service.subscribe({
+          channels: [btcChannel],
+          channelType: 'market-stats.v1',
+          callback: vi.fn(),
+          requestId: 'btc-sub',
+        });
+        const eth = service.subscribe({
+          channels: [ethChannel],
+          channelType: 'market-stats.v1',
+          callback: vi.fn(),
+          requestId: 'eth-sub',
+        });
+
+        mockWs.simulateMessage({
+          event: 'error',
+          data: {
+            message:
+              'invalid channel: unsupported chainId: bip122:000000000019d6689c085ae165831e93 (supported: eip155:1)',
+          },
+        });
+
+        await expect(btc).rejects.toThrow(
+          'unsupported chainId: bip122:000000000019d6689c085ae165831e93',
+        );
+
+        mockWs.simulateMessage({
+          event: 'subscribed',
+          data: {
+            requestId: 'eth-sub',
+            subscriptionId: 'eth-sub-id',
+            succeeded: [ethChannel],
+            failed: [],
+          },
+        });
+
+        await expect(eth).resolves.toMatchObject({
+          subscriptionId: 'eth-sub-id',
+        });
+        expect(mockWs.readyState).toBe(MockWebSocket.OPEN);
       });
     });
 

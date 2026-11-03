@@ -108,11 +108,21 @@ export type ChannelSubscriptionManagerOptions = {
   /** Handler invoked for messages on the system-notifications channel. */
   onSystemNotification?: (notification: ServerNotificationMessage) => void;
   /**
-   * Called on every connection state change, after the manager performs its own
-   * resubscribe-on-CONNECTED. Lets the host run domain reactions (e.g. marking
-   * tracked chains down on DISCONNECTED).
+   * Called on every connection state change. When `resubscribeOnConnect` is
+   * true, this runs after active channels are subscribed again.
    */
   onConnectionStateChange?: (connectionInfo: WebSocketConnectionInfo) => void;
+  /**
+   * Subscribe active channels again when the socket connects, before
+   * `onConnectionStateChange`. Defaults to true. Set false when the host
+   * sends those subscriptions from `onConnectionStateChange` itself.
+   */
+  resubscribeOnConnect?: boolean;
+  /**
+   * Reconnect the shared socket after unsubscribe retries are exhausted.
+   * Defaults to true. Market stats leaves the socket up; the caller polls.
+   */
+  forceReconnectOnUnsubscribeFailure?: boolean;
   /** Prefix used in log lines (defaults to the channel type). */
   logPrefix?: string;
   /** Override the grace period (primarily for tests). */
@@ -146,11 +156,19 @@ export class ChannelSubscriptionManager {
 
   readonly #unsubRetryPolicy: ReturnType<typeof retry>;
 
+  readonly #resubscribeOnConnect: boolean;
+
+  readonly #forceReconnectOnUnsubscribeFailure: boolean;
+
   constructor(options: ChannelSubscriptionManagerOptions) {
     this.#options = options;
     this.#messenger = options.messenger;
     this.#channelType = options.channelType;
     this.#gracePeriodMs = options.gracePeriodMs ?? DEFAULT_GRACE_PERIOD_MS;
+
+    this.#resubscribeOnConnect = options.resubscribeOnConnect ?? true;
+    this.#forceReconnectOnUnsubscribeFailure =
+      options.forceReconnectOnUnsubscribeFailure ?? true;
 
     const retryDelays = options.unsubRetryDelaysMs ?? [
       ...DEFAULT_UNSUB_RETRY_DELAYS_MS,
@@ -201,109 +219,102 @@ export class ChannelSubscriptionManager {
   // =============================================================================
 
   /**
-   * Subscribe to a channel. If this is the first subscriber a WebSocket
-   * subscription is created; additional calls for the same channel only bump the
-   * reference count.
+   * Subscribe to one channel, or to many channels in one WebSocket frame.
    *
-   * @param channel - The fully-qualified channel name.
-   * @returns A promise that resolves once the subscription is established.
+   * The first subscriber opens the channel. Further calls for a channel that
+   * is already held only bump its reference count. Channels the gateway
+   * rejects are reported through `onSubscriptionError` and left untracked.
+   * A socket that is not connected yet keeps every channel so the connect
+   * handler can send them.
+   *
+   * @param channel - One fully-qualified channel name, or a list of them.
+   * @returns A promise that resolves once the subscription is recorded.
    */
-  async subscribe(channel: string): Promise<void> {
+  async subscribe(channel: string | readonly string[]): Promise<void> {
+    const channels = [
+      ...new Set(typeof channel === 'string' ? [channel] : channel),
+    ];
+    if (channels.length === 0) {
+      return;
+    }
     const releaseLock = await this.#mutex.acquire();
     try {
-      await this.#subscribeInner(channel);
+      await this.#subscribeInner(channels);
     } finally {
       releaseLock();
     }
   }
 
-  async #subscribeInner(channel: string): Promise<void> {
-    const entry = this.#channels.get(channel);
+  /**
+   * Open every channel in this call that is not already held.
+   *
+   * A channel another caller already holds only bumps its reference count.
+   * Channels that still need a server subscription go out in one frame.
+   *
+   * @param channels - Fully-qualified channel names, already deduped.
+   */
+  async #subscribeInner(channels: readonly string[]): Promise<void> {
+    const keeping = new Set(channels);
+    const toOpen: string[] = [];
+    let shouldFlush = false;
 
-    if (entry?.retryAbort) {
-      entry.retryAbort.abort();
-      entry.retryAbort = undefined;
-      entry.refCount = 1;
+    for (const channel of channels) {
+      const entry = this.#channels.get(channel);
 
-      if (
-        this.#messenger.call(
-          'BackendWebSocketService:channelHasSubscription',
-          channel,
-        )
-      ) {
-        await this.#flushOtherChannels(channel);
-        this.#log('Cancelled unsubscribe retry — reusing WS subscription', {
-          channel,
-        });
-        return;
+      if (entry?.retryAbort) {
+        entry.retryAbort.abort();
+        entry.retryAbort = undefined;
+        entry.refCount = 1;
+        shouldFlush = true;
+        if (this.#serverHasChannel(channel)) {
+          this.#log('Cancelled unsubscribe retry — reusing WS subscription', {
+            channel,
+          });
+          continue;
+        }
+        toOpen.push(channel);
+        continue;
       }
-      // WS subscription was lost — fall through to recreate it.
-    } else if (entry?.gracePeriodTimer) {
-      clearTimeout(entry.gracePeriodTimer);
-      entry.gracePeriodTimer = undefined;
-      this.#log('Cancelled grace-period unsubscribe', {
-        channel,
-      });
 
-      if (
-        this.#messenger.call(
-          'BackendWebSocketService:channelHasSubscription',
-          channel,
-        )
-      ) {
-        await this.#flushOtherChannels(channel);
+      if (entry?.gracePeriodTimer) {
+        clearTimeout(entry.gracePeriodTimer);
+        entry.gracePeriodTimer = undefined;
+        this.#log('Cancelled grace-period unsubscribe', { channel });
+        shouldFlush = true;
+        if (this.#serverHasChannel(channel)) {
+          entry.refCount += 1;
+          this.#log('WS subscription still alive, bumped refCount', {
+            channel,
+            refCount: entry.refCount,
+          });
+          continue;
+        }
+        toOpen.push(channel);
+        continue;
+      }
+
+      if (entry && entry.refCount > 0) {
         entry.refCount += 1;
-        this.#log('WS subscription still alive, bumped refCount', {
-          channel,
-          refCount: entry.refCount,
-        });
-        return;
+        continue;
       }
-      // WS subscription was lost (e.g. after disconnect/reconnect) — fall
-      // through to recreate it. refCount is bumped only after success below.
-    } else if (entry && entry.refCount > 0) {
-      entry.refCount += 1;
+
+      shouldFlush = true;
+      toOpen.push(channel);
+    }
+
+    // Example: ETH is open as market-stats.v1.eip155:1/slip44:60.usd. Switching
+    // the currency to EUR drops that channel's refCount to 0 and starts its
+    // grace timer, then subscribes market-stats.v1.eip155:1/slip44:60.eur.
+    // The eur subscribe flushes the usd channel now. The eur channel is in
+    // this call, so it stays open.
+    if (shouldFlush) {
+      await this.#flushOtherChannels(keeping);
+    }
+    if (toOpen.length === 0) {
       return;
     }
 
-    await this.#flushOtherChannels(channel);
-
-    try {
-      await this.#messenger.call('BackendWebSocketService:connect');
-
-      if (
-        this.#messenger.call(
-          'BackendWebSocketService:channelHasSubscription',
-          channel,
-        )
-      ) {
-        this.#log(
-          'Channel already has WS subscription (idempotency), skipping',
-          {
-            channel,
-          },
-        );
-        this.#channels.set(channel, { refCount: 1 });
-        return;
-      }
-
-      await this.#messenger.call('BackendWebSocketService:subscribe', {
-        channels: [channel],
-        channelType: this.#channelType,
-        callback: (notification: ServerNotificationMessage) => {
-          this.#options.onMessage(channel, notification);
-        },
-      });
-
-      this.#channels.set(channel, { refCount: 1 });
-      this.#log('Subscribe succeeded — new WS subscription created', {
-        channel,
-      });
-    } catch (error) {
-      this.#log('Subscription failed', { channel, error });
-      this.#channels.delete(channel);
-      this.#options.onSubscriptionError?.(channel, String(error), 'subscribe');
-    }
+    await this.#openChannels(toOpen);
   }
 
   /**
@@ -352,18 +363,24 @@ export class ChannelSubscriptionManager {
    * Immediately unsubscribe other channels in grace or failed-cleanup state.
    * Called while the subscribe mutex is held before opening a new channel.
    *
-   * @param exceptChannel - Channel being subscribed; excluded from flush.
+   * @param exceptChannel - Channels being subscribed; excluded from flush.
    */
-  async #flushOtherChannels(exceptChannel: string): Promise<void> {
+  async #flushOtherChannels(
+    exceptChannel: string | ReadonlySet<string>,
+  ): Promise<void> {
+    const except =
+      typeof exceptChannel === 'string'
+        ? new Set([exceptChannel])
+        : exceptChannel;
     for (const [channel, channelEntry] of this.#channels.entries()) {
-      if (channel === exceptChannel || channelEntry.refCount > 0) {
+      if (except.has(channel) || channelEntry.refCount > 0) {
         continue;
       }
 
       this.#clearChannelTimers(channelEntry);
       this.#log('Flushing grace-period channel before new subscribe', {
         flushedChannel: channel,
-        newChannel: exceptChannel,
+        newChannel: [...except].join(','),
       });
 
       const success = await this.#unsubscribeChannelOnServer(channel);
@@ -392,7 +409,7 @@ export class ChannelSubscriptionManager {
       );
 
       for (const sub of subscriptions) {
-        await sub.unsubscribe();
+        await sub.unsubscribe(undefined, [channel]);
       }
       return true;
     } catch (error) {
@@ -454,10 +471,17 @@ export class ChannelSubscriptionManager {
         return;
       }
 
+      this.#channels.delete(channel);
+      if (!this.#forceReconnectOnUnsubscribeFailure) {
+        this.#log('Unsubscribe retries exhausted — leaving the socket up', {
+          channel,
+        });
+        return;
+      }
+
       this.#log('Unsubscribe retries exhausted — forcing reconnection', {
         channel,
       });
-      this.#channels.delete(channel);
       // Last resort: reconnects the shared BackendWebSocketService instance
       // (other consumers share this connection). They resubscribe on CONNECTED;
       // this manager only resubscribes channels with refCount > 0.
@@ -491,6 +515,210 @@ export class ChannelSubscriptionManager {
     }
 
     this.#scheduleUnsubscribeRetry(channel);
+  }
+
+  /**
+   * Open server subscriptions for channels that are already tracked, in one
+   * WebSocket frame, without changing reference counts that are already set.
+   *
+   * @param channels - Fully-qualified channel names.
+   */
+  async ensureSubscribedChannels(channels: string[]): Promise<void> {
+    const unique = [...new Set(channels)];
+    if (unique.length === 0) {
+      return;
+    }
+    const releaseLock = await this.#mutex.acquire();
+    try {
+      const missing = unique.filter(
+        (channel) => !this.#serverHasChannel(channel),
+      );
+      if (missing.length === 0) {
+        return;
+      }
+
+      await this.#messenger.call('BackendWebSocketService:connect');
+
+      const still = missing.filter(
+        (channel) => !this.#serverHasChannel(channel),
+      );
+      if (still.length === 0) {
+        for (const channel of missing) {
+          this.#rememberOpen(channel);
+        }
+        return;
+      }
+
+      await this.#openChannels(still);
+    } finally {
+      releaseLock();
+    }
+  }
+
+  /**
+   * Open a server subscription for a channel that is already tracked, without
+   * changing its reference count. No-op when the server already has it.
+   *
+   * @param channel - Fully-qualified channel name.
+   */
+  async ensureSubscribed(channel: string): Promise<void> {
+    const releaseLock = await this.#mutex.acquire();
+    try {
+      if (this.#serverHasChannel(channel)) {
+        return;
+      }
+
+      await this.#messenger.call('BackendWebSocketService:connect');
+
+      if (this.#serverHasChannel(channel)) {
+        return;
+      }
+
+      await this.#subscribeOnServer(channel);
+
+      const entry = this.#channels.get(channel);
+      if (!entry || entry.refCount === 0) {
+        if (entry) {
+          this.#clearChannelTimers(entry);
+        }
+        this.#channels.set(channel, { refCount: 1 });
+      }
+      this.#log('Subscribe succeeded after the socket connected', { channel });
+    } catch (error) {
+      if (isRetryableSubscribeError(error)) {
+        const entry = this.#channels.get(channel);
+        if (!entry || entry.refCount === 0) {
+          this.#channels.set(channel, { refCount: 1 });
+        }
+        this.#log('Subscription still waiting for the socket', { channel });
+        return;
+      }
+
+      this.#log('Subscription failed after the socket connected', {
+        channel,
+        error,
+      });
+      this.#options.onSubscriptionError?.(channel, String(error), 'subscribe');
+      throw error;
+    } finally {
+      releaseLock();
+    }
+  }
+
+  /**
+   * Resubscribe all channels that were active before a disconnect.
+   * Called when WebSocket transitions to CONNECTED.
+   */
+  async resubscribe(): Promise<void> {
+    await this.#resubscribeActiveChannels();
+  }
+
+  /**
+   * Keep a channel that is already on the server, or whose subscribe has to
+   * wait for the socket. A reference count that is already set stays as it is.
+   *
+   * @param channel - Fully-qualified channel name.
+   */
+  #rememberOpen(channel: string): void {
+    const entry = this.#channels.get(channel);
+    if (!entry || entry.refCount === 0) {
+      if (entry) {
+        this.#clearChannelTimers(entry);
+      }
+      this.#channels.set(channel, { refCount: 1 });
+    }
+  }
+
+  /**
+   * Open one WebSocket subscription for every channel that is not on the
+   * server yet. Channels the gateway rejects are dropped.
+   *
+   * @param channels - Fully-qualified channel names.
+   */
+  async #openChannels(channels: string[]): Promise<void> {
+    try {
+      await this.#messenger.call('BackendWebSocketService:connect');
+
+      const missing = channels.filter(
+        (channel) => !this.#serverHasChannel(channel),
+      );
+      for (const channel of channels) {
+        if (!missing.includes(channel)) {
+          this.#rememberOpen(channel);
+        }
+      }
+      if (missing.length === 0) {
+        return;
+      }
+
+      const result = await this.#messenger.call(
+        'BackendWebSocketService:subscribe',
+        {
+          channels: missing,
+          channelType: this.#channelType,
+          callback: (notification: ServerNotificationMessage) => {
+            // One channel keeps the name this call opened. A list uses the
+            // channel on the notification, because one callback serves all of them.
+            const channel =
+              missing.length === 1 ? missing[0] : notification.channel;
+            this.#options.onMessage(channel, notification);
+          },
+        },
+      );
+      const failed = new Set(result?.failedChannels ?? []);
+      for (const channel of missing) {
+        if (failed.has(channel)) {
+          this.#channels.delete(channel);
+          this.#options.onSubscriptionError?.(
+            channel,
+            `Request failed: ${channel}`,
+            'subscribe',
+          );
+          continue;
+        }
+        this.#rememberOpen(channel);
+        this.#log('Subscribe succeeded — new WS subscription created', {
+          channel,
+        });
+      }
+    } catch (error) {
+      if (isRetryableSubscribeError(error)) {
+        for (const channel of channels) {
+          this.#rememberOpen(channel);
+        }
+        this.#log('Subscription deferred until the socket is connected', {
+          channels,
+        });
+        return;
+      }
+
+      for (const channel of channels) {
+        this.#channels.delete(channel);
+        this.#options.onSubscriptionError?.(
+          channel,
+          String(error),
+          'subscribe',
+        );
+      }
+      this.#log('Subscription failed', { channels, error });
+    }
+  }
+
+  #serverHasChannel(channel: string): boolean {
+    return this.#messenger.call(
+      'BackendWebSocketService:channelHasSubscription',
+      channel,
+    );
+  }
+
+  async #subscribeOnServer(channel: string): Promise<void> {
+    await this.#messenger.call('BackendWebSocketService:subscribe', {
+      channels: [channel],
+      channelType: this.#channelType,
+      callback: (notification: ServerNotificationMessage) => {
+        this.#options.onMessage(channel, notification);
+      },
+    });
   }
 
   /**
@@ -528,13 +756,7 @@ export class ChannelSubscriptionManager {
             continue;
           }
 
-          await this.#messenger.call('BackendWebSocketService:subscribe', {
-            channels: [channel],
-            channelType: this.#channelType,
-            callback: (notification: ServerNotificationMessage) => {
-              this.#options.onMessage(channel, notification);
-            },
-          });
+          await this.#subscribeOnServer(channel);
           this.#log('Resubscription succeeded', { channel });
         } catch (error) {
           this.#log('Resubscription failed for channel', {
@@ -551,7 +773,10 @@ export class ChannelSubscriptionManager {
   async #handleWebSocketStateChange(
     connectionInfo: WebSocketConnectionInfo,
   ): Promise<void> {
-    if (connectionInfo.state === WebSocketState.CONNECTED) {
+    if (
+      connectionInfo.state === WebSocketState.CONNECTED &&
+      this.#resubscribeOnConnect
+    ) {
       await this.#resubscribeActiveChannels();
     }
 
@@ -580,4 +805,21 @@ export class ChannelSubscriptionManager {
       );
     }
   }
+}
+
+/**
+ * True when subscribe failed because the shared socket cannot accept it yet.
+ * That includes "WebSocket is …" while the bearer token is still loading, and
+ * an authentication error from a connect() that was already in flight.
+ *
+ * @param error - Failure from connect or subscribe.
+ * @returns Whether the channel should be kept and sent on CONNECTED.
+ */
+function isRetryableSubscribeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes('WebSocket is') ||
+    message.includes('Authentication required') ||
+    message.includes('not signed in')
+  );
 }

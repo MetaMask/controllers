@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `MarketStatsService` for real-time spot prices over the shared backend WebSocket. `subscribe`/`unsubscribe` take a CAIP-19 `assetId` and currency (`market-stats.v1.<assetId>.<currency>`). Price changes are published as `pricesUpdated` from the batched `market-stats.v1` channel, and chain health is published as `chainStatusChanged`. Also export `MARKET_STATS_MAX_CHANNELS` (200) and `wssSupport` on `V3SpotPricesResponse`
+
 ### Changed
 
+- `MarketStatsService.subscribe` accepts one asset or a list. A list is sent as one WebSocket `subscribe` frame. Unsubscribing one asset leaves the other channels in that frame open
+- Request `includeWssSupportField=true` on `GET /v3/spot-prices`. The Price API omits `wssSupport` without that flag, so no `market-stats.v1` channel is opened
+- A rejected `MarketStatsService` subscribe does not reconnect the shared backend WebSocket. The channel is dropped and the caller keeps polling that asset
+- An `error` event with no request id fails only the in-flight market-stats subscribe it names. Other subscribes continue and the socket stays open
+- Keep a market-stats channel when subscribe runs before the backend socket is open, including while the bearer token is still loading. `MarketStatsService` sends that subscribe when the socket connects
+- `MarketStatsService.init()` returns without throwing when `BackendWebSocketService` has not registered its actions yet. Call `init()` again once that service exists
 - Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
 
 ## [14.0.0]
