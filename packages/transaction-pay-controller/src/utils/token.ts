@@ -13,8 +13,7 @@ import {
 } from '../constants.js';
 import { projectLogger } from '../logger.js';
 import type { FiatRates, TransactionPayControllerMessenger } from '../types.js';
-import { hexToBigNumber } from './big-number.js';
-import { LenientBigNumber } from './big-number.js';
+import { hexToBigNumber, parseDecimal } from './big-number.js';
 import { getStablecoins, isChainExcludedFromInfura } from './feature-flags.js';
 import { rpcRequest } from './provider.js';
 
@@ -207,13 +206,13 @@ export function computeRawFromFiatAmount(
   decimals: number,
   usdRate: BigNumber.Value,
 ): string | undefined {
-  const rate = new LenientBigNumber(usdRate);
-  if (!rate.isFinite() || !rate.gt(0)) {
+  const rate = parseDecimal(usdRate);
+  if (!rate?.gt(0)) {
     return undefined;
   }
 
-  const humanAmount = new LenientBigNumber(fiatAmount).dividedBy(rate);
-  if (!humanAmount.isFinite() || !humanAmount.gt(0)) {
+  const humanAmount = parseDecimal(fiatAmount)?.dividedBy(rate);
+  if (!humanAmount?.isFinite() || !humanAmount.gt(0)) {
     return undefined;
   }
 

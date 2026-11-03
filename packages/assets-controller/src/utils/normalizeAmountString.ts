@@ -1,6 +1,6 @@
 import { BigNumber as BigNumberJS } from 'bignumber.js';
 
-import { LenientBigNumber } from './lenientBigNumber.js';
+import { parseDecimal } from './parseDecimal.js';
 
 /**
  * Normalize an asset balance `amount` string into a canonical plain-decimal
@@ -42,8 +42,8 @@ export function normalizeAmountString(
   if (typeof amount !== 'string' || amount.length === 0) {
     return '0';
   }
-  const bn = new LenientBigNumber(amount);
-  if (!bn.isFinite()) {
+  const bn = parseDecimal(amount);
+  if (!bn) {
     return '0';
   }
 

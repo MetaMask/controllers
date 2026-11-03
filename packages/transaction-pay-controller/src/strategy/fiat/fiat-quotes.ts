@@ -15,7 +15,7 @@ import type {
   TransactionPayRequiredToken,
   TransactionPayQuote,
 } from '../../types.js';
-import { LenientBigNumber } from '../../utils/big-number.js';
+import { parseDecimal } from '../../utils/big-number.js';
 import { getDirectMoneyMusdEnabled } from '../../utils/feature-flags.js';
 import {
   buildCaipAssetType,
@@ -155,12 +155,10 @@ async function executeFiatQuotePipeline(
     const relayTotalFeeUsd = gasDeductedFromSource
       ? getRelayTotalFeeUsd(relayQuote)
       : getNonGasRelayFeeUsd(relayQuote);
-    const adjustedAmountFiat = new LenientBigNumber(amountFiat).plus(
-      relayTotalFeeUsd,
-    );
+    const adjustedAmountFiat = parseDecimal(amountFiat)?.plus(relayTotalFeeUsd);
 
     if (
-      !adjustedAmountFiat.isFinite() ||
+      !adjustedAmountFiat?.isFinite() ||
       !adjustedAmountFiat.gt(0) ||
       !relayTotalFeeUsd.isFinite() ||
       !relayTotalFeeUsd.gte(0)

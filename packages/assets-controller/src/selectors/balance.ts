@@ -19,7 +19,7 @@ import type {
   AssetPreferences,
   Caip19AssetId,
 } from '../types.js';
-import { LenientBigNumber } from '../utils/lenientBigNumber.js';
+import { parseDecimal } from '../utils/parseDecimal.js';
 import { emitTrace, withTrace } from '../utils/trace.js';
 
 // ============================================================================
@@ -103,8 +103,7 @@ const getAmountFromBalance = (balance: AssetBalance): string => {
 };
 
 const toBigNumberOrZero = (value: string): BigNumberJS => {
-  const parsed = new LenientBigNumber(value);
-  return parsed.isNaN() || !parsed.isFinite() ? new BigNumberJS(0) : parsed;
+  return parseDecimal(value) ?? new BigNumberJS(0);
 };
 
 const getPriceDatumFast = (

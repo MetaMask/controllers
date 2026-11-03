@@ -1,12 +1,27 @@
 import { BigNumber } from 'bignumber.js';
 
 /**
- * A BigNumber constructor that returns `NaN` for invalid input rather than
- * throwing (bignumber.js v11 throws by default via `STRICT`). Use this where
- * the caller validates the result with `isFinite()` / `isNaN()` and handles
- * the invalid case itself.
+ * Parses a value into a finite BigNumber.
+ *
+ * bignumber.js throws on invalid input. This returns `undefined` for anything
+ * that is not a finite decimal, so callers decide explicitly what invalid
+ * input means rather than relying on a `NaN` result. Strings with a `0x`
+ * prefix are parsed as hex.
+ *
+ * @param value - The value to parse.
+ * @returns The parsed BigNumber, or `undefined` if the value is not a finite
+ * decimal.
  */
-export const LenientBigNumber = BigNumber.clone({ STRICT: false });
+export function parseDecimal(
+  value: BigNumber.Value | null | undefined,
+): BigNumber | undefined {
+  try {
+    const parsed = new BigNumber(value as BigNumber.Value);
+    return parsed.isFinite() ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Parses a hex string, with or without a `0x` prefix, into a BigNumber.

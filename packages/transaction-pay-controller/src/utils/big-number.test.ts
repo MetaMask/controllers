@@ -1,15 +1,35 @@
+import { BigNumber } from 'bignumber.js';
 import { describe, expect, it } from 'vitest';
 
-import { LenientBigNumber, hexToBigNumber } from './big-number.js';
+import { hexToBigNumber, parseDecimal } from './big-number.js';
 
 describe('big-number utils', () => {
-  describe('LenientBigNumber', () => {
-    it('parses valid numeric strings', () => {
-      expect(new LenientBigNumber('1.5').toFixed()).toBe('1.5');
+  describe('parseDecimal', () => {
+    it.each([
+      ['1.5', '1.5'],
+      ['0', '0'],
+      ['-2', '-2'],
+      ['1e3', '1000'],
+      ['0x5208', '21000'],
+      [42, '42'],
+      [new BigNumber('7.25'), '7.25'],
+    ])('parses %j', (value, expected) => {
+      expect(parseDecimal(value)?.toFixed()).toBe(expected);
     });
 
-    it('returns NaN for invalid input instead of throwing', () => {
-      expect(new LenientBigNumber('invalid').isNaN()).toBe(true);
+    it.each([
+      'invalid',
+      '',
+      '1.2.3',
+      'Infinity',
+      '-Infinity',
+      'NaN',
+      NaN,
+      Infinity,
+      undefined,
+      null,
+    ])('returns undefined for %j', (value) => {
+      expect(parseDecimal(value)).toBeUndefined();
     });
   });
 

@@ -10,7 +10,7 @@ import { BigNumber } from 'bignumber.js';
 import type { TransactionPayControllerMessenger } from '../index.js';
 import { createModuleLogger, projectLogger } from '../logger.js';
 import type { Amount } from '../types.js';
-import { LenientBigNumber } from './big-number.js';
+import { parseDecimal } from './big-number.js';
 import { getFallbackGas, getGasBuffer } from './feature-flags.js';
 import { getNetworkClientId } from './provider.js';
 import { getNativeToken, getTokenBalance, getTokenFiatRate } from './token.js';
@@ -312,11 +312,9 @@ export function getGasFee(
 }
 
 function parseEstimatedGas(gasValue: string): number {
-  const parsedGas = gasValue.startsWith('0x')
-    ? new LenientBigNumber(gasValue.slice(2), 16)
-    : new LenientBigNumber(gasValue);
+  const parsedGas = parseDecimal(gasValue);
 
-  if (!parsedGas.isFinite() || parsedGas.isNaN()) {
+  if (!parsedGas) {
     throw new Error(`Invalid gas estimate returned: ${gasValue}`);
   }
 
