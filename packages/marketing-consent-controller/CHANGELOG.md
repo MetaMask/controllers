@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Uncategorized
+
+- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
+- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
+- chore(deps): bump the external-non-major group across 1 directory with 2 updates ([#11081](https://github.com/MetaMask/core/pull/11081))
+
 ## [1.1.0]
 
 ### Added
