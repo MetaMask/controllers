@@ -1,9 +1,11 @@
 import type { Infer } from '@metamask/superstruct';
 import {
+  array,
   enums,
   nullable,
   number,
   optional,
+  record,
   string,
   type as structType,
 } from '@metamask/superstruct';
@@ -71,6 +73,32 @@ export type SocialHandles = {
  */
 export type TradeAction = 'opened' | 'added' | 'reduced' | 'closed';
 
+export const CommentReactionProfileStruct = structType({
+  id: string(),
+  name: string(),
+});
+
+export const CommentEngagementStruct = structType({
+  reactions: array(
+    structType({
+      emotion: string(),
+      count: number(),
+      profiles: array(CommentReactionProfileStruct),
+    }),
+  ),
+  userReaction: nullable(string()),
+  replyCount: optional(number()),
+});
+
+export const AuthorCommentStruct = structType({
+  uid: string(),
+  text: string(),
+  timestamp: number(),
+  sourceLanguage: optional(nullable(string())),
+  translations: optional(record(string(), string())),
+  engagement: CommentEngagementStruct,
+});
+
 export const TradeStruct = structType({
   direction: enums(['buy', 'sell']),
   intent: enums(['enter', 'exit']),
@@ -94,6 +122,11 @@ export const TradeStruct = structType({
   marketCap: optional(nullable(number())),
   timestamp: number(),
   transactionHash: string(),
+  /**
+   * Every author comment on this fill, newest first. An author may comment on
+   * one fill more than once. Absent on older social-api builds.
+   */
+  comments: optional(array(AuthorCommentStruct)),
 });
 
 export type Trade = Infer<typeof TradeStruct>;
@@ -926,6 +959,19 @@ export type BlockedContentResponse = {
   items: BlockedContent[];
   /** Pass as `cursor` for the next page. `null` on the last page. */
   cursor: string | null;
+};
+
+/**
+ * Response from `GET /v1/moderation/status`: whether the moderation team has
+ * banned the current user. A banned user cannot post, reply, or react.
+ */
+export type ModerationStatusResponse = {
+  /** Whether the current user is banned. */
+  banned: boolean;
+  /** When the ban was placed, in Unix epoch seconds. `null` when not banned. */
+  bannedAt: number | null;
+  /** The reason the moderation team gave the user, if any. Safe to show. */
+  reason: string | null;
 };
 
 // ---------------------------------------------------------------------------

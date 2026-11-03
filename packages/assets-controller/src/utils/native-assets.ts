@@ -113,7 +113,7 @@ export const NATIVE_ASSETS: Readonly<Record<ChainId, Caip19AssetId>> = {
     'eip155:1440000/erc20:0x0000000000000000000000000000000000000000', // xrpl-evm - native symbol: XRP
   'eip155:1313161554': 'eip155:1313161554/slip44:60', // Aurora Mainnet (Ethereum L2 on NEAR) - Native symbol: ETH
   'eip155:1666600000': 'eip155:1666600000/slip44:1023', // Harmony Mainnet Shard 0 - Native symbol: ONE
-  'eip155:16661': 'eip155:16661/slip44:1111116661', // 0G Chain - Native symbol: 0G
+  'eip155:16661': 'eip155:16661/slip44:16661', // 0G Chain - Native symbol: 0G
   'bip122:000000000019d6689c085ae165831e93':
     'bip122:000000000019d6689c085ae165831e93/slip44:0', // Bitcoin Mainnet - Native symbol: BTC
   'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp':
