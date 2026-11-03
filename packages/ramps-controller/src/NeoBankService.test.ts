@@ -40,6 +40,7 @@ const isAutorampTransactionQuery = (
  * `{ maxRetries: 0 }` so tests fail fast unless they opt into retries.
  * @param options.canonicalProfileId - Canonical profile id returned by the
  * stubbed `AuthenticationController:getSessionProfile` (wallet registration).
+ * Pass a function to change it between calls.
  * @returns Service instance for the test.
  */
 function createService(options?: {
@@ -47,7 +48,7 @@ function createService(options?: {
   baseUrlOverride?: string;
   omitDefaults?: boolean;
   policyOptions?: CreateServicePolicyOptions;
-  canonicalProfileId?: string;
+  canonicalProfileId?: string | (() => string);
 }): NeoBankService {
   const rootMessenger = new Messenger({
     namespace: MOCK_ANY_NAMESPACE,
@@ -56,17 +57,21 @@ function createService(options?: {
     'AuthenticationController:getBearerToken',
     async () => 'test-token',
   );
-  const canonicalProfileId =
-    options?.canonicalProfileId ?? 'canonical-profile-1';
+  const profileIdOption = options?.canonicalProfileId ?? 'canonical-profile-1';
   rootMessenger.registerActionHandler(
     'AuthenticationController:getSessionProfile',
-    async () =>
-      ({
+    async () => {
+      const canonicalProfileId =
+        typeof profileIdOption === 'function'
+          ? profileIdOption()
+          : profileIdOption;
+      return {
         identifierId: 'id-1',
         profileId: canonicalProfileId,
         canonicalProfileId,
         metaMetricsId: 'mm-1',
-      }) as never,
+      } as never;
+    },
   );
 
   const messenger = new Messenger({
@@ -1192,6 +1197,158 @@ describe('NeoBankService', () => {
       nock(STAGING_BASE).get(MICRODEPOSITS_PATH).query(true).reply(200, []);
 
       expect(await service.getMicrodeposits()).toStrictEqual([]);
+    });
+  });
+
+  describe('getCustomerAbilities', () => {
+    const CUSTOMER_PATH = '/neobank/customers/canonical-profile-1/external';
+    const ABILITIES_PATH = '/neobank/customers/iron-customer-1/abilities';
+
+    const abilities = {
+      fiat_deposit: {
+        brl: { pix: 'Active', pix_thirdparty: 'Active' },
+        usd: { ach: 'Pending', ach_thirdparty: 'Unavailable' },
+      },
+      fiat_payout: {
+        brl: { pix: 'Active', pix_thirdparty: 'Active' },
+      },
+      currencies: [],
+      blocking_abilities: { ach_thirdparty: 'rule engine preflight' },
+    };
+
+    /**
+     * Stubs the customer lookup that `getCustomerAbilities` performs first.
+     *
+     * @returns The nock scope for the lookup.
+     */
+    function mockCustomerLookup(): nock.Scope {
+      return nock(STAGING_BASE)
+        .get(CUSTOMER_PATH)
+        .reply(200, { id: 'iron-customer-1' });
+    }
+
+    it('returns the abilities unchanged', async () => {
+      const customerScope = mockCustomerLookup();
+      const scope = nock(STAGING_BASE)
+        .get(ABILITIES_PATH)
+        .query({ sdk: /.+/u, controller: /.+/u, context: 'test' })
+        .matchHeader('Authorization', 'Bearer test-token')
+        .reply(200, abilities);
+
+      const service = createService();
+
+      expect(await service.getCustomerAbilities()).toStrictEqual(abilities);
+      expect(customerScope.isDone()).toBe(true);
+      expect(scope.isDone()).toBe(true);
+    });
+
+    it('throws an HttpError when the customer does not exist yet (404)', async () => {
+      nock(STAGING_BASE).get(CUSTOMER_PATH).reply(404, 'customer not found');
+
+      const service = createService();
+
+      await expect(service.getCustomerAbilities()).rejects.toMatchObject({
+        httpStatus: 404,
+      });
+    });
+
+    it('throws an HttpError carrying the upstream body on a 5xx', async () => {
+      mockCustomerLookup();
+      nock(STAGING_BASE)
+        .get(ABILITIES_PATH)
+        .query(true)
+        .reply(500, 'upstream exploded');
+
+      const service = createService();
+
+      await expect(service.getCustomerAbilities()).rejects.toThrow(
+        /status '500' - upstream exploded/u,
+      );
+    });
+
+    it.each([
+      ['an array', []],
+      ['an object without fiat_deposit', { fiat_payout: {} }],
+      ['a null fiat_deposit', { fiat_deposit: null }],
+    ])('throws when the body is %s', async (_label, body) => {
+      mockCustomerLookup();
+      nock(STAGING_BASE).get(ABILITIES_PATH).query(true).reply(200, body);
+
+      const service = createService();
+
+      await expect(service.getCustomerAbilities()).rejects.toThrow(
+        'Malformed response received from neo-bank abilities API',
+      );
+    });
+
+    it('shares the customer id lookup with getMicrodeposits', async () => {
+      const customerScope = nock(STAGING_BASE)
+        .get(CUSTOMER_PATH)
+        .once()
+        .reply(200, { id: 'iron-customer-1' });
+      nock(STAGING_BASE).get(ABILITIES_PATH).query(true).reply(200, abilities);
+      nock(STAGING_BASE)
+        .get('/neobank/customers/iron-customer-1/microdeposits')
+        .query(true)
+        .reply(200, []);
+
+      const service = createService();
+
+      await Promise.all([
+        service.getCustomerAbilities(),
+        service.getMicrodeposits(),
+      ]);
+
+      expect(customerScope.isDone()).toBe(true);
+    });
+
+    it('looks the customer up again after the session profile changes', async () => {
+      let profileId = 'canonical-profile-1';
+      mockCustomerLookup();
+      nock(STAGING_BASE).get(ABILITIES_PATH).query(true).reply(200, abilities);
+      nock(STAGING_BASE)
+        .get('/neobank/customers/canonical-profile-2/external')
+        .reply(200, { id: 'iron-customer-2' });
+      const secondProfileScope = nock(STAGING_BASE)
+        .get('/neobank/customers/iron-customer-2/abilities')
+        .query(true)
+        .reply(200, abilities);
+
+      const service = createService({ canonicalProfileId: () => profileId });
+
+      await service.getCustomerAbilities();
+      profileId = 'canonical-profile-2';
+      await service.getCustomerAbilities();
+
+      expect(secondProfileScope.isDone()).toBe(true);
+    });
+
+    it('keeps the new profile lookup when the old profile lookup fails late', async () => {
+      let profileId = 'canonical-profile-1';
+      nock(STAGING_BASE)
+        .get(CUSTOMER_PATH)
+        .delay(50)
+        .reply(500, 'old lookup failed');
+      const newLookupScope = nock(STAGING_BASE)
+        .get('/neobank/customers/canonical-profile-2/external')
+        .once()
+        .reply(200, { id: 'iron-customer-2' });
+      nock(STAGING_BASE)
+        .get('/neobank/customers/iron-customer-2/abilities')
+        .query(true)
+        .times(2)
+        .reply(200, abilities);
+
+      const service = createService({ canonicalProfileId: () => profileId });
+
+      const oldProfileCall = service.getCustomerAbilities();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      profileId = 'canonical-profile-2';
+      await service.getCustomerAbilities();
+      await expect(oldProfileCall).rejects.toMatchObject({ httpStatus: 500 });
+
+      expect(await service.getCustomerAbilities()).toStrictEqual(abilities);
+      expect(newLookupScope.isDone()).toBe(true);
     });
   });
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expose `startPolling` and `stopPollingByToken` through CurrencyRateController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `isNftOwner`, `addNftVerifyOwnership`, `addNft`, `removeNft`, `removeAndIgnoreNft`, `checkAndUpdateSingleNftOwnershipStatus`, and `checkAndUpdateAllNftsOwnershipStatus` through NftController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `detectNfts` through NftDetectionController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `startPolling` and `stopPollingByToken` through TokenDetectionController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+- Expose `startPolling` and `stopPollingByToken` through DeFiPositionsController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
+
 ### Changed
 
 - Use SLIP-44 coin type 16661 for the 0G native asset price lookup ([#11221](https://github.com/MetaMask/core/pull/11221))
