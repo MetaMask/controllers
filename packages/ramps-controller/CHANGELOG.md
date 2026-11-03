@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - This applies to `getAutoramp`, `getAutoramps`, `getPixDepositInstructions`, `getDepositInstructions`, `getMicrodeposits`, `getCustomerAbilities`, `listAutorampTransactions` and `createAutoramp`.
 - Add dependency `@metamask/base-data-service` ([#10882](https://github.com/MetaMask/core/pull/10882))
 - Add dependency `@metamask/superstruct` ([#10882](https://github.com/MetaMask/core/pull/10882))
+- Bump `bignumber.js` from `^9.1.2` to `^11.1.5` ([#11260](https://github.com/MetaMask/core/pull/11260))
 
 ### Removed
 
