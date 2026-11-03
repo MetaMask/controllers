@@ -17,7 +17,6 @@ export default mergeConfig(
         exclude: [
           'src/**/strategy/types.ts',
           'src/**/quote-status-manager/types.ts',
-          'src/**/*-method-action-types.ts',
         ],
 
         thresholds: {
