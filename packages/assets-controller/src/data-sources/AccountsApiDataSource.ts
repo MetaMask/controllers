@@ -324,10 +324,6 @@ export class AccountsApiDataSource extends AbstractDataSource<
    * refreshes the chain list without starting another timer.
    */
   async init(): Promise<void> {
-    if (this.#chainsRefreshTimer) {
-      await this.#refreshActiveChains();
-      return;
-    }
     await this.#initializeActiveChains();
   }
 
