@@ -5,6 +5,7 @@ import { BigNumber } from 'bignumber.js';
 
 import type { BridgeHistoryItem } from '../types.js';
 import { hexToBigNumber } from './hex-to-big-number.js';
+import { parseDecimal } from './parse-decimal.js';
 
 const getReceivedNativeAmount = (
   historyItem: BridgeHistoryItem,
@@ -16,9 +17,11 @@ const getReceivedNativeAmount = (
   if (!preTxBalance || !postTxBalance || preTxBalance === postTxBalance) {
     // If preTxBalance and postTxBalance are equal, postTxBalance hasn't been updated on time
     // because of the RPC provider delay, so we return an estimated receiving amount instead.
-    return new BigNumber(historyItem.quote.destTokenAmount)
-      .div(new BigNumber(10).pow(historyItem.quote.destAsset.decimals))
-      .toString(10);
+    return (
+      parseDecimal(historyItem.quote.destTokenAmount)
+        ?.div(new BigNumber(10).pow(historyItem.quote.destAsset.decimals))
+        .toString(10) ?? null
+    );
   }
 
   return actualGas && postTxBalance && preTxBalance
@@ -94,10 +97,12 @@ export const getActualSwapReceivedAmount = (
     ? getReceivedNativeAmount(historyItem, actualGas, txMeta)
     : getReceivedERC20Amount(historyItem, txMeta);
 
+  const quotedReturnInUsd = parseDecimal(pricingData?.quotedReturnInUsd);
+  const quotedReturnTokens = parseDecimal(quotedReturnAmount);
   const returnUsdExchangeRate =
-    pricingData?.quotedReturnInUsd && quotedReturnAmount
-      ? new BigNumber(pricingData.quotedReturnInUsd)
-          .div(quotedReturnAmount)
+    quotedReturnInUsd && quotedReturnTokens
+      ? quotedReturnInUsd
+          .div(quotedReturnTokens)
           .multipliedBy(10 ** historyItem.quote.destAsset.decimals)
       : null;
 
@@ -122,15 +127,19 @@ export const getActualBridgeReceivedAmount = (
 ): Omit<TokenAmountValues, 'valueInCurrency'> | null => {
   const { quote, pricingData, status } = historyItem;
 
-  const usdExchangeRate = pricingData?.quotedReturnInUsd
-    ? new BigNumber(pricingData.quotedReturnInUsd).div(quote.destTokenAmount)
-    : null;
+  const quotedReturnInUsd = parseDecimal(pricingData?.quotedReturnInUsd);
+  const quotedReturnTokens = parseDecimal(quote.destTokenAmount);
+  const usdExchangeRate =
+    quotedReturnInUsd && quotedReturnTokens
+      ? quotedReturnInUsd.div(quotedReturnTokens)
+      : null;
 
   const actualAmount = status.destChain?.amount;
-  return actualAmount && usdExchangeRate
+  const parsedActualAmount = parseDecimal(actualAmount);
+  return actualAmount && parsedActualAmount && usdExchangeRate
     ? {
         amount: actualAmount,
-        usd: usdExchangeRate.multipliedBy(actualAmount).toString(10),
+        usd: usdExchangeRate.multipliedBy(parsedActualAmount).toString(10),
       }
     : null;
 };

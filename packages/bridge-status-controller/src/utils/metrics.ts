@@ -44,6 +44,7 @@ import { BigNumber } from 'bignumber.js';
 
 import type { BridgeHistoryItem } from '../types.js';
 import { calcActualGasUsed } from './gas.js';
+import { parseDecimal } from './parse-decimal.js';
 import {
   getActualBridgeReceivedAmount,
   getActualSwapReceivedAmount,
@@ -233,19 +234,25 @@ export const getFinalizedTxProperties = (
       ? getActualSwapReceivedAmount(historyItem, actualGas, txMeta)
       : getActualBridgeReceivedAmount(historyItem);
 
+  const quotedGasAmount = parseDecimal(
+    historyItem.pricingData?.quotedGasAmount,
+  );
+  const actualGasAmount = parseDecimal(actualGas?.amount);
   const quotedVsUsedGasRatio =
-    historyItem.pricingData?.quotedGasAmount && actualGas?.amount
-      ? new BigNumber(historyItem.pricingData.quotedGasAmount)
+    quotedGasAmount && actualGasAmount
+      ? quotedGasAmount
           .multipliedBy(new BigNumber(10).pow(18))
-          .div(actualGas.amount)
+          .div(actualGasAmount)
           .toNumber()
       : 0;
 
+  const quotedReturnInUsd = parseDecimal(
+    historyItem.pricingData?.quotedReturnInUsd,
+  );
+  const actualReturnUsd = parseDecimal(actualReturn?.usd);
   const quoteVsExecutionRatio =
-    historyItem.pricingData?.quotedReturnInUsd && actualReturn?.usd
-      ? new BigNumber(historyItem.pricingData.quotedReturnInUsd)
-          .div(actualReturn.usd)
-          .toNumber()
+    quotedReturnInUsd && actualReturnUsd
+      ? quotedReturnInUsd.div(actualReturnUsd).toNumber()
       : 0;
 
   return {
