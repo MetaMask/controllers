@@ -6,16 +6,9 @@ import type {
   ClassDeclaration,
   MethodDeclaration,
   Node as TSNode,
-  Program,
   SourceFile,
-  Type,
-} from 'typescript';
+} from 'typescript/ast';
 import {
-  ScriptTarget,
-  createProgram,
-  createSourceFile,
-  findConfigFile,
-  forEachChild,
   getJSDocCommentsAndTags,
   isArrayLiteralExpression,
   isAsExpression,
@@ -25,10 +18,9 @@ import {
   isMethodDeclaration,
   isStringLiteral,
   isVariableStatement,
-  parseJsonConfigFileContent,
-  readConfigFile,
-  sys,
-} from 'typescript';
+} from 'typescript/ast';
+import type { Checker, Type } from 'typescript/sync';
+import { API } from 'typescript/sync';
 
 export type MethodInfo = {
   name: string;
@@ -168,45 +160,10 @@ function createASTVisitor(context: VisitorContext): (node: TSNode) => void {
       }
     }
 
-    forEachChild(node, visitNode);
+    node.forEachChild(visitNode);
   }
 
   return visitNode;
-}
-
-/**
- * Create a TypeScript program for the given file by locating the nearest
- * tsconfig.json.
- *
- * @param filePath - Absolute path to the source file.
- * @returns A TypeScript program, or null if no tsconfig was found.
- */
-function createProgramForFile(filePath: string): Program | null {
-  const configPath = findConfigFile(
-    path.dirname(filePath),
-    sys.fileExists.bind(sys),
-    'tsconfig.json',
-  );
-  if (!configPath) {
-    return null;
-  }
-
-  const { config, error } = readConfigFile(configPath, sys.readFile.bind(sys));
-
-  if (error) {
-    return null;
-  }
-
-  const parsedConfig = parseJsonConfigFileContent(
-    config,
-    sys,
-    path.dirname(configPath),
-  );
-
-  return createProgram({
-    rootNames: parsedConfig.fileNames,
-    options: parsedConfig.options,
-  });
 }
 
 /**
@@ -233,27 +190,24 @@ function findClassInSourceFile(
  * Search through the class hierarchy of a TypeScript type to find the
  * declaration of a method with the given name.
  *
+ * @param checker - The type checker the type belongs to.
  * @param classType - The class type to search.
  * @param methodName - The method name to look for.
  * @returns The method declaration node, or null if not found.
  */
 function findMethodInHierarchy(
+  checker: Checker,
   classType: Type,
   methodName: string,
 ): MethodDeclaration | null {
-  const symbol = classType.getProperty(methodName);
+  const symbol = checker.getPropertyOfType(classType, methodName);
   if (!symbol) {
     return null;
   }
 
-  const declarations = symbol.getDeclarations();
-  // istanbul ignore next: defensive check — symbols from getProperty always have declarations
-  if (!declarations) {
-    return null;
-  }
-
-  for (const declaration of declarations) {
-    if (isMethodDeclaration(declaration)) {
+  for (const handle of symbol.declarations) {
+    const declaration = handle.resolve();
+    if (declaration && isMethodDeclaration(declaration)) {
       return declaration;
     }
   }
@@ -296,12 +250,9 @@ export async function parseSourceFile(
 ): Promise<SourceInfo | null> {
   try {
     const content = await fs.promises.readFile(filePath, 'utf8');
-    const source = createSourceFile(
-      filePath,
-      content,
-      ScriptTarget.Latest,
-      true,
-    );
+    using api = new API({ cwd: path.dirname(filePath) });
+    using retained = api.createSourceFile(filePath, content);
+    const source = retained.sourceFile;
 
     const context: VisitorContext = {
       exposedMethods: [],
@@ -325,14 +276,17 @@ export async function parseSourceFile(
     );
 
     if (inheritedMethodNames.length > 0) {
-      const program = createProgramForFile(filePath);
-      const checker = program?.getTypeChecker();
-      const programSourceFile = program?.getSourceFile(filePath);
+      using snapshot = api.createSnapshot({ openFiles: [filePath] });
+      const project = snapshot.getDefaultProjectForFile(filePath);
 
       assert(
-        checker,
+        project?.configFileName &&
+          project.program.getConfigFileParsingDiagnostics().length === 0,
         `Type checker could not be created for "${filePath}". Ensure a valid tsconfig.json is present.`,
       );
+
+      const { checker, program } = project;
+      const programSourceFile = program.getSourceFile(filePath);
 
       assert(
         programSourceFile,
@@ -351,7 +305,11 @@ export async function parseSourceFile(
 
       const classType = checker.getTypeAtLocation(classNode);
       for (const methodName of inheritedMethodNames) {
-        const methodDeclaration = findMethodInHierarchy(classType, methodName);
+        const methodDeclaration = findMethodInHierarchy(
+          checker,
+          classType,
+          methodName,
+        );
 
         const jsDoc = methodDeclaration
           ? extractJSDoc(methodDeclaration, methodDeclaration.getSourceFile())
