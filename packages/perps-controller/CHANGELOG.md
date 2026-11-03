@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `uuid` from `^14.0.0` to `^14.0.1` ([#11179](https://github.com/MetaMask/core/pull/11179))
 
+### Fixed
+
+- Prevent HyperLiquid `userFills` from going silent after a WebSocket reconnect when an in-flight subscribe races with `restoreSubscriptions` (same pending + generation pattern TWAP already uses) ([#11160](https://github.com/MetaMask/core/pull/11160))
+  - Without this, live fills can keep attaching to a dead pre-reconnect listener (MetaMask/metamask-extension#47287).
+
 ## [22.1.0]
 
 ### Added
