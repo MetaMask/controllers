@@ -185,17 +185,18 @@ function failedAssetIds(error: unknown): string[] | undefined {
   if (!Array.isArray(failedAssets)) {
     return undefined;
   }
-  return failedAssets.flatMap((asset) => {
-    if (
-      typeof asset === 'object' &&
-      asset !== null &&
-      'assetId' in asset &&
-      typeof asset.assetId === 'string'
-    ) {
-      return [asset.assetId];
+  const assets: readonly unknown[] = failedAssets;
+  const ids: string[] = [];
+  for (const asset of assets) {
+    if (typeof asset !== 'object' || asset === null) {
+      continue;
     }
-    return [];
-  });
+    const candidate = asset as { assetId?: unknown };
+    if (typeof candidate.assetId === 'string') {
+      ids.push(candidate.assetId);
+    }
+  }
+  return ids;
 }
 
 export function isMarketStatsUnavailable(error: unknown): boolean {

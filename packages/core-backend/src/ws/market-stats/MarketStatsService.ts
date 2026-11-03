@@ -259,7 +259,11 @@ export class MarketStatsService {
       | MarketStatsSubscriptionOptions
       | readonly MarketStatsSubscriptionOptions[],
   ): Promise<void> {
-    const requested = Array.isArray(options) ? options : [options];
+    const requested: readonly MarketStatsSubscriptionOptions[] = Array.isArray(
+      options,
+    )
+      ? options
+      : [options];
     const seen = new Set<string>();
     const subscriptions: {
       assetId: string;

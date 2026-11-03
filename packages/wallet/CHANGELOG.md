@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **BREAKING:** Add `MarketStatsService` to the default initialization configurations
+- **BREAKING:** Add `MarketStatsService` to the default initialization configurations ([#11193](https://github.com/MetaMask/core/pull/11193))
   - Delegates the `BackendWebSocketService` actions and `connectionStateChanged` event used to subscribe to spot-price channels. `Wallet` does not construct `BackendWebSocketService`. The host registers that service and its actions on the wallet messenger.
   - `MarketStatsService.init()` registers price callbacks. When it runs before `BackendWebSocketService` exists, it returns without throwing. Call `init()` again after that service is registered.
   - Optional `instanceOptions.marketStatsService.traceFn`.
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Add `@metamask/core-backend` at `^14.0.0`
+- Add `@metamask/core-backend` at `^14.0.0` ([#11193](https://github.com/MetaMask/core/pull/11193))
 - Bump `@metamask/gas-fee-controller` from `^27.0.0` to `^27.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 - Bump `@metamask/subscription-controller` from `^15.1.2` to `^15.2.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 - Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.1` ([#11289](https://github.com/MetaMask/core/pull/11289), [#11300](https://github.com/MetaMask/core/pull/11300))

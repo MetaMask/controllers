@@ -658,8 +658,7 @@ export class PricesApiClient extends BaseApiClient {
   ): FetchQueryOptions<V3SpotPricesResponse> {
     const currency = queryOptions?.currency ?? 'usd';
     const includeMarketData = queryOptions?.includeMarketData ?? true;
-    const includeWssSupportField =
-      queryOptions?.includeWssSupportField ?? true;
+    const includeWssSupportField = queryOptions?.includeWssSupportField ?? true;
     const cacheOnly = queryOptions?.cacheOnly ?? false;
     return {
       queryKey: [

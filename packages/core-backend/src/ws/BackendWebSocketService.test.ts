@@ -1380,7 +1380,7 @@ describe('BackendWebSocketService', () => {
           .slice(sendsBefore)
           .map(
             (call) =>
-              JSON.parse(call[0] as string) as {
+              JSON.parse(call[0]) as {
                 event: string;
                 data: { channels: string[] };
               },
@@ -1404,7 +1404,7 @@ describe('BackendWebSocketService', () => {
 
         expect(repeat.channels).toStrictEqual([]);
         expect(repeat.subscriptionId).toBe('');
-        expect(mockWs.send.mock.calls.length).toBe(sendsBeforeRepeat);
+        expect(mockWs.send.mock.calls).toHaveLength(sendsBeforeRepeat);
 
         await repeat.unsubscribe();
         expect(service.channelHasSubscription('channel-a')).toBe(true);
@@ -1489,10 +1489,344 @@ describe('BackendWebSocketService', () => {
           },
         });
 
-        await expect(eth).resolves.toMatchObject({
+        expect(await eth).toMatchObject({
           subscriptionId: 'eth-sub-id',
         });
         expect(mockWs.readyState).toBe(MockWebSocket.OPEN);
+      });
+    });
+
+    it('keeps opened channels from a partial subscribe and removes them one at a time', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const pending = service.subscribe({
+          channels: ['channel-a', 'channel-b'],
+          channelType: 'test-channel.v1',
+          callback: vi.fn(),
+          requestId: 'partial-sub',
+        });
+        mockWs.simulateMessage({
+          id: 'partial-sub',
+          data: {
+            requestId: 'partial-sub',
+            subscriptionId: 'partial-id',
+            succeeded: ['channel-a'],
+            failed: ['channel-b'],
+          },
+        });
+
+        const subscription = await pending;
+
+        expect(subscription.channels).toStrictEqual(['channel-a']);
+        expect(subscription.failedChannels).toStrictEqual(['channel-b']);
+        expect(service.channelHasSubscription('channel-b')).toBe(false);
+
+        await subscription.unsubscribe(undefined, ['channel-b']);
+        expect(service.channelHasSubscription('channel-a')).toBe(true);
+
+        const removeA = subscription.unsubscribe('remove-a', ['channel-a']);
+        mockWs.simulateMessage({
+          id: 'remove-a',
+          data: { requestId: 'remove-a' },
+        });
+        await removeA;
+
+        expect(service.channelHasSubscription('channel-a')).toBe(false);
+        await subscription.unsubscribe();
+      });
+    });
+
+    it('leaves the rest of a subscription open when one channel is removed', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const subscription = await createSubscription(service, mockWs, {
+          channels: ['channel-a', 'channel-b'],
+          callback: vi.fn(),
+          requestId: 'both-open',
+          subscriptionId: 'both-id',
+        });
+
+        await subscription.unsubscribe(undefined, ['missing-channel']);
+
+        const removeA = subscription.unsubscribe('remove-a', ['channel-a']);
+        mockWs.simulateMessage({
+          id: 'remove-a',
+          data: { requestId: 'remove-a' },
+        });
+        await removeA;
+
+        expect(service.channelHasSubscription('channel-a')).toBe(false);
+        expect(service.channelHasSubscription('channel-b')).toBe(true);
+
+        const removeB = subscription.unsubscribe('remove-b');
+        mockWs.simulateMessage({
+          id: 'remove-b',
+          data: { requestId: 'remove-b' },
+        });
+        await removeB;
+        await subscription.unsubscribe();
+
+        expect(service.channelHasSubscription('channel-b')).toBe(false);
+      });
+    });
+
+    it('rejects a resolved subscribe whose succeeded list matches nothing', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+
+        const unmatched = service.subscribe({
+          channels: ['channel-a'],
+          channelType: 'test-channel.v1',
+          callback: vi.fn(),
+          requestId: 'unmatched',
+        });
+        mockWs.simulateMessage({
+          id: 'unmatched',
+          data: {
+            requestId: 'unmatched',
+            subscriptionId: 'unmatched-id',
+            succeeded: ['channel-z'],
+            failed: [],
+          },
+        });
+
+        await expect(unmatched).rejects.toThrow('Request failed: channel-a');
+
+        const listed = service.subscribe({
+          channels: ['channel-a'],
+          channelType: 'test-channel.v1',
+          callback: vi.fn(),
+          requestId: 'listed-failed',
+        });
+        mockWs.simulateMessage({
+          id: 'listed-failed',
+          data: {
+            requestId: 'listed-failed',
+            subscriptionId: 'listed-id',
+            succeeded: ['channel-z'],
+            failed: ['channel-a'],
+          },
+        });
+
+        await expect(listed).rejects.toThrow('Request failed: channel-a');
+      });
+    });
+
+    it('rejects a mixed subscribe response that has no subscription id', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const pending = service.subscribe({
+          channels: ['channel-a'],
+          channelType: 'test-channel.v1',
+          callback: vi.fn(),
+          requestId: 'no-sub-id',
+        });
+
+        mockWs.simulateMessage({
+          id: 'no-sub-id',
+          data: {
+            requestId: 'no-sub-id',
+            subscriptionId: '',
+            succeeded: ['channel-a'],
+            failed: ['channel-b'],
+          },
+        });
+
+        await expect(pending).rejects.toThrow('Request failed: channel-b');
+      });
+    });
+
+    it('ignores an error event that names a request or has no message', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const channel = 'market-stats.v1.eip155:1/slip44:60.usd';
+        const pending = service.subscribe({
+          channels: [channel],
+          channelType: 'market-stats.v1',
+          callback: vi.fn(),
+          requestId: 'has-request-id',
+        });
+
+        mockWs.simulateMessage({
+          event: 'error',
+          data: {
+            requestId: 'has-request-id',
+            message: `unsupported chainId: eip155:1`,
+            failed: [channel],
+          },
+        });
+        await expect(pending).rejects.toThrow('Request failed');
+
+        const quiet = service.subscribe({
+          channels: [channel],
+          channelType: 'market-stats.v1',
+          callback: vi.fn(),
+          requestId: 'quiet-sub',
+        });
+        mockWs.simulateMessage({
+          event: 'error',
+          data: { message: '' },
+        });
+        mockWs.simulateMessage({
+          event: 'error',
+          data: { message: 5 },
+        });
+        mockWs.simulateMessage({
+          id: 'quiet-sub',
+          data: {
+            requestId: 'quiet-sub',
+            subscriptionId: 'quiet-id',
+            succeeded: [channel],
+            failed: [],
+          },
+        });
+
+        expect(await quiet).toMatchObject({ subscriptionId: 'quiet-id' });
+      });
+    });
+
+    it('matches an uncorrelated error by channel text, chain id, or neither', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const fullChannel = 'market-stats.v1.eip155:10/slip44:60.usd';
+        const plainChannel = 'account-activity.v1.0xabc';
+        const noSlash = 'market-stats.v1.eip155:1';
+
+        const byText = service.subscribe({
+          channels: [fullChannel],
+          channelType: 'market-stats.v1',
+          callback: vi.fn(),
+          requestId: 'by-text',
+        });
+        mockWs.simulateMessage({
+          event: 'error',
+          data: { message: `rejected ${fullChannel}` },
+        });
+        await expect(byText).rejects.toThrow(fullChannel);
+
+        const byChain = service.subscribe({
+          channels: [fullChannel],
+          channelType: 'market-stats.v1',
+          callback: vi.fn(),
+          requestId: 'by-chain',
+        });
+        mockWs.simulateMessage({
+          event: 'error',
+          data: { message: 'unsupported chainId: eip155:10, extra' },
+        });
+        await expect(byChain).rejects.toThrow('unsupported chainId: eip155:10');
+
+        const plain = service.subscribe({
+          channels: [plainChannel],
+          channelType: 'account-activity.v1',
+          callback: vi.fn(),
+          requestId: 'plain-sub',
+        });
+        const slashless = service.subscribe({
+          channels: [noSlash],
+          channelType: 'market-stats.v1',
+          callback: vi.fn(),
+          requestId: 'slashless-sub',
+        });
+        mockWs.simulateMessage({
+          event: 'error',
+          data: { message: 'unsupported chainId: eip155:1' },
+        });
+
+        mockWs.simulateMessage({
+          id: 'plain-sub',
+          data: {
+            requestId: 'plain-sub',
+            subscriptionId: 'plain-id',
+            succeeded: [plainChannel],
+            failed: [],
+          },
+        });
+        mockWs.simulateMessage({
+          id: 'slashless-sub',
+          data: {
+            requestId: 'slashless-sub',
+            subscriptionId: 'slashless-id',
+            succeeded: [noSlash],
+            failed: [],
+          },
+        });
+
+        expect(await plain).toMatchObject({ subscriptionId: 'plain-id' });
+        expect(await slashless).toMatchObject({
+          subscriptionId: 'slashless-id',
+        });
+      });
+    });
+
+    it('records no subscribe channels when the request payload has none', async () => {
+      await withService(async ({ service, getMockWebSocket }) => {
+        await service.connect();
+        const mockWs = getMockWebSocket();
+        const rejected: string[] = [];
+        const track = (requestId: string, pending: Promise<unknown>): void => {
+          pending.catch(() => {
+            rejected.push(requestId);
+          });
+        };
+
+        track(
+          'missing-channels',
+          service.sendRequest({
+            event: 'subscribe',
+            data: { requestId: 'missing-channels' },
+          }),
+        );
+        track(
+          'channels-not-array',
+          service.sendRequest({
+            event: 'subscribe',
+            data: {
+              requestId: 'channels-not-array',
+              channels: 'channel-a' as unknown as string[],
+            },
+          }),
+        );
+        track(
+          'channels-empty',
+          service.sendRequest({
+            event: 'subscribe',
+            data: {
+              requestId: 'channels-empty',
+              channels: [1] as unknown as string[],
+            },
+          }),
+        );
+
+        mockWs.simulateMessage({
+          event: 'error',
+          data: { message: 'rejected channel-a' },
+        });
+        await flushPromises();
+
+        const subscribeRequestIds = mockWs.send.mock.calls
+          .map(
+            (call) =>
+              JSON.parse(String(call[0])) as {
+                event: string;
+                data: { requestId?: string };
+              },
+          )
+          .filter((message) => message.event === 'subscribe')
+          .map((message) => message.data.requestId);
+
+        expect(subscribeRequestIds).toStrictEqual([
+          'missing-channels',
+          'channels-not-array',
+          'channels-empty',
+        ]);
+        expect(rejected).toStrictEqual([]);
       });
     });
 

@@ -956,7 +956,9 @@ export class BackendWebSocketService {
    * @param options.callback - Callback function for handling notifications
    * @param options.requestId - Optional request ID for testing (will generate UUID if not provided)
    * @param options.channelType - Channel type identifier
-   * @returns Subscription object with unsubscribe method
+   * @returns Subscription object with unsubscribe method. Channels the socket
+   * already tracks are left out. When every channel is already open, this
+   * resolves with an empty channel list and does not send a frame.
    *
    * @example
    * ```typescript
@@ -992,10 +994,24 @@ export class BackendWebSocketService {
       );
     }
 
+    // The gateway already has these channels. Sending them again opens a
+    // second subscription for the same name.
+    const channelsToOpen = channels.filter(
+      (channel) => !this.channelHasSubscription(channel),
+    );
+    if (channelsToOpen.length === 0) {
+      return {
+        subscriptionId: '',
+        channels: [],
+        channelType,
+        unsubscribe: async () => undefined,
+      };
+    }
+
     // Send subscription request and wait for response
     const subscriptionResponse = await this.sendRequest({
       event: 'subscribe',
-      data: { channels, requestId },
+      data: { channels: channelsToOpen, requestId },
     });
 
     if (!subscriptionResponse?.subscriptionId) {
@@ -1007,14 +1023,14 @@ export class BackendWebSocketService {
     const succeeded = stringList(subscriptionResponse.succeeded);
     const openChannels =
       succeeded.length > 0
-        ? channels.filter((channel) => succeeded.includes(channel))
-        : channels.filter((channel) => !failedChannels.includes(channel));
+        ? channelsToOpen.filter((channel) => succeeded.includes(channel))
+        : channelsToOpen.filter((channel) => !failedChannels.includes(channel));
 
     if (openChannels.length === 0) {
       throw new Error(
         `Request failed: ${(failedChannels.length > 0
           ? failedChannels
-          : channels
+          : channelsToOpen
         ).join(', ')}`,
       );
     }

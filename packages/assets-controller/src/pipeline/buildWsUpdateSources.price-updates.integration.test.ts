@@ -192,8 +192,11 @@ async function runWsUpdatePass({
     onActiveChainsUpdated: vi.fn(),
     onAssetsUpdate: async (
       response: DataResponse,
-      request: DataRequest,
+      request?: DataRequest,
     ): Promise<void> => {
+      if (!request) {
+        return;
+      }
       const { response: enriched } = await executeAssetsPipeline({
         sources,
         request,
@@ -214,9 +217,14 @@ async function runWsUpdatePass({
   accountActivityDataSource.destroy();
   queryApiClient.clear();
 
+  const completed = captured;
+  if (!completed) {
+    throw new Error('Websocket update pass has not completed yet');
+  }
+
   return {
-    response: captured.response,
-    request: captured.request,
+    response: completed.response,
+    request: completed.request,
     mocks: {
       priceAPI: { priceBatches: prices.requestedBatches },
       tokenAPI: { assetBatches: assets.requestedBatches },

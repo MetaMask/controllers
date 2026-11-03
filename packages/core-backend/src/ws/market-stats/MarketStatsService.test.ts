@@ -8,8 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 
 import { flushPromises } from '../../../../../tests/vitest/helpers.js';
-import type { ServerNotificationMessage } from '../BackendWebSocketService.js';
 import { WebSocketState } from '../BackendWebSocketService.js';
+import type {
+  BackendWebSocketService,
+  ServerNotificationMessage,
+} from '../BackendWebSocketService.js';
 import { MarketStatsService } from './MarketStatsService.js';
 import type { MarketStatsServiceMessenger } from './MarketStatsService.js';
 import type { MarketStatsSubscriptionOptions } from './types.js';
@@ -33,6 +36,8 @@ const getMessenger = (): {
     forceReconnection: Mock;
     addChannelCallback: Mock;
     removeChannelCallback: Mock;
+    channelHasSubscription: Mock;
+    getSubscriptionsByChannel: Mock;
   };
 } => {
   const rootMessenger: RootMessenger = new Messenger({
@@ -58,14 +63,28 @@ const getMessenger = (): {
   });
 
   const subscribedChannels = new Set<string>();
-  const mockSubscribe = vi.fn(async (options: { channels: string[] }) => {
-    for (const channel of options.channels) {
-      subscribedChannels.add(channel);
-    }
-  });
+  const mockSubscribe = vi.fn(
+    async (
+      options: Parameters<BackendWebSocketService['subscribe']>[0],
+    ): ReturnType<BackendWebSocketService['subscribe']> => {
+      for (const channel of options.channels) {
+        subscribedChannels.add(channel);
+      }
+      return {
+        subscriptionId: 'market-stats-sub',
+        channels: [...options.channels],
+        channelType: options.channelType,
+        unsubscribe: async () => undefined,
+      };
+    },
+  );
   const mockAddChannelCallback = vi.fn();
   const mockRemoveChannelCallback = vi.fn();
   const mockForceReconnection = vi.fn().mockResolvedValue(undefined);
+  const mockChannelHasSubscription = vi.fn((channel: string) =>
+    subscribedChannels.has(channel),
+  );
+  const mockGetSubscriptionsByChannel = vi.fn().mockReturnValue([]);
 
   rootMessenger.registerActionHandler(
     'BackendWebSocketService:connect',
@@ -81,11 +100,11 @@ const getMessenger = (): {
   );
   rootMessenger.registerActionHandler(
     'BackendWebSocketService:channelHasSubscription',
-    (channel: string) => subscribedChannels.has(channel),
+    mockChannelHasSubscription,
   );
   rootMessenger.registerActionHandler(
     'BackendWebSocketService:getSubscriptionsByChannel',
-    vi.fn().mockReturnValue([]),
+    mockGetSubscriptionsByChannel,
   );
   rootMessenger.registerActionHandler(
     'BackendWebSocketService:addChannelCallback',
@@ -104,6 +123,8 @@ const getMessenger = (): {
       forceReconnection: mockForceReconnection,
       addChannelCallback: mockAddChannelCallback,
       removeChannelCallback: mockRemoveChannelCallback,
+      channelHasSubscription: mockChannelHasSubscription,
+      getSubscriptionsByChannel: mockGetSubscriptionsByChannel,
     },
   };
 };
@@ -443,5 +464,226 @@ describe('MarketStatsService', () => {
     service.destroy();
 
     expect(mocks.removeChannelCallback).toHaveBeenCalledWith('market-stats.v1');
+  });
+
+  it('ignores a second init', () => {
+    const { messenger, mocks } = getMessenger();
+    const service = new MarketStatsService({ messenger });
+    service.init();
+    const calls = mocks.addChannelCallback.mock.calls.length;
+
+    service.init();
+
+    expect(mocks.addChannelCallback).toHaveBeenCalledTimes(calls);
+
+    service.destroy();
+  });
+
+  it('rethrows a callback error that is not a missing handler', () => {
+    const { messenger, mocks } = getMessenger();
+    mocks.addChannelCallback.mockImplementationOnce(() => {
+      throw new Error('callback registry down');
+    });
+    const service = new MarketStatsService({ messenger });
+
+    expect(() => service.init()).toThrow('callback registry down');
+
+    service.destroy();
+  });
+
+  it('subscribes each asset once and ignores an empty list', async () => {
+    const { messenger, mocks } = getMessenger();
+    const service = new MarketStatsService({ messenger });
+    service.init();
+
+    await service.subscribe([]);
+    await service.subscribe([SUB_OPTS, { ...SUB_OPTS }]);
+
+    expect(mocks.subscribe).toHaveBeenCalledTimes(1);
+    expect(mocks.subscribe).toHaveBeenCalledWith({
+      channels: [EXPECTED_CHANNEL],
+      channelType: 'market-stats.v1',
+      callback: expect.any(Function),
+    });
+
+    service.destroy();
+  });
+
+  it('keeps a channel until every subscriber has left', async () => {
+    const { messenger, mocks, rootMessenger } = getMessenger();
+    const service = new MarketStatsService({ messenger });
+    service.init();
+
+    await service.unsubscribe({
+      assetId: 'eip155:1/erc20:0x0',
+      currency: 'usd',
+    });
+    await service.subscribe(SUB_OPTS);
+    await service.subscribe(SUB_OPTS);
+    await service.unsubscribe(SUB_OPTS);
+
+    mocks.channelHasSubscription.mockReturnValue(false);
+    mocks.subscribe.mockClear();
+    publishConnection(rootMessenger, WebSocketState.CONNECTED);
+    await completeAsyncOperations();
+
+    expect(mocks.subscribe).toHaveBeenCalledWith({
+      channels: [EXPECTED_CHANNEL],
+      channelType: 'market-stats.v1',
+      callback: expect.any(Function),
+    });
+
+    service.destroy();
+  });
+
+  it('publishes a price delivered on the per-asset callback and drops empty batches', async () => {
+    const { messenger, mocks, rootMessenger } = getMessenger();
+    const service = new MarketStatsService({ messenger });
+    service.init();
+    await service.subscribe(SUB_OPTS);
+
+    const prices: unknown[] = [];
+    rootMessenger.subscribe('MarketStatsService:pricesUpdated', (payload) => {
+      prices.push(payload);
+    });
+
+    const notify = (data: ServerNotificationMessage['data']): void => {
+      (
+        mocks.subscribe.mock.calls[0][0] as {
+          callback: (notification: ServerNotificationMessage) => void;
+        }
+      ).callback({
+        event: 'data',
+        channel: EXPECTED_CHANNEL,
+        timestamp: 5,
+        data,
+      });
+    };
+
+    notify({ not: 'a batch' });
+    notify([null] as unknown as ServerNotificationMessage['data']);
+    notify([
+      {
+        assetId: 'eip155:1/slip44:60',
+        currency: 'eur',
+        price: 1,
+        pricePercentChange1d: Number.POSITIVE_INFINITY,
+      },
+    ] as unknown as ServerNotificationMessage['data']);
+
+    expect(prices).toStrictEqual([
+      {
+        updates: [
+          {
+            assetId: 'eip155:1/slip44:60',
+            currency: 'eur',
+            price: 1,
+            pricePercentChange1d: null,
+          },
+        ],
+        timestamp: 5,
+      },
+    ]);
+
+    service.destroy();
+  });
+
+  it('rejects a chain-status message that has no chains and clears a down chain', async () => {
+    const { messenger, mocks, rootMessenger } = getMessenger();
+    const service = new MarketStatsService({ messenger });
+    service.init();
+
+    const statuses: unknown[] = [];
+    rootMessenger.subscribe(
+      'MarketStatsService:chainStatusChanged',
+      (payload) => {
+        statuses.push(payload);
+      },
+    );
+
+    const notify = callbackFor(
+      mocks,
+      'system-notifications.v1.market-stats.v1',
+    );
+
+    expect(() =>
+      notify({
+        event: 'system-notification',
+        channel: 'system-notifications.v1.market-stats.v1',
+        timestamp: 1,
+        data: { status: 'up' },
+      }),
+    ).toThrow('Invalid system notification data');
+
+    notify({
+      event: 'system-notification',
+      channel: 'system-notifications.v1.market-stats.v1',
+      timestamp: 2,
+      data: { chainIds: ['eip155:1'], status: 'down' },
+    });
+    publishConnection(rootMessenger, WebSocketState.CONNECTING);
+    publishConnection(rootMessenger, WebSocketState.DISCONNECTED);
+    await completeAsyncOperations();
+
+    expect(statuses).toStrictEqual([
+      { chainIds: ['eip155:1'], status: 'down', timestamp: 2 },
+    ]);
+
+    service.destroy();
+  });
+
+  it('logs a subscribe failure when the socket connects and channel lookup throws', async () => {
+    const { messenger, mocks, rootMessenger } = getMessenger();
+    mocks.subscribe.mockRejectedValueOnce(
+      new Error(
+        `Cannot create subscription(s) ${EXPECTED_CHANNEL}: WebSocket is DISCONNECTED`,
+      ),
+    );
+    const service = new MarketStatsService({ messenger });
+    service.init();
+    await service.subscribe(SUB_OPTS);
+    mocks.subscribe.mockClear();
+    mocks.channelHasSubscription.mockImplementation(() => {
+      throw new Error('lookup failed');
+    });
+
+    publishConnection(rootMessenger, WebSocketState.CONNECTED);
+    await completeAsyncOperations();
+
+    expect(mocks.subscribe).not.toHaveBeenCalled();
+
+    service.destroy();
+  });
+
+  it('publishes an unsubscribe failure without recording it as a subscribe error', async () => {
+    const { messenger, mocks, rootMessenger } = getMessenger();
+    const errors: unknown[] = [];
+    rootMessenger.subscribe(
+      'MarketStatsService:subscriptionError',
+      (payload) => {
+        errors.push(payload);
+      },
+    );
+    const service = new MarketStatsService({ messenger });
+    service.init();
+    await service.subscribe(SUB_OPTS);
+    mocks.getSubscriptionsByChannel.mockImplementation(() => {
+      throw new Error('unsubscribe failed');
+    });
+
+    await service.unsubscribe(SUB_OPTS);
+    vi.advanceTimersByTime(3000);
+    await completeAsyncOperations();
+
+    expect(errors).toStrictEqual([
+      {
+        channel: EXPECTED_CHANNEL,
+        error: 'Error: unsubscribe failed',
+        operation: 'unsubscribe',
+      },
+    ]);
+    expect(mocks.forceReconnection).not.toHaveBeenCalled();
+
+    service.destroy();
   });
 });
