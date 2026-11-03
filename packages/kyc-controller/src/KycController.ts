@@ -58,7 +58,10 @@ import type {
   KycVendorDisclaimersAccepted,
   KycVendorSigning,
 } from './types.js';
-import { deriveClientMaterial } from './ukyc/deriveClientMaterial.js';
+import {
+  deriveClientMaterial,
+  type UkycClientMaterial,
+} from './ukyc/deriveClientMaterial.js';
 import { assertAttestedServerPublicKey } from './ukyc/jwtChain.js';
 import type { Jwk } from './ukyc/jwtChain.js';
 import {
@@ -68,6 +71,7 @@ import {
 import {
   encodeStorageAccessTokenForHeader,
   signStorageAccessToken,
+  type UkycStorageOperation,
 } from './ukyc/storageAccessToken.js';
 import { wrapEncryptionKey } from './ukyc/wrapEncryptionKey.js';
 import {
@@ -1311,20 +1315,14 @@ export class KycController extends BaseController<
 
     await this.#verifyCapabilityTokenSchema(capabilityTokenSchema);
 
-    const localUserSecret = await getOrCreateLocalUserSecret(
-      this.#localUserSecretStore,
-    );
-    const clientMaterial = deriveClientMaterial(localUserSecret);
-    const ukycCapabilityToken = signStorageAccessToken({
-      material: clientMaterial,
+    const clientMaterial = await this.#getClientMaterial();
+    const wrappedUkycCapabilityToken = this.#wrapCapabilityToken({
+      clientMaterial,
+      sessionClientPrivateKey,
+      serverPublicKeyX: capabilityTokenSchema.serverPublicKey.x,
       operations: ['delete'],
       expiresAt: new Date(Date.now() + UKYC_DELETE_CAPABILITY_TOKEN_TTL_MS),
     });
-    const wrappedUkycCapabilityToken = wrapEncryptionKey(
-      sessionClientPrivateKey,
-      capabilityTokenSchema.serverPublicKey.x,
-      stringToBytes(encodeStorageAccessTokenForHeader(ukycCapabilityToken)),
-    );
 
     await this.messenger.call('KycService:completeDeletion', {
       deletionId,
@@ -1566,28 +1564,73 @@ export class KycController extends BaseController<
     wrappedEncryptionDataKey: CapabilityAuthorization;
     wrappedUkycCapabilityToken: CapabilityAuthorization;
   }> {
-    const localUserSecret = await getOrCreateLocalUserSecret(
-      this.#localUserSecretStore,
-    );
-    const clientMaterial = deriveClientMaterial(localUserSecret);
+    const clientMaterial = await this.#getClientMaterial();
     const wrappedEncryptionDataKey = wrapEncryptionKey(
       sessionClientPrivateKey,
       encryptionDataKey.serverPublicKey.x,
       clientMaterial.dataEncryptionKey,
     );
-
-    const ukycCapabilityToken = signStorageAccessToken({
-      material: clientMaterial,
+    const wrappedUkycCapabilityToken = this.#wrapCapabilityToken({
+      clientMaterial,
+      sessionClientPrivateKey,
+      serverPublicKeyX: capabilityTokenSchema.serverPublicKey.x,
       // TODO: Confirm with idOS when this can be switched back to read and a separate token is sent for write
       operations: ['read', 'write'],
       expiresAt: new Date(Date.now() + UKYC_CAPABILITY_TOKEN_TTL_MS),
     });
-    const wrappedUkycCapabilityToken = wrapEncryptionKey(
-      sessionClientPrivateKey,
-      capabilityTokenSchema.serverPublicKey.x,
-      stringToBytes(encodeStorageAccessTokenForHeader(ukycCapabilityToken)),
-    );
 
     return { wrappedEncryptionDataKey, wrappedUkycCapabilityToken };
+  }
+
+  /**
+   * Loads the stored `local_user_secret`, creating one when none exists, and
+   * derives the UKYC client material from it.
+   *
+   * @returns Client material derived from `local_user_secret`.
+   */
+  async #getClientMaterial(): Promise<UkycClientMaterial> {
+    const localUserSecret = await getOrCreateLocalUserSecret(
+      this.#localUserSecretStore,
+    );
+    return deriveClientMaterial(localUserSecret);
+  }
+
+  /**
+   * Mints a client-presented `ukyc_capability_token` and seals it for the
+   * server public key from a capability-token encryption schema.
+   *
+   * The operation list and lifetime stay with the caller: session
+   * authorizations grant `read` and `write` for the session lifetime, while
+   * deletion grants `delete` alone for a short window.
+   *
+   * @param params - Key material and token claims.
+   * @param params.clientMaterial - Client material derived from
+   * `local_user_secret`.
+   * @param params.sessionClientPrivateKey - X25519 private key used to seal
+   * the token.
+   * @param params.serverPublicKeyX - Server X25519 public key (unpadded
+   * base64url) from the capability-token schema.
+   * @param params.operations - Storage operations the token authorizes.
+   * `delete` must be the sole operation.
+   * @param params.expiresAt - Token expiry. Must be after the issue time.
+   * @returns The wrapped capability token.
+   */
+  #wrapCapabilityToken(params: {
+    clientMaterial: UkycClientMaterial;
+    sessionClientPrivateKey: Uint8Array;
+    serverPublicKeyX: string;
+    operations: UkycStorageOperation[];
+    expiresAt: Date;
+  }): CapabilityAuthorization {
+    const ukycCapabilityToken = signStorageAccessToken({
+      material: params.clientMaterial,
+      operations: params.operations,
+      expiresAt: params.expiresAt,
+    });
+    return wrapEncryptionKey(
+      params.sessionClientPrivateKey,
+      params.serverPublicKeyX,
+      stringToBytes(encodeStorageAccessTokenForHeader(ukycCapabilityToken)),
+    );
   }
 }
