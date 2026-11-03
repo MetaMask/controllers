@@ -5247,7 +5247,7 @@ __metadata:
   dependencies:
     "@metamask/account-api": "npm:^2.2.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/eth-hd-keyring": "npm:^15.0.0"
     "@metamask/keyring-api": "npm:^24.3.0"
@@ -5281,7 +5281,7 @@ __metadata:
   resolution: "@metamask/accounts-controller@workspace:packages/accounts-controller"
   dependencies:
     "@ethereumjs/util": "npm:^9.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-snap-keyring": "npm:^24.1.1"
@@ -5305,7 +5305,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
@@ -5329,7 +5329,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/address-book-controller@workspace:packages/address-book-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -5347,7 +5347,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/advanced-chart-core@workspace:packages/advanced-chart-core"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     jsdom: "npm:^27.0.0"
     rimraf: "npm:^6.1.3"
@@ -5361,7 +5361,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/ai-controllers@workspace:packages/ai-controllers"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/superstruct": "npm:^3.4.1"
@@ -5378,7 +5378,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/analytics-controller@workspace:packages/analytics-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/config-registry-controller": "npm:^5.0.0"
     "@metamask/geolocation-controller": "npm:^2.0.0"
@@ -5390,7 +5390,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -5399,7 +5399,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/analytics-data-regulation-controller@workspace:packages/analytics-data-regulation-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -5420,7 +5420,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/announcement-controller@workspace:packages/announcement-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -5443,7 +5443,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/app-metadata-controller@workspace:packages/app-metadata-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -5459,13 +5459,13 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/approval-controller@workspace:packages/approval-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/rpc-errors": "npm:^7.0.3"
     "@metamask/utils": "npm:^12.0.1"
     "@typescript/native": "npm:typescript@^7.0.2"
-    nanoid: "npm:^3.3.19"
+    nanoid: "npm:^6.0.2"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
@@ -5487,7 +5487,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/assets-controller@npm:^20.1.0, @metamask/assets-controller@workspace:packages/assets-controller":
+"@metamask/assets-controller@npm:^20.2.0, @metamask/assets-controller@workspace:packages/assets-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/assets-controller@workspace:packages/assets-controller"
   dependencies:
@@ -5496,8 +5496,8 @@ __metadata:
     "@ethersproject/providers": "npm:^5.8.0"
     "@metamask/account-tree-controller": "npm:^11.2.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/assets-controllers": "npm:^113.0.1"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/assets-controllers": "npm:^113.1.0"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/client-controller": "npm:^2.0.0"
     "@metamask/config-registry-controller": "npm:^5.0.0"
@@ -5535,7 +5535,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/assets-controllers@npm:^113.0.1, @metamask/assets-controllers@workspace:packages/assets-controllers":
+"@metamask/assets-controllers@npm:^113.1.0, @metamask/assets-controllers@workspace:packages/assets-controllers":
   version: 0.0.0-use.local
   resolution: "@metamask/assets-controllers@workspace:packages/assets-controllers"
   dependencies:
@@ -5551,7 +5551,7 @@ __metadata:
     "@metamask/account-tree-controller": "npm:^11.2.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
     "@metamask/approval-controller": "npm:^10.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/contract-metadata": "npm:^2.5.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -5602,7 +5602,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
@@ -5649,7 +5649,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/authenticated-user-storage@workspace:packages/authenticated-user-storage"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -5665,7 +5665,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/auto-changelog@npm:^6.1.1, @metamask/auto-changelog@npm:^6.2.1":
+"@metamask/auto-changelog@npm:^6.1.1":
   version: 6.2.1
   resolution: "@metamask/auto-changelog@npm:6.2.1"
   dependencies:
@@ -5688,11 +5688,36 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@metamask/auto-changelog@npm:^7.1.0":
+  version: 7.1.0
+  resolution: "@metamask/auto-changelog@npm:7.1.0"
+  dependencies:
+    "@octokit/rest": "npm:^20.0.0"
+    "@yarnpkg/core": "npm:4.9.1"
+    "@yarnpkg/fslib": "npm:^3.1.5"
+    diff: "npm:^5.0.0"
+    execa: "npm:^8.0.1"
+    semver: "npm:^7.8.5"
+    yargs: "npm:^17.7.2"
+  peerDependencies:
+    oxfmt: ^0.45.0
+    prettier: ">=3.0.0"
+  peerDependenciesMeta:
+    oxfmt:
+      optional: true
+    prettier:
+      optional: true
+  bin:
+    auto-changelog: dist/cli.js
+  checksum: 10/475ef3a198ae17abd81df68831c459e4c7e5322b5970821dc233d1fc607593f7b8e743c7be76aaf4d9b89d71a45c7e374b2a104126e0c5a6bae331ce8160741c
+  languageName: node
+  linkType: hard
+
 "@metamask/base-controller@npm:^10.1.0, @metamask/base-controller@workspace:packages/base-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/base-controller@workspace:packages/base-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/superstruct": "npm:^3.4.1"
     "@metamask/utils": "npm:^12.0.1"
@@ -5721,7 +5746,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/base-data-service@workspace:packages/base-data-service"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/storage-service": "npm:^2.0.0"
     "@metamask/superstruct": "npm:^3.4.1"
@@ -5737,7 +5762,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -5746,7 +5771,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/bitcoin-regtest-up@workspace:packages/bitcoin-regtest-up"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/local-node-utils": "npm:^2.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     rimraf: "npm:^6.1.3"
@@ -5769,9 +5794,9 @@ __metadata:
     "@ethersproject/contracts": "npm:^5.7.0"
     "@ethersproject/providers": "npm:^5.8.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/assets-controller": "npm:^20.1.0"
-    "@metamask/assets-controllers": "npm:^113.0.1"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/assets-controller": "npm:^20.2.0"
+    "@metamask/assets-controllers": "npm:^113.1.0"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-json-rpc-provider": "npm:^7.0.0"
@@ -5797,7 +5822,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -5807,7 +5832,7 @@ __metadata:
   resolution: "@metamask/bridge-status-controller@workspace:packages/bridge-status-controller"
   dependencies:
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/bridge-controller": "npm:^83.1.3"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -5830,7 +5855,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -5848,7 +5873,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/build-utils@workspace:packages/build-utils"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/utils": "npm:^12.0.1"
     "@types/eslint": "npm:^8.44.7"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -5864,7 +5889,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/byte-utils@workspace:packages/byte-utils"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/type-utils": "npm:^0.1.0"
     "@scure/base": "npm:^1.2.6"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -5881,7 +5906,7 @@ __metadata:
   resolution: "@metamask/chain-agnostic-permission@workspace:packages/chain-agnostic-permission"
   dependencies:
     "@metamask/api-specs": "npm:^0.15.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/keyring-internal-api": "npm:^12.1.2"
     "@metamask/permission-controller": "npm:^14.1.0"
@@ -5901,7 +5926,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/chomp-api-service@workspace:packages/chomp-api-service"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -5922,7 +5947,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/claims-controller@workspace:packages/claims-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -5945,7 +5970,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/client-controller@workspace:packages/client-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -5962,7 +5987,7 @@ __metadata:
   resolution: "@metamask/client-utils@workspace:packages/client-utils"
   dependencies:
     "@ethersproject/abi": "npm:^5.7.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/contract-metadata": "npm:^2.5.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/core-backend": "npm:^13.0.0"
@@ -5971,7 +5996,7 @@ __metadata:
     "@metamask/transaction-controller": "npm:^73.0.0"
     "@metamask/utils": "npm:^12.0.1"
     "@typescript/native": "npm:typescript@^7.0.2"
-    eth-chainlist: "npm:^0.0.844"
+    eth-chainlist: "npm:^0.0.873"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
@@ -5984,7 +6009,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/compliance-controller@workspace:packages/compliance-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -6005,7 +6030,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/composable-controller@workspace:packages/composable-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -6024,7 +6049,7 @@ __metadata:
   resolution: "@metamask/config-registry-controller@workspace:packages/config-registry-controller"
   dependencies:
     "@lavamoat/allow-scripts": "npm:^5.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -6050,7 +6075,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/connectivity-controller@workspace:packages/connectivity-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -6119,7 +6144,7 @@ __metadata:
   dependencies:
     "@babel/runtime": "npm:^7.29.7"
     "@ethersproject/abi": "npm:^5.7.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/eth-json-rpc-provider": "npm:^7.0.0"
     "@metamask/eth-query": "npm:^4.0.0"
     "@metamask/ethjs-unit": "npm:^0.3.0"
@@ -6151,7 +6176,7 @@ __metadata:
   resolution: "@metamask/core-backend@workspace:packages/core-backend"
   dependencies:
     "@metamask/account-tree-controller": "npm:^11.2.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -6167,7 +6192,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -6180,7 +6205,7 @@ __metadata:
     "@actions/github": "npm:^9.1.1"
     "@lavamoat/allow-scripts": "npm:^5.1.0"
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/create-release-branch": "npm:^4.2.2"
     "@metamask/error-utils": "npm:^0.1.0"
     "@metamask/network-controller": "npm:^37.1.1"
@@ -6220,7 +6245,7 @@ __metadata:
     typescript: "npm:@typescript/typescript6@^6.0.2"
     vite: "npm:^8.0.8"
     vitest: "npm:^5.0.0"
-    yargs: "npm:^17.7.3"
+    yargs: "npm:^18.2.0"
   languageName: unknown
   linkType: soft
 
@@ -6259,7 +6284,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/cryptography@workspace:packages/cryptography"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/utils": "npm:^12.0.1"
     "@typescript/native": "npm:typescript@^7.0.2"
     rimraf: "npm:^6.1.3"
@@ -6274,7 +6299,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/delegation-controller@workspace:packages/delegation-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -6313,7 +6338,7 @@ __metadata:
     "@ethersproject/bignumber": "npm:^5.8.0"
     "@ethersproject/providers": "npm:^5.8.0"
     "@metamask/account-tree-controller": "npm:^11.2.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/keyring-api": "npm:^24.3.0"
@@ -6335,7 +6360,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/eip-5792-middleware@workspace:packages/eip-5792-middleware"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/preferences-controller": "npm:^24.0.0"
@@ -6350,7 +6375,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -6359,7 +6384,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/eip-7702-internal-rpc-middleware@workspace:packages/eip-7702-internal-rpc-middleware"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/rpc-errors": "npm:^7.0.3"
     "@metamask/superstruct": "npm:^3.4.1"
@@ -6377,7 +6402,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/eip1193-permission-middleware@workspace:packages/eip1193-permission-middleware"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/chain-agnostic-permission": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
@@ -6398,7 +6423,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/error-utils@workspace:packages/error-utils"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/type-utils": "npm:^0.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     pony-cause: "npm:^2.1.11"
@@ -6414,7 +6439,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/eth-block-tracker@workspace:packages/eth-block-tracker"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/eth-json-rpc-provider": "npm:^7.0.0"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
     "@metamask/safe-event-emitter": "npm:^3.1.3"
@@ -6478,7 +6503,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/eth-json-rpc-middleware@workspace:packages/eth-json-rpc-middleware"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/eth-block-tracker": "npm:^16.0.0"
     "@metamask/eth-json-rpc-provider": "npm:^7.0.0"
     "@metamask/eth-sig-util": "npm:^9.0.0"
@@ -6517,7 +6542,7 @@ __metadata:
   resolution: "@metamask/eth-json-rpc-provider@workspace:packages/eth-json-rpc-provider"
   dependencies:
     "@ethersproject/providers": "npm:^5.8.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/eth-query": "npm:^4.0.0"
     "@metamask/ethjs-query": "npm:^0.7.1"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
@@ -6527,7 +6552,7 @@ __metadata:
     "@typescript/native": "npm:typescript@^7.0.2"
     ethers: "npm:^6.17.0"
     lodash-es: "npm:^4.18.1"
-    nanoid: "npm:^3.3.19"
+    nanoid: "npm:^6.0.2"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typescript: "npm:@typescript/typescript6@^6.0.2"
@@ -6754,7 +6779,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/foundryup@workspace:packages/foundryup"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@types/unzipper": "npm:^0.10.10"
     "@types/yargs": "npm:^17.0.35"
     "@types/yargs-parser": "npm:^21.0.3"
@@ -6769,7 +6794,7 @@ __metadata:
     unzipper: "npm:^0.12.3"
     vitest: "npm:^5.0.0"
     yaml: "npm:^2.9.1"
-    yargs: "npm:^17.7.3"
+    yargs: "npm:^18.2.0"
     yargs-parser: "npm:^22.0.0"
   bin:
     mm-foundryup: ./dist/cli.js
@@ -6781,7 +6806,7 @@ __metadata:
   resolution: "@metamask/gas-fee-controller@workspace:packages/gas-fee-controller"
   dependencies:
     "@babel/runtime": "npm:^7.29.7"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-query": "npm:^4.0.0"
@@ -6798,7 +6823,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   peerDependencies:
     "@babel/runtime": ^7.0.0
@@ -6813,7 +6838,7 @@ __metadata:
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
     "@metamask/7715-permission-types": "npm:^1.0.0"
     "@metamask/abi-utils": "npm:^2.0.4"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/delegation-core": "npm:^2.2.1"
     "@metamask/delegation-deployments": "npm:^1.4.0"
@@ -6837,7 +6862,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/geolocation-controller@workspace:packages/geolocation-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -6856,7 +6881,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/java-tron-up@workspace:packages/java-tron-up"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/local-node-utils": "npm:^2.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     rimraf: "npm:^6.1.3"
@@ -6890,7 +6915,7 @@ __metadata:
   dependencies:
     "@lavamoat/allow-scripts": "npm:^5.1.0"
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/rpc-errors": "npm:^7.0.3"
     "@metamask/safe-event-emitter": "npm:^3.1.3"
@@ -6922,7 +6947,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/json-rpc-middleware-stream@workspace:packages/json-rpc-middleware-stream"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
     "@metamask/safe-event-emitter": "npm:^3.1.3"
     "@metamask/utils": "npm:^12.0.1"
@@ -6973,7 +6998,7 @@ __metadata:
     "@ethereumjs/util": "npm:^9.1.0"
     "@lavamoat/allow-scripts": "npm:^5.1.0"
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/browser-passworder": "npm:^6.0.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -6996,7 +7021,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     ulid: "npm:^2.4.0"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7112,7 +7137,7 @@ __metadata:
   resolution: "@metamask/kyc-controller@workspace:packages/kyc-controller"
   dependencies:
     "@metamask/authenticated-user-storage": "npm:^4.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -7142,7 +7167,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/local-node-utils@workspace:packages/local-node-utils"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     nock: "npm:^15.0.5"
     rimraf: "npm:^6.1.3"
@@ -7158,7 +7183,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/logging-controller@workspace:packages/logging-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/utils": "npm:^12.0.1"
@@ -7167,7 +7192,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7178,7 +7203,7 @@ __metadata:
   dependencies:
     "@metamask/analytics-controller": "npm:^4.1.0"
     "@metamask/authenticated-user-storage": "npm:^4.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -7197,7 +7222,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/message-manager@workspace:packages/message-manager"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-sig-util": "npm:^9.0.0"
@@ -7209,7 +7234,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7218,7 +7243,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/messenger-cli@workspace:packages/messenger-cli"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/error-utils": "npm:^0.1.0"
     "@metamask/node-utils": "npm:^0.1.0"
     "@metamask/type-utils": "npm:^0.1.0"
@@ -7230,7 +7255,7 @@ __metadata:
     rimraf: "npm:^6.1.3"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     vitest: "npm:^5.0.0"
-    yargs: "npm:^17.7.3"
+    yargs: "npm:^18.2.0"
   peerDependencies:
     oxfmt: ^0.44.0
     prettier: ^3.0.0
@@ -7274,7 +7299,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/messenger@workspace:packages/messenger"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     immer: "npm:^11.1.18"
     rimraf: "npm:^6.1.3"
@@ -7300,7 +7325,7 @@ __metadata:
   dependencies:
     "@cubist-labs/cubesigner-sdk": "npm:^0.4.284"
     "@cubist-labs/cubesigner-sdk-fs-storage": "npm:^0.4.284"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/cryptography": "npm:^1.1.2"
     "@metamask/messenger": "npm:^3.0.0"
@@ -7360,7 +7385,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/money-account-api-data-service@workspace:packages/money-account-api-data-service"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -7383,7 +7408,7 @@ __metadata:
   dependencies:
     "@ethersproject/contracts": "npm:^5.7.0"
     "@ethersproject/providers": "npm:^5.8.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -7408,7 +7433,7 @@ __metadata:
   resolution: "@metamask/money-account-controller@workspace:packages/money-account-controller"
   dependencies:
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/eth-money-keyring": "npm:^4.0.2"
     "@metamask/eth-money-mpc-keyring": "npm:^0.2.0"
@@ -7430,7 +7455,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/money-account-lifecycle-controller@workspace:packages/money-account-lifecycle-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/chomp-api-service": "npm:^7.0.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
@@ -7454,7 +7479,7 @@ __metadata:
   resolution: "@metamask/money-account-mfa-whitelist@workspace:packages/money-account-mfa-whitelist"
   dependencies:
     "@metamask/abi-utils": "npm:^2.0.4"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/delegation-controller": "npm:^4.0.0"
     "@metamask/delegation-core": "npm:^2.2.1"
     "@metamask/delegation-deployments": "npm:^1.4.0"
@@ -7478,7 +7503,7 @@ __metadata:
   resolution: "@metamask/money-account-upgrade-controller@workspace:packages/money-account-upgrade-controller"
   dependencies:
     "@metamask/authenticated-user-storage": "npm:^4.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/chomp-api-service": "npm:^7.0.0"
     "@metamask/delegation-controller": "npm:^4.0.0"
@@ -7506,7 +7531,7 @@ __metadata:
     "@ethersproject/abi": "npm:^5.7.0"
     "@ethersproject/abstract-provider": "npm:^5.8.0"
     "@ethersproject/contracts": "npm:^5.7.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/transaction-controller": "npm:^73.0.0"
     "@metamask/utils": "npm:^12.0.1"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -7532,7 +7557,7 @@ __metadata:
     "@ethereumjs/util": "npm:^9.1.0"
     "@metamask/account-api": "npm:^2.2.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-hd-keyring": "npm:^15.0.0"
@@ -7559,7 +7584,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
@@ -7574,7 +7599,7 @@ __metadata:
   dependencies:
     "@metamask/accounts-controller": "npm:^40.1.0"
     "@metamask/api-specs": "npm:^0.15.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/chain-agnostic-permission": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-json-rpc-filters": "npm:^9.0.0"
@@ -7587,7 +7612,7 @@ __metadata:
     "@metamask/snaps-controllers": "npm:^19.0.1"
     "@metamask/utils": "npm:^12.0.1"
     "@open-rpc/meta-schema": "npm:^1.14.9"
-    "@open-rpc/schema-utils-js": "npm:^2.0.5"
+    "@open-rpc/schema-utils-js": "npm:^2.2.1"
     "@typescript/native": "npm:typescript@^7.0.2"
     jsonschema: "npm:^1.4.1"
     rimraf: "npm:^6.1.3"
@@ -7603,7 +7628,7 @@ __metadata:
   resolution: "@metamask/multichain-network-controller@workspace:packages/multichain-network-controller"
   dependencies:
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/keyring-api": "npm:^24.3.0"
@@ -7632,7 +7657,7 @@ __metadata:
   resolution: "@metamask/multichain-transactions-controller@workspace:packages/multichain-transactions-controller"
   dependencies:
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/keyring-api": "npm:^24.3.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
@@ -7650,7 +7675,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7659,7 +7684,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/name-controller@workspace:packages/name-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -7678,7 +7703,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/network-connection-banner-controller@workspace:packages/network-connection-banner-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/client-controller": "npm:^2.0.0"
     "@metamask/connectivity-controller": "npm:^1.0.0"
@@ -7703,7 +7728,7 @@ __metadata:
   dependencies:
     "@json-rpc-specification/meta-schema": "npm:^1.0.6"
     "@metamask/analytics-controller": "npm:^4.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/config-registry-controller": "npm:^5.0.0"
     "@metamask/connectivity-controller": "npm:^1.0.0"
@@ -7740,7 +7765,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uri-js: "npm:^4.4.1"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7749,7 +7774,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/network-enablement-controller@workspace:packages/network-enablement-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/config-registry-controller": "npm:^5.0.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -7774,7 +7799,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/node-utils@workspace:packages/node-utils"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/error-utils": "npm:^0.1.0"
     "@metamask/type-utils": "npm:^0.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -7782,7 +7807,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7806,7 +7831,7 @@ __metadata:
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
     "@metamask/analytics-controller": "npm:^4.1.0"
     "@metamask/authenticated-user-storage": "npm:^4.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
@@ -7829,7 +7854,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7911,7 +7936,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/package-template@workspace:packages/package-template"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
@@ -7926,7 +7951,7 @@ __metadata:
   resolution: "@metamask/passkey-controller@workspace:packages/passkey-controller"
   dependencies:
     "@levischuck/tiny-cbor": "npm:^0.3.6"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -7987,7 +8012,7 @@ __metadata:
   resolution: "@metamask/permission-controller@workspace:packages/permission-controller"
   dependencies:
     "@metamask/approval-controller": "npm:^10.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
@@ -7999,7 +8024,7 @@ __metadata:
     deep-freeze-strict: "npm:^1.1.1"
     fast-deep-equal: "npm:^3.1.3"
     immer: "npm:^11.1.18"
-    nanoid: "npm:^3.3.19"
+    nanoid: "npm:^6.0.2"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
@@ -8012,7 +8037,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/permission-log-controller@workspace:packages/permission-log-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -8020,7 +8045,7 @@ __metadata:
     "@types/deep-freeze-strict": "npm:^1.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     deep-freeze-strict: "npm:^1.1.1"
-    nanoid: "npm:^3.3.19"
+    nanoid: "npm:^6.0.2"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
@@ -8036,7 +8061,7 @@ __metadata:
     "@metamask/abi-utils": "npm:^2.0.4"
     "@metamask/account-tree-controller": "npm:^11.2.0"
     "@metamask/authenticated-user-storage": "npm:^4.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/geolocation-controller": "npm:^2.0.0"
@@ -8059,7 +8084,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     viem: "npm:^2.56.8"
     vitest: "npm:^5.0.0"
   languageName: unknown
@@ -8070,7 +8095,7 @@ __metadata:
   resolution: "@metamask/phishing-controller@workspace:packages/phishing-controller"
   dependencies:
     "@metamask/address-book-controller": "npm:^8.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-sig-util": "npm:^9.0.0"
@@ -8102,7 +8127,7 @@ __metadata:
     "@docusaurus/types": "npm:^3.10.2"
     "@easyops-cn/docusaurus-search-local": "npm:^0.55.3"
     "@mdx-js/react": "npm:^3.1.1"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/node-utils": "npm:^0.1.0"
     "@types/node": "npm:^22.13.14"
     "@types/npm-which": "npm:^3"
@@ -8118,7 +8143,7 @@ __metadata:
     ts-morph: "npm:^28.0.0"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     vitest: "npm:^5.0.0"
-    yargs: "npm:^17.7.3"
+    yargs: "npm:^18.2.0"
   bin:
     platform-api-docs: ./dist/cli.js
   languageName: unknown
@@ -8128,7 +8153,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/polling-controller@workspace:packages/polling-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/utils": "npm:^12.0.1"
@@ -8138,7 +8163,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -8157,7 +8182,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/preferences-controller@workspace:packages/preferences-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -8173,7 +8198,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/profile-controller@workspace:packages/profile-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -8195,7 +8220,7 @@ __metadata:
   resolution: "@metamask/profile-metrics-controller@workspace:packages/profile-metrics-controller"
   dependencies:
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
@@ -8216,7 +8241,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -8228,7 +8253,7 @@ __metadata:
     "@lavamoat/allow-scripts": "npm:^5.1.0"
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
     "@metamask/address-book-controller": "npm:^8.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/cryptography": "npm:^1.1.2"
@@ -8285,16 +8310,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/ramps-controller@npm:^28.1.0, @metamask/ramps-controller@workspace:packages/ramps-controller":
+"@metamask/ramps-controller@npm:^29.0.0, @metamask/ramps-controller@workspace:packages/ramps-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/ramps-controller@workspace:packages/ramps-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
+    "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/profile-sync-controller": "npm:^36.0.0"
     "@metamask/remote-feature-flag-controller": "npm:^7.0.0"
+    "@metamask/superstruct": "npm:^3.4.1"
     "@metamask/utils": "npm:^12.0.1"
     "@typescript/native": "npm:typescript@^7.0.2"
     bignumber.js: "npm:^9.1.2"
@@ -8312,7 +8339,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/rate-limit-controller@workspace:packages/rate-limit-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/rpc-errors": "npm:^7.0.3"
@@ -8330,7 +8357,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/react-data-query@workspace:packages/react-data-query"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/utils": "npm:^12.0.1"
@@ -8342,7 +8369,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   peerDependencies:
     react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -8361,7 +8388,7 @@ __metadata:
   resolution: "@metamask/remote-feature-flag-controller@workspace:packages/remote-feature-flag-controller"
   dependencies:
     "@lavamoat/allow-scripts": "npm:^5.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -8372,7 +8399,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -8398,7 +8425,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/sample-controllers@workspace:packages/sample-controllers"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -8435,7 +8462,7 @@ __metadata:
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
     "@metamask/analytics-controller": "npm:^4.1.0"
     "@metamask/auth-network-utils": "npm:^0.3.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/browser-passworder": "npm:^6.0.0"
     "@metamask/cryptography": "npm:^1.1.2"
@@ -8463,7 +8490,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/selected-network-controller@workspace:packages/selected-network-controller"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/json-rpc-engine": "npm:^11.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -8488,7 +8515,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/sentinel-api-service@workspace:packages/sentinel-api-service"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -8512,7 +8539,7 @@ __metadata:
     "@babel/runtime": "npm:^7.29.7"
     "@lavamoat/allow-scripts": "npm:^5.1.0"
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -8529,7 +8556,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -8540,7 +8567,7 @@ __metadata:
   dependencies:
     "@metamask/accounts-controller": "npm:^40.1.0"
     "@metamask/approval-controller": "npm:^10.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-sig-util": "npm:^9.0.0"
@@ -8557,7 +8584,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -8586,7 +8613,7 @@ __metadata:
     "@ethersproject/bytes": "npm:^5.8.0"
     "@ethersproject/keccak256": "npm:^5.8.0"
     "@ethersproject/transactions": "npm:^5.8.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-json-rpc-provider": "npm:^7.0.0"
@@ -8619,7 +8646,7 @@ __metadata:
   dependencies:
     "@metamask/account-api": "npm:^2.2.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/eth-snap-keyring": "npm:^24.1.1"
     "@metamask/keyring-api": "npm:^24.3.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
@@ -8762,7 +8789,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/social-controllers@workspace:packages/social-controllers"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -8784,7 +8811,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/solana-test-validator-up@workspace:packages/solana-test-validator-up"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/local-node-utils": "npm:^2.0.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     rimraf: "npm:^6.1.3"
@@ -8808,7 +8835,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/stellar-quickstart-up@workspace:packages/stellar-quickstart-up"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
@@ -8832,7 +8859,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/storage-service@workspace:packages/storage-service"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/utils": "npm:^12.0.1"
     "@typescript/native": "npm:typescript@^7.0.2"
@@ -8850,7 +8877,7 @@ __metadata:
   dependencies:
     "@ethersproject/abi": "npm:^5.7.0"
     "@metamask/authenticated-user-storage": "npm:^4.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/chomp-api-service": "npm:^7.0.0"
@@ -8928,7 +8955,7 @@ __metadata:
     "@ethersproject/wallet": "npm:^5.8.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
     "@metamask/approval-controller": "npm:^10.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/connectivity-controller": "npm:^1.0.0"
     "@metamask/controller-utils": "npm:^13.0.0"
@@ -8962,7 +8989,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   peerDependencies:
     "@babel/runtime": ^7.0.0
@@ -8978,8 +9005,8 @@ __metadata:
     "@ethersproject/contracts": "npm:^5.7.0"
     "@ethersproject/providers": "npm:^5.8.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/assets-controller": "npm:^20.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/assets-controller": "npm:^20.2.0"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/gas-fee-controller": "npm:^27.0.0"
@@ -8987,7 +9014,7 @@ __metadata:
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/metamask-eth-abis": "npm:^3.1.1"
     "@metamask/network-controller": "npm:^37.1.1"
-    "@metamask/ramps-controller": "npm:^28.1.0"
+    "@metamask/ramps-controller": "npm:^29.0.0"
     "@metamask/remote-feature-flag-controller": "npm:^7.0.0"
     "@metamask/sentinel-api-service": "npm:^2.1.0"
     "@metamask/transaction-controller": "npm:^73.0.0"
@@ -9011,7 +9038,7 @@ __metadata:
   dependencies:
     "@metamask/account-tree-controller": "npm:^11.2.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
     "@metamask/network-controller": "npm:^37.1.1"
@@ -9035,7 +9062,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/type-utils@workspace:packages/type-utils"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@typescript/native": "npm:typescript@^7.0.2"
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
@@ -9050,7 +9077,7 @@ __metadata:
   resolution: "@metamask/user-operation-controller@workspace:packages/user-operation-controller"
   dependencies:
     "@metamask/approval-controller": "npm:^10.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/eth-block-tracker": "npm:^16.0.0"
@@ -9072,7 +9099,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    uuid: "npm:^14.0.0"
+    uuid: "npm:^14.0.1"
     vitest: "npm:^5.0.0"
   peerDependencies:
     "@metamask/eth-block-tracker": ">=9"
@@ -9104,7 +9131,7 @@ __metadata:
   resolution: "@metamask/utils@workspace:packages/utils"
   dependencies:
     "@ethereumjs/tx": "npm:^5.4.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/byte-utils": "npm:^0.1.0"
     "@metamask/error-utils": "npm:^0.1.0"
     "@metamask/node-utils": "npm:^0.1.0"
@@ -9156,7 +9183,7 @@ __metadata:
     "@docusaurus/types": "npm:^3.10.2"
     "@easyops-cn/docusaurus-search-local": "npm:^0.55.3"
     "@mdx-js/react": "npm:^3.1.1"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-data-service": "npm:^2.1.0"
     "@metamask/controller-utils": "npm:^13.0.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -9183,7 +9210,7 @@ __metadata:
     "@metamask/address-book-controller": "npm:^8.0.0"
     "@metamask/analytics-controller": "npm:^4.1.0"
     "@metamask/approval-controller": "npm:^10.0.0"
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/browser-passworder": "npm:^6.0.0"
     "@metamask/claims-controller": "npm:^1.1.0"
@@ -9222,7 +9249,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/watch-only-account-service@workspace:packages/watch-only-account-service"
   dependencies:
-    "@metamask/auto-changelog": "npm:^6.2.1"
+    "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/keyring-api": "npm:^24.3.0"
     "@metamask/keyring-controller": "npm:^28.2.0"
     "@metamask/messenger": "npm:^3.0.0"
@@ -9931,21 +9958,45 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@open-rpc/schema-utils-js@npm:^2.0.5":
-  version: 2.0.5
-  resolution: "@open-rpc/schema-utils-js@npm:2.0.5"
+"@open-rpc/schema-utils-js@npm:^2.2.1":
+  version: 2.2.1
+  resolution: "@open-rpc/schema-utils-js@npm:2.2.1"
   dependencies:
     "@json-schema-tools/dereferencer": "npm:^1.6.3"
     "@json-schema-tools/meta-schema": "npm:^1.7.5"
     "@json-schema-tools/reference-resolver": "npm:^1.2.6"
-    "@open-rpc/meta-schema": "npm:^1.14.9"
+    "@open-rpc/spec-types": "npm:0.0.2"
+    "@open-rpc/specification-extension-spec": "npm:^1.0.2"
     ajv: "npm:^6.10.0"
     detect-node: "npm:^2.0.4"
     fast-safe-stringify: "npm:^2.0.7"
     fs-extra: "npm:^10.1.0"
     is-url: "npm:^1.2.4"
     isomorphic-fetch: "npm:^3.0.0"
-  checksum: 10/9e10215606e9a00a47b082c9cfd70d05bf0d38de6cf1c147246c545c6997375d94cd3caafe919b71178df58b5facadfd0dcc8b6857bf5e79c40e5e33683dd3d5
+  checksum: 10/8ac30b3880e57638af8c75e8cc130cb97237bbd55c4cae0948c5e1dbf01e6c639caa0515fa8eacb4b350f5410a9f02f47617244249c6231bc550b791478ee515
+  languageName: node
+  linkType: hard
+
+"@open-rpc/spec-types@npm:0.0.2":
+  version: 0.0.2
+  resolution: "@open-rpc/spec-types@npm:0.0.2"
+  dependencies:
+    "@open-rpc/spec": "npm:1.4.1"
+  checksum: 10/e2698a458df89fa4a538b9773438cbe057e9514a2b298c7e4357ca1a13921d7ac8fc559048ec047d3e664292ae43ff598b57d19e73b237cb0793ab186222f333
+  languageName: node
+  linkType: hard
+
+"@open-rpc/spec@npm:1.4.1":
+  version: 1.4.1
+  resolution: "@open-rpc/spec@npm:1.4.1"
+  checksum: 10/6e6679a1b85039a724f9938b1840a020f75428b2ef899704ce7a964e16024be620b97d467a7e5d69b56a735026db62c465b841c3c349034e60ba243e9aae2db5
+  languageName: node
+  linkType: hard
+
+"@open-rpc/specification-extension-spec@npm:^1.0.2":
+  version: 1.0.2
+  resolution: "@open-rpc/specification-extension-spec@npm:1.0.2"
+  checksum: 10/04111d8ce84deb45358c504b425f8d3e5c0b8991c739708b6b2662de665002da541fc7b39065d2394a9509866f580c3a5aaedc56b42c0d679fe6054eda034b9b
   languageName: node
   linkType: hard
 
@@ -13669,10 +13720,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ansi-regex@npm:^6.0.1":
-  version: 6.0.1
-  resolution: "ansi-regex@npm:6.0.1"
-  checksum: 10/1ff8b7667cded1de4fa2c9ae283e979fc87036864317da86a2e546725f96406746411d0d85e87a2d12fa5abd715d90006de7fa4fa0477c92321ad3b4c7d4e169
+"ansi-regex@npm:^6.2.2":
+  version: 6.4.0
+  resolution: "ansi-regex@npm:6.4.0"
+  checksum: 10/8d0305a47218c994a15348d556d358c9a0b3a7abbd51be1c502447813839fb2b0f12700fca9e842acdd79e5740bb2a2d291880b4d770c1634068732a2a3091e5
   languageName: node
   linkType: hard
 
@@ -13694,10 +13745,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ansi-styles@npm:^6.1.0":
-  version: 6.2.1
-  resolution: "ansi-styles@npm:6.2.1"
-  checksum: 10/70fdf883b704d17a5dfc9cde206e698c16bcd74e7f196ab821511651aee4f9f76c9514bdfa6ca3a27b5e49138b89cb222a28caf3afe4567570139577f991df32
+"ansi-styles@npm:^6.1.0, ansi-styles@npm:^6.2.1":
+  version: 6.2.3
+  resolution: "ansi-styles@npm:6.2.3"
+  checksum: 10/c49dad7639f3e48859bd51824c93b9eb0db628afc243c51c3dd2410c4a15ede1a83881c6c7341aa2b159c4f90c11befb38f2ba848c07c66c9f9de4bcd7cb9f30
   languageName: node
   linkType: hard
 
@@ -14873,6 +14924,17 @@ __metadata:
     strip-ansi: "npm:^6.0.1"
     wrap-ansi: "npm:^7.0.0"
   checksum: 10/eaa5561aeb3135c2cddf7a3b3f562fc4238ff3b3fc666869ef2adf264be0f372136702f16add9299087fb1907c2e4ec5dbfe83bd24bce815c70a80c6c1a2e950
+  languageName: node
+  linkType: hard
+
+"cliui@npm:^9.0.1":
+  version: 9.0.1
+  resolution: "cliui@npm:9.0.1"
+  dependencies:
+    string-width: "npm:^7.2.0"
+    strip-ansi: "npm:^7.1.0"
+    wrap-ansi: "npm:^9.0.0"
+  checksum: 10/df43d8d1c6e3254cbb64b1905310d5f6672c595496a3cbe76946c6d24777136886470686f2772ac9edfe547a74bb70e8017530b3554715aee119efd7752fc0d9
   languageName: node
   linkType: hard
 
@@ -16106,6 +16168,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"emoji-regex@npm:^10.3.0":
+  version: 10.6.0
+  resolution: "emoji-regex@npm:10.6.0"
+  checksum: 10/98cc0b0e1daed1ed25afbf69dcb921fee00f712f51aab93aa1547e4e4e8171725cc4f0098aaa645b4f611a19da11ec9f4623eb6ff2b72314b39a8f2ae7c12bf2
+  languageName: node
+  linkType: hard
+
 "emoji-regex@npm:^7.0.1":
   version: 7.0.3
   resolution: "emoji-regex@npm:7.0.3"
@@ -16676,10 +16745,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eth-chainlist@npm:^0.0.844":
-  version: 0.0.844
-  resolution: "eth-chainlist@npm:0.0.844"
-  checksum: 10/a0aef2a7b43f0c631c9eb32c5b93d0cf39a654d0d5be1cd82c3ad9e266b4e9c2d21ef4f0764b9723a49d10cfbb8d408d05c38a6b65323bc33ac01e9865998b3d
+"eth-chainlist@npm:^0.0.873":
+  version: 0.0.873
+  resolution: "eth-chainlist@npm:0.0.873"
+  checksum: 10/797176d251b53398f02e962758fa3f3d15f91c8bbf665c8896f80d51d8cbec104e8ce75a86dfeb72930afe555c754ab208ff496ed7eb0f9e82360d076442a585
   languageName: node
   linkType: hard
 
@@ -17487,6 +17556,13 @@ __metadata:
   version: 2.0.5
   resolution: "get-caller-file@npm:2.0.5"
   checksum: 10/b9769a836d2a98c3ee734a88ba712e62703f1df31b94b784762c433c27a386dd6029ff55c2a920c392e33657d80191edbf18c61487e198844844516f843496b9
+  languageName: node
+  linkType: hard
+
+"get-east-asian-width@npm:^1.0.0, get-east-asian-width@npm:^1.5.0":
+  version: 1.7.0
+  resolution: "get-east-asian-width@npm:1.7.0"
+  checksum: 10/8d8d96b54d1cfb6510f1b6dce51c4a6000b4d122757780d519d0147d968a6f5401421dbeff2e6bd3dc742e9b502fbcdbb98a50bf7f62730a6a8d6749a632279c
   languageName: node
   linkType: hard
 
@@ -21148,6 +21224,15 @@ __metadata:
   bin:
     nanoid: bin/nanoid.cjs
   checksum: 10/a330adb28dad63eccb0a0c95a2a61353e84b7e067061fff94167803d94be8eef0f7b75cf2da1bece06e8b7afb892abbe52cf0ec33298c817a083eedccd7656e4
+  languageName: node
+  linkType: hard
+
+"nanoid@npm:^6.0.2":
+  version: 6.0.2
+  resolution: "nanoid@npm:6.0.2"
+  bin:
+    nanoid: bin/nanoid.js
+  checksum: 10/c555e99171c0988195d71ba22a7acd96f18c767b4a1db5c2a3d75ebf9c302a269fcda3c22e2d6022f3e5a345dcf7188a36f88c6d5fffc2828c68a1b7f9996daf
   languageName: node
   linkType: hard
 
@@ -25211,6 +25296,27 @@ __metadata:
   languageName: node
   linkType: hard
 
+"string-width@npm:^7.0.0, string-width@npm:^7.2.0":
+  version: 7.2.0
+  resolution: "string-width@npm:7.2.0"
+  dependencies:
+    emoji-regex: "npm:^10.3.0"
+    get-east-asian-width: "npm:^1.0.0"
+    strip-ansi: "npm:^7.1.0"
+  checksum: 10/42f9e82f61314904a81393f6ef75b832c39f39761797250de68c041d8ba4df2ef80db49ab6cd3a292923a6f0f409b8c9980d120f7d32c820b4a8a84a2598a295
+  languageName: node
+  linkType: hard
+
+"string-width@npm:^8.2.1":
+  version: 8.3.0
+  resolution: "string-width@npm:8.3.0"
+  dependencies:
+    get-east-asian-width: "npm:^1.5.0"
+    strip-ansi: "npm:^7.1.2"
+  checksum: 10/4cd652495ffb29964d83c341741264b45ffa9843070d553846907bc1f1e10c41399ea3742cb7bca202f2804659967ca713f5caac46675e200fc74fef58c63043
+  languageName: node
+  linkType: hard
+
 "string_decoder@npm:^1.1.1, string_decoder@npm:^1.3.0":
   version: 1.3.0
   resolution: "string_decoder@npm:1.3.0"
@@ -25268,12 +25374,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"strip-ansi@npm:^7.0.1":
-  version: 7.1.0
-  resolution: "strip-ansi@npm:7.1.0"
+"strip-ansi@npm:^7.0.1, strip-ansi@npm:^7.1.0, strip-ansi@npm:^7.1.2":
+  version: 7.2.0
+  resolution: "strip-ansi@npm:7.2.0"
   dependencies:
-    ansi-regex: "npm:^6.0.1"
-  checksum: 10/475f53e9c44375d6e72807284024ac5d668ee1d06010740dec0b9744f2ddf47de8d7151f80e5f6190fc8f384e802fdf9504b76a7e9020c9faee7103623338be2
+    ansi-regex: "npm:^6.2.2"
+  checksum: 10/96da3bc6d73cfba1218625a3d66cf7d37a69bf0920d8735b28f9eeaafcdb6c1fe8440e1ae9eb1ba0ca355dbe8702da872e105e2e939fa93e7851b3cb5dd7d316
   languageName: node
   linkType: hard
 
@@ -26336,12 +26442,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:^14.0.0":
-  version: 14.0.0
-  resolution: "uuid@npm:14.0.0"
+"uuid@npm:^14.0.1":
+  version: 14.0.1
+  resolution: "uuid@npm:14.0.1"
   bin:
     uuid: dist-node/bin/uuid
-  checksum: 10/8ee9b98f9650e25555515f7a28d3c3ae9364e72f7bb19b9e08b681bc135338beba5509b2830f6ae1cfaba4d45401da0d16d4d109b977097bc3d6ba0c5583341b
+  checksum: 10/0f978fd5b0269d7acb615342aeb131f0b8d85eeb8ec34f2915d906baa3befcc14a079a430d0f8116aec6fd20c850cbfab65d1b3d1643fa81ed373c0cf9574f18
   languageName: node
   linkType: hard
 
@@ -27342,6 +27448,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"wrap-ansi@npm:^9.0.0":
+  version: 9.0.2
+  resolution: "wrap-ansi@npm:9.0.2"
+  dependencies:
+    ansi-styles: "npm:^6.2.1"
+    string-width: "npm:^7.0.0"
+    strip-ansi: "npm:^7.1.0"
+  checksum: 10/f3907e1ea9717404ca53a338fa5a017c2121550c3a5305180e2bc08c03e21aa45068df55b0d7676bf57be1880ba51a84458c17241ebedea485fafa9ef16b4024
+  languageName: node
+  linkType: hard
+
 "wrappy@npm:1":
   version: 1.0.2
   resolution: "wrappy@npm:1.0.2"
@@ -27561,7 +27678,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yargs@npm:17.7.3, yargs@npm:^17.0.1, yargs@npm:^17.7.1, yargs@npm:^17.7.2, yargs@npm:^17.7.3":
+"yargs@npm:17.7.3, yargs@npm:^17.0.1, yargs@npm:^17.7.1, yargs@npm:^17.7.2":
   version: 17.7.3
   resolution: "yargs@npm:17.7.3"
   dependencies:
@@ -27591,6 +27708,20 @@ __metadata:
     y18n: "npm:^4.0.0"
     yargs-parser: "npm:^13.1.2"
   checksum: 10/608ba2e62ac2c7c4572b9c6f7a2d3ef76e2deaad8c8082788ed29ae3ef33e9f68e087f07eb804ed5641de2bc4eab977405d3833b1d11ae8dbbaf5847584d96be
+  languageName: node
+  linkType: hard
+
+"yargs@npm:^18.2.0":
+  version: 18.2.0
+  resolution: "yargs@npm:18.2.0"
+  dependencies:
+    cliui: "npm:^9.0.1"
+    escalade: "npm:^3.1.1"
+    get-caller-file: "npm:^2.0.5"
+    string-width: "npm:^8.2.1"
+    y18n: "npm:^5.0.5"
+    yargs-parser: "npm:^22.0.0"
+  checksum: 10/a780cc1fa693028baa50c0c88bcc2c59c92817f0f8e2dfbd226aa1c27cf0dbfb1743511012b73a4f415119d9caa22a6de19350c781d5ef75f874359ae7601ac3
   languageName: node
   linkType: hard
 

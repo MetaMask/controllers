@@ -61,7 +61,7 @@
     "build:docs": "typedoc",
     "build:only-clean": "rimraf './dist' './tsconfig.build.tsbuildinfo'",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/profile-sync-controller",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/profile-sync-controller",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",
     "messenger-action-types:check": "node --import ../../scripts/resolver/register.ts ../../packages/messenger-cli/src/cli.ts --formatter oxfmt --esm --check",
@@ -93,7 +93,7 @@
   "devDependencies": {
     "@lavamoat/allow-scripts": "^5.1.0",
     "@lavamoat/preinstall-always-fail": "^3.0.0",
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@metamask/eth-hd-keyring": "^15.0.0",
     "@metamask/keyring-api": "^24.3.0",
     "@metamask/keyring-internal-api": "^12.1.2",
