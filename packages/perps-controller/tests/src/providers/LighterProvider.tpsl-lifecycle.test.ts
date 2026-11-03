@@ -4599,17 +4599,14 @@ describe('LighterProvider', () => {
         ).getMockImplementation() as (
           call: LighterWasmCall,
         ) => Promise<unknown>;
+        const interrupt = async (): Promise<never> => {
+          throw new Error('interrupted');
+        };
+        // Index 1 interrupts signing; index 0 delegates to the venue fixture.
+        const handlers = [execute, interrupt];
         (built.bridge.execute as Mock).mockImplementation(
-          async (call: LighterWasmCall) => {
-            if (call.function === '_signCreateOrder') {
-              throw new Error('interrupted');
-            }
-            const result = await execute?.(call);
-            if (!result) {
-              throw new Error('Missing fixture signer');
-            }
-            return result;
-          },
+          async (call: LighterWasmCall) =>
+            await handlers[Number(call.function === '_signCreateOrder')](call),
         );
         await built.provider.updatePositionTPSL({
           symbol: 'BTC',
@@ -4630,22 +4627,23 @@ describe('LighterProvider', () => {
         const payloadWrite = writes.find(([name]) =>
           name.startsWith(`lighterTpslJournalOp:testnet:${key}:`),
         );
-        if (!pointerWrite || !payloadWrite) {
-          throw new Error('Expected durable pre-dispatch snapshot');
-        }
-        await infra.diskCache.setItem(...pointerWrite);
+        expect(pointerWrite).toBeDefined();
+        expect(payloadWrite).toBeDefined();
+        const [pointerName, pointerValue] = pointerWrite as [string, string];
+        const [payloadName, payloadValue] = payloadWrite as [string, string];
+        await infra.diskCache.setItem(pointerName, pointerValue);
         await infra.diskCache.setItem(
           'lighterTpslJournalIndex:testnet',
           JSON.stringify([key]),
         );
-        const payload = JSON.parse(payloadWrite[1]) as {
+        const payload = JSON.parse(payloadValue) as {
           version: number;
           partialIntent: { version: number; positionSize: string };
         };
         expect(payload.version).toBe(6);
         expect(payload.partialIntent.version).toBe(2);
         payload.partialIntent.positionSize = positionSize;
-        await infra.diskCache.setItem(payloadWrite[0], JSON.stringify(payload));
+        await infra.diskCache.setItem(payloadName, JSON.stringify(payload));
 
         const restarted = buildProvider({
           apiKeyIndex: 7,
