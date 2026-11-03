@@ -9,17 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `batchStatus` method and `SentinelApiService:batchStatus` action to look up the status of several smart transactions via `GET /v1/networks/{chainId}/batchStatus`
+- Add `batchStatus` method and `SentinelApiService:batchStatus` action to look up the status of several smart transactions via `GET /v1/networks/{chainId}/batchStatus` ([#11272](https://github.com/MetaMask/core/pull/11272))
   - Accepts a `SentinelBatchStatusRequest` (`chainId`, `uuids`) and returns a `SentinelBatchStatusResponse`, a record keyed by UUID whose values are `SentinelBatchedTransactionStatus`.
   - Adds the `SentinelCancellationReason`, `SentinelMinedTxStatus`, and `SentinelOriginalTransactionStatus` enums for the closed-set status fields.
   - Not cached. Throws `SentinelChainNotSupportedError` when the chain is missing from the registry or does not enable `confirmations`. A non-2xx response throws `HttpError` with the response body on `data` when it is JSON.
-- Add `cancel` method and `SentinelApiService:cancel` action to cancel a smart transaction via `POST /v1/networks/{chainId}/cancel`
+- Add `cancel` method and `SentinelApiService:cancel` action to cancel a smart transaction via `POST /v1/networks/{chainId}/cancel` ([#11272](https://github.com/MetaMask/core/pull/11272))
   - Accepts a `SentinelCancelRequest` (`chainId`, `uuid`) and returns a `SentinelCancelResponse` (`uuid`, `affected`, `cancelled`).
   - Not cached. Throws `SentinelChainNotSupportedError` when the chain is missing from the registry or does not enable `confirmations`. A non-2xx response throws `HttpError` with the response body on `data` when it is JSON.
-- Add `submitTransactions` method and `SentinelApiService:submitTransactions` action to submit signed smart transactions via `POST /v1/networks/{chainId}/submitTransactions`
+- Add `submitTransactions` method and `SentinelApiService:submitTransactions` action to submit signed smart transactions via `POST /v1/networks/{chainId}/submitTransactions` ([#11272](https://github.com/MetaMask/core/pull/11272))
   - Accepts a `SentinelSubmitTransactionsRequest` (`rawTxs`, optional `rawCancelTxs`, optional `rawTxsWithMetadata`) and returns a `SentinelSubmitTransactionsResponse` (`uuid`).
   - Not cached. Throws `SentinelChainNotSupportedError` when the chain is missing from the registry or does not enable `confirmations`. A non-2xx response throws `HttpError` with the response body on `data` when it is JSON.
-- Add `getFees` method and `SentinelApiService:getFees` action to quote smart-transaction gas fees from `POST /v1/networks/{chainId}/getFees`
+- Add `getFees` method and `SentinelApiService:getFees` action to quote smart-transaction gas fees from `POST /v1/networks/{chainId}/getFees` ([#11272](https://github.com/MetaMask/core/pull/11272))
   - Accepts a `SentinelGetFeesRequest` and returns a `SentinelGetFeesResponse`.
   - Each transaction is a `SentinelSimulationTransaction`, the object `infura_simulateTransactions` accepts. The handler forwards them as the `txs` array.
   - Not cached. Throws `SentinelChainNotSupportedError` when the chain is missing from the registry or does not enable `confirmations`. A non-2xx response throws `HttpError` with the response body on `data` when it is JSON.
@@ -28,12 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `SentinelMeta.feature` now also accepts `SentinelProductFeature`, a new enum of product names (`Swap`, `Staking`, `Ramp`, `Prediction`, `Perp`, `Earn`, `Card`, `Bridge`, `dAppTransaction`)
+- `SentinelMeta.feature` now also accepts `SentinelProductFeature`, a new enum of product names (`Swap`, `Staking`, `Ramp`, `Prediction`, `Perp`, `Earn`, `Card`, `Bridge`, `dAppTransaction`) ([#11272](https://github.com/MetaMask/core/pull/11272))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
 
 ### Deprecated
 
-- Deprecate the `SentinelKind` enum and the `SentinelMeta.kind` and `SentinelMeta.wallet` properties, which Sentinel no longer takes in its metadata
+- Deprecate the `SentinelKind` enum and the `SentinelMeta.kind` and `SentinelMeta.wallet` properties, which Sentinel no longer takes in its metadata ([#11272](https://github.com/MetaMask/core/pull/11272))
   - They will be removed in a future major version.
 
 ## [2.1.0]
