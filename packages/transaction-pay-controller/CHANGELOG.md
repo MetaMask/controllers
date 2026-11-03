@@ -7,13 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [30.3.3]
+
+### Changed
+
+- Bump `@metamask/ramps-controller` from `^28.1.0` to `^29.0.0` ([#11248](https://github.com/MetaMask/core/pull/11248))
+
+## [30.3.2]
+
+### Changed
+
+- Bump `@metamask/transaction-controller` from `^72.2.1` to `^73.0.0` ([#11154](https://github.com/MetaMask/core/pull/11154), [#11203](https://github.com/MetaMask/core/pull/11203))
+- Bump `@metamask/assets-controller` from `^20.0.0` to `^20.1.0` ([#11157](https://github.com/MetaMask/core/pull/11157), [#11196](https://github.com/MetaMask/core/pull/11196), [#11203](https://github.com/MetaMask/core/pull/11203))
+- Bump `@metamask/ramps-controller` from `^28.0.0` to `^28.1.0` ([#11175](https://github.com/MetaMask/core/pull/11175))
+- Use shared recipient resolution for Relay and Server quotes ([#10887](https://github.com/MetaMask/core/pull/10887))
+- Use shared Hyperliquid perps logic in all strategies, detecting deposits from calldata rather than transaction type ([#11026](https://github.com/MetaMask/core/pull/11026))
+
+### Fixed
+
+- Fix Hyperliquid perps deposit detection and withdrawal decimals in `ServerStrategy` ([#11026](https://github.com/MetaMask/core/pull/11026))
+
+## [30.3.1]
+
+### Changed
+
+- Bump `@metamask/ramps-controller` from `^27.2.0` to `^28.0.0` ([#11141](https://github.com/MetaMask/core/pull/11141))
+
+## [30.3.0]
+
 ### Added
 
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
 
 ### Changed
 
+- Read `mode` from the `TransactionController:estimateGasBatch` result to detect a combined EIP-7702 gas limit, instead of inferring it from the number of gas limits, falling back to the number of gas limits if `mode` is missing ([#10790](https://github.com/MetaMask/core/pull/10790))
 - Bump `@metamask/ramps-controller` from `^27.1.0` to `^27.2.0` ([#11092](https://github.com/MetaMask/core/pull/11092))
+- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
+- Bump `@metamask/assets-controller` from `^19.1.0` to `^20.0.0` ([#11115](https://github.com/MetaMask/core/pull/11115))
+
+### Fixed
+
+- Stop copying the outer EIP-7702 gas limit into the `gas` of each nested transaction when submitting a Server quote as an EIP-7702 batch, as nested gas is not supported in EIP-7702 batches ([#10790](https://github.com/MetaMask/core/pull/10790))
 
 ### Fixed
 
@@ -1743,7 +1778,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#6820](https://github.com/MetaMask/core/pull/6820))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.2.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.3...HEAD
+[30.3.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.2...@metamask/transaction-pay-controller@30.3.3
+[30.3.2]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.1...@metamask/transaction-pay-controller@30.3.2
+[30.3.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.0...@metamask/transaction-pay-controller@30.3.1
+[30.3.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.2.0...@metamask/transaction-pay-controller@30.3.0
 [30.2.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.1.0...@metamask/transaction-pay-controller@30.2.0
 [30.1.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.0.3...@metamask/transaction-pay-controller@30.1.0
 [30.0.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.0.2...@metamask/transaction-pay-controller@30.0.3

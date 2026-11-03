@@ -1,6 +1,6 @@
 {
   "name": "@metamask/error-utils",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Utilities for inspecting, wrapping, and extracting messages from errors",
   "keywords": [
     "Ethereum",
@@ -38,7 +38,7 @@
     "build:docs": "typedoc",
     "build:only-clean": "rimraf './dist' './tsconfig.build.tsbuildinfo'",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/error-utils",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/error-utils",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",
     "messenger-action-types:check": "node --import ../../scripts/resolver/register.ts ../../packages/messenger-cli/src/cli.ts --formatter oxfmt --check",
@@ -50,11 +50,11 @@
     "test:watch": "vitest --watch"
   },
   "dependencies": {
-    "@metamask/type-utils": "^0.0.0",
+    "@metamask/type-utils": "^0.1.0",
     "pony-cause": "^2.1.11"
   },
   "devDependencies": {
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@typescript/native": "npm:typescript@^7.0.2",
     "rimraf": "^6.1.3",
     "typedoc": "^0.28.20",

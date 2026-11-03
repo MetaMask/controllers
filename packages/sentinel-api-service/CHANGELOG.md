@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add optional `suggestFees.withRedeemerEnforcer` property to `SentinelSimulationRequest`, optional `balance` property to `SentinelStateOverrides`, and optional `sponsorship.sponsor` property to `SentinelSimulationResponse` ([#9476](https://github.com/MetaMask/core/pull/9476))
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
+
+### Changed
+
+- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
 
 ## [2.1.0]
 

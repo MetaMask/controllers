@@ -16,6 +16,7 @@ import type {
   BlockedProfilesResponse,
   BlockOptions,
   CommentEngagement,
+  CommentTranslation,
   CopyTradeIntentResponse,
   CreateCopyTradeIntentOptions,
   CreateSwapCommentOptions,
@@ -35,12 +36,15 @@ import type {
   FollowOptions,
   FollowResponse,
   LeaderboardResponse,
+  ModerationStatusResponse,
   Position,
   PositionsResponse,
   ReactToCommentOptions,
   RemoveCommentReactionOptions,
   SwapCommentResponse,
+  TranslateCommentOptions,
   TraderProfileResponse,
+  UnblockProfileOptions,
   UnfollowOptions,
   UnfollowResponse,
 } from './social-types.js';
@@ -49,11 +53,13 @@ import {
   BlockedContentResponseStruct,
   BlockedProfilesResponseStruct,
   CommentEngagementStruct,
+  CommentTranslationStruct,
   CopyTradeIntentResponseStruct,
   FollowResponseStruct,
   FollowersResponseStruct,
   FollowingResponseStruct,
   LeaderboardResponseStruct,
+  ModerationStatusResponseStruct,
   PositionStruct,
   PositionsResponseStruct,
   SwapCommentResponseStruct,
@@ -84,6 +90,7 @@ const MESSENGER_EXPOSED_METHODS = [
   'reactToComment',
   'removeCommentReaction',
   'createSwapComment',
+  'translateComment',
   'createCopyTradeIntent',
   'follow',
   'unfollow',
@@ -91,8 +98,10 @@ const MESSENGER_EXPOSED_METHODS = [
   'optInToLeaderboard',
   'refreshNotificationPreferencesCache',
   'block',
+  'unblockProfile',
   'fetchBlockedProfiles',
   'fetchBlockedContent',
+  'fetchModerationStatus',
 ] as const;
 
 export type SocialServiceActions =
@@ -797,6 +806,51 @@ export class SocialService extends BaseDataService<
   }
 
   /**
+   * Requests a translation of a swap comment (Call).
+   *
+   * Calls `POST ${baseUrl}/swap-comment/${commentId}/translate`. social-api
+   * does not expose this route yet, so a missing route rejects with
+   * {@link SocialServiceErrorMessage.TRANSLATE_COMMENT_FAILED}.
+   * `SocialController.translateComment` logs that case.
+   *
+   * @param options - Options bag.
+   * @param options.commentId - `authorComment.uid` from a feed item.
+   * @param options.targetLanguage - AWS language code to translate into, for
+   * example `en`.
+   * @returns The detected source language and stored translations.
+   */
+  async translateComment(
+    options: TranslateCommentOptions,
+  ): Promise<CommentTranslation> {
+    const { commentId, targetLanguage } = options;
+
+    return await this.fetchQuery({
+      queryKey: [`${this.name}:translateComment`, commentId, targetLanguage],
+      staleTime: 0,
+      queryFn: async () => {
+        const url = `${this.#v1Url}/swap-comment/${encodeURIComponent(commentId)}/translate`;
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetLanguage }),
+        });
+        SocialService.#throwIfNotOk(
+          response,
+          SocialServiceErrorMessage.TRANSLATE_COMMENT_FAILED,
+        );
+        const translation = (await response.json()) as unknown;
+        if (!is(translation, CommentTranslationStruct)) {
+          throw new Error(
+            SocialServiceErrorMessage.TRANSLATE_COMMENT_INVALID_RESPONSE,
+          );
+        }
+        return translation;
+      },
+    });
+  }
+
+  /**
    * Records that the current user is copying a trade from a social post, so
    * the copy can be detected and attributed to the post's author.
    *
@@ -1128,6 +1182,37 @@ export class SocialService extends BaseDataService<
   }
 
   /**
+   * Removes the current user's block on a trader.
+   *
+   * Calls `DELETE ${baseUrl}/moderation/blocks/profiles/${profileId}`.
+   * Unblocking a trader who is not blocked is a no-op. The caller is
+   * identified server-side from the JWT sub claim carried in the
+   * Authorization header.
+   *
+   * @param options - Options bag.
+   * @param options.profileId - Profile id (UUID) of the trader to unblock.
+   */
+  async unblockProfile({ profileId }: UnblockProfileOptions): Promise<void> {
+    await this.fetchQuery({
+      queryKey: [`${this.name}:unblockProfile`, profileId],
+      staleTime: 0,
+      queryFn: async () => {
+        const url = `${this.#v1Url}/moderation/blocks/profiles/${encodeURIComponent(profileId)}`;
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: authHeaders,
+        });
+        SocialService.#throwIfNotOk(
+          response,
+          SocialServiceErrorMessage.UNBLOCK_PROFILE_FAILED,
+        );
+        return null;
+      },
+    });
+  }
+
+  /**
    * Fetches traders the current user has blocked.
    *
    * Calls `GET ${baseUrl}/moderation/blocks/profiles`. Results are most
@@ -1211,6 +1296,38 @@ export class SocialService extends BaseDataService<
           );
         }
         return blockedContent;
+      },
+    });
+  }
+
+  /**
+   * Fetches whether the moderation team has banned the current user.
+   *
+   * Calls `GET ${baseUrl}/moderation/status`. The caller is identified
+   * server-side from the JWT sub claim carried in the Authorization header.
+   *
+   * @returns The current user's ban status, with the reason they may be shown.
+   */
+  async fetchModerationStatus(): Promise<ModerationStatusResponse> {
+    return await this.fetchQuery({
+      queryKey: [`${this.name}:fetchModerationStatus`],
+      staleTime: 0,
+      queryFn: async () => {
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(`${this.#v1Url}/moderation/status`, {
+          headers: authHeaders,
+        });
+        SocialService.#throwIfNotOk(
+          response,
+          SocialServiceErrorMessage.FETCH_MODERATION_STATUS_FAILED,
+        );
+        const status = (await response.json()) as unknown;
+        if (!is(status, ModerationStatusResponseStruct)) {
+          throw new Error(
+            SocialServiceErrorMessage.FETCH_MODERATION_STATUS_INVALID_RESPONSE,
+          );
+        }
+        return status;
       },
     });
   }

@@ -9,7 +9,11 @@ import {
 import { PERPS_ERROR_CODES } from '../../../src/perpsErrorCodes.js';
 import { HyperLiquidProvider } from '../../../src/providers/HyperLiquidProvider.js';
 import { HyperLiquidSubscriptionService } from '../../../src/services/HyperLiquidSubscriptionService.js';
-import type { Order, OrderParams } from '../../../src/types/index.js';
+import type {
+  Order,
+  OrderParams,
+  OrderResult,
+} from '../../../src/types/index.js';
 import { HYPERLIQUID_SCALE_CLOID_MARKER } from '../../../src/utils/hyperLiquidAdapter.js';
 import {
   hasFeeReductionAppliedFlag,
@@ -315,6 +319,29 @@ describe('HyperLiquidProvider - strategy order types', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Insufficient margin');
+    });
+
+    it('surfaces a minimum-value rejection without resubmitting', async () => {
+      const { exchangeClient } = useStrategyClients({
+        exchange: {
+          twapOrder: vi
+            .fn()
+            .mockRejectedValue(
+              new Error('Order must have minimum value of $10'),
+            ),
+        },
+      });
+
+      const result = await provider.placeOrder({
+        ...baseOrder,
+        orderType: 'twap',
+        twapDuration: 30,
+      } satisfies OrderParams);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('minimum value of $10');
+      expect(exchangeClient.twapOrder).toHaveBeenCalledTimes(1);
+      expect(exchangeClient.order).not.toHaveBeenCalled();
     });
 
     it.each(['987', Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5])(
@@ -1007,8 +1034,18 @@ describe('HyperLiquidProvider - strategy order types', () => {
         }
         return Promise.resolve(createClearinghouseBalance(withdrawable));
       });
+      const cleanupStarted = createDeferred<void>();
+      const pendingCleanup = createDeferred<{ status: 'ok' }>();
+      const sendAsset = vi
+        .fn()
+        .mockResolvedValueOnce({ status: 'ok' })
+        .mockImplementationOnce(() => {
+          cleanupStarted.resolve();
+          return pendingCleanup.promise;
+        });
       useStrategyClients({
         exchange: {
+          sendAsset,
           twapOrder: vi.fn().mockImplementation(async () => {
             twapPlaced = true;
             return {
@@ -1055,15 +1092,6 @@ describe('HyperLiquidProvider - strategy order types', () => {
         useUnifiedAccount: false,
         initialAssetMapping: [['xyz:TSLA', 110000]],
       });
-      const cleanupStarted = createDeferred<void>();
-      const pendingCleanup = createDeferred<{ success: boolean }>();
-      const transfer = vi
-        .spyOn(provider, 'transferBetweenDexs')
-        .mockResolvedValueOnce({ success: true })
-        .mockImplementationOnce(() => {
-          cleanupStarted.resolve();
-          return pendingCleanup.promise;
-        });
 
       expect(
         await provider.placeOrder({
@@ -1076,14 +1104,14 @@ describe('HyperLiquidProvider - strategy order types', () => {
 
       const reads = [provider.getTwapOrders(), provider.getTwapOrders()];
       await cleanupStarted.promise;
-      expect(transfer).toHaveBeenCalledTimes(2);
-      pendingCleanup.resolve({ success: true });
+      expect(sendAsset).toHaveBeenCalledTimes(2);
+      pendingCleanup.resolve({ status: 'ok' });
       await Promise.all(reads);
 
-      expect(transfer).toHaveBeenCalledTimes(2);
+      expect(sendAsset).toHaveBeenCalledTimes(2);
     });
 
-    it('retries a failed HIP-3 collateral rebalance after provider recreation', async () => {
+    it('retries a failed HIP-3 collateral rebalance with fresh context after reconnect', async () => {
       let twapPlaced = false;
       const clearinghouseState = vi.fn().mockImplementation(({ dex }) => {
         let withdrawable = '1000';
@@ -1102,8 +1130,9 @@ describe('HyperLiquidProvider - strategy order types', () => {
           },
         };
       });
+      const sendAsset = vi.fn().mockResolvedValue({ status: 'ok' });
       useStrategyClients({
-        exchange: { twapOrder },
+        exchange: { sendAsset, twapOrder },
         info: {
           clearinghouseState,
           perpDexs: vi.fn().mockResolvedValue([null, { name: 'xyz' }]),
@@ -1139,9 +1168,6 @@ describe('HyperLiquidProvider - strategy order types', () => {
         useUnifiedAccount: false,
         initialAssetMapping: [['xyz:TSLA', 110000]],
       });
-      const initialTransfer = vi
-        .spyOn(provider, 'transferBetweenDexs')
-        .mockResolvedValue({ success: true });
 
       expect(
         await provider.placeOrder({
@@ -1151,28 +1177,22 @@ describe('HyperLiquidProvider - strategy order types', () => {
           twapDuration: 30,
         } satisfies OrderParams),
       ).toMatchObject({ success: true, orderId: '987' });
-      expect(initialTransfer).toHaveBeenCalledTimes(1);
+      expect(sendAsset).toHaveBeenCalledTimes(1);
       await provider.disconnect();
+      expect(await provider.initialize()).toMatchObject({ success: true });
+      sendAsset
+        .mockReset()
+        .mockResolvedValueOnce({ status: 'err' })
+        .mockResolvedValue({ status: 'ok' });
 
-      const recreatedProvider = createTestProvider({
-        hip3Enabled: true,
-        allowlistMarkets: ['xyz:*'],
-        useUnifiedAccount: false,
-        initialAssetMapping: [['xyz:TSLA', 110000]],
-      });
-      const rebalance = vi
-        .spyOn(recreatedProvider, 'transferBetweenDexs')
-        .mockResolvedValueOnce({ success: false, error: 'transfer failed' })
-        .mockResolvedValue({ success: true });
+      await provider.getTwapOrders();
+      expect(sendAsset).toHaveBeenCalledTimes(1);
 
-      await recreatedProvider.getTwapOrders();
-      expect(rebalance).toHaveBeenCalledTimes(1);
+      await provider.getTwapOrders();
+      expect(sendAsset).toHaveBeenCalledTimes(2);
 
-      await recreatedProvider.getTwapOrders();
-      expect(rebalance).toHaveBeenCalledTimes(2);
-
-      await recreatedProvider.getTwapOrders();
-      expect(rebalance).toHaveBeenCalledTimes(2);
+      await provider.getTwapOrders();
+      expect(sendAsset).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -1485,6 +1505,42 @@ describe('HyperLiquidProvider - strategy order types', () => {
       expect(result.error).toBe(PERPS_ERROR_CODES.ORDER_REJECTED);
     });
 
+    it('corrects account support when every rung is rejected for multi-signature', async () => {
+      useStrategyClients({
+        exchange: {
+          order: vi.fn().mockResolvedValue({
+            status: 'ok',
+            response: {
+              data: {
+                statuses: [
+                  { error: 'Multi-sig required' },
+                  { error: 'Multi-sig required' },
+                  { error: 'Multi-sig required' },
+                ],
+              },
+            },
+          }),
+        },
+      });
+
+      const result = await provider.placeOrder({
+        ...baseOrder,
+        orderType: 'scale',
+        scaleMinPrice: '2000',
+        scaleMaxPrice: '3000',
+        scaleNumOrders: 3,
+      } satisfies OrderParams);
+
+      expect(result).toMatchObject({
+        success: false,
+        error: PERPS_ERROR_CODES.EXCHANGE_MULTI_SIG_REQUIRED,
+      });
+      expect(await provider.getAccountSupport()).toStrictEqual({
+        isSupported: false,
+        reason: 'multi_sig_account',
+      });
+    });
+
     it.each([
       ['missing', undefined],
       ['non-array', { resting: { oid: 11 } }],
@@ -1518,7 +1574,7 @@ describe('HyperLiquidProvider - strategy order types', () => {
         .mockResolvedValueOnce({
           status: 'ok',
           response: {
-            data: { statuses: [{ error: 'multi-sig required' }] },
+            data: { statuses: [{ error: 'cancel refused' }] },
           },
         })
         .mockResolvedValueOnce({
@@ -1614,6 +1670,61 @@ describe('HyperLiquidProvider - strategy order types', () => {
         ],
       });
       expect(exchangeClient.approveBuilderFee).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The Scale group handle from a successful placement.
+     *
+     * @param placed - The placement result.
+     * @returns The group handle.
+     */
+    const requireScaleGroupHandle = (placed: OrderResult): string => {
+      if (!placed.orderId) {
+        throw new Error('Expected a Scale group handle');
+      }
+      return placed.orderId;
+    };
+
+    it('corrects account support when Scale cancellation requires multi-signature', async () => {
+      useStrategyClients({
+        exchange: {
+          order: vi.fn().mockResolvedValue(scaleStatuses),
+          cancel: vi.fn().mockResolvedValue({
+            status: 'ok',
+            response: {
+              data: {
+                statuses: [
+                  { error: 'Multi-sig required' },
+                  { error: 'Multi-sig required' },
+                  { error: 'Multi-sig required' },
+                ],
+              },
+            },
+          }),
+        },
+      });
+
+      const placed = await provider.placeOrder({
+        ...baseOrder,
+        orderType: 'scale',
+        scaleMinPrice: '2000',
+        scaleMaxPrice: '3000',
+        scaleNumOrders: 3,
+      } satisfies OrderParams);
+      const result = await provider.cancelOrder({
+        orderId: requireScaleGroupHandle(placed),
+        symbol: 'ETH',
+        orderType: 'scale',
+      });
+
+      expect(result).toMatchObject({
+        success: false,
+        error: PERPS_ERROR_CODES.ORDER_STRATEGY_CANCEL_INCOMPLETE,
+      });
+      expect(await provider.getAccountSupport()).toStrictEqual({
+        isSupported: false,
+        reason: 'multi_sig_account',
+      });
     });
 
     it('does not restore a canceled group from a stale open-order cache', async () => {
@@ -1846,7 +1957,7 @@ describe('HyperLiquidProvider - strategy order types', () => {
           status: 'ok',
           response: {
             data: {
-              statuses: ['success', { error: 'multi-sig required' }, 'success'],
+              statuses: ['success', { error: 'cancel refused' }, 'success'],
             },
           },
         })

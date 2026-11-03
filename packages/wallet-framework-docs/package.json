@@ -23,7 +23,7 @@
   "scripts": {
     "build": "docusaurus build site",
     "changelog:update": "../../scripts/update-changelog.sh @metamask/wallet-framework-docs",
-    "changelog:validate": "../../scripts/validate-changelog.sh @metamask/wallet-framework-docs",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "dev": "docusaurus start site",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",
@@ -41,7 +41,7 @@
     "@metamask/controller-utils": "^13.0.0",
     "@metamask/messenger": "^3.0.0",
     "@metamask/superstruct": "^3.4.1",
-    "@metamask/utils": "^12.0.0",
+    "@metamask/utils": "^12.0.1",
     "@tanstack/query-core": "^5.103.2"
   },
   "devDependencies": {
@@ -52,10 +52,10 @@
     "@docusaurus/types": "^3.10.2",
     "@easyops-cn/docusaurus-search-local": "^0.55.3",
     "@mdx-js/react": "^3.1.1",
-    "@metamask/auto-changelog": "^6.2.1",
+    "@metamask/auto-changelog": "^7.1.0",
     "@types/react": "^19.0.0",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "nock": "^13.5.6",
+    "nock": "^15.0.5",
     "prism-react-renderer": "^2.4.1",
     "raw-loader": "^4.0.2",
     "react": "^19.3.0",

@@ -230,6 +230,12 @@ export type TransactionMeta = {
   isGasFeeSponsored?: boolean;
 
   /**
+   * Name of the party paying the gas fee, such as `Uniswap` or `MetaMask`.
+   * Only set when `isGasFeeSponsored` is true and the simulation names a sponsor.
+   */
+  gasFeeSponsor?: string;
+
+  /**
    * Whether the transaction has no lifecycle and is not signed or published.
    */
   isStateOnly?: boolean;
@@ -2113,6 +2119,13 @@ export type GasFeeToken = {
   /** Account address to send the token to. */
   recipient: Hex;
 
+  /**
+   * Name of the party paying the gas fee, such as `Uniswap` or `MetaMask`.
+   * Only set when the simulation reports the gas fee as sponsored.
+   * Prefer `TransactionMeta.gasFeeSponsor`, which also respects a caller-provided `isGasFeeSponsored`.
+   */
+  sponsor?: string;
+
   /** Symbol of the token. */
   symbol: string;
 
@@ -2231,6 +2244,9 @@ export type MetamaskPayMetadata = {
 
 /**
  * Parameters for the transaction simulation API.
+ *
+ * Lets consumers rewrite the simulation request URL (for example to route
+ * through the MetaMask Shield proxy) via the returned `newUrl`.
  */
 export type GetSimulationConfig = (
   url: string,
@@ -2239,7 +2255,6 @@ export type GetSimulationConfig = (
   },
 ) => Promise<{
   newUrl?: string;
-  authorization?: string;
 }>;
 
 /**
