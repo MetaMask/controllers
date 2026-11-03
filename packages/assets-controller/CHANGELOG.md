@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AccountsApiDataSource` no longer starts its supported-network fetch, which calls `RemoteFeatureFlagController:getState`, from the constructor. Call `init()`.
 - When `AccountTreeController` actions are not registered, selected-account reads fall back to `AccountsController:getSelectedAccount`, and asset tracking does not wait for account-tree initialization ([#10885](https://github.com/MetaMask/core/pull/10885))
   - `AccountActivityDataSource` uses the same fallback when resolving the account for a balance update.
+- Use SLIP-44 coin type 16661 for the 0G native asset ([#11221](https://github.com/MetaMask/core/pull/11221))
 
 ### Fixed
 
