@@ -9,10 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [113.1.0]
 
-### Uncategorized
-
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-
 ### Added
 
 - Expose `startPolling` and `stopPollingByToken` through CurrencyRateController messenger ([#11247](https://github.com/MetaMask/core/pull/11247))
