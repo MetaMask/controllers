@@ -108,6 +108,7 @@ type Mocks = {
   upgradeSuccessorAccount: Mock<
     (address: Hex, predecessorAddress: Hex) => Promise<void>
   >;
+  registerMigrationIntents: Mock<(predecessorAddress: Hex) => Promise<void>>;
   setDefaultMoneyAccount: Mock<(id: string) => void>;
   isEnabled: Mock<(remoteFeatureFlags: FeatureFlags) => boolean>;
   captureException: Mock<(error: Error) => void>;
@@ -187,6 +188,7 @@ function getMessenger(
       'MoneyAccountUpgradeController:getRegistrationStatus',
       'MoneyAccountUpgradeController:upgradeAccount',
       'MoneyAccountUpgradeController:upgradeSuccessorAccount',
+      'MoneyAccountUpgradeController:registerMigrationIntents',
       'RemoteFeatureFlagController:getState',
     ],
     events: [
@@ -269,6 +271,9 @@ export async function withController<ReturnValue>(
     upgradeSuccessorAccount: vi
       .fn<(address: Hex, predecessorAddress: Hex) => Promise<void>>()
       .mockResolvedValue(undefined),
+    registerMigrationIntents: vi
+      .fn<(predecessorAddress: Hex) => Promise<void>>()
+      .mockResolvedValue(undefined),
     setDefaultMoneyAccount: vi
       .fn<(id: string) => void>()
       .mockImplementation(() => {
@@ -311,6 +316,10 @@ export async function withController<ReturnValue>(
   rootMessenger.registerActionHandler(
     'MoneyAccountUpgradeController:upgradeSuccessorAccount',
     mocks.upgradeSuccessorAccount,
+  );
+  rootMessenger.registerActionHandler(
+    'MoneyAccountUpgradeController:registerMigrationIntents',
+    mocks.registerMigrationIntents,
   );
   rootMessenger.registerActionHandler(
     'RemoteFeatureFlagController:getState',
