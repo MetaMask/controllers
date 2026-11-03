@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add optional `clientId` constructor option to `TransactionPayController`, sent as the `X-Client-Id` header on all intents API requests so the server can distinguish Mobile from Extension traffic ([#11259](https://github.com/MetaMask/core/pull/11259))
+  - Add `TransactionPayClientId` enum with `Extension` and `Mobile` members.
+  - Add `TransactionPayController:getClientId` messenger action and the corresponding `TransactionPayControllerGetClientIdAction` type.
+  - The header is omitted when `clientId` is not provided, so existing consumers are unaffected.
+
 ### Changed
 
 - Bump `@metamask/assets-controller` from `^20.1.0` to `^20.2.0` ([#11255](https://github.com/MetaMask/core/pull/11255))
