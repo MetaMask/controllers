@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `@metamask/assets-controller` from `^20.1.0` to `^20.2.0` ([#11255](https://github.com/MetaMask/core/pull/11255))
 
+### Fixed
+
+- Quote Across perps deposits in the 6 decimals Across uses for HyperCore USDC-PERPS, instead of requesting 100 times the deposit amount ([#PR_NUMBER](https://github.com/MetaMask/core/pull/PR_NUMBER))
+  - Reject Across perps deposit quotes whose USDC-PERPS decimals differ from those used to scale the request, so the next strategy is tried instead of showing a mispriced quote.
+
 ## [30.3.3]
 
 ### Changed
