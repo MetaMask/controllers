@@ -4,6 +4,7 @@ import type { TransactionMeta } from '@metamask/transaction-controller';
 import { BigNumber } from 'bignumber.js';
 
 import type { BridgeHistoryItem } from '../types.js';
+import { hexToBigNumber } from './hex-to-big-number.js';
 
 const getReceivedNativeAmount = (
   historyItem: BridgeHistoryItem,
@@ -21,8 +22,8 @@ const getReceivedNativeAmount = (
   }
 
   return actualGas && postTxBalance && preTxBalance
-    ? new BigNumber(postTxBalance, 16)
-        .minus(preTxBalance, 16)
+    ? hexToBigNumber(postTxBalance)
+        .minus(hexToBigNumber(preTxBalance))
         .minus(actualGas.amount)
         .div(10 ** historyItem.quote.destAsset.decimals)
     : null;
@@ -59,7 +60,7 @@ const getReceivedERC20Amount = (
   });
 
   if (tokenTransferLog?.data) {
-    return new BigNumber(tokenTransferLog.data, 16).div(
+    return hexToBigNumber(tokenTransferLog.data).div(
       new BigNumber(10).pow(quote.destAsset.decimals),
     );
   }

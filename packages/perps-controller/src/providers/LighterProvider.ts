@@ -14668,10 +14668,11 @@ export class LighterProvider implements PerpsProvider {
           }
           // Preserve decimal intent through the bounds check and downward grid
           // normalization; binary conversion can widen a requested quantity.
-          const value = new BigNumber(raw);
+          const isDecimalString = /^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(raw);
+          const value = isDecimalString ? new BigNumber(raw) : undefined;
           const positionAmount = new BigNumber(position.size).abs();
           if (
-            !/^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(raw) ||
+            value === undefined ||
             !value.isFinite() ||
             !value.gt(0) ||
             !positionAmount.isFinite() ||

@@ -22,7 +22,7 @@ export const calcNormalizedTokenAmount = (
     return;
   }
   const divisor = new BigNumber(base).pow(decimals ?? 0);
-  return new BigNumber(value, base).div(divisor).toFixed();
+  return new BigNumber(String(value), base).div(divisor).toFixed();
 };
 
 /**
@@ -42,7 +42,7 @@ export const calcAtomicTokenAmount = (
     return;
   }
   const divisor = new BigNumber(base).pow(decimals);
-  return new BigNumber(value, base).times(divisor).toFixed();
+  return new BigNumber(String(value), base).times(divisor).toFixed();
 };
 
 /**

@@ -33,7 +33,7 @@ export function calcTokenAmount(value: string, decimals: number): BigNumber {
  * @returns The count of leading zeros in the fractional part of the number.
  */
 export const getLeadingZeroCount = (numericValue: number | string): number => {
-  const numToString = new BigNumber(numericValue, 10).toString(10);
+  const numToString = new BigNumber(numericValue).toString(10);
   const fractionalPart = numToString.split('.')[1] ?? '';
   return fractionalPart.match(/^0*/u)?.[0]?.length ?? 0;
 };

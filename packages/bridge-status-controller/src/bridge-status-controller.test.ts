@@ -2671,7 +2671,7 @@ describe('BridgeStatusController', () => {
           decimals: 9,
           assetId: getNativeAssetForChainId(ChainId.SOLANA).assetId,
         },
-        destTokenAmount: '500000000000000000s',
+        destTokenAmount: '500000000000000000',
         minDestTokenAmount: '475000000000000000s',
         destAsset: {
           chainId: ChainId.SOLANA,

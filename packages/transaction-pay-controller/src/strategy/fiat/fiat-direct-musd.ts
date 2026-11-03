@@ -15,6 +15,7 @@ import type {
   TransactionPayRequiredToken,
   TransactionPayQuote,
 } from '../../types.js';
+import { LenientBigNumber } from '../../utils/big-number.js';
 import { prefixError } from '../../utils/error-prefix.js';
 import { getFiatVaultDisabled } from '../../utils/feature-flags.js';
 import { submitSecondLeg } from '../../utils/second-leg.js';
@@ -277,7 +278,9 @@ function getDirectMusdTargetAmountFiat(
   fiatQuote: RampsQuote,
   amountFiat: string,
 ): string {
-  const amountOutInFiat = new BigNumber(fiatQuote.quote.amountOutInFiat ?? NaN);
+  const amountOutInFiat = new LenientBigNumber(
+    fiatQuote.quote.amountOutInFiat ?? NaN,
+  );
   if (amountOutInFiat.isFinite() && amountOutInFiat.isGreaterThanOrEqualTo(0)) {
     return amountOutInFiat.toString(10);
   }
@@ -286,7 +289,7 @@ function getDirectMusdTargetAmountFiat(
 }
 
 function getSafeFee(value: BigNumber.Value | undefined): BigNumber {
-  const fee = new BigNumber(value ?? 0);
+  const fee = new LenientBigNumber(value ?? 0);
   return fee.isFinite() && fee.isGreaterThanOrEqualTo(0)
     ? fee
     : new BigNumber(0);

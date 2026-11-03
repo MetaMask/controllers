@@ -10,6 +10,7 @@ import { BigNumber } from 'bignumber.js';
 import type { TransactionPayControllerMessenger } from '../index.js';
 import { projectLogger } from '../logger.js';
 import type { QuoteRequest } from '../types.js';
+import { LenientBigNumber } from './big-number.js';
 import { getFeatureFlags, getGasBuffer } from './feature-flags.js';
 import { estimateGasLimit } from './gas.js';
 
@@ -311,7 +312,7 @@ function parseGasLimit(gas?: number | string): number | undefined {
     return undefined;
   }
 
-  const parsedGas = new BigNumber(gas);
+  const parsedGas = new LenientBigNumber(gas);
 
   if (
     !parsedGas.isFinite() ||

@@ -215,6 +215,10 @@ describe('Relay Quotes Utils', () => {
 
     successfulFetchMock = vi.spyOn(global, 'fetch');
 
+    // `getTokenBalance` always returns a string; an unset mock would return
+    // `undefined`, which bignumber.js v11 rejects.
+    getTokenBalanceMock.mockReturnValue('0');
+
     getKeyringControllerStateMock.mockReturnValue({
       isUnlocked: true,
       keyrings: [

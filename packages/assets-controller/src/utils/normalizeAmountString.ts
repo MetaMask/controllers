@@ -1,5 +1,7 @@
 import { BigNumber as BigNumberJS } from 'bignumber.js';
 
+import { LenientBigNumber } from './lenientBigNumber.js';
+
 /**
  * Normalize an asset balance `amount` string into a canonical plain-decimal
  * form (no scientific notation), optionally truncating to the asset's decimal
@@ -40,7 +42,7 @@ export function normalizeAmountString(
   if (typeof amount !== 'string' || amount.length === 0) {
     return '0';
   }
-  const bn = new BigNumberJS(amount);
+  const bn = new LenientBigNumber(amount);
   if (!bn.isFinite()) {
     return '0';
   }

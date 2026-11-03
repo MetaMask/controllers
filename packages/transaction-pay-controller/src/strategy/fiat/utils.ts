@@ -11,6 +11,7 @@ import { BigNumber } from 'bignumber.js';
 
 import { projectLogger } from '../../logger.js';
 import type { TransactionPayControllerMessenger } from '../../types.js';
+import { LenientBigNumber } from '../../utils/big-number.js';
 import {
   getFiatAssetPerTransactionType,
   getFiatEnabledTypes,
@@ -239,7 +240,7 @@ export function getRawSourceAmountFromOrderCryptoAmount({
   cryptoAmount: RampsOrder['cryptoAmount'];
   decimals: number;
 }): string {
-  const normalizedAmount = new BigNumber(String(cryptoAmount));
+  const normalizedAmount = new LenientBigNumber(String(cryptoAmount));
 
   if (!normalizedAmount.isFinite() || normalizedAmount.lte(0)) {
     throw new Error(

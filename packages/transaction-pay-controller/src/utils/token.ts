@@ -13,6 +13,8 @@ import {
 } from '../constants.js';
 import { projectLogger } from '../logger.js';
 import type { FiatRates, TransactionPayControllerMessenger } from '../types.js';
+import { hexToBigNumber } from './big-number.js';
+import { LenientBigNumber } from './big-number.js';
 import { getStablecoins, isChainExcludedFromInfura } from './feature-flags.js';
 import { rpcRequest } from './provider.js';
 
@@ -205,12 +207,12 @@ export function computeRawFromFiatAmount(
   decimals: number,
   usdRate: BigNumber.Value,
 ): string | undefined {
-  const rate = new BigNumber(usdRate);
+  const rate = new LenientBigNumber(usdRate);
   if (!rate.isFinite() || !rate.gt(0)) {
     return undefined;
   }
 
-  const humanAmount = new BigNumber(fiatAmount).dividedBy(rate);
+  const humanAmount = new LenientBigNumber(fiatAmount).dividedBy(rate);
   if (!humanAmount.isFinite() || !humanAmount.gt(0)) {
     return undefined;
   }
@@ -278,7 +280,7 @@ export async function getLiveTokenBalance(
       }),
     );
 
-    return new BigNumber(result, 16).toString(10);
+    return hexToBigNumber(result).toString(10);
   }
 
   const calldata = new Interface(abiERC20).encodeFunctionData('balanceOf', [
@@ -295,7 +297,7 @@ export async function getLiveTokenBalance(
     }),
   );
 
-  return new BigNumber(result, 16).toString(10);
+  return hexToBigNumber(result).toString(10);
 }
 
 /**

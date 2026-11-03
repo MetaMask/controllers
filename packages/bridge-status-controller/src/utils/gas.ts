@@ -4,10 +4,11 @@ import type { TransactionReceipt } from '@metamask/transaction-controller';
 import { BigNumber } from 'bignumber.js';
 
 import type { BridgeHistoryItem } from '../types.js';
+import { hexToBigNumber } from './hex-to-big-number.js';
 
 const calcGasInHexWei = (gasLimit?: string, gasPrice?: string) => {
   return gasLimit && gasPrice
-    ? new BigNumber(gasLimit, 16).times(new BigNumber(gasPrice, 16))
+    ? hexToBigNumber(gasLimit).times(hexToBigNumber(gasPrice))
     : null;
 };
 

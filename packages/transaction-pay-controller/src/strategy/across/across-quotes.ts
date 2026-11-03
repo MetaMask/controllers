@@ -19,6 +19,7 @@ import type {
   TransactionPayQuote,
 } from '../../types.js';
 import { getFiatValueFromUsd, sumAmounts } from '../../utils/amounts.js';
+import { LenientBigNumber } from '../../utils/big-number.js';
 import {
   getPayStrategiesConfig,
   getSlippage,
@@ -797,8 +798,8 @@ function calculateSourceGasFeeTokenAmountFallback({
   fiatRate: FiatRates;
   nativeGasCost: Amount;
 }): Amount | undefined {
-  const usdRate = new BigNumber(fiatRate.usdRate);
-  const nativeGasUsd = new BigNumber(nativeGasCost.usd);
+  const usdRate = new LenientBigNumber(fiatRate.usdRate);
+  const nativeGasUsd = new LenientBigNumber(nativeGasCost.usd);
 
   if (
     !usdRate.isFinite() ||
