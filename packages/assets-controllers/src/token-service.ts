@@ -543,6 +543,8 @@ type SearchTokenOptions = {
   includeMarketData?: boolean;
   includeRwaData?: boolean;
   includeTokenSecurityData?: boolean;
+  /** Value sent as the `x-mm-service-profile` header on the request. Omitted when unset. */
+  serviceProfile?: string;
 };
 
 /**
@@ -556,6 +558,7 @@ type SearchTokenOptions = {
  * @param options.includeMarketData - Optional flag to include market data in the results (defaults to false).
  * @param options.includeRwaData - Optional flag to include RWA data in the results (defaults to false).
  * @param options.includeTokenSecurityData - Optional flag to include token security data in the results (defaults to false).
+ * @param options.serviceProfile - Optional service profile sent as the `x-mm-service-profile` header.
  * @returns Object containing count, totalCount, data array, optional pageInfo for pagination, and an optional error message if the request failed.
  */
 export async function searchTokens(
@@ -567,6 +570,7 @@ export async function searchTokens(
     includeMarketData = false,
     includeRwaData = true,
     includeTokenSecurityData,
+    serviceProfile,
   }: SearchTokenOptions = {},
 ): Promise<{
   count: number;
@@ -591,7 +595,12 @@ export async function searchTokens(
       totalCount?: number;
       data: TokenSearchItem[];
       pageInfo?: PageInfo;
-    } = await handleFetch(tokenSearchURL);
+    } = await handleFetch(
+      tokenSearchURL,
+      serviceProfile
+        ? { headers: { 'x-mm-service-profile': serviceProfile } }
+        : undefined,
+    );
 
     if (result && typeof result === 'object' && Array.isArray(result.data)) {
       return {

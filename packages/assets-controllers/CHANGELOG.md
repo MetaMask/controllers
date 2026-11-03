@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add optional `serviceProfile` option to `searchTokens`, sent as the `x-mm-service-profile` header on the `/tokens/search` request ([#PR](https://github.com/MetaMask/core/pull/PR))
+
 ## [113.1.0]
 
 ### Added

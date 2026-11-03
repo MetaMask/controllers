@@ -640,6 +640,38 @@ describe('Token service', () => {
   });
 
   describe('searchTokens', () => {
+    it('sends the x-mm-service-profile header when serviceProfile is provided', async () => {
+      const searchQuery = 'USD';
+      nock(TOKEN_END_POINT_API, {
+        reqheaders: { 'x-mm-service-profile': 'assets--trending-search' },
+      })
+        .get(
+          `/tokens/search?networks=${encodeURIComponent(sampleCaipChainId)}&query=${searchQuery}&first=10&includeMarketData=false&includeRwaData=true`,
+        )
+        .reply(200, { count: 0, data: [] });
+
+      const results = await searchTokens([sampleCaipChainId], searchQuery, {
+        serviceProfile: 'assets--trending-search',
+      });
+
+      expect(results).toStrictEqual({ count: 0, data: [] });
+    });
+
+    it('does not send the x-mm-service-profile header when serviceProfile is unset', async () => {
+      const searchQuery = 'USD';
+      nock(TOKEN_END_POINT_API, {
+        badheaders: ['x-mm-service-profile'],
+      })
+        .get(
+          `/tokens/search?networks=${encodeURIComponent(sampleCaipChainId)}&query=${searchQuery}&first=10&includeMarketData=false&includeRwaData=true`,
+        )
+        .reply(200, { count: 0, data: [] });
+
+      const results = await searchTokens([sampleCaipChainId], searchQuery);
+
+      expect(results).toStrictEqual({ count: 0, data: [] });
+    });
+
     it('should call the search api and return the list of matching tokens for single chain', async () => {
       const searchQuery = 'USD';
       const mockResponse = {
