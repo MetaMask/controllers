@@ -267,8 +267,18 @@ describe('buildDelegationSimulation', () => {
 
 describe('build7702BatchSimulation', () => {
   const CALLS_MOCK = [
-    { data: '0x1234' as Hex, to: TOKEN_ADDRESS_MOCK, value: '0x0' as Hex },
-    { data: '0x5678' as Hex, to: TOKEN_ADDRESS_MOCK, value: '0x1' as Hex },
+    {
+      data: '0x1234' as Hex,
+      from: FROM_MOCK,
+      to: TOKEN_ADDRESS_MOCK,
+      value: '0x0' as Hex,
+    },
+    {
+      data: '0x5678' as Hex,
+      from: FROM_MOCK,
+      to: TOKEN_ADDRESS_MOCK,
+      value: '0x1' as Hex,
+    },
   ];
 
   it('builds a batch on the sender account with an authorization and gas', () => {
