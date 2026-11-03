@@ -28,6 +28,32 @@ import type { RecoveryRequest } from './recovery-session.js';
 const log = createModuleLogger(projectLogger, controllerName);
 
 /**
+ * Find the recovery-keys item among the decrypted items of the TOPRF1
+ * namespace and parse it.
+ *
+ * @param items - The decrypted TOPRF1 items.
+ * @returns The TOPRF2 keys, or undefined when there is no well-formed item.
+ */
+export function findRecoveryKeys(
+  items: FetchedSecretDataItem[],
+): RecoveryKeys | undefined {
+  const item = items.find(
+    (candidate) =>
+      candidate.itemId === WrappedKeysItemId.WrappedRecovery &&
+      candidate.dataType === EncAccountDataType.WrappedKeys,
+  );
+  if (!item) {
+    return undefined;
+  }
+  try {
+    return parseRecoveryKeysItem(item.data).recoveryKeys;
+  } catch (error) {
+    log('Ignoring malformed recovery-keys item', error);
+    return undefined;
+  }
+}
+
+/**
  * Reads and writes the recovery-related secret data items: the recovery-keys
  * item (TOPRF1 namespace, next to the user's secrets), the wrapped-keys item
  * (TOPRF2 namespace), and the recovery verifier auth public key.
@@ -62,20 +88,9 @@ export class RecoveryItemStore {
     encKey: Uint8Array;
     authKeyPair: KeyPair;
   }): Promise<RecoveryKeys | undefined> {
-    const item = await this.#fetchWrappedKeysItem(
-      encKey,
-      authKeyPair,
-      WrappedKeysItemId.WrappedRecovery,
+    return findRecoveryKeys(
+      await this.#fetchSecretDataItems(encKey, authKeyPair),
     );
-    if (!item) {
-      return undefined;
-    }
-    try {
-      return parseRecoveryKeysItem(item.data).recoveryKeys;
-    } catch (error) {
-      log('Ignoring malformed recovery-keys item', error);
-      return undefined;
-    }
   }
 
   /**

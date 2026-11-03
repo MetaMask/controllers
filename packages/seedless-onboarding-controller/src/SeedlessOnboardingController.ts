@@ -50,7 +50,10 @@ import {
   getValidRecoverySession,
 } from './mfa-recovery/recovery-session.js';
 import type { RecoveryRequest } from './mfa-recovery/recovery-session.js';
-import { RecoveryItemStore } from './mfa-recovery/RecoveryItemStore.js';
+import {
+  findRecoveryKeys,
+  RecoveryItemStore,
+} from './mfa-recovery/RecoveryItemStore.js';
 import { SecretMetadata } from './SecretMetadata.js';
 import type {
   SeedlessOnboardingControllerMessenger,
@@ -736,6 +739,7 @@ export class SeedlessOnboardingController<
           encKey: newEncKey,
           pwEncKey: newPwEncKey,
           authKeyPair: newAuthKeyPair,
+          recoveryKeys,
         } = await this.#changeEncryptionKey({
           oldPassword,
           newPassword,
@@ -753,11 +757,13 @@ export class SeedlessOnboardingController<
         this.#resetPasswordOutdatedCache();
 
         // keep MFA recovery pointing at the live TOPRF1 keys
-        await this.#rewrapRecoveryKeys({
-          encKey: newEncKey,
-          pwEncKey: newPwEncKey,
-          authKeyPair: newAuthKeyPair,
-        });
+        if (recoveryKeys) {
+          await this.#rewrapRecoveryKeys(recoveryKeys, {
+            encKey: newEncKey,
+            pwEncKey: newPwEncKey,
+            authKeyPair: newAuthKeyPair,
+          });
+        }
 
         // store the keyring encryption key if it exists
         if (keyringEncryptionKey) {
@@ -790,17 +796,14 @@ export class SeedlessOnboardingController<
    * failures are logged and not thrown. A stale wrap is reported by
    * `getRecoveryStatus` and repaired by `storeRecoveryKeys`.
    *
+   * @param recoveryKeys - The TOPRF2 keys from the recovery-keys item.
    * @param keySet - The new TOPRF1 key set.
    */
-  async #rewrapRecoveryKeys(keySet: WrappedKeySet): Promise<void> {
+  async #rewrapRecoveryKeys(
+    recoveryKeys: RecoveryKeys,
+    keySet: WrappedKeySet,
+  ): Promise<void> {
     try {
-      const recoveryKeys = await this.#recoveryItemStore.fetchRecoveryKeys({
-        encKey: keySet.encKey,
-        authKeyPair: keySet.authKeyPair,
-      });
-      if (!recoveryKeys) {
-        return;
-      }
       await this.#recoveryItemStore.writeWrappedKeys(recoveryKeys, [keySet]);
     } catch (error) {
       log('Error re-wrapping recovery keys', error);
@@ -1462,7 +1465,8 @@ export class SeedlessOnboardingController<
    * @param params.oldPassword - The old password to verify.
    * @param params.newPassword - The new password to update.
    * @param params.latestKeyIndex - The key index of the latest key.
-   * @returns A promise that resolves to new encryption key and authentication key pair.
+   * @returns A promise that resolves to new encryption key and authentication key pair,
+   * and the TOPRF2 keys of the recovery-keys item, if any.
    */
   async #changeEncryptionKey({
     oldPassword,
@@ -1472,7 +1476,7 @@ export class SeedlessOnboardingController<
     newPassword: string;
     oldPassword: string;
     latestKeyIndex?: number;
-  }): Promise<ChangeEncryptionKeyResult> {
+  }): Promise<ChangeEncryptionKeyResult & { recoveryKeys?: RecoveryKeys }> {
     let encKey: Uint8Array;
     let pwEncKey: Uint8Array;
     let authKeyPair: KeyPair;
@@ -1506,7 +1510,8 @@ export class SeedlessOnboardingController<
    * @param params.oldKeySet - The current TOPRF1 key set.
    * @param params.keyIndex - The key index of the current key.
    * @param params.newPassword - The new password.
-   * @returns A promise that resolves to the new key set.
+   * @returns A promise that resolves to the new key set and the TOPRF2 keys
+   * of the recovery-keys item, if the namespace holds a well-formed one.
    */
   async #changeEncKeyFromKeys({
     oldKeySet,
@@ -1516,7 +1521,7 @@ export class SeedlessOnboardingController<
     oldKeySet: WrappedKeySet;
     keyIndex: number;
     newPassword: string;
-  }): Promise<ChangeEncryptionKeyResult> {
+  }): Promise<ChangeEncryptionKeyResult & { recoveryKeys?: RecoveryKeys }> {
     this.#assertIsAuthenticatedUser(this.state);
     const {
       nodeAuthTokens,
@@ -1525,7 +1530,8 @@ export class SeedlessOnboardingController<
       userId,
     } = this.state;
 
-    return await this.toprfClient.changeEncKey({
+    let recoveryKeys: RecoveryKeys | undefined;
+    const newKeySet = await this.toprfClient.changeEncKey({
       nodeAuthTokens,
       authConnectionId,
       groupedAuthConnectionId,
@@ -1562,9 +1568,11 @@ export class SeedlessOnboardingController<
             version,
             itemId,
           }));
+        recoveryKeys = findRecoveryKeys(items);
         return [...secretItems, ...wrappedKeysItems];
       },
     });
+    return { ...newKeySet, recoveryKeys };
   }
 
   /**
@@ -2677,11 +2685,13 @@ export class SeedlessOnboardingController<
 
           let changedKeySet: WrappedKeySet;
           try {
-            changedKeySet = await this.#changeEncKeyFromKeys({
-              oldKeySet: pending.keySet,
-              keyIndex,
-              newPassword,
-            });
+            const { encKey, pwEncKey, authKeyPair } =
+              await this.#changeEncKeyFromKeys({
+                oldKeySet: pending.keySet,
+                keyIndex,
+                newPassword,
+              });
+            changedKeySet = { encKey, pwEncKey, authKeyPair };
           } catch (error) {
             if (isAuthTokenError(error)) {
               throw error;

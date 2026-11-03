@@ -1473,11 +1473,8 @@ describe('SeedlessOnboardingController', () => {
             MOCK_PASSWORD,
           );
 
-          // The re-wrap reads the recovery-keys item with the new TOPRF1 key.
-          expect(fetchSpy).toHaveBeenCalledTimes(1);
-          expect(fetchSpy.mock.calls[0][0].decKey).toStrictEqual(
-            encryptor.deriveEncKey(NEW_PASSWORD),
-          );
+          // The re-wrap reuses the items fetched by the key change.
+          expect(fetchSpy).not.toHaveBeenCalled();
           const [{ newPassword, transformDataItems }] =
             changeEncKeySpy.mock.calls[0];
           expect(newPassword).toBe(NEW_PASSWORD);
@@ -1515,13 +1512,19 @@ describe('SeedlessOnboardingController', () => {
       const NEW_PASSWORD = 'new-mock-password';
 
       /**
-       * Mocks `changeEncKey` to return the key set of NEW_PASSWORD.
+       * Mocks `changeEncKey` to pass the given TOPRF1 items to
+       * `transformDataItems`, as the client does with the items it fetched
+       * under the old key, and to return the key set of NEW_PASSWORD.
        *
        * @param toprfClient - The ToprfSecureBackup instance.
+       * @param oldItems - The TOPRF1 item data under the old key.
        * @returns The new TOPRF1 key set.
        */
       function mockPasswordChange(
         toprfClient: ToprfSecureBackup,
+        oldItems: Uint8Array[] = [
+          new SecretMetadata(MOCK_SEED_PHRASE).toBytes(),
+        ],
       ): WrappedKeySet {
         const encryptor = createMockToprfEncryptor();
         const newKeySet: WrappedKeySet = {
@@ -1529,7 +1532,12 @@ describe('SeedlessOnboardingController', () => {
           pwEncKey: encryptor.derivePwEncKey(NEW_PASSWORD),
           authKeyPair: encryptor.deriveAuthKeyPair(NEW_PASSWORD),
         };
-        vi.spyOn(toprfClient, 'changeEncKey').mockResolvedValue(newKeySet);
+        vi.spyOn(toprfClient, 'changeEncKey').mockImplementation(
+          async ({ transformDataItems }) => {
+            transformDataItems?.(toFetchedItems(oldItems));
+            return newKeySet;
+          },
+        );
         return newKeySet;
       }
 
@@ -1565,16 +1573,14 @@ describe('SeedlessOnboardingController', () => {
             { hasRecoveryShare: true },
           );
           const recoveryKeys = createRandomRecoveryKeys();
-          const newKeySet = mockPasswordChange(toprfClient);
+          const newKeySet = mockPasswordChange(
+            toprfClient,
+            recoveryKeysItem(recoveryKeys),
+          );
           mockRecoveryFetchAuthPubKey(toprfClient, {
             password: getVaultKeySet().authKeyPair.pk,
           });
-          mockNamespaces(toprfClient, [
-            {
-              decKey: newKeySet.encKey,
-              items: recoveryKeysItem(recoveryKeys),
-            },
-          ]);
+          const fetchSpy = vi.spyOn(toprfClient, 'fetchAllSecretDataItems');
           const addSpy = vi
             .spyOn(toprfClient, 'addSecretDataItem')
             .mockResolvedValue();
@@ -1585,6 +1591,7 @@ describe('SeedlessOnboardingController', () => {
             MOCK_PASSWORD,
           );
 
+          expect(fetchSpy).not.toHaveBeenCalled();
           expect(addSpy).toHaveBeenCalledTimes(1);
           const [{ encKey, authKeyPair, secretData }] = addSpy.mock
             .calls[0] as [
@@ -1630,19 +1637,16 @@ describe('SeedlessOnboardingController', () => {
           async ({ controller, toprfClient, baseMessenger }) => {
             expect(controller.state.recoverySession).toBeUndefined();
             const recoveryKeys = createRandomRecoveryKeys();
-            const newKeySet = mockPasswordChange(toprfClient);
+            const newKeySet = mockPasswordChange(
+              toprfClient,
+              recoveryKeysItem(recoveryKeys),
+            );
             const fetchAuthPubKeySpy = mockRecoveryFetchAuthPubKey(
               toprfClient,
               {
                 password: getVaultKeySet().authKeyPair.pk,
               },
             );
-            mockNamespaces(toprfClient, [
-              {
-                decKey: newKeySet.encKey,
-                items: recoveryKeysItem(recoveryKeys),
-              },
-            ]);
             const addSpy = vi
               .spyOn(toprfClient, 'addSecretDataItem')
               .mockResolvedValue();
@@ -1670,18 +1674,13 @@ describe('SeedlessOnboardingController', () => {
         );
       });
 
-      it('does not write a wrapped-keys item when MFA recovery is not enabled', async () => {
+      it('makes no recovery requests when MFA recovery is not enabled', async () => {
         await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
-          const newKeySet = mockPasswordChange(toprfClient);
+          mockPasswordChange(toprfClient);
           mockRecoveryFetchAuthPubKey(toprfClient, {
             password: getVaultKeySet().authKeyPair.pk,
           });
-          mockNamespaces(toprfClient, [
-            {
-              decKey: newKeySet.encKey,
-              items: [new SecretMetadata(MOCK_SEED_PHRASE).toBytes()],
-            },
-          ]);
+          const fetchSpy = vi.spyOn(toprfClient, 'fetchAllSecretDataItems');
           const addSpy = vi
             .spyOn(toprfClient, 'addSecretDataItem')
             .mockResolvedValue();
@@ -1693,6 +1692,7 @@ describe('SeedlessOnboardingController', () => {
               MOCK_PASSWORD,
             ),
           ).toBeUndefined();
+          expect(fetchSpy).not.toHaveBeenCalled();
           expect(addSpy).not.toHaveBeenCalled();
         });
       });
@@ -1705,16 +1705,13 @@ describe('SeedlessOnboardingController', () => {
           );
           const recoveryKeys = createRandomRecoveryKeys();
           const oldKeySet = getVaultKeySet();
-          const newKeySet = mockPasswordChange(toprfClient);
+          const newKeySet = mockPasswordChange(
+            toprfClient,
+            recoveryKeysItem(recoveryKeys),
+          );
           mockRecoveryFetchAuthPubKey(toprfClient, {
             password: oldKeySet.authKeyPair.pk,
           });
-          mockNamespaces(toprfClient, [
-            {
-              decKey: newKeySet.encKey,
-              items: recoveryKeysItem(recoveryKeys),
-            },
-          ]);
           vi.spyOn(toprfClient, 'addSecretDataItem').mockRejectedValue(
             new Error('write failed'),
           );
@@ -1754,15 +1751,21 @@ describe('SeedlessOnboardingController', () => {
         });
       });
 
-      it('still resolves without writing when reading the recovery-keys item fails', async () => {
+      it('still resolves without writing when the recovery-keys item is malformed', async () => {
         await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
-          mockPasswordChange(toprfClient);
+          mockPasswordChange(toprfClient, [
+            new SecretMetadata(MOCK_SEED_PHRASE).toBytes(),
+            stringToBytes(
+              JSON.stringify({
+                data: 'not-base64!',
+                timestamp: 1,
+                type: RECOVERY_KEYS_SECRET_TYPE,
+              }),
+            ),
+          ]);
           mockRecoveryFetchAuthPubKey(toprfClient, {
             password: getVaultKeySet().authKeyPair.pk,
           });
-          vi.spyOn(toprfClient, 'fetchAllSecretDataItems').mockRejectedValue(
-            new Error('fetch failed'),
-          );
           const addSpy = vi
             .spyOn(toprfClient, 'addSecretDataItem')
             .mockResolvedValue();
