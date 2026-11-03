@@ -15,7 +15,7 @@
  */
 
 import type { CaipAccountId } from '@metamask/utils';
-import { BigNumber } from 'bignumber.js';
+import type { BigNumber } from 'bignumber.js';
 
 import type { CandlePeriod } from '../constants/chartConfig.js';
 import {
@@ -249,6 +249,7 @@ import type {
   PerpsLoggerOptions,
 } from '../utils/errorContext.js';
 import { ensureError, isKeyringLockedError } from '../utils/errorUtils.js';
+import { LenientBigNumber } from '../utils/lenientBigNumber.js';
 import {
   adaptAccountStateFromLighter,
   adaptAccountStateFromLighterUserStats,
@@ -745,11 +746,11 @@ const isPartialTpslIntent = (value: unknown): value is PartialTpslIntent => {
       (intent.version === 2 &&
         intent.linkage === 'independent' &&
         typeof intent.positionSize === 'string' &&
-        new BigNumber(intent.positionSize).isFinite() &&
-        new BigNumber(intent.positionSize).gt(0) &&
-        new BigNumber(intent.positionSize)
+        new LenientBigNumber(intent.positionSize).isFinite() &&
+        new LenientBigNumber(intent.positionSize).gt(0) &&
+        new LenientBigNumber(intent.positionSize)
           .shiftedBy(Number(intent.sizeDecimals))
-          .integerValue(BigNumber.ROUND_DOWN)
+          .integerValue(LenientBigNumber.ROUND_DOWN)
           .eq(Number(intent.positionWireSize)) &&
         Number(intent.positionWireSize) < 2 ** 48 &&
         Array.isArray(intent.requestedSizes) &&
@@ -763,10 +764,12 @@ const isPartialTpslIntent = (value: unknown): value is PartialTpslIntent => {
           ) {
             return false;
           }
-          const amount = new BigNumber(size ?? (intent.positionSize as string));
+          const amount = new LenientBigNumber(
+            size ?? (intent.positionSize as string),
+          );
           const wire = amount
             .shiftedBy(Number(intent.sizeDecimals))
-            .integerValue(BigNumber.ROUND_DOWN);
+            .integerValue(LenientBigNumber.ROUND_DOWN);
           const order = orders[index];
           return (
             amount.isFinite() &&
@@ -8594,7 +8597,7 @@ export class LighterProvider implements PerpsProvider {
     if (!Array.isArray(active.orders)) {
       throw new Error('Lighter Scale active reservations are unavailable');
     }
-    let reserved = new BigNumber(0);
+    let reserved = new LenientBigNumber(0);
     const identities = new Set<string>();
     for (const row of active.orders) {
       if (
@@ -8689,7 +8692,7 @@ export class LighterProvider implements PerpsProvider {
         (held.sign !== 1 && held.sign !== -1) ||
         (held.sign === 1) === params.isBuy ||
         parseFinitePositive(held.position) === null ||
-        new BigNumber(ladder.size).gt(held.position)
+        new LenientBigNumber(ladder.size).gt(held.position)
       ) {
         throw new Error(
           'Lighter Scale reduce-only size or side exceeds the live position',
@@ -8722,12 +8725,12 @@ export class LighterProvider implements PerpsProvider {
         leverage < 1 ||
         leverage > maximum ||
         parseStrictDecimal(account.availableBalance) === null ||
-        new BigNumber(account.availableBalance).lt(0)
+        new LenientBigNumber(account.availableBalance).lt(0)
       ) {
         throw new Error('Invalid Lighter Scale margin state');
       }
       if (
-        new BigNumber(ladder.notional)
+        new LenientBigNumber(ladder.notional)
           .div(leverage)
           .gt(account.availableBalance)
       ) {
@@ -8841,7 +8844,7 @@ export class LighterProvider implements PerpsProvider {
       }
       const unsubmitted = remaining.reduce(
         (total, rung) => total.plus(rung.size),
-        new BigNumber(0),
+        new LenientBigNumber(0),
       );
       if (reserved.plus(unsubmitted).gt(held.position)) {
         throw new Error(
@@ -8868,8 +8871,9 @@ export class LighterProvider implements PerpsProvider {
       throw new Error('Invalid Lighter Scale remaining margin');
     }
     const notional = remaining.reduce(
-      (total, rung) => total.plus(new BigNumber(rung.price).times(rung.size)),
-      new BigNumber(0),
+      (total, rung) =>
+        total.plus(new LenientBigNumber(rung.price).times(rung.size)),
+      new LenientBigNumber(0),
     );
     if (notional.div(leverage).gt(account.availableBalance)) {
       throw new Error('Insufficient aggregate Lighter Scale remaining margin');
@@ -9111,8 +9115,8 @@ export class LighterProvider implements PerpsProvider {
           ![0, 1, false, true].includes(row.reduceOnly) ||
           Boolean(row.reduceOnly) !== group.reduceOnly ||
           row.type !== 'limit' ||
-          !new BigNumber(row.price).eq(rung.price) ||
-          !new BigNumber(row.initialBaseAmount).eq(rung.size)
+          !new LenientBigNumber(row.price).eq(rung.price) ||
+          !new LenientBigNumber(row.initialBaseAmount).eq(rung.size)
         ) {
           throw new Error('Lighter Scale order does not match signed intent');
         }
@@ -9124,7 +9128,7 @@ export class LighterProvider implements PerpsProvider {
           if (
             filled === null ||
             filled < 0 ||
-            new BigNumber(row.filledBaseAmount).gt(rung.size)
+            new LenientBigNumber(row.filledBaseAmount).gt(rung.size)
           ) {
             throw new Error('Invalid Lighter Scale fill quantity');
           }
@@ -9145,7 +9149,7 @@ export class LighterProvider implements PerpsProvider {
         if (
           row.filledBaseAmount !== undefined &&
           rung.filledSize !== undefined &&
-          new BigNumber(row.filledBaseAmount).lt(rung.filledSize)
+          new LenientBigNumber(row.filledBaseAmount).lt(rung.filledSize)
         ) {
           // Indexer lag cannot erase cumulative execution evidence.
           continue;
@@ -9518,10 +9522,10 @@ export class LighterProvider implements PerpsProvider {
               clientOrderId: ids[index],
               price,
               size: ladder.sizes[index],
-              priceInt: new BigNumber(price)
+              priceInt: new LenientBigNumber(price)
                 .shiftedBy(market.supportedPriceDecimals)
                 .toNumber(),
-              sizeInt: new BigNumber(ladder.sizes[index])
+              sizeInt: new LenientBigNumber(ladder.sizes[index])
                 .shiftedBy(market.supportedSizeDecimals)
                 .toNumber(),
               state: 'prepared',
@@ -10255,8 +10259,8 @@ export class LighterProvider implements PerpsProvider {
               rung.state !== 'rejected' &&
               (rung.orderId === undefined ||
                 rung.orderId === String(row.orderIndex)) &&
-              new BigNumber(rung.size).eq(row.initialBaseAmount) &&
-              new BigNumber(rung.price).eq(row.price),
+              new LenientBigNumber(rung.size).eq(row.initialBaseAmount) &&
+              new LenientBigNumber(rung.price).eq(row.price),
           ) &&
           row.isAsk === !group.isBuy &&
           Boolean(row.reduceOnly) === group.reduceOnly &&
@@ -12075,13 +12079,13 @@ export class LighterProvider implements PerpsProvider {
     if (!/^\d+(?:\.\d+)?$/u.test(params.size)) {
       throw new Error('Lighter Chase requires exact positive size');
     }
-    const requestedSize = new BigNumber(params.size);
+    const requestedSize = new LenientBigNumber(params.size);
     const size =
       params.usdAmount === undefined
         ? requestedSize
         : requestedSize.decimalPlaces(
             market.supportedSizeDecimals,
-            BigNumber.ROUND_DOWN,
+            LenientBigNumber.ROUND_DOWN,
           );
     const units = size.shiftedBy(market.supportedSizeDecimals);
     if (
@@ -12109,7 +12113,7 @@ export class LighterProvider implements PerpsProvider {
     });
     let maxNotional = String(LIGHTER_NATIVE_PROBE_MAX_NOTIONAL);
     if (params.usdAmount !== undefined) {
-      const budget = new BigNumber(params.usdAmount);
+      const budget = new LenientBigNumber(params.usdAmount);
       if (
         !/^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(params.usdAmount) ||
         !budget.isFinite() ||
@@ -12127,13 +12131,16 @@ export class LighterProvider implements PerpsProvider {
       ].filter((value) => value !== undefined);
       if (
         referencePrices.some((value) => {
-          const price = new BigNumber(value);
+          const price = new LenientBigNumber(value);
           return (
             !price.isFinite() ||
             !price.gt(0) ||
             !budget
               .div(price)
-              .decimalPlaces(market.supportedSizeDecimals, BigNumber.ROUND_DOWN)
+              .decimalPlaces(
+                market.supportedSizeDecimals,
+                LenientBigNumber.ROUND_DOWN,
+              )
               .eq(size)
           );
         })
@@ -12197,29 +12204,29 @@ export class LighterProvider implements PerpsProvider {
     const rows = (account.positions ?? []).filter(
       (position) => position.marketId === intent.marketId,
     );
-    const expectedFilled = new BigNumber(intent.originalSize).minus(
+    const expectedFilled = new LenientBigNumber(intent.originalSize).minus(
       remainingSize,
     );
     if (
       rows.length !== 1 ||
-      !new BigNumber(rows[0].initialMarginFraction).eq(100) ||
-      !new BigNumber(rows[0].position).abs().eq(expectedFilled) ||
+      !new LenientBigNumber(rows[0].initialMarginFraction).eq(100) ||
+      !new LenientBigNumber(rows[0].position).abs().eq(expectedFilled) ||
       (!expectedFilled.isZero() && (rows[0].sign === 1) !== intent.isBuy) ||
       account.pendingOrderCount !== 0 ||
       (account.positions ?? []).some(
         (position) =>
           position.openOrderCount !== 0 ||
           (position.marketId !== intent.marketId &&
-            !new BigNumber(position.position).isZero()),
+            !new LenientBigNumber(position.position).isZero()),
       )
     ) {
       throw new Error(
         'Lighter Chase requires independently confirmed 1x and no unrelated exposure or orders',
       );
     }
-    let exposure = new BigNumber(0);
+    let exposure = new LenientBigNumber(0);
     for (const position of account.positions ?? []) {
-      const value = new BigNumber(position.positionValue);
+      const value = new LenientBigNumber(position.positionValue);
       if (!value.isFinite()) {
         throw new Error('Lighter Chase account exposure is unavailable');
       }
@@ -12227,7 +12234,7 @@ export class LighterProvider implements PerpsProvider {
     }
     if (
       exposure
-        .plus(new BigNumber(remainingSize).times(price))
+        .plus(new LenientBigNumber(remainingSize).times(price))
         .gt(LIGHTER_NATIVE_PROBE_MAX_NOTIONAL)
     ) {
       throw new Error(
@@ -12354,7 +12361,9 @@ export class LighterProvider implements PerpsProvider {
           exact.orders[0].status === 'open' &&
           remaining !== null &&
           remaining > 0 &&
-          new BigNumber(exact.orders[0].remainingBaseAmount).lte(child.size)
+          new LenientBigNumber(exact.orders[0].remainingBaseAmount).lte(
+            child.size,
+          )
         ) {
           dispatch.phase = 'failed';
         }
@@ -12415,8 +12424,10 @@ export class LighterProvider implements PerpsProvider {
           market.marketId !== intent.marketId ||
           market.supportedPriceDecimals !== intent.priceDecimals ||
           market.supportedSizeDecimals !== intent.sizeDecimals ||
-          !new BigNumber(market.minBaseAmount).eq(intent.minBaseAmount) ||
-          !new BigNumber(market.minQuoteAmount).eq(intent.minQuoteAmount)
+          !new LenientBigNumber(market.minBaseAmount).eq(
+            intent.minBaseAmount,
+          ) ||
+          !new LenientBigNumber(market.minQuoteAmount).eq(intent.minQuoteAmount)
         ) {
           throw new Error('Lighter Chase native market constraints changed');
         }
@@ -12450,10 +12461,10 @@ export class LighterProvider implements PerpsProvider {
                 intent.owner.accountIndex,
                 intent.marketId,
                 Number(child.clientOrderId),
-                new BigNumber(child.size)
+                new LenientBigNumber(child.size)
                   .shiftedBy(intent.sizeDecimals)
                   .toFixed(0),
-                new BigNumber(child.price)
+                new LenientBigNumber(child.price)
                   .shiftedBy(intent.priceDecimals)
                   .toFixed(0),
                 intent.isBuy ? 0 : 1,
@@ -12768,7 +12779,7 @@ export class LighterProvider implements PerpsProvider {
       assertStartCurrent();
       this.#scheduleChase(record, io, generation);
       const current = record.children.at(-1);
-      const filled = new BigNumber(record.executedSize);
+      const filled = new LenientBigNumber(record.executedSize);
       return {
         success: record.status === 'active' || record.status === 'filled',
         orderId: intent.handle,
@@ -12781,7 +12792,7 @@ export class LighterProvider implements PerpsProvider {
         ...(filled.gt(0)
           ? {
               filledSize: filled.toFixed(),
-              averagePrice: new BigNumber(record.executedNotional)
+              averagePrice: new LenientBigNumber(record.executedNotional)
                 .div(filled)
                 .toFixed(),
             }
@@ -13272,16 +13283,16 @@ export class LighterProvider implements PerpsProvider {
       referencePrice: number,
       nowMilliseconds: number,
     ): ReturnType<typeof prepareLighterTwapOrder> => {
-      const maximumNotional = new BigNumber(params.size)
+      const maximumNotional = new LenientBigNumber(params.size)
         .times(referencePrice)
-        .times(new BigNumber(1).plus(slippage));
+        .times(new LenientBigNumber(1).plus(slippage));
       if (
         maximumNotional.gt(LIGHTER_NATIVE_PROBE_MAX_NOTIONAL) ||
-        new BigNumber(params.size)
+        new LenientBigNumber(params.size)
           .times(referencePrice)
-          .times(new BigNumber(1).minus(slippage))
+          .times(new LenientBigNumber(1).minus(slippage))
           .lt(market.minQuoteAmount) ||
-        new BigNumber(params.size).lt(market.minBaseAmount)
+        new LenientBigNumber(params.size).lt(market.minBaseAmount)
       ) {
         throw new Error(
           'Native TWAP probe must fit venue parent minimums and the 20 USD limit',
@@ -13315,7 +13326,7 @@ export class LighterProvider implements PerpsProvider {
     );
     if (
       positions.length !== 1 ||
-      !new BigNumber(positions[0].initialMarginFraction).eq(100)
+      !new LenientBigNumber(positions[0].initialMarginFraction).eq(100)
     ) {
       throw new Error(
         'Native TWAP probe requires independently confirmed existing 1x leverage',
@@ -13343,7 +13354,7 @@ export class LighterProvider implements PerpsProvider {
       marketId: market.marketId,
       clientOrderId: String(clientId),
       size: params.size,
-      price: new BigNumber(prepared.price)
+      price: new LenientBigNumber(prepared.price)
         .shiftedBy(-market.supportedPriceDecimals)
         .toFixed(),
       isBuy: params.isBuy,
@@ -13895,10 +13906,14 @@ export class LighterProvider implements PerpsProvider {
               record.status = 'terminal';
             } else if (
               status === 'open' &&
-              new BigNumber(row.price).eq(record.intent.price) &&
-              new BigNumber(row.initialBaseAmount).eq(record.intent.size) &&
-              new BigNumber(row.remainingBaseAmount).eq(record.intent.size) &&
-              new BigNumber(record.observation.filledSize).isZero()
+              new LenientBigNumber(row.price).eq(record.intent.price) &&
+              new LenientBigNumber(row.initialBaseAmount).eq(
+                record.intent.size,
+              ) &&
+              new LenientBigNumber(row.remainingBaseAmount).eq(
+                record.intent.size,
+              ) &&
+              new LenientBigNumber(record.observation.filledSize).isZero()
             ) {
               record.status = 'settled';
             }
@@ -14659,19 +14674,20 @@ export class LighterProvider implements PerpsProvider {
               : params.stopLossSize;
           if (!partialRequested || raw === undefined) {
             return params.partialPairLinkage === 'independent'
-              ? new BigNumber(position.size)
+              ? new LenientBigNumber(position.size)
                   .abs()
                   .shiftedBy(market.supportedSizeDecimals)
-                  .integerValue(BigNumber.ROUND_DOWN)
+                  .integerValue(LenientBigNumber.ROUND_DOWN)
                   .toNumber()
               : sizeInt;
           }
           // Preserve decimal intent through the bounds check and downward grid
           // normalization; binary conversion can widen a requested quantity.
-          const value = new BigNumber(raw);
-          const positionAmount = new BigNumber(position.size).abs();
+          const isDecimalString = /^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(raw);
+          const value = isDecimalString ? new LenientBigNumber(raw) : undefined;
+          const positionAmount = new LenientBigNumber(position.size).abs();
           if (
-            !/^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(raw) ||
+            value === undefined ||
             !value.isFinite() ||
             !value.gt(0) ||
             !positionAmount.isFinite() ||
@@ -14683,7 +14699,7 @@ export class LighterProvider implements PerpsProvider {
           }
           const wire = value
             .shiftedBy(market.supportedSizeDecimals)
-            .integerValue(BigNumber.ROUND_DOWN);
+            .integerValue(LenientBigNumber.ROUND_DOWN);
           if (wire.lt(1) || wire.gt(Number.MAX_SAFE_INTEGER)) {
             throw new Error(
               'Partial protection quantity is outside the size grid',
@@ -14734,7 +14750,9 @@ export class LighterProvider implements PerpsProvider {
               ? {
                   version: 2 as const,
                   linkage: 'independent' as const,
-                  positionSize: new BigNumber(position.size).abs().toFixed(),
+                  positionSize: new LenientBigNumber(position.size)
+                    .abs()
+                    .toFixed(),
                   requestedSizes: [
                     params.takeProfitSize ?? null,
                     params.stopLossSize ?? null,
@@ -14750,10 +14768,10 @@ export class LighterProvider implements PerpsProvider {
             positionSign: isLong ? 1 : -1,
             positionWireSize:
               params.partialPairLinkage === 'independent'
-                ? new BigNumber(position.size)
+                ? new LenientBigNumber(position.size)
                     .abs()
                     .shiftedBy(market.supportedSizeDecimals)
-                    .integerValue(BigNumber.ROUND_DOWN)
+                    .integerValue(LenientBigNumber.ROUND_DOWN)
                     .toNumber()
                 : sizeInt,
             sizeDecimals: market.supportedSizeDecimals,
@@ -14775,7 +14793,7 @@ export class LighterProvider implements PerpsProvider {
                 order[5] === LIGHTER_ORDER_TYPE_TAKE_PROFIT
                   ? params.takeProfitSize
                   : params.stopLossSize,
-              normalizedSize: new BigNumber(order[2])
+              normalizedSize: new LenientBigNumber(order[2])
                 .shiftedBy(-market.supportedSizeDecimals)
                 .toFixed(),
               status: 'unknown',
@@ -15983,8 +16001,8 @@ export class LighterProvider implements PerpsProvider {
                 throw new Error('Lighter protection receipt identity changed');
               }
               leg.orderId = String(row.orderIndex);
-              const remaining = new BigNumber(row.remainingBaseAmount);
-              const initial = new BigNumber(row.initialBaseAmount);
+              const remaining = new LenientBigNumber(row.remainingBaseAmount);
+              const initial = new LenientBigNumber(row.initialBaseAmount);
               const status = row.status.toLowerCase();
               leg.status = 'unknown';
               if (
@@ -16583,8 +16601,8 @@ export class LighterProvider implements PerpsProvider {
     if (
       expected &&
       (row.sign !== expected.sign ||
-        !new BigNumber(row.position).eq(expected.position) ||
-        !new BigNumber(row.avgEntryPrice).eq(expected.avgEntryPrice))
+        !new LenientBigNumber(row.position).eq(expected.position) ||
+        !new LenientBigNumber(row.avgEntryPrice).eq(expected.avgEntryPrice))
     ) {
       throw new Error(
         'Lighter margin position changed; refresh before adjusting collateral',
@@ -16599,7 +16617,7 @@ export class LighterProvider implements PerpsProvider {
       amount > 0 &&
       (available === null ||
         available < 0 ||
-        new BigNumber(amount).gt(account.availableBalance))
+        new LenientBigNumber(amount).gt(account.availableBalance))
     ) {
       throw new Error('Lighter margin addition exceeds available collateral');
     }
@@ -16607,7 +16625,7 @@ export class LighterProvider implements PerpsProvider {
       amount < 0 &&
       (allocated === null ||
         allocated < 0 ||
-        new BigNumber(-amount).gt(row.allocatedMargin ?? '0'))
+        new LenientBigNumber(-amount).gt(row.allocatedMargin ?? '0'))
     ) {
       throw new Error(
         'Lighter margin removal exceeds authoritative allocated collateral',
@@ -16647,7 +16665,10 @@ export class LighterProvider implements PerpsProvider {
       // raw-scaling to an unsafe integer inside signer params.
       const marginAmountInt = toSignerWireInteger(Math.abs(amount), 6);
       if (
-        !new BigNumber(params.amount).abs().shiftedBy(6).eq(marginAmountInt)
+        !new LenientBigNumber(params.amount)
+          .abs()
+          .shiftedBy(6)
+          .eq(marginAmountInt)
       ) {
         throw new Error(
           'Lighter margin adjustment requires exact micro-USDC precision',

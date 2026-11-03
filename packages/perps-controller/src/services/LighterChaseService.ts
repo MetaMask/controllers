@@ -9,7 +9,7 @@ import {
   optional,
 } from '@metamask/superstruct';
 import type { Infer } from '@metamask/superstruct';
-import { BigNumber } from 'bignumber.js';
+import type { BigNumber } from 'bignumber.js';
 
 import { BASIS_POINTS_DIVISOR } from '../constants/hyperLiquidConfig.js';
 import {
@@ -38,6 +38,7 @@ import type {
   PerpsPlatformDependencies,
   ReconcileChaseOrderCancellationParams,
 } from '../types/index.js';
+import { LenientBigNumber } from '../utils/lenientBigNumber.js';
 import type { LighterChaseChildObservation } from '../utils/lighterChase.js';
 import {
   isLighterTxHash,
@@ -180,7 +181,7 @@ function amount(value: string): BigNumber {
   if (!/^\d+(?:\.\d+)?$/u.test(value)) {
     throw new Error('Invalid Lighter Chase amount');
   }
-  const result = new BigNumber(value);
+  const result = new LenientBigNumber(value);
   if (!result.isFinite() || result.isNegative()) {
     throw new Error('Invalid Lighter Chase amount');
   }
@@ -519,8 +520,8 @@ export class LighterChaseService {
   }
 
   #totals(record: LighterChaseRecord): void {
-    let filled = new BigNumber(0);
-    let notional = new BigNumber(0);
+    let filled = new LenientBigNumber(0);
+    let notional = new LenientBigNumber(0);
     const orderIds = new Set<string>();
     for (const child of record.children) {
       if (!child.observation) {
@@ -1469,11 +1470,11 @@ export function toLighterChaseOrder(record: LighterChaseRecord): ChaseOrder {
     restingOrderId: child?.observation?.terminal
       ? null
       : (child?.observation?.orderId ?? null),
-    distanceChasedBps: BigNumber.maximum(
+    distanceChasedBps: LenientBigNumber.maximum(
       0,
       adverse.div(arrival).times(BASIS_POINTS_DIVISOR),
     )
-      .integerValue(BigNumber.ROUND_HALF_UP)
+      .integerValue(LenientBigNumber.ROUND_HALF_UP)
       .toNumber(),
     maxDistanceBps: intent.maxDistanceBps,
     repricings: record.repricings,

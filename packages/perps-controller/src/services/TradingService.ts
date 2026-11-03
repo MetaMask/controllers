@@ -1,4 +1,3 @@
-import { BigNumber } from 'bignumber.js';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -47,6 +46,7 @@ import type {
   PerpsLoggerOptions,
 } from '../utils/errorContext.js';
 import { ensureError } from '../utils/errorUtils.js';
+import { LenientBigNumber } from '../utils/lenientBigNumber.js';
 import { captureScaleOrderParams } from '../utils/lighterScaleOrders.js';
 import {
   isLimitExecutionOrderType,
@@ -329,7 +329,7 @@ export class TradingService {
     // Keep execution quantities intact on the receipt and partial-fill event.
     const trackedFillSize =
       result?.filledSize !== undefined &&
-      new BigNumber(result.filledSize).isZero()
+      new LenientBigNumber(result.filledSize).isZero()
         ? (result.acceptedSize ?? result.filledSize)
         : result?.filledSize;
     const trackedOrderSize = parseFloat(
@@ -490,11 +490,11 @@ export class TradingService {
     const acceptedSize =
       acceptedSizeString === undefined
         ? undefined
-        : new BigNumber(acceptedSizeString);
+        : new LenientBigNumber(acceptedSizeString);
     const filledSize =
       result?.filledSize === undefined
         ? undefined
-        : new BigNumber(result.filledSize);
+        : new LenientBigNumber(result.filledSize);
     if (
       result?.success === true &&
       acceptedSize !== undefined &&

@@ -1,7 +1,7 @@
 import { TransactionType } from '@metamask/transaction-controller';
 import type { TransactionMeta } from '@metamask/transaction-controller';
-import { BigNumber } from 'bignumber.js';
 
+import { parseDecimal } from '../../utils/big-number.js';
 import type { AcrossSwapApprovalResponse } from './types.js';
 
 export type AcrossOrderedTransaction = {
@@ -57,9 +57,9 @@ export function getOriginalTransactionGas(
     return undefined;
   }
 
-  const gas = new BigNumber(rawGas);
+  const gas = parseDecimal(rawGas);
 
-  if (!gas.isFinite() || gas.isNaN() || !gas.isInteger() || gas.lte(0)) {
+  if (!gas?.isInteger() || gas.lte(0)) {
     return undefined;
   }
 

@@ -4,10 +4,12 @@ import type { TransactionReceipt } from '@metamask/transaction-controller';
 import { BigNumber } from 'bignumber.js';
 
 import type { BridgeHistoryItem } from '../types.js';
+import { hexToBigNumber } from './hex-to-big-number.js';
+import { parseDecimal } from './parse-decimal.js';
 
 const calcGasInHexWei = (gasLimit?: string, gasPrice?: string) => {
   return gasLimit && gasPrice
-    ? new BigNumber(gasLimit, 16).times(new BigNumber(gasPrice, 16))
+    ? hexToBigNumber(gasLimit).times(hexToBigNumber(gasPrice))
     : null;
 };
 
@@ -25,11 +27,11 @@ export const calcActualGasUsed = (
   txReceipt?: TransactionReceipt,
   approvalTxReceipt?: TransactionReceipt,
 ): Omit<TokenAmountValues, 'valueInCurrency'> | null => {
+  const quotedGasInUsd = parseDecimal(pricingData?.quotedGasInUsd);
+  const quotedGasAmount = parseDecimal(pricingData?.quotedGasAmount);
   const usdExchangeRate =
-    pricingData?.quotedGasInUsd && pricingData?.quotedGasAmount
-      ? new BigNumber(pricingData?.quotedGasInUsd).div(
-          pricingData.quotedGasAmount,
-        )
+    quotedGasInUsd && quotedGasAmount
+      ? quotedGasInUsd.div(quotedGasAmount)
       : null;
 
   const actualGasInHexWei = calcGasInHexWei(

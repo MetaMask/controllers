@@ -1,4 +1,4 @@
-import { BigNumber } from 'bignumber.js';
+import type { BigNumber } from 'bignumber.js';
 
 import {
   LIGHTER_MAX_DECIMALS,
@@ -9,6 +9,7 @@ import type {
   LighterOrderBookOrdersResponse,
   LighterRestTrade,
 } from '../types/lighter-types.js';
+import { LenientBigNumber } from './lenientBigNumber.js';
 import { adaptFillFromLighterTrade } from './lighterAdapter.js';
 
 /** Authoritative observation of one exact ordinary post-only child. */
@@ -28,7 +29,7 @@ function amount(value: string | undefined): BigNumber {
   if (value === undefined || !/^\d+(?:\.\d+)?$/u.test(value)) {
     throw new Error('Lighter Chase amount is missing or malformed');
   }
-  const parsed = new BigNumber(value);
+  const parsed = new LenientBigNumber(value);
   if (!parsed.isFinite() || parsed.isNegative()) {
     throw new Error('Lighter Chase amount is invalid');
   }
@@ -122,15 +123,15 @@ export function readLighterChaseQuote(
   if (external.bids.length === 0 || external.asks.length === 0) {
     throw new Error('Lighter Chase external book is unavailable');
   }
-  const bid = BigNumber.maximum(...external.bids);
-  const ask = BigNumber.minimum(...external.asks);
+  const bid = LenientBigNumber.maximum(...external.bids);
+  const ask = LenientBigNumber.minimum(...external.asks);
   if (bid.gte(ask)) {
     throw new Error('Lighter Chase book is crossed');
   }
-  const tick = new BigNumber(1).shiftedBy(-options.priceDecimals);
+  const tick = new LenientBigNumber(1).shiftedBy(-options.priceDecimals);
   const price = options.isBuy
-    ? BigNumber.minimum(bid.plus(tick), ask.minus(tick))
-    : BigNumber.maximum(ask.minus(tick), bid.plus(tick));
+    ? LenientBigNumber.minimum(bid.plus(tick), ask.minus(tick))
+    : LenientBigNumber.maximum(ask.minus(tick), bid.plus(tick));
   if (price.lte(0)) {
     throw new Error('Lighter Chase book quote is invalid');
   }
@@ -161,8 +162,8 @@ export function reconcileLighterChaseChild(
 ): LighterChaseChildObservation {
   const orderId = identifyLighterChaseChild(intent, child, order);
   const unique = new Map<string, LighterRestTrade>();
-  let filled = new BigNumber(0);
-  let notional = new BigNumber(0);
+  let filled = new LenientBigNumber(0);
+  let notional = new LenientBigNumber(0);
   for (const trade of trades) {
     exactId(trade.bidId, trade.bidIdStr);
     exactId(trade.askId, trade.askIdStr);
@@ -197,7 +198,7 @@ export function reconcileLighterChaseChild(
   ) {
     throw new Error('Lighter Chase fill totals are incomplete or inconsistent');
   }
-  const remaining = new BigNumber(child.size).minus(filled);
+  const remaining = new LenientBigNumber(child.size).minus(filled);
   const active = ['pending', 'in-progress', 'open'].includes(order.status);
   const terminal = [
     'filled',

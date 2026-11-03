@@ -189,7 +189,10 @@ export const isSmartTransactionCancellable = (
 };
 
 export const incrementNonceInHex = (nonceInHex: string): string => {
-  const nonceInDec = new BigNumber(nonceInHex, 16).toString(10);
+  const nonceInDec = new BigNumber(
+    nonceInHex.replace(/^0x/iu, ''),
+    16,
+  ).toString(10);
   return hexlify(Number(nonceInDec) + 1);
 };
 

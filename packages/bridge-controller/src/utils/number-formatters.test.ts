@@ -1,9 +1,15 @@
 import type { CaipAssetType } from '@metamask/utils';
+import { BigNumber } from 'bignumber.js';
 import { describe, expect, it } from 'vitest';
 
 import type { DeepPartial } from '../types.js';
 import type { AmountsAndAsset } from '../validators/amount-and-asset.js';
-import { sumAmounts, sumAmountsByAssetId } from './number-formatters.js';
+import {
+  calcAtomicTokenAmount,
+  calcNormalizedTokenAmount,
+  sumAmounts,
+  sumAmountsByAssetId,
+} from './number-formatters.js';
 
 const ETH = 'eip155:1/slip44:60' as CaipAssetType;
 const USDC =
@@ -41,6 +47,70 @@ const dest = ({
   ...(usd && { usd }),
   ...(minAmountValueInCurrency && { minAmountValueInCurrency }),
   ...(minAmountUsd && { minAmountUsd }),
+});
+
+describe('calcNormalizedTokenAmount', () => {
+  it.each([
+    [undefined, 18],
+    [null, 18],
+    ['1', undefined],
+  ])('returns undefined for value %s and decimals %s', (value, decimals) => {
+    expect(calcNormalizedTokenAmount(value, decimals)).toBeUndefined();
+  });
+
+  it.each([
+    ['1000000000000000000', 18, '1'],
+    ['1500000', 6, '1.5'],
+  ])('divides string %s by 10^%s', (value, decimals, expected) => {
+    expect(calcNormalizedTokenAmount(value, decimals)).toBe(expected);
+  });
+
+  it('accepts a BigNumber whose string form uses exponent notation', () => {
+    expect(calcNormalizedTokenAmount(new BigNumber('1e21'), 18)).toBe('1000');
+  });
+
+  it('accepts a BigNumber with a tiny value', () => {
+    expect(calcNormalizedTokenAmount(new BigNumber('1e-10'), 2)).toBe(
+      '0.000000000001',
+    );
+  });
+
+  it('accepts a number', () => {
+    expect(calcNormalizedTokenAmount(14000000, 6)).toBe('14');
+  });
+
+  it('parses a prefixed hex string when base is 16', () => {
+    expect(calcNormalizedTokenAmount('0x10', 0, 16)).toBe('16');
+  });
+
+  it('parses an unprefixed hex string when base is 16', () => {
+    expect(calcNormalizedTokenAmount('ff', 0, 16)).toBe('255');
+  });
+});
+
+describe('calcAtomicTokenAmount', () => {
+  it.each([
+    [undefined, 18],
+    [null, 18],
+    ['1', undefined],
+  ])('returns undefined for value %s and decimals %s', (value, decimals) => {
+    expect(calcAtomicTokenAmount(value, decimals)).toBeUndefined();
+  });
+
+  it('multiplies a string by 10^decimals', () => {
+    expect(calcAtomicTokenAmount('1.5', 6)).toBe('1500000');
+  });
+
+  it('accepts a BigNumber whose string form uses exponent notation', () => {
+    expect(calcAtomicTokenAmount(new BigNumber('1e-10'), 18)).toBe('100000000');
+    expect(calcAtomicTokenAmount(new BigNumber('1e21'), 0)).toBe(
+      '1000000000000000000000',
+    );
+  });
+
+  it('accepts a number', () => {
+    expect(calcAtomicTokenAmount(1.1, 18)).toBe('1100000000000000000');
+  });
 });
 
 describe('sumAmounts', () => {

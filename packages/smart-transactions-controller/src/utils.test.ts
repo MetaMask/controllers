@@ -339,6 +339,11 @@ describe('src/utils.js', () => {
       const incrementedNonce = utils.incrementNonceInHex('0x56');
       expect(incrementedNonce).toBe('0x57');
     });
+
+    it('returns "0x57" if we pass an unprefixed "56"', () => {
+      const incrementedNonce = utils.incrementNonceInHex('56');
+      expect(incrementedNonce).toBe('0x57');
+    });
   });
 
   describe('mapKeysToCamel', () => {

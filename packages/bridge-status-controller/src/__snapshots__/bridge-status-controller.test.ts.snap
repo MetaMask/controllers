@@ -5826,7 +5826,7 @@ exports[`BridgeStatusController > submitTx: Solana swap > should successfully su
   "chainId": "0x416edef1601be",
   "destinationChainId": "0x416edef1601be",
   "destinationTokenAddress": "0x...",
-  "destinationTokenAmount": "500000000000000000s",
+  "destinationTokenAmount": "500000000000000000",
   "destinationTokenDecimals": 18,
   "destinationTokenSymbol": "USDC",
   "hash": "signature",
@@ -5882,7 +5882,7 @@ exports[`BridgeStatusController > submitTx: Solana swap > should successfully su
       "symbol": "USDC",
     },
     "destChainId": 1151111081099710,
-    "destTokenAmount": "500000000000000000s",
+    "destTokenAmount": "500000000000000000",
     "feeData": {
       "metabridge": {
         "amount": "1000000",

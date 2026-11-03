@@ -749,6 +749,98 @@ describe('metrics utils', () => {
       const result = getFinalizedTxProperties(noQuotedGasHistoryItem);
       expect(result.usd_actual_gas).toBe(0);
     });
+
+    describe('with non-numeric quote data', () => {
+      const bridgeTxMeta = {
+        type: TransactionType.bridge,
+        txReceipt: { gasUsed: '0x2c92a', effectiveGasPrice: '0x1880a' },
+      } as never;
+
+      it.each([
+        [
+          'quotedReturnInUsd',
+          {
+            ...mockHistoryItem,
+            pricingData: {
+              ...mockHistoryItem.pricingData,
+              quotedReturnInUsd: 'garbage',
+            },
+          },
+          { quote_vs_execution_ratio: 0, usd_actual_return: 0 },
+        ],
+        [
+          'quotedGasInUsd',
+          {
+            ...mockHistoryItem,
+            pricingData: {
+              ...mockHistoryItem.pricingData,
+              quotedGasInUsd: 'garbage',
+            },
+          },
+          { usd_actual_gas: '0' },
+        ],
+        [
+          'quotedGasAmount',
+          {
+            ...mockHistoryItem,
+            pricingData: {
+              ...mockHistoryItem.pricingData,
+              quotedGasAmount: 'garbage',
+            },
+          },
+          { quoted_vs_used_gas_ratio: 0, usd_actual_gas: '0' },
+        ],
+        [
+          'destTokenAmount',
+          {
+            ...mockHistoryItem,
+            quote: { ...mockHistoryItem.quote, destTokenAmount: 'garbage' },
+          },
+          { quote_vs_execution_ratio: 0, usd_actual_return: 0 },
+        ],
+        [
+          'destChain.amount',
+          {
+            ...mockHistoryItem,
+            status: {
+              ...mockHistoryItem.status,
+              destChain: {
+                ...mockHistoryItem.status.destChain,
+                amount: 'garbage',
+              },
+            },
+          },
+          { quote_vs_execution_ratio: 0, usd_actual_return: 0 },
+        ],
+      ] as [string, BridgeHistoryItem, Record<string, unknown>][])(
+        'treats a non-numeric %s as unavailable',
+        (_field, historyItem, expected) => {
+          const result = getFinalizedTxProperties(historyItem, bridgeTxMeta);
+
+          expect(result).toMatchObject(expected);
+        },
+      );
+
+      it('treats a non-numeric destTokenAmount as unavailable when a native swap balance has not updated', () => {
+        const result = getFinalizedTxProperties(
+          {
+            ...mockHistoryItem,
+            quote: { ...mockHistoryItem.quote, destTokenAmount: 'garbage' },
+          },
+          {
+            type: TransactionType.swap,
+            preTxBalance: '0x1',
+            postTxBalance: '0x1',
+            txReceipt: { gasUsed: '0x2c92a', effectiveGasPrice: '0x1880a' },
+          } as never,
+        );
+
+        expect(result).toMatchObject({
+          quote_vs_execution_ratio: 0,
+          usd_actual_return: 0,
+        });
+      });
+    });
   });
 
   describe('getRequestParamFromHistory', () => {

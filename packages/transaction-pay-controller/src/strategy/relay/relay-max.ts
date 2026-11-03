@@ -10,6 +10,7 @@ import type {
   TransactionPayControllerMessenger,
   TransactionPayQuote,
 } from '../../types.js';
+import { parseDecimal } from '../../utils/big-number.js';
 import { prefixError } from '../../utils/error-prefix.js';
 import { isAtomicMaxEnabled } from '../../utils/feature-flags.js';
 import {
@@ -564,9 +565,9 @@ export function isSubsidizedAtomicMaxQuote(
 }
 
 function validatePositiveIntegerString(value: string): string {
-  const amount = new BigNumber(value);
+  const amount = parseDecimal(value);
 
-  if (!amount.isFinite() || !amount.isInteger() || !amount.isGreaterThan(0)) {
+  if (!amount?.isInteger() || !amount.isGreaterThan(0)) {
     throw new Error(`Invalid target amount: ${value}`);
   }
 

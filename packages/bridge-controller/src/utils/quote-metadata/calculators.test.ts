@@ -441,7 +441,7 @@ describe('Quote Metadata Utils', () => {
         },
       );
 
-      expect(new BigNumber(mockBridgeQuote.trade.value, 16).toFixed()).toBe(
+      expect(new BigNumber(mockBridgeQuote.trade.value).toFixed()).toBe(
         '1200000000000000000',
       );
 

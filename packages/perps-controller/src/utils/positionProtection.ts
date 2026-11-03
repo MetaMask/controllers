@@ -1,7 +1,6 @@
-import { BigNumber } from 'bignumber.js';
-
 import { PERPS_ERROR_CODES } from '../perpsErrorCodes.js';
 import type { UpdatePositionTPSLParams } from '../types/index.js';
+import { LenientBigNumber } from './lenientBigNumber.js';
 
 /**
  * Reject a protection mutation whose caller-owned position no longer matches.
@@ -25,8 +24,8 @@ export function assertExpectedPosition(
   ) {
     throw new Error(PERPS_ERROR_CODES.TPSL_UPDATE_FAILED);
   }
-  const expectedSize = new BigNumber(expected.size);
-  const expectedEntryPrice = new BigNumber(expected.entryPrice);
+  const expectedSize = new LenientBigNumber(expected.size);
+  const expectedEntryPrice = new LenientBigNumber(expected.entryPrice);
   if (
     !expectedSize.isFinite() ||
     expectedSize.isZero() ||

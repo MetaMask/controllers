@@ -41,6 +41,7 @@ import type { GetAssetVisibility } from '../utils/assetVisibility.js';
 import { ZERO_ADDRESS } from '../utils/constants.js';
 import { filterFailedChainBalances } from '../utils/filterFailedChainBalances.js';
 import { normalizeAssetId } from '../utils/index.js';
+import { parseDecimal } from '../utils/parseDecimal.js';
 import { AbstractDataSource } from './AbstractDataSource.js';
 import type {
   DataSourceState,
@@ -371,8 +372,8 @@ export class RpcDataSource extends AbstractDataSource<
       return '0';
     }
 
-    const rawAmount = new BigNumberJS(rawBalance);
-    if (!rawAmount.isFinite()) {
+    const rawAmount = parseDecimal(rawBalance);
+    if (!rawAmount) {
       log('Invalid raw balance — defaulting to "0"', { rawBalance, decimals });
       return '0';
     }

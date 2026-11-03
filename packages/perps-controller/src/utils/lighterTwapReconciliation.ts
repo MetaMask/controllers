@@ -1,4 +1,4 @@
-import { BigNumber } from 'bignumber.js';
+import type { BigNumber } from 'bignumber.js';
 
 import {
   LIGHTER_MINUTE_MS,
@@ -14,6 +14,7 @@ import type {
   LighterApiOrder,
   LighterRestTrade,
 } from '../types/lighter-types.js';
+import { LenientBigNumber } from './lenientBigNumber.js';
 import { adaptFillFromLighterTrade } from './lighterAdapter.js';
 
 export type LighterTwapObservation = {
@@ -51,7 +52,7 @@ function amount(value: string | undefined): BigNumber {
   if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/u.test(value)) {
     throw new Error('Lighter TWAP execution amount is missing or malformed');
   }
-  return new BigNumber(value);
+  return new LenientBigNumber(value);
 }
 
 /**
@@ -212,19 +213,19 @@ export function reconcileLighterTwapObservation(
     };
     fills.push(fill);
     const sum = totals.get(String(sideId)) ?? {
-      base: new BigNumber(0),
-      quote: new BigNumber(0),
+      base: new LenientBigNumber(0),
+      quote: new LenientBigNumber(0),
     };
     sum.base = sum.base.plus(amount(trade.size));
     sum.quote = sum.quote.plus(amount(trade.usdAmount));
     totals.set(String(sideId), sum);
   }
-  let executed = new BigNumber(0);
-  let notional = new BigNumber(0);
+  let executed = new LenientBigNumber(0);
+  let notional = new LenientBigNumber(0);
   for (const child of children) {
     const sum = totals.get(String(child.orderIndex)) ?? {
-      base: new BigNumber(0),
-      quote: new BigNumber(0),
+      base: new LenientBigNumber(0),
+      quote: new LenientBigNumber(0),
     };
     if (
       !amount(child.filledBaseAmount).eq(sum.base) ||
@@ -283,7 +284,7 @@ export function reconcileLighterTwapObservation(
     side: intent.isBuy ? 'buy' : 'sell',
     size: intent.size,
     executedSize: executed.toFixed(),
-    remainingSize: new BigNumber(intent.size).minus(executed).toFixed(),
+    remainingSize: new LenientBigNumber(intent.size).minus(executed).toFixed(),
     executedNotional: notional.toFixed(),
     ...(executed.gt(0)
       ? { averagePrice: notional.div(executed).toFixed() }
@@ -291,7 +292,7 @@ export function reconcileLighterTwapObservation(
     fillProgressBps: executed
       .div(intent.size)
       .times(10_000)
-      .integerValue(BigNumber.ROUND_FLOOR)
+      .integerValue(LenientBigNumber.ROUND_FLOOR)
       .toNumber(),
     timeProgressBps: Math.min(
       10_000,

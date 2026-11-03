@@ -11,6 +11,7 @@ import { BigNumber } from 'bignumber.js';
 
 import { projectLogger } from '../../logger.js';
 import type { TransactionPayControllerMessenger } from '../../types.js';
+import { parseDecimal } from '../../utils/big-number.js';
 import {
   getFiatAssetPerTransactionType,
   getFiatEnabledTypes,
@@ -239,9 +240,9 @@ export function getRawSourceAmountFromOrderCryptoAmount({
   cryptoAmount: RampsOrder['cryptoAmount'];
   decimals: number;
 }): string {
-  const normalizedAmount = new BigNumber(String(cryptoAmount));
+  const normalizedAmount = parseDecimal(String(cryptoAmount));
 
-  if (!normalizedAmount.isFinite() || normalizedAmount.lte(0)) {
+  if (!normalizedAmount?.gt(0)) {
     throw new Error(
       `Invalid fiat order crypto amount: ${String(cryptoAmount)}`,
     );
