@@ -641,24 +641,24 @@ describe('KycService', () => {
         .reply(204);
       const { service } = getService();
 
-      await expect(
-        service.completeDeletion({
+      expect(
+        await service.completeDeletion({
           deletionId: 'deletion-1',
           wrappedUkycCapabilityToken,
         }),
-      ).resolves.toBeUndefined();
+      ).toBeUndefined();
     });
 
     it('url-encodes the deletion id', async () => {
       nock(MOCK_API_URL).delete('/deletions/a%2Fb').reply(204);
       const { service } = getService();
 
-      await expect(
-        service.completeDeletion({
+      expect(
+        await service.completeDeletion({
           deletionId: 'a/b',
           wrappedUkycCapabilityToken,
         }),
-      ).resolves.toBeUndefined();
+      ).toBeUndefined();
     });
   });
 

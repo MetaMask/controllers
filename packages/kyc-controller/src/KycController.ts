@@ -58,10 +58,8 @@ import type {
   KycVendorDisclaimersAccepted,
   KycVendorSigning,
 } from './types.js';
-import {
-  deriveClientMaterial,
-  type UkycClientMaterial,
-} from './ukyc/deriveClientMaterial.js';
+import { deriveClientMaterial } from './ukyc/deriveClientMaterial.js';
+import type { UkycClientMaterial } from './ukyc/deriveClientMaterial.js';
 import { assertAttestedServerPublicKey } from './ukyc/jwtChain.js';
 import type { Jwk } from './ukyc/jwtChain.js';
 import {
@@ -71,8 +69,8 @@ import {
 import {
   encodeStorageAccessTokenForHeader,
   signStorageAccessToken,
-  type UkycStorageOperation,
 } from './ukyc/storageAccessToken.js';
+import type { UkycStorageOperation } from './ukyc/storageAccessToken.js';
 import { wrapEncryptionKey } from './ukyc/wrapEncryptionKey.js';
 import {
   areVendorDisclaimersCompleted,

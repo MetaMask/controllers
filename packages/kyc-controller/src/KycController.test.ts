@@ -93,6 +93,11 @@ const MOCK_SUMSUB_DISCLAIMERS_ACCEPTED: KycConsentRecord[] =
 
 const AAL2_TOKEN = 'aal2-token';
 
+const ENCRYPTION_SCHEMA = {
+  serverPublicKey: { kty: 'OKP', crv: 'X25519', x: 'spk-x' },
+  jwtChain: 'jwt.chain.sig',
+};
+
 describe('KycController', () => {
   describe('constructor', () => {
     it('accepts initial state merged over defaults', async () => {
@@ -2350,9 +2355,7 @@ describe('KycController', () => {
           ENCRYPTION_SCHEMA,
         );
 
-        const plaintext = bytesToString(
-          mockWrapEncryptionKey.mock.calls[0][2] as Uint8Array,
-        );
+        const plaintext = bytesToString(mockWrapEncryptionKey.mock.calls[0][2]);
         const token = JSON.parse(
           bytesToString(base64UrlToBytes(plaintext)),
         ) as {
@@ -2394,6 +2397,24 @@ describe('KycController', () => {
 
         await expect(controller.deleteEncryptedStorage()).rejects.toThrow(
           'prepare failed',
+        );
+        expect(handlers.completeDeletion).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does not complete the deletion when fetching relay signing keys fails', async () => {
+      const fetchError = new Error(
+        "Fetching 'https://idos.example/.well-known/jwks.json' failed with status '500'",
+      );
+      await withController(async ({ controller, handlers }) => {
+        handlers.fetchIdosRelayJwks.mockRejectedValueOnce(fetchError);
+
+        await expect(controller.deleteEncryptedStorage()).rejects.toMatchObject(
+          {
+            message:
+              'KycController.#verifyCapabilityTokenSchema: Unable to fetch JWKS needed to verify wrapping keys.',
+            cause: fetchError,
+          },
         );
         expect(handlers.completeDeletion).not.toHaveBeenCalled();
       });
@@ -2466,11 +2487,6 @@ type WithControllerCallback<ReturnValue> = (payload: {
 
 type WithControllerOptions = {
   options: Partial<ConstructorParameters<typeof KycController>[0]>;
-};
-
-const ENCRYPTION_SCHEMA = {
-  serverPublicKey: { kty: 'OKP', crv: 'X25519', x: 'spk-x' },
-  jwtChain: 'jwt.chain.sig',
 };
 
 /**
