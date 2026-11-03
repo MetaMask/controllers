@@ -450,6 +450,42 @@ describe('TokenDataSource', () => {
       );
     });
 
+    it('matches launchpad and occurrence data regardless of asset ID casing', async () => {
+      const checksummedId =
+        'eip155:1/erc20:0xAbCdEf0123456789aBcDeF0123456789AbCdEf01' as Caip19AssetId;
+      const { controller, apiClient } = setupController({
+        messenger: createTestMessenger(),
+        supportedNetworks: ['eip155:1'],
+        assetsResponse: [
+          createMockAssetResponse(checksummedId.toLowerCase(), {
+            occurrences: 0,
+          }),
+        ],
+        suggestedOccurrenceFloors: { '1': 3 },
+      });
+      apiClient.token.fetchV2Assets.mockResolvedValue([
+        { assetId: checksummedId.toLowerCase(), launchpad: 'flap' },
+      ]);
+
+      const context = createMiddlewareContext({
+        response: {
+          assetsBalance: {
+            'mock-account-id': { [checksummedId]: { amount: '50' } },
+          },
+        },
+      });
+      await controller.assetsMiddleware(
+        context,
+        vi.fn().mockResolvedValue(undefined),
+      );
+
+      expect(
+        context.response.assetsInfo?.[
+          checksummedId.toLowerCase() as Caip19AssetId
+        ],
+      ).toBeDefined();
+    });
+
     it('filters launchpad tokens classified as malicious', async () => {
       const { controller } = setupLaunchpad([
         {

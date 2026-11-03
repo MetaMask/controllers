@@ -56,6 +56,17 @@ export enum CaipAssetNamespace {
 
 const MUSD_ADDRESS_LOWERCASE = '0xaca92e438df0b2401ff60da7e4337b687a2435da';
 
+/**
+ * Whether a CAIP-19 asset ID (any casing) is mUSD, which is exempt from
+ * occurrence-floor filtering.
+ *
+ * @param assetId - CAIP-19 asset ID.
+ * @returns True when the asset is mUSD.
+ */
+function isMusdAssetId(assetId: string): boolean {
+  return assetId.toLowerCase().includes(`/erc20:${MUSD_ADDRESS_LOWERCASE}`);
+}
+
 // ============================================================================
 // OPTIONS
 // ============================================================================
@@ -458,7 +469,7 @@ export class TokenDataSource {
             knownBalanceIds.has(lowerId) ||
             knownMetadataIds.has(lowerId) ||
             customAssetIds.has(lowerId) ||
-            lowerId.includes(`/erc20:${MUSD_ADDRESS_LOWERCASE}`)
+            isMusdAssetId(lowerId)
           ) {
             continue;
           }
@@ -517,6 +528,8 @@ export class TokenDataSource {
         const spamAssetIds = new Set(
           await findLowOccurrenceSpamAssetIds({
             assetIds: judgeableAssetIds,
+            isExempt: (id) =>
+              customAssetIds.has(id.toLowerCase()) || isMusdAssetId(id),
             getOccurrences: (id) => occurrencesByLowerId.get(id.toLowerCase()),
             getOccurrenceFloor: (id) =>
               getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors),
@@ -629,8 +642,8 @@ export class TokenDataSource {
 
         // Split assets by chain type: EVM uses occurrence-count filtering;
         // non-EVM non-native uses Blockaid; native assets are always allowed.
-        const occurrencesByAssetId = new Map(
-          metadataResponse.map((a) => [a.assetId, a.occurrences]),
+        const occurrencesByLowerId = new Map(
+          metadataResponse.map((a) => [a.assetId.toLowerCase(), a.occurrences]),
         );
 
         const evmErc20Ids: string[] = [];
@@ -665,8 +678,8 @@ export class TokenDataSource {
             isExempt: (id) =>
               customAssetIds.has(id.toLowerCase()) ||
               balanceHealAssetIds.has(id.toLowerCase()) ||
-              id.includes(`/erc20:${MUSD_ADDRESS_LOWERCASE}`),
-            getOccurrences: (id) => occurrencesByAssetId.get(id),
+              isMusdAssetId(id),
+            getOccurrences: (id) => occurrencesByLowerId.get(id.toLowerCase()),
             getOccurrenceFloor: (id) =>
               getOccurrenceFloorForAsset(id, suggestedOccurrenceFloors),
             findLaunchpadAssetIds: (ids) => this.#getLaunchpadAssetIds(ids),
