@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Uncategorized
+
+- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
+
 ### Added
 
 - Add `AnalyticsDataRegulationServiceInvalidateQueriesAction`, `AnalyticsDataRegulationServiceCacheUpdatedEvent` and `AnalyticsDataRegulationServiceGranularCacheUpdatedEvent`, also included in `AnalyticsDataRegulationServiceActions` and `AnalyticsDataRegulationServiceEvents` ([#10879](https://github.com/MetaMask/core/pull/10879))

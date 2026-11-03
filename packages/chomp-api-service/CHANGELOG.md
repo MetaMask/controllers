@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Uncategorized
+
+- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
+- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
+- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
+- test: assert only the native fetch error messages on nock 15 ([#11171](https://github.com/MetaMask/core/pull/11171))
+- chore(deps): update dependency nock to v15 ([#11055](https://github.com/MetaMask/core/pull/11055))
+
 ## [7.0.0]
 
 ### Added
