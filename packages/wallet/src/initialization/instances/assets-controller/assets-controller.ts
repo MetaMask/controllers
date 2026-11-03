@@ -24,19 +24,12 @@ export const assetsController: InitializationConfiguration<
 > = {
   name: 'AssetsController',
   reference: AssetsController,
-  init: ({ state, messenger, options }) => {
-    if (!options.queryApiClient) {
-      throw new Error(
-        'AssetsController requires `instanceOptions.assetsController.queryApiClient`.',
-      );
-    }
-
-    return new AssetsController({
+  init: ({ state, messenger, options }) =>
+    new AssetsController({
       ...options,
       messenger,
       state,
-    });
-  },
+    }),
   getMessenger: (parent) => {
     const messenger: AssetsControllerMessenger = new Messenger({
       namespace: 'AssetsController',

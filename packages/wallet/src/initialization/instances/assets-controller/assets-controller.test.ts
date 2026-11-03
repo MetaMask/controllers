@@ -108,21 +108,6 @@ describe('assetsController', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
-  it('throws when no queryApiClient is provided', () => {
-    const rootMessenger = getRootMessenger();
-    const messenger = assetsController.getMessenger(rootMessenger);
-
-    expect(() =>
-      assetsController.init({
-        state: undefined,
-        messenger,
-        options: {} as AssetsControllerInstanceOptions,
-      }),
-    ).toThrow(
-      'AssetsController requires `instanceOptions.assetsController.queryApiClient`.',
-    );
-  });
-
   it('exposes AssetsController actions over the root messenger', () => {
     const rootMessenger = getRootMessenger();
     const messenger = assetsController.getMessenger(rootMessenger);
