@@ -19,6 +19,7 @@ import {
   string,
   type as looseObject,
 } from '@metamask/superstruct';
+import type { Json } from '@metamask/utils';
 
 import packageJson from '../package.json';
 import type { RampsClientIdentity } from './client-identity.js';
@@ -814,13 +815,11 @@ const CountriesResponseStruct = array(
     states: optional(nullable(array(any()))),
   }),
 );
-type CountriesResponseBody = Infer<typeof CountriesResponseStruct>;
 
 const TokensResponseStruct = looseObject({
   topTokens: array(any()),
   allTokens: array(any()),
 });
-type TokensResponseBody = Infer<typeof TokensResponseStruct>;
 
 const ProvidersResponseStruct = looseObject({
   providers: array(any()),
@@ -829,7 +828,6 @@ const ProvidersResponseStruct = looseObject({
 type ProvidersResponseBody = Infer<typeof ProvidersResponseStruct>;
 
 const PaymentMethodsResponseStruct = looseObject({ payments: array(any()) });
-type PaymentMethodsResponseBody = Infer<typeof PaymentMethodsResponseStruct>;
 
 const QuotesResponseStruct = looseObject({
   success: array(any()),
@@ -837,13 +835,10 @@ const QuotesResponseStruct = looseObject({
   error: array(any()),
   customActions: array(any()),
 });
-type QuotesResponseBody = Infer<typeof QuotesResponseStruct>;
 
 const BuyWidgetResponseStruct = looseObject({ url: nonempty(string()) });
-type BuyWidgetResponseBody = Infer<typeof BuyWidgetResponseStruct>;
 
 const OrderResponseStruct = looseObject({});
-type OrderResponseBody = Infer<typeof OrderResponseStruct>;
 
 const OrderCallbackResponseStruct = looseObject({ id: optional(string()) });
 type OrderCallbackResponseBody = Infer<typeof OrderCallbackResponseStruct>;
@@ -1177,6 +1172,20 @@ export class RampsService extends BaseDataService<
   }
 
   /**
+   * Makes a request, throws an `HttpError` for a non-2xx response, and parses
+   * the body as JSON. Only call this from inside a query function. The
+   * response struct validates the shape afterwards.
+   *
+   * @param url - The URL to request.
+   * @param init - Optional request options.
+   * @returns The parsed JSON body.
+   */
+  async #fetchJson(url: URL, init?: RequestInit): Promise<Json> {
+    const response = await this.#fetchOk(url, init);
+    return (await response.json()) as Json;
+  }
+
+  /**
    * Makes a request to the API in order to retrieve the user's geolocation
    * based on their IP address.
    *
@@ -1216,8 +1225,7 @@ export class RampsService extends BaseDataService<
       gcTime: 0,
       responseStruct: CountriesResponseStruct,
       queryFn: async () => {
-        const response = await this.#fetchOk(url);
-        return (await response.json()) as CountriesResponseBody;
+        return this.#fetchJson(url);
       },
     })) as unknown as Country[];
 
@@ -1274,8 +1282,7 @@ export class RampsService extends BaseDataService<
       gcTime: 0,
       responseStruct: TokensResponseStruct,
       queryFn: async () => {
-        const response = await this.#fetchOk(url);
-        return (await response.json()) as TokensResponseBody;
+        return this.#fetchJson(url);
       },
     });
   }
@@ -1377,8 +1384,7 @@ export class RampsService extends BaseDataService<
       gcTime: 0,
       responseStruct: PaymentMethodsResponseStruct,
       queryFn: async () => {
-        const response = await this.#fetchOk(url);
-        return (await response.json()) as PaymentMethodsResponseBody;
+        return this.#fetchJson(url);
       },
     });
   }
@@ -1440,8 +1446,7 @@ export class RampsService extends BaseDataService<
       gcTime: 0,
       responseStruct: QuotesResponseStruct,
       queryFn: async () => {
-        const response = await this.#fetchOk(url, { headers });
-        return (await response.json()) as QuotesResponseBody;
+        return this.#fetchJson(url, { headers });
       },
     });
   }
@@ -1466,8 +1471,7 @@ export class RampsService extends BaseDataService<
       gcTime: 0,
       responseStruct: BuyWidgetResponseStruct,
       queryFn: async () => {
-        const response = await this.#fetchOk(url, { headers });
-        return (await response.json()) as BuyWidgetResponseBody;
+        return this.#fetchJson(url, { headers });
       },
     });
   }
@@ -1514,8 +1518,7 @@ export class RampsService extends BaseDataService<
       gcTime: 0,
       responseStruct: OrderResponseStruct,
       queryFn: async () => {
-        const response = await this.#fetchOk(url);
-        return (await response.json()) as OrderResponseBody;
+        return this.#fetchJson(url);
       },
     });
   }
