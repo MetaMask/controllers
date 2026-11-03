@@ -1136,6 +1136,36 @@ describe('MultichainTransactionsController', () => {
       );
     });
 
+    it('ignores updates with an invalid chain id', async () => {
+      const { rootMessenger, messenger, controller, pendingTransaction } =
+        await setupPendingTransaction();
+      const publishSpy = vi.spyOn(messenger, 'publish');
+
+      rootMessenger.publish('AccountActivityService:transactionUpdated', {
+        id: pendingTransaction.id,
+        chain: 'not-a-caip-chain-id',
+        status: 'confirmed',
+        timestamp: Date.now(),
+        from: 'from-address',
+        to: 'to-address',
+      });
+
+      await waitForAllPromises();
+
+      const entry =
+        controller.state.nonEvmTransactions[mockBtcAccount.id][
+          pendingTransaction.chain
+        ];
+      expect(
+        entry.transactions.find((tx) => tx.id === pendingTransaction.id)
+          ?.status,
+      ).toBe('submitted');
+      expect(publishSpy).not.toHaveBeenCalledWith(
+        'MultichainTransactionsController:transactionConfirmed',
+        expect.anything(),
+      );
+    });
+
     it('ignores updates for unknown transaction ids', async () => {
       const { rootMessenger, messenger, controller, pendingTransaction } =
         await setupPendingTransaction();

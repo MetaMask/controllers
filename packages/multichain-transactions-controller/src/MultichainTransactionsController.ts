@@ -25,6 +25,7 @@ import type { Messenger } from '@metamask/messenger';
 import type { SnapControllerHandleRequestAction } from '@metamask/snaps-controllers';
 import type { SnapId } from '@metamask/snaps-sdk';
 import { HandlerType } from '@metamask/snaps-utils';
+import { isCaipChainId } from '@metamask/utils';
 import type { CaipChainId, Json, JsonRpcRequest } from '@metamask/utils';
 import type { Draft } from 'immer';
 
@@ -439,16 +440,23 @@ export class MultichainTransactionsController extends BaseController<
 
     let updatedTransaction: Transaction | undefined;
 
+    if (!isCaipChainId(transaction.chain)) {
+      return;
+    }
+
+    // Captured with an explicit type: indexing with the narrowed value
+    // directly triggers excessively-deep type instantiation in lint.
+    const chain: CaipChainId = transaction.chain;
+
     this.update((state: Draft<MultichainTransactionsControllerState>) => {
       for (const chains of Object.values(state.nonEvmTransactions)) {
-        const entry = chains[transaction.chain as CaipChainId];
-        const index =
-          entry?.transactions.findIndex(
-            (tx) =>
-              tx.id === transaction.id &&
-              tx.status !== TransactionStatus.Confirmed &&
-              tx.status !== TransactionStatus.Failed,
-          ) ?? -1;
+        const entry = chains[chain];
+        const index = entry?.transactions.findIndex(
+          (tx) =>
+            tx.id === transaction.id &&
+            tx.status !== TransactionStatus.Confirmed &&
+            tx.status !== TransactionStatus.Failed,
+        );
 
         if (!entry || index === -1) {
           continue;
@@ -456,6 +464,8 @@ export class MultichainTransactionsController extends BaseController<
 
         updatedTransaction = {
           ...entry.transactions[index],
+          // Cast is safe here as the status is already validated above as
+          // either `TransactionStatus.Confirmed` or `TransactionStatus.Failed`.
           status: status as TransactionStatus,
           timestamp: transaction.timestamp,
         };
