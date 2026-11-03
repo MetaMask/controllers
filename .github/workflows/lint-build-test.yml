@@ -11,11 +11,11 @@ jobs:
     name: Prepare environment
     runs-on: ubuntu-latest
     outputs:
-      node-versions: ${{ steps.prepare-environment.outputs.node-versions }}
-      latest-version: ${{ steps.prepare-environment.outputs.latest-version }}
+      node-versions: ${{ steps.get-node-versions.outputs.node-versions }}
+      latest-version: ${{ steps.get-node-versions.outputs.latest-version }}
     steps:
       - name: Get Node versions
-        id: prepare-environment
+        id: get-node-versions
         env:
           SUPPORTED_VERSIONS: |
             22.x
