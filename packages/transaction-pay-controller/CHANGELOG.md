@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support fiat payments for `membershipSubscription` transactions ([#11256](https://github.com/MetaMask/core/pull/11256))
+  - Add `membershipSubscription` to the default fiat-enabled transaction types and fiat asset map.
+  - Treat `membershipSubscription` as a Money Account deposit, so it uses the direct mUSD on-ramp when `directMoneyMusdEnabled` is set, and CHOMP vault recovery on the second leg.
+
 ### Changed
 
 - **BREAKING:** Request and submit post-quote quotes from the transaction's own `from`, so `accountOverride` only receives the output and never signs ([#10992](https://github.com/MetaMask/core/pull/10992))
