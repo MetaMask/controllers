@@ -138,7 +138,8 @@ export const TESTNET = {
  * @param options - Optional configuration.
  * @param options.connectivityStatus - The connectivity status to return by default.
  * If not provided, defaults to Online.
- * @param options.rpcFailoverMode - The RPC failover mode to return, defaults to `disabled`.
+ * @param options.remoteRpcFailoverMode - The RPC failover mode that
+ * `RemoteFeatureFlagController` returns.
  * @param options.analyticsId - The analytics ID that `AnalyticsController:getState`
  * returns by default. Defaults to a fixed valid UUIDv4.
  * @param options.trackEvent - The handler registered for
@@ -151,13 +152,13 @@ export const TESTNET = {
  */
 export function buildRootMessenger({
   connectivityStatus = CONNECTIVITY_STATUSES.Online,
-  rpcFailoverMode = 'disabled',
+  remoteRpcFailoverMode,
   analyticsId = '11111111-1111-4111-8111-111111111111',
   trackEvent = vi.fn(),
   configRegistryNetworkConfigs = [buildMockConfigRegistryControllerNetwork()],
 }: {
   connectivityStatus?: ConnectivityStatus;
-  rpcFailoverMode?: RpcFailoverMode;
+  remoteRpcFailoverMode?: RpcFailoverMode;
   analyticsId?: string;
   trackEvent?: Mock;
   configRegistryNetworkConfigs?: RegistryNetworkConfig[];
@@ -177,12 +178,18 @@ export function buildRootMessenger({
 
   rootMessenger.registerActionHandler(
     'RemoteFeatureFlagController:getState',
-    () => ({
-      remoteFeatureFlags: {
-        corePlatformRpcFailoverMode: rpcFailoverMode,
-      },
-      cacheTimestamp: 0,
-    }),
+    () => {
+      const remoteFeatureFlags: {
+        corePlatformRpcFailoverMode?: RpcFailoverMode;
+      } = remoteRpcFailoverMode
+        ? { corePlatformRpcFailoverMode: remoteRpcFailoverMode }
+        : {};
+
+      return {
+        remoteFeatureFlags,
+        cacheTimestamp: 0,
+      };
+    },
   );
 
   rootMessenger.registerActionHandler('AnalyticsController:getState', () => ({
@@ -782,7 +789,7 @@ type WithControllerCallback<ReturnValue> = ({
 }) => Promise<ReturnValue> | ReturnValue;
 
 type WithControllerOptions = Partial<NetworkControllerOptions> & {
-  rpcFailoverMode?: RpcFailoverMode;
+  remoteRpcFailoverMode?: RpcFailoverMode;
   configRegistryNetworkConfigs?: RegistryNetworkConfig[];
   initializeController?: boolean;
 };
@@ -806,13 +813,13 @@ export async function withController<ReturnValue>(
 ): Promise<ReturnValue> {
   const [{ ...rest }, fn] = args.length === 2 ? args : [{}, args[0]];
   const {
-    rpcFailoverMode,
+    remoteRpcFailoverMode,
     initializeController = true,
     configRegistryNetworkConfigs = [buildMockConfigRegistryControllerNetwork()],
     ...controllerOptions
   } = rest;
   const messenger = buildRootMessenger({
-    rpcFailoverMode,
+    remoteRpcFailoverMode,
     configRegistryNetworkConfigs,
   });
   const networkControllerMessenger = buildNetworkControllerMessenger(messenger);
