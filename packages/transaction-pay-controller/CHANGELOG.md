@@ -7,10 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support fiat payments for `membershipSubscription` transactions ([#11256](https://github.com/MetaMask/core/pull/11256))
+  - Add `membershipSubscription` to the default fiat-enabled transaction types and fiat asset map.
+  - Treat `membershipSubscription` as a Money Account deposit, so it uses the direct mUSD on-ramp when `directMoneyMusdEnabled` is set, and CHOMP vault recovery on the second leg.
+
+## [30.4.0]
+
+### Added
+
+- Add optional `clientId` constructor option to `TransactionPayController`, sent as the `X-Client-Id` header on all intents API requests so the server can distinguish Mobile from Extension traffic ([#11259](https://github.com/MetaMask/core/pull/11259))
+  - Add `TransactionPayClientId` enum with `Extension` and `Mobile` members.
+  - Add `TransactionPayController:getClientId` messenger action and the corresponding `TransactionPayControllerGetClientIdAction` type.
+  - The header is omitted when `clientId` is not provided, so existing consumers are unaffected.
+
 ### Changed
 
-- Bump `@metamask/transaction-controller` from `^72.2.1` to `^72.3.0` ([#11154](https://github.com/MetaMask/core/pull/11154))
-- Bump `@metamask/assets-controller` from `^20.0.0` to `^20.0.2` ([#11157](https://github.com/MetaMask/core/pull/11157), [#11196](https://github.com/MetaMask/core/pull/11196))
+- Bump `@metamask/assets-controller` from `^20.1.0` to `^20.2.0` ([#11255](https://github.com/MetaMask/core/pull/11255))
+
+## [30.3.3]
+
+### Changed
+
+- Bump `@metamask/ramps-controller` from `^28.1.0` to `^29.0.0` ([#11248](https://github.com/MetaMask/core/pull/11248))
+
+## [30.3.2]
+
+### Changed
+
+- Bump `@metamask/transaction-controller` from `^72.2.1` to `^73.0.0` ([#11154](https://github.com/MetaMask/core/pull/11154), [#11203](https://github.com/MetaMask/core/pull/11203))
+- Bump `@metamask/assets-controller` from `^20.0.0` to `^20.1.0` ([#11157](https://github.com/MetaMask/core/pull/11157), [#11196](https://github.com/MetaMask/core/pull/11196), [#11203](https://github.com/MetaMask/core/pull/11203))
 - Bump `@metamask/ramps-controller` from `^28.0.0` to `^28.1.0` ([#11175](https://github.com/MetaMask/core/pull/11175))
 - Use shared recipient resolution for Relay and Server quotes ([#10887](https://github.com/MetaMask/core/pull/10887))
 - Use shared Hyperliquid perps logic in all strategies, detecting deposits from calldata rather than transaction type ([#11026](https://github.com/MetaMask/core/pull/11026))
@@ -1766,7 +1793,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#6820](https://github.com/MetaMask/core/pull/6820))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.1...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.0...HEAD
+[30.4.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.3...@metamask/transaction-pay-controller@30.4.0
+[30.3.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.2...@metamask/transaction-pay-controller@30.3.3
+[30.3.2]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.1...@metamask/transaction-pay-controller@30.3.2
 [30.3.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.0...@metamask/transaction-pay-controller@30.3.1
 [30.3.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.2.0...@metamask/transaction-pay-controller@30.3.0
 [30.2.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.1.0...@metamask/transaction-pay-controller@30.2.0

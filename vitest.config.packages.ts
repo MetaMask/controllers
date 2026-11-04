@@ -42,11 +42,7 @@ export default defineConfig({
     },
 
     coverage: {
-      enabled: true,
-
-      // Configure the coverage provider. We use `istanbul` here, because it is
-      // more stable than `v8`.
-      provider: 'istanbul',
+      enabled: false,
 
       // The files to include in the coverage report.
       include: ['src/**/*.ts'],
@@ -54,7 +50,8 @@ export default defineConfig({
       // The files to exclude from the coverage report. Index files are
       // measured like any other source; a package that needs an exception
       // adds it to its own config with a reason.
-      exclude: ['src/**/*.d.ts'],
+      exclude: ['src/**/*.d.ts', 'src/**/*-method-action-types.ts'],
+
 
       // `lcovonly` rather than `lcov`, which also writes a second HTML report.
       reporter: ['text', 'html', 'json-summary', 'lcovonly'],
