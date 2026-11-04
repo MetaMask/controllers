@@ -9,6 +9,7 @@ import { HttpError } from '@metamask/controller-utils';
 import type { Messenger } from '@metamask/messenger';
 import type { AuthenticationController } from '@metamask/profile-sync-controller';
 import { is } from '@metamask/superstruct';
+import type { Json } from '@metamask/utils';
 
 import { serviceName, SocialServiceErrorMessage } from './social-constants.js';
 import type {
@@ -1389,7 +1390,7 @@ export class SocialService extends BaseDataService<
         : SocialServiceErrorMessage.FETCH_SEARCH_GIFS_INVALID_RESPONSE;
 
     return await this.fetchQuery({
-      queryKey: [`${this.name}:${method}`, params ?? null],
+      queryKey: [`${this.name}:${method}`, gifQueryCacheKey(params)],
       staleTime: GIF_STALE_TIME_MS,
       queryFn: async () => {
         const url = new URL(`${this.#v1Url}/gifs/${resource}`);
@@ -1483,6 +1484,28 @@ export class SocialService extends BaseDataService<
  * @param url - URL to mutate.
  * @param params - Provider query parameters. `undefined` values are omitted.
  */
+/**
+ * Cache key for a GIF query. `undefined` values are dropped so the key is JSON.
+ *
+ * @param params - Provider query parameters.
+ * @returns A JSON object, or `null` when no params were passed.
+ */
+function gifQueryCacheKey(
+  params: GifQueryParams | undefined,
+): { [prop: string]: Json } | null {
+  if (!params) {
+    return null;
+  }
+  const serialized: { [prop: string]: Json } = {};
+  for (const key of Object.keys(params).sort()) {
+    const value = params[key];
+    if (value !== undefined) {
+      serialized[key] = value;
+    }
+  }
+  return serialized;
+}
+
 function appendGifQuery(url: URL, params: GifQueryParams | undefined): void {
   if (!params) {
     return;
