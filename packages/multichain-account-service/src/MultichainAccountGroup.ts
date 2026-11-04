@@ -177,13 +177,17 @@ export class MultichainAccountGroup<
     // Do not override an in-progress status that was set by an outer caller
     // (e.g. 'in-progress:create-accounts' must survive through the inner
     // #alignAccountsForRange 'in-progress:alignment' withState call).
-    if (!this.#status.startsWith('in-progress:')) {
+    const inProgressStatus = this.#status.startsWith('in-progress:');
+    if (!inProgressStatus) {
       this.#setStatus(status);
     }
     try {
       return await operation();
     } finally {
-      this.#setStatus(this.isAligned() ? 'aligned' : 'misaligned');
+      // Only the call that entered the in-progress state may finalize it.
+      if (!inProgressStatus) {
+        this.#setStatus(this.isAligned() ? 'aligned' : 'misaligned');
+      }
     }
   }
 

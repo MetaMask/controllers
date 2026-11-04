@@ -255,25 +255,72 @@ describe('MultichainAccountGroup', () => {
       );
     });
 
-    it('preserves in-progress:create-accounts through an inner in-progress:alignment withState', async () => {
-      const { group } = setup({
+    it('preserves the outer status after a nested operation succeeds', async () => {
+      const { group, providers, messenger } = setup({
         accounts: [[MOCK_WALLET_1_EVM_ACCOUNT], []],
       });
-      const statusDuringInner: string[] = [];
+      const publishSpy = vi.spyOn(messenger, 'publish');
+      const result = await group.withState(
+        'in-progress:create-accounts',
+        async () => {
+          const innerOperation = group.withState(
+            'in-progress:alignment',
+            async () => {
+              expect(group.status).toBe('in-progress:create-accounts');
+              return 'result';
+            },
+          );
 
-      await group.withState('in-progress:create-accounts', async () => {
-        // Inner withState with a different in-progress status should not override
-        await group.withState('in-progress:alignment', async () => {
-          statusDuringInner.push(group.status);
-        });
-        statusDuringInner.push(group.status);
+          expect(await innerOperation).toBe('result');
+
+          expect(group.status).toBe('in-progress:create-accounts');
+          providers[1].isAligned.mockReturnValue(true);
+          group.update({ 'Provider 1': [MOCK_WALLET_1_EVM_ACCOUNT.id] });
+          expect(group.status).toBe('in-progress:create-accounts');
+
+          return 'result';
+        },
+      );
+
+      expect(result).toBe('result');
+      expect(group.status).toBe('aligned');
+      expect(
+        publishSpy.mock.calls.filter(
+          ([event]) => event === 'MultichainAccountService:groupStatusChange',
+        ),
+      ).toStrictEqual([
+        [
+          'MultichainAccountService:groupStatusChange',
+          group.id,
+          'in-progress:create-accounts',
+        ],
+        ['MultichainAccountService:groupStatusChange', group.id, 'aligned'],
+      ]);
+    });
+
+    it('preserves the outer status after a nested rejection and finalizes when the outer operation rejects', async () => {
+      const { group, providers } = setup({
+        accounts: [[MOCK_WALLET_1_EVM_ACCOUNT], []],
       });
+      const error = new Error('Operation failed');
 
-      // 'in-progress:create-accounts' is preserved through the inner call since
-      // the guard skips the entry when already in any in-progress state.
-      expect(statusDuringInner[0]).toBe('in-progress:create-accounts');
-      // After both finally blocks fire, status is 'misaligned'.
-      expect(group.status).toBe('misaligned');
+      await expect(
+        group.withState('in-progress:create-accounts', async () => {
+          await expect(
+            group.withState('in-progress:alignment', async () => {
+              throw error;
+            }),
+          ).rejects.toBe(error);
+
+          expect(group.status).toBe('in-progress:create-accounts');
+          providers[1].isAligned.mockReturnValue(true);
+          group.update({ 'Provider 1': [MOCK_WALLET_1_EVM_ACCOUNT.id] });
+          expect(group.status).toBe('in-progress:create-accounts');
+          throw error;
+        }),
+      ).rejects.toBe(error);
+
+      expect(group.status).toBe('aligned');
     });
 
     it('updates accounts before initialization without changing status or publishing events', () => {
