@@ -35,6 +35,8 @@ import type {
   FollowingResponse,
   FollowOptions,
   FollowResponse,
+  GifPageResponse,
+  GifQueryParams,
   LeaderboardResponse,
   ModerationStatusResponse,
   Position,
@@ -58,6 +60,7 @@ import {
   FollowResponseStruct,
   FollowersResponseStruct,
   FollowingResponseStruct,
+  GifPageResponseStruct,
   LeaderboardResponseStruct,
   ModerationStatusResponseStruct,
   PositionStruct,
@@ -102,7 +105,12 @@ const MESSENGER_EXPOSED_METHODS = [
   'fetchBlockedProfiles',
   'fetchBlockedContent',
   'fetchModerationStatus',
+  'fetchTrendingGifs',
+  'searchGifs',
 ] as const;
+
+/** Client cache for a GIF page. The social-api caches the provider response. */
+const GIF_STALE_TIME_MS = 60_000;
 
 export type SocialServiceActions =
   | SocialServiceMethodActions
@@ -1333,6 +1341,74 @@ export class SocialService extends BaseDataService<
   }
 
   /**
+   * Fetches a page of trending GIFs through the social-api GIF proxy.
+   *
+   * Calls `GET ${baseUrl}/gifs/trending`. Query parameters are forwarded
+   * unchanged, and the return value is the provider page itself.
+   *
+   * @param params - Provider query parameters (`page`, `per_page`, `locale`,
+   * `content_filter`, `format_filter`, and any others the caller sets).
+   * @returns The GIF page response.
+   */
+  async fetchTrendingGifs(params?: GifQueryParams): Promise<GifPageResponse> {
+    return this.#fetchGifPage('trending', params);
+  }
+
+  /**
+   * Searches GIFs through the social-api GIF proxy.
+   *
+   * Calls `GET ${baseUrl}/gifs/search`. Query parameters are forwarded
+   * unchanged, and the return value is the provider page itself.
+   *
+   * @param params - Provider query parameters. `q` is the search text.
+   * @returns The GIF page response.
+   */
+  async searchGifs(params?: GifQueryParams): Promise<GifPageResponse> {
+    return this.#fetchGifPage('search', params);
+  }
+
+  /**
+   * Fetches one GIF proxy page and returns the provider body unchanged.
+   *
+   * @param resource - `trending` or `search`.
+   * @param params - Provider query parameters, forwarded as-is.
+   * @returns The GIF page response.
+   */
+  async #fetchGifPage(
+    resource: 'trending' | 'search',
+    params?: GifQueryParams,
+  ): Promise<GifPageResponse> {
+    const method = resource === 'trending' ? 'fetchTrendingGifs' : 'searchGifs';
+    const failedMessage =
+      resource === 'trending'
+        ? SocialServiceErrorMessage.FETCH_TRENDING_GIFS_FAILED
+        : SocialServiceErrorMessage.FETCH_SEARCH_GIFS_FAILED;
+    const invalidMessage =
+      resource === 'trending'
+        ? SocialServiceErrorMessage.FETCH_TRENDING_GIFS_INVALID_RESPONSE
+        : SocialServiceErrorMessage.FETCH_SEARCH_GIFS_INVALID_RESPONSE;
+
+    return await this.fetchQuery({
+      queryKey: [`${this.name}:${method}`, params ?? null],
+      staleTime: GIF_STALE_TIME_MS,
+      queryFn: async () => {
+        const url = new URL(`${this.#v1Url}/gifs/${resource}`);
+        appendGifQuery(url, params);
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(url.toString(), {
+          headers: authHeaders,
+        });
+        SocialService.#throwIfNotOk(response, failedMessage);
+        const body = (await response.json()) as unknown;
+        if (!is(body, GifPageResponseStruct)) {
+          throw new Error(invalidMessage);
+        }
+        return body;
+      },
+    });
+  }
+
+  /**
    * Shared helper for fetching open/closed positions.
    *
    * @param status - "open" or "closed".
@@ -1398,5 +1474,23 @@ export class SocialService extends BaseDataService<
     });
 
     return positionsResponse;
+  }
+}
+
+/**
+ * Appends GIF query parameters without renaming or defaulting them.
+ *
+ * @param url - URL to mutate.
+ * @param params - Provider query parameters. `undefined` values are omitted.
+ */
+function appendGifQuery(url: URL, params: GifQueryParams | undefined): void {
+  if (!params) {
+    return;
+  }
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) {
+      continue;
+    }
+    url.searchParams.append(key, String(value));
   }
 }

@@ -493,6 +493,35 @@ export type SocialServiceFetchModerationStatusAction = {
 };
 
 /**
+ * Fetches a page of trending GIFs through the social-api GIF proxy.
+ *
+ * Calls `GET ${baseUrl}/gifs/trending`. Query parameters are forwarded
+ * unchanged, and the return value is the provider page itself.
+ *
+ * @param params - Provider query parameters (`page`, `per_page`, `locale`,
+ * `content_filter`, `format_filter`, and any others the caller sets).
+ * @returns The GIF page response.
+ */
+export type SocialServiceFetchTrendingGifsAction = {
+  type: `SocialService:fetchTrendingGifs`;
+  handler: SocialService['fetchTrendingGifs'];
+};
+
+/**
+ * Searches GIFs through the social-api GIF proxy.
+ *
+ * Calls `GET ${baseUrl}/gifs/search`. Query parameters are forwarded
+ * unchanged, and the return value is the provider page itself.
+ *
+ * @param params - Provider query parameters. `q` is the search text.
+ * @returns The GIF page response.
+ */
+export type SocialServiceSearchGifsAction = {
+  type: `SocialService:searchGifs`;
+  handler: SocialService['searchGifs'];
+};
+
+/**
  * Union of all SocialService action types.
  */
 export type SocialServiceMethodActions =
@@ -523,4 +552,6 @@ export type SocialServiceMethodActions =
   | SocialServiceUnblockProfileAction
   | SocialServiceFetchBlockedProfilesAction
   | SocialServiceFetchBlockedContentAction
-  | SocialServiceFetchModerationStatusAction;
+  | SocialServiceFetchModerationStatusAction
+  | SocialServiceFetchTrendingGifsAction
+  | SocialServiceSearchGifsAction;
