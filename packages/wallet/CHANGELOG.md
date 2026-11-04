@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Wait up to 5 seconds for geolocation during `Wallet.init` when no country is persisted, and start Infura failover in `forced` mode when that country is `CN`. A persisted country does not block `init`. A completed refresh leaves `forced` mode when the country is no longer `CN`
+- Wait up to 5 seconds for geolocation during `Wallet.init` when no country is persisted, and start Infura failover in `forced` mode when that country is `CN`. A persisted country does not block `init`. A completed refresh leaves `forced` mode when the country is no longer `CN` ([#11304](https://github.com/MetaMask/core/pull/11304))
 
 ### Changed
 

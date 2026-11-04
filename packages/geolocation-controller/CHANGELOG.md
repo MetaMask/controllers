@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `GeolocationController.resolveStartupCountry`, which returns a persisted country immediately or waits on one geolocation fetch for up to 5 seconds
+- Add `GeolocationController.resolveStartupCountry`, which returns a persisted country immediately or waits on one geolocation fetch for up to 5 seconds ([#11304](https://github.com/MetaMask/core/pull/11304))
 - Add `GeolocationApiServiceInvalidateQueriesAction`, `GeolocationApiServiceCacheUpdatedEvent` and `GeolocationApiServiceGranularCacheUpdatedEvent`, also included in `GeolocationApiServiceActions` and `GeolocationApiServiceEvents` ([#10881](https://github.com/MetaMask/core/pull/10881))
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
 
 ### Changed
 
-- Persist the last geolocation result (`location`, `country`, `region`, `timezone`, and `lastFetchedAt`) so the next launch can use it before any chain request. `status` and `error` stay unpersisted
+- Persist the last geolocation result (`location`, `country`, `region`, `timezone`, and `lastFetchedAt`) so the next launch can use it before any chain request. `status` and `error` stay unpersisted ([#11304](https://github.com/MetaMask/core/pull/11304))
 - **BREAKING:** `GeolocationApiService` now extends `BaseDataService` from `@metamask/base-data-service` ([#10881](https://github.com/MetaMask/core/pull/10881))
   - `GeolocationApiServiceMessenger` now includes the `GeolocationApiService:invalidateQueries` action and `GeolocationApiService:cacheUpdated` events. Messengers built from `GeolocationApiServiceActions` / `GeolocationApiServiceEvents` pick these up automatically.
   - The hand-rolled TTL cache and in-flight deduplication are replaced by the `BaseDataService` query cache. `ttlMs` and `bypassCache` keep their existing behaviour.
