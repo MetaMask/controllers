@@ -1,7 +1,4 @@
-import {
-  FeatureFlags,
-  RemoteFeatureFlagControllerState,
-} from '@metamask/remote-feature-flag-controller';
+import { RemoteFeatureFlagControllerState } from '@metamask/remote-feature-flag-controller';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,33 +7,33 @@ import {
 } from './selectors.js';
 
 /**
- * Builds RemoteFeatureFlagController state, filling in the given feature flags.
+ * Builds a complete version of RemoteFeatureFlagController state, filling in the given feature flags.
  *
- * @param remoteFeatureFlags - The remote feature flags.
+ * @param state - The partial RemoteFeatureFlagController state.
  * @returns The RemoteFeatureFlagController state object.
  */
 function buildRemoteFeatureFlagControllerState(
-  remoteFeatureFlags: FeatureFlags,
+  state: Partial<RemoteFeatureFlagControllerState>,
 ): RemoteFeatureFlagControllerState {
   return {
-    remoteFeatureFlags,
+    remoteFeatureFlags: {},
     cacheTimestamp: 0,
+    ...state,
   };
 }
 
 describe('selectRpcFailoverModeFeatureFlag', () => {
-  it.each(RPC_FAILOVER_MODES)(
-    'returns "%s" when the corePlatformRpcFailoverMode flag is "%s"',
-    (flagValue) => {
+  for (const mode of RPC_FAILOVER_MODES) {
+    it(`returns "${mode}" when the corePlatformRpcFailoverMode flag is "${mode}"`, () => {
       const state = buildRemoteFeatureFlagControllerState({
         remoteFeatureFlags: {
-          corePlatformRpcFailoverMode: flagValue,
+          corePlatformRpcFailoverMode: mode,
         },
       });
 
-      expect(selectRpcFailoverModeFeatureFlag(state)).toBeNull();
-    },
-  );
+      expect(selectRpcFailoverModeFeatureFlag(state)).toBe(mode);
+    });
+  }
 
   it('returns null when the corePlatformRpcFailoverMode flag is absent', () => {
     const state = buildRemoteFeatureFlagControllerState({
