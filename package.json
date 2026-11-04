@@ -1,6 +1,6 @@
 {
   "name": "@metamask/core-monorepo",
-  "version": "1381.0.0",
+  "version": "1387.0.0",
   "private": true,
   "description": "Monorepo for packages shared between MetaMask clients",
   "repository": {
@@ -60,12 +60,12 @@
     "setup": "yarn install",
     "skills": "metamask-skills sync",
     "skills:postinstall": "metamask-skills postinstall",
-    "test": "yarn test:scripts --coverage.enabled=false --silent && yarn test:scripts:shell && yarn test:packages",
+    "test": "yarn test:scripts --silent && yarn test:scripts:shell && yarn test:packages",
     "test:clean": "yarn workspaces foreach --all --parallel --verbose run test:clean && yarn test",
-    "test:packages": "vitest --silent --coverage.enabled=false",
+    "test:packages": "vitest --silent",
     "test:scripts": "vitest --config ./vitest.config.scripts.ts",
     "test:scripts:shell": "node_modules/bats/bin/bats scripts/*.bats",
-    "test:verbose": "vitest --reporter=verbose --coverage.enabled=false",
+    "test:verbose": "vitest --reporter=verbose",
     "workspaces:list-versions": "./scripts/list-workspace-versions.sh"
   },
   "devDependencies": {
@@ -89,7 +89,7 @@
     "@types/node": "^22.13.14",
     "@types/semver": "^7.8.0",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "@vitest/coverage-istanbul": "^5.0.5",
+    "@vitest/coverage-v8": "5.0.3",
     "@yarnpkg/cli": "^4.18.1",
     "@yarnpkg/core": "^4.9.0",
     "@yarnpkg/fslib": "^3.1.5",
@@ -112,8 +112,8 @@
     "simple-git-hooks": "^2.14.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.0.8",
-    "vitest": "^5.0.0",
-    "yargs": "^17.7.3"
+    "vitest": "5.0.3",
+    "yargs": "^18.2.0"
   },
   "resolutions": {
     "@typescript/old": "patch:typescript@npm%3A6.0.3#~/.yarn/patches/typescript-npm-6.0.3-585eecd158.patch",

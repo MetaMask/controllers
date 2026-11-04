@@ -1,9 +1,11 @@
 import type { Infer } from '@metamask/superstruct';
 import {
+  array,
   enums,
   nullable,
   number,
   optional,
+  record,
   string,
   type as structType,
 } from '@metamask/superstruct';
@@ -71,6 +73,32 @@ export type SocialHandles = {
  */
 export type TradeAction = 'opened' | 'added' | 'reduced' | 'closed';
 
+export const CommentReactionProfileStruct = structType({
+  id: string(),
+  name: string(),
+});
+
+export const CommentEngagementStruct = structType({
+  reactions: array(
+    structType({
+      emotion: string(),
+      count: number(),
+      profiles: array(CommentReactionProfileStruct),
+    }),
+  ),
+  userReaction: nullable(string()),
+  replyCount: optional(number()),
+});
+
+export const AuthorCommentStruct = structType({
+  uid: string(),
+  text: string(),
+  timestamp: number(),
+  sourceLanguage: optional(nullable(string())),
+  translations: optional(record(string(), string())),
+  engagement: CommentEngagementStruct,
+});
+
 export const TradeStruct = structType({
   direction: enums(['buy', 'sell']),
   intent: enums(['enter', 'exit']),
@@ -94,6 +122,11 @@ export const TradeStruct = structType({
   marketCap: optional(nullable(number())),
   timestamp: number(),
   transactionHash: string(),
+  /**
+   * Every author comment on this fill, newest first. An author may comment on
+   * one fill more than once. Absent on older social-api builds.
+   */
+  comments: optional(array(AuthorCommentStruct)),
 });
 
 export type Trade = Infer<typeof TradeStruct>;
