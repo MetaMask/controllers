@@ -382,6 +382,7 @@ describe('assetsUtil', () => {
     it.each([
       ['data:application/json,{}', true],
       ['DATA:image/png;base64,AAAA', true],
+      [' \n\tdata:application/json,{}', true],
       ['https://example.com/data:', false],
       ['ipfs://QmFoo', false],
       ['', false],
@@ -416,6 +417,7 @@ describe('assetsUtil', () => {
       ],
       ['plain JSON', `data:application/json;utf8,${JSON.stringify(json)}`],
       ['mixed-case header', `Data:Application/Json; Base64,${base64}`],
+      ['leading whitespace', ` \ndata:application/json;base64,${base64}`],
       [
         'URL-safe base64',
         `data:application/json;base64,${base64.replace(/\+/gu, '-').replace(/\//gu, '_')}`,
@@ -491,6 +493,49 @@ describe('assetsUtil', () => {
       expect(
         await assetsUtil.getTokenUriJson('https://example.com/1.json'),
       ).toStrictEqual({ a: 1 });
+    });
+
+    it('returns null for fetched JSON that is not an object', async () => {
+      nock('https://example.com').get('/1.json').reply(200, [1]);
+
+      expect(
+        await assetsUtil.getTokenUriJson('https://example.com/1.json'),
+      ).toBeNull();
+    });
+  });
+
+  describe('getTokenUriImage', () => {
+    it.each([
+      [
+        'an HTTPS image',
+        'https://example.com/a.png',
+        'https://example.com/a.png',
+      ],
+      [
+        'an IPFS image',
+        'ipfs://bafybeidxfmwycgzcp4v2togflpqh2gnibuexjy4m4qqwxp7nh3jx5zlh4y',
+        'https://bafybeidxfmwycgzcp4v2togflpqh2gnibuexjy4m4qqwxp7nh3jx5zlh4y.ipfs.ipfs.example.com',
+      ],
+      ['a non-string image', 42, undefined],
+    ])('resolves %s from a data URL', async (_description, image, expected) => {
+      const tokenURI = `data:application/json,${encodeURIComponent(
+        JSON.stringify({ image }),
+      )}`;
+
+      expect(
+        await assetsUtil.getTokenUriImage(tokenURI, 'https://ipfs.example.com'),
+      ).toBe(expected);
+    });
+
+    it('returns undefined if fetching the token URI fails', async () => {
+      nock('https://example.com').get('/1.json').reply(500);
+
+      expect(
+        await assetsUtil.getTokenUriImage(
+          'https://example.com/1.json',
+          'https://ipfs.example.com',
+        ),
+      ).toBeUndefined();
     });
   });
 

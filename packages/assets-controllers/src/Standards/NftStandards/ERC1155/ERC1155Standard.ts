@@ -13,7 +13,7 @@ import type * as BN from 'bn.js';
 import {
   getFormattedIpfsUrl,
   ethersBigNumberToBN,
-  getTokenUriJson,
+  getTokenUriImage,
 } from '../../../assetsUtil.js';
 
 export class ERC1155Standard {
@@ -239,17 +239,7 @@ export class ERC1155Standard {
     ]);
 
     if (tokenURI) {
-      try {
-        const object = await getTokenUriJson(tokenURI);
-        if (typeof object?.image === 'string') {
-          image = object.image.startsWith('ipfs://')
-            ? await getFormattedIpfsUrl(ipfsGateway, object.image, true)
-            : object.image;
-        }
-      } catch {
-        // Catch block should be kept empty to ignore exceptions, and
-        // pass as much information as possible to the return statement
-      }
+      image = await getTokenUriImage(tokenURI, ipfsGateway);
     }
 
     // TODO consider querying to the metadata to get name.

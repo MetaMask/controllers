@@ -286,7 +286,10 @@ export function addUrlProtocolPrefix(urlString: string): string {
  * @returns True if the URI uses the `data:` scheme.
  */
 export function isDataUri(uri: string): boolean {
-  return /^data:/iu.test(uri);
+  // URL parsers (and therefore `fetch`) ignore leading whitespace and C0
+  // control characters, so treat those as `data:` URLs too.
+  // eslint-disable-next-line no-control-regex
+  return /^[\u0000-\u0020]*data:/iu.test(uri);
 }
 
 /**
@@ -371,7 +374,7 @@ export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
   }
 
   const [mediaType, ...params] = uri
-    .slice('data:'.length, commaIndex)
+    .slice(uri.indexOf(':') + 1, commaIndex)
     .split(';')
     .map((part) => part.trim().toLowerCase());
   if (!isJsonCandidateMediaType(mediaType)) {
@@ -414,8 +417,34 @@ export async function getTokenUriJson(
     return parseJsonDataUri(tokenURI);
   }
   const response = await timeoutFetch(tokenURI);
-  const json = (await response.json()) as Record<string, unknown> | null;
-  return json;
+  const json: unknown = await response.json();
+  return isObject(json) && !Array.isArray(json) ? json : null;
+}
+
+/**
+ * Resolves the image of the NFT metadata a token URI points to, converting
+ * `ipfs://` images to gateway URLs. Never throws.
+ *
+ * @param tokenURI - The token URI (an HTTP(S) URL or a `data:` URL).
+ * @param ipfsGateway - The IPFS gateway to use for `ipfs://` images.
+ * @returns The image URL, or `undefined` if it cannot be resolved.
+ */
+export async function getTokenUriImage(
+  tokenURI: string,
+  ipfsGateway: string,
+): Promise<string | undefined> {
+  try {
+    const metadata = await getTokenUriJson(tokenURI);
+    const image = metadata?.image;
+    if (typeof image !== 'string') {
+      return undefined;
+    }
+    return image.startsWith('ipfs://')
+      ? await getFormattedIpfsUrl(ipfsGateway, image, true)
+      : image;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

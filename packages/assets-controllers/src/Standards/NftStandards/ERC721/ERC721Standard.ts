@@ -9,7 +9,7 @@ import {
 } from '@metamask/controller-utils';
 import { abiERC721 } from '@metamask/metamask-eth-abis';
 
-import { getFormattedIpfsUrl, getTokenUriJson } from '../../../assetsUtil.js';
+import { getFormattedIpfsUrl, getTokenUriImage } from '../../../assetsUtil.js';
 
 export class ERC721Standard {
   private readonly provider: Web3Provider;
@@ -197,16 +197,7 @@ export class ERC721Standard {
 
     let image;
     if (tokenURI) {
-      try {
-        const object = await getTokenUriJson(tokenURI);
-        if (typeof object?.image === 'string') {
-          image = object.image.startsWith('ipfs://')
-            ? await getFormattedIpfsUrl(ipfsGateway, object.image, true)
-            : object.image;
-        }
-      } catch {
-        // ignore
-      }
+      image = await getTokenUriImage(tokenURI, ipfsGateway);
     }
 
     return {

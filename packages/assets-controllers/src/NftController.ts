@@ -358,9 +358,6 @@ export const getDefaultNftControllerState = (): NftControllerState => ({
 const NFT_UPDATE_THRESHOLD = 500;
 
 /**
- * Controller that stores assets and exposes convenience methods
- */
-/**
  * Narrows an untrusted token URI metadata field to a string.
  *
  * @param value - The metadata field value.
@@ -370,6 +367,9 @@ function toStringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/**
+ * Controller that stores assets and exposes convenience methods
+ */
 export class NftController extends BaseController<
   typeof controllerName,
   NftControllerState,
@@ -775,7 +775,7 @@ export class NftController extends BaseController<
       image: toStringOrNull(object[image]),
       name: toStringOrNull(object.name),
       description: toStringOrNull(object.description),
-      standard,
+      standard: standard || null,
       favorite: false,
       tokenURI,
     };
