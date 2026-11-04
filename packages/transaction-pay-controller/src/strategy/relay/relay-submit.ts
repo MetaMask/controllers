@@ -440,7 +440,7 @@ async function waitForRelayCompletion(
     let status: RelayStatusResponse | undefined;
 
     try {
-      status = await getRelayStatus(requestId);
+      status = await getRelayStatus(messenger, requestId);
     } catch (error) {
       log('Polling network error', error);
     }
