@@ -38,7 +38,7 @@ import {
 import { getNetworkClientId } from '../../utils/provider.js';
 import { submitSecondLeg } from '../../utils/second-leg.js';
 import {
-  getLiveTokenBalance,
+  getLiveTokenBalanceOrUndefined,
   normalizeTokenAddress,
   TokenAddressTarget,
 } from '../../utils/token.js';
@@ -763,6 +763,10 @@ async function buildDelegatedOriginalParams(
  * any concurrent spends. Throws fast with a clear error instead of letting
  * the on-chain transaction revert.
  *
+ * This is a fast-fail optimisation, not a safety net: if the balance cannot be
+ * read the check is skipped and submission proceeds, since the server and the
+ * chain still reject an underfunded transaction.
+ *
  * @param quote - Server quote containing the required source amount.
  * @param messenger - Controller messenger.
  */
@@ -778,19 +782,22 @@ async function validateSourceBalance(
     TokenAddressTarget.MetaMask,
   );
 
-  let currentBalance: string;
+  const currentBalance = await getLiveTokenBalanceOrUndefined(
+    messenger,
+    from,
+    sourceChainId,
+    normalizedSourceTokenAddress,
+  );
 
-  try {
-    currentBalance = await getLiveTokenBalance(
-      messenger,
+  // An unreadable balance is unknown, not insufficient. Submit anyway and let
+  // the server and the chain reject a genuinely underfunded transaction.
+  if (currentBalance === undefined) {
+    log('Skipping source balance check: live balance unavailable', {
       from,
       sourceChainId,
-      normalizedSourceTokenAddress,
-    );
-  } catch (error) {
-    throw new Error(
-      `Cannot validate payment token balance - ${(error as Error).message}`,
-    );
+      sourceTokenAddress,
+    });
+    return;
   }
 
   const requiredAmount = new BigNumber(quote.sourceAmount.raw);

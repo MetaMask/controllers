@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Hyperliquid account balance aggregation now uses decimal-safe arithmetic and emits canonical six-decimal USDC balances, preventing equivalent unified-account balances from differing by one atomic unit ([#11253](https://github.com/MetaMask/core/pull/11253))
+- Include `number_orders_canceled` in batch `OrderCancelTransaction` events, counting successful cancellations and reporting zero for empty or failed batches. ([#11276](https://github.com/MetaMask/core/pull/11276))
+
 ## [22.1.1]
 
 ### Changed
