@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `fetchTrendingGifs` and `searchGifs` to `SocialService` (`SocialService:fetchTrendingGifs`, `SocialService:searchGifs`). They call `GET /api/v1/gifs/trending` and `GET /api/v1/gifs/search`, forward `GifQueryParams` unchanged, and return the GIF provider page. Export `GifQueryParams`, `GifItem`, `GifPageResponse`, and the messenger action types
+- Add `fetchTrendingGifs` and `searchGifs` to `SocialService` (`SocialService:fetchTrendingGifs`, `SocialService:searchGifs`). They call `GET /api/v1/gifs/trending` and `GET /api/v1/gifs/search`, forward `GifQueryParams` unchanged, and return the GIF provider page. Export `GifQueryParams`, `GifItem`, `GifPageResponse`, and the messenger action types ([#11302](https://github.com/MetaMask/core/pull/11302))
 
 ## [3.16.0]
 
