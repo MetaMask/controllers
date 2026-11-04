@@ -46,6 +46,7 @@ import {
 import { assertAbortAllowed, getRecoveryPhase } from './state-machine.js';
 import type {
   AuthenticateIdentifierOptions,
+  AuthenticateIdentifierResult,
   Identifier,
   IdentifierSession,
   Mutation,
@@ -61,7 +62,7 @@ import type {
   RecoveryIdentifierAuthProvider,
   RecoveryPhase,
   RecoveredSecret,
-  SeedlessIdentifierSession,
+  SeedlessAuthenticateIdentifierResult,
   WrappedSecret,
   WritingPendingOperation,
 } from './types.js';
@@ -323,33 +324,35 @@ export class MfaRecoveryController extends BaseController<
   }
 
   /**
-   * Authenticates an identifier with a single login. The session authorizes a
-   * later recovery-secret read and, for seedless social logins, carries the
-   * auth-server tokens for `SeedlessOnboardingController.authenticate`.
+   * Authenticates an identifier with a single login. Returns an ephemeral
+   * `session` for {@link getRecoverySecret} and, for seedless social logins,
+   * `seedlessAuthData` for `SeedlessOnboardingController.authenticate`.
+   * Callers should drop `seedlessAuthData` after seedless authenticate and
+   * keep only `session` for recovery reads.
    *
    * @param identifier - Identifier to authenticate.
    * @param options - Authentication options.
    * @param options.requireSeedlessAuthData - Fail unless the login returns
-   * complete seedless auth data. Set for the seedless password unlock path.
-   * @returns Ephemeral session data required by {@link getRecoverySecret},
-   * plus `seedlessAuthData` when the login provided it.
+   * complete seedless auth data (including `revokeToken`). Set for the
+   * seedless password unlock path.
+   * @returns Session for recovery reads, plus seedless auth data when present.
    */
   async authenticateIdentifier(
     identifier: Identifier,
     options: AuthenticateIdentifierOptions & {
       requireSeedlessAuthData: true;
     },
-  ): Promise<SeedlessIdentifierSession>;
+  ): Promise<SeedlessAuthenticateIdentifierResult>;
 
   async authenticateIdentifier(
     identifier: Identifier,
     options?: AuthenticateIdentifierOptions,
-  ): Promise<IdentifierSession>;
+  ): Promise<AuthenticateIdentifierResult>;
 
   async authenticateIdentifier(
     identifier: Identifier,
     { requireSeedlessAuthData = false }: AuthenticateIdentifierOptions = {},
-  ): Promise<IdentifierSession> {
+  ): Promise<AuthenticateIdentifierResult> {
     this.#assertKnownIdentifierTypes([identifier]);
     const requestId = randomId();
     const ephemeral = await generateWrapKey();
@@ -359,18 +362,22 @@ export class MfaRecoveryController extends BaseController<
       requestId,
       pkE,
     });
-    const credential = await requestKeyBoundIdentifierLogin({
-      identifier,
-      requestHash,
-      identifierAuthProvider: this.#identifierAuthProvider,
-      requireSeedlessAuthData,
-    });
-    return {
+    const { seedlessAuthData, ...credential } =
+      await requestKeyBoundIdentifierLogin({
+        identifier,
+        requestHash,
+        identifierAuthProvider: this.#identifierAuthProvider,
+        requireSeedlessAuthData,
+      });
+    const session: IdentifierSession = {
       ...credential,
       requestId,
       ephemeralPrivateKey: ephemeral.privateKey,
       pkE,
     };
+    return seedlessAuthData === undefined
+      ? { session }
+      : { session, seedlessAuthData };
   }
 
   /**

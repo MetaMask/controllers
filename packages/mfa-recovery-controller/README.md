@@ -30,26 +30,28 @@ one AAL1 social login and return both the key-bound recovery token and the
 auth-server token set. Mobile then calls:
 
 ```typescript
-const session = await mfaRecoveryController.authenticateIdentifier(identifier, {
-  requireSeedlessAuthData: true,
-});
+const { session, seedlessAuthData } =
+  await mfaRecoveryController.authenticateIdentifier(identifier, {
+    requireSeedlessAuthData: true,
+  });
 
-const { authConnection, ...seedlessAuthFields } = session.seedlessAuthData;
+const { authConnection, ...seedlessAuthFields } = seedlessAuthData;
 await seedlessOnboardingController.authenticate({
   ...seedlessAuthFields,
   // Values match `AuthConnection`; cast if your TS treats string enums nominally.
   authConnection: authConnection as AuthConnection,
 });
 // Prompt for the password, evaluate TOPRF, and decrypt the vault.
+// Keep `session` only if a later getRecoverySecret is needed; drop seedlessAuthData.
 ```
 
-With `requireSeedlessAuthData: true`, the returned
-`SeedlessIdentifierSession` always has `seedlessAuthData` for
-`SeedlessOnboardingController.authenticate`. `authConnection` uses the same
-string values as seedless `AuthConnection`. If TypeScript treats that enum
-nominally, cast `authConnection` to `AuthConnection`. The same `session`
-retains the key-bound token and proof material and can later be passed to
-`getRecoverySecret(session)` without another social prompt.
+With `requireSeedlessAuthData: true`, the result always includes
+`seedlessAuthData` (including `revokeToken`) beside a key-bound `session`.
+`authConnection` must match the social identifier's issuer namespace and uses
+the same string values as seedless `AuthConnection`. Cast to `AuthConnection`
+if TypeScript treats that enum nominally. Pass only `session` to
+`getRecoverySecret(session)` later — do not keep auth-server tokens on the
+session object.
 
 The seedless auth data comes only from the AAL1 social login and is never sent
 to recovery escrows. `getRecoverySecret` separately requests its AAL2

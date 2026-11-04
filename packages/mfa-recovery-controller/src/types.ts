@@ -4,7 +4,9 @@
 
 /**
  * Social login providers accepted by seedless authenticate. Values match
- * `SeedlessOnboardingController`'s `AuthConnection` enum.
+ * `SeedlessOnboardingController`'s `AuthConnection` enum. Kept as a local
+ * constant so this package does not depend on seedless-onboarding-controller
+ * at runtime; a unit test asserts the two stay in sync.
  */
 export const SEEDLESS_AUTH_CONNECTIONS = [
   'google',
@@ -16,6 +18,20 @@ export const SEEDLESS_AUTH_CONNECTIONS = [
  * Social login provider for {@link SeedlessAuthData}.
  */
 export type SeedlessAuthConnection = (typeof SEEDLESS_AUTH_CONNECTIONS)[number];
+
+/**
+ * OIDC issuer namespaces for {@link Identifier} `type: 'social'`, mapped to
+ * {@link SeedlessAuthConnection}. Used to ensure seedless auth data belongs to
+ * the same IdP that was authenticated.
+ */
+export const SEEDLESS_AUTH_CONNECTION_BY_NAMESPACE: Record<
+  string,
+  SeedlessAuthConnection
+> = {
+  'https://accounts.google.com': 'google',
+  'https://appleid.apple.com': 'apple',
+  'https://oauth.telegram.org': 'telegram',
+};
 
 export type Identifier = {
   type: string;
@@ -130,10 +146,16 @@ export type SeedlessAuthData = {
   accessToken: string;
   metadataAccessToken: string;
   refreshToken: string;
+  /**
+   * Required when `authenticateIdentifier` is called with
+   * `requireSeedlessAuthData: true` (password unlock / vault path). Optional
+   * when seedless auth data is returned without that requirement.
+   */
   revokeToken?: string;
   /**
    * Social login provider. Values match `SeedlessOnboardingController`'s
-   * `AuthConnection` enum (`google`, `apple`, `telegram`).
+   * `AuthConnection` enum (`google`, `apple`, `telegram`). Must match the
+   * authenticated social identifier's issuer namespace.
    */
   authConnection: SeedlessAuthConnection;
   authConnectionId: string;
@@ -185,7 +207,8 @@ export type AuthenticateIdentifierOptions = {
  *
  * `proofPrivateKey` signs escrow challenges. `ephemeralPrivateKey` is the
  * private half of `pkE` and decrypts the recovery secret. Keep both in
- * memory only.
+ * memory only. Does not carry seedless auth-server tokens — those are
+ * returned beside the session from {@link AuthenticateIdentifierResult}.
  */
 export type IdentifierSession = KeyBoundCredential & {
   requestId: string;
@@ -197,19 +220,24 @@ export type IdentifierSession = KeyBoundCredential & {
    * Raw 32-byte X25519 public key, the client's one-time read key.
    */
   pkE: Uint8Array;
-  /**
-   * Seedless tokens from the same login, for
-   * `SeedlessOnboardingController.authenticate`. Ignored by
-   * `getRecoverySecret`.
-   */
+};
+
+/**
+ * Result of `authenticateIdentifier`. `seedlessAuthData` is present when the
+ * login also completed a seedless auth-server exchange. Callers should use it
+ * for `SeedlessOnboardingController.authenticate` and then drop it; keep only
+ * `session` for a later `getRecoverySecret`.
+ */
+export type AuthenticateIdentifierResult = {
+  session: IdentifierSession;
   seedlessAuthData?: SeedlessAuthData;
 };
 
 /**
- * An identifier session with the seedless authentication data required by the
- * seedless password unlock flow.
+ * `AuthenticateIdentifierResult` when seedless auth data was required.
  */
-export type SeedlessIdentifierSession = IdentifierSession & {
+export type SeedlessAuthenticateIdentifierResult = {
+  session: IdentifierSession;
   seedlessAuthData: SeedlessAuthData;
 };
 

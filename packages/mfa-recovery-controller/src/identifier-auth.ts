@@ -12,7 +12,10 @@ import { areUint8ArraysEqual } from '@metamask/utils';
 import { generateSigningKey, hash, sign } from './crypto.js';
 import { MfaRecoveryError } from './errors.js';
 import { isFulfilledResult } from './escrow-utils.js';
-import { SEEDLESS_AUTH_CONNECTIONS } from './types.js';
+import {
+  SEEDLESS_AUTH_CONNECTION_BY_NAMESPACE,
+  SEEDLESS_AUTH_CONNECTIONS,
+} from './types.js';
 import type {
   Identifier,
   IdentifierAuthMode,
@@ -22,6 +25,7 @@ import type {
   KeyBoundIdentifierToken,
   RecoveryEscrowProvider,
   RecoveryIdentifierAuthProvider,
+  SeedlessAuthConnection,
   SeedlessAuthData,
 } from './types.js';
 
@@ -71,6 +75,7 @@ export type AuthorizedEscrow = {
  * @param params.requestHash - Request hash bound to the authorization.
  * @param params.identifierAuthProvider - Provider for key-bound assertions.
  * @returns Key-bound identifier token and its proof private key.
+ * @throws If the returned token is not bound to this identifier and request.
  */
 export async function requestKeyBoundIdentifierToken({
   identifier,
@@ -87,6 +92,16 @@ export async function requestKeyBoundIdentifierToken({
     proofPublicKey: proofKey.publicKey,
     requestHash,
   });
+  if (
+    !isTokenBoundToRequest(
+      token,
+      identifier,
+      proofKey.publicKey,
+      requestHash,
+    )
+  ) {
+    throwInvalidIdentifierToken();
+  }
   return { token, proofPrivateKey: proofKey.privateKey };
 }
 
@@ -153,12 +168,14 @@ export async function requestKeyBoundIdentifierLogin({
   const token: unknown = login?.token;
   if (
     !login ||
-    !isTokenBoundToRequest(token, proofKey.publicKey, requestHash)
+    !isTokenBoundToRequest(
+      token,
+      identifier,
+      proofKey.publicKey,
+      requestHash,
+    )
   ) {
-    throw new MfaRecoveryError(
-      'Identifier token is not bound to this request',
-      'invalid_identifier_token',
-    );
+    throwInvalidIdentifierToken();
   }
   const credential = { token, proofPrivateKey: proofKey.privateKey };
 
@@ -168,26 +185,25 @@ export async function requestKeyBoundIdentifierLogin({
     }
     return credential;
   }
-  if (!is(login.seedlessAuthData, SeedlessAuthDataStruct)) {
-    throw new MfaRecoveryError(
-      'Incomplete seedless auth data',
-      'invalid_seedless_auth_data',
-    );
-  }
   return {
     ...credential,
-    seedlessAuthData: pickSeedlessAuthData(login.seedlessAuthData),
+    seedlessAuthData: validateSeedlessAuthData(login.seedlessAuthData, {
+      identifier,
+      requireRevokeToken: requireSeedlessAuthData,
+    }),
   };
 }
 
 /**
  * @param token - Token returned by the identifier provider.
+ * @param identifier - Identifier the provider was asked to authenticate.
  * @param proofPublicKey - Proof public key sent to the provider.
  * @param requestHash - Request hash sent to the provider.
- * @returns Whether the token is bound to the proof key and request.
+ * @returns Whether the token is bound to the identifier, proof key, and request.
  */
 function isTokenBoundToRequest(
   token: unknown,
+  identifier: Identifier,
   proofPublicKey: Uint8Array,
   requestHash: string,
 ): token is KeyBoundIdentifierToken {
@@ -198,8 +214,91 @@ function isTokenBoundToRequest(
   return (
     candidate.requestHash === requestHash &&
     candidate.proofPublicKey instanceof Uint8Array &&
-    areUint8ArraysEqual(candidate.proofPublicKey, proofPublicKey)
+    areUint8ArraysEqual(candidate.proofPublicKey, proofPublicKey) &&
+    isSameIdentifier(candidate.identifier, identifier)
   );
+}
+
+/**
+ * @param left - Identifier from the token, if any.
+ * @param right - Identifier requested by the controller.
+ * @returns Whether both share the same type, namespace, and value.
+ */
+function isSameIdentifier(
+  left: Identifier | undefined,
+  right: Identifier,
+): boolean {
+  return (
+    left !== undefined &&
+    left.type === right.type &&
+    left.namespace === right.namespace &&
+    left.value === right.value
+  );
+}
+
+/**
+ * Expected seedless `authConnection` for a social identifier, if known.
+ *
+ * @param identifier - Authenticated identifier.
+ * @returns Matching connection, or `undefined` when the identifier is not a
+ * known social issuer.
+ */
+export function expectedSeedlessAuthConnection(
+  identifier: Identifier,
+): SeedlessAuthConnection | undefined {
+  if (identifier.type !== 'social') {
+    return undefined;
+  }
+  return SEEDLESS_AUTH_CONNECTION_BY_NAMESPACE[identifier.namespace];
+}
+
+/**
+ * Validates seedless auth data shape, strips unknown fields, and ensures it
+ * belongs to the authenticated social identifier.
+ *
+ * @param data - Provider-returned seedless auth data.
+ * @param options - Validation options.
+ * @param options.identifier - Identifier that was authenticated.
+ * @param options.requireRevokeToken - Whether `revokeToken` must be present
+ * (password unlock path).
+ * @returns Documented seedless auth data fields only.
+ */
+function validateSeedlessAuthData(
+  data: unknown,
+  {
+    identifier,
+    requireRevokeToken,
+  }: {
+    identifier: Identifier;
+    requireRevokeToken: boolean;
+  },
+): SeedlessAuthData {
+  if (!is(data, SeedlessAuthDataStruct)) {
+    throw new MfaRecoveryError(
+      'Incomplete seedless auth data',
+      'invalid_seedless_auth_data',
+    );
+  }
+  if (
+    requireRevokeToken &&
+    (data.revokeToken === undefined || data.revokeToken.length === 0)
+  ) {
+    throw new MfaRecoveryError(
+      'Incomplete seedless auth data',
+      'invalid_seedless_auth_data',
+    );
+  }
+  const expectedConnection = expectedSeedlessAuthConnection(identifier);
+  if (
+    expectedConnection === undefined ||
+    data.authConnection !== expectedConnection
+  ) {
+    throw new MfaRecoveryError(
+      'Seedless auth data does not match the authenticated identifier',
+      'invalid_seedless_auth_data',
+    );
+  }
+  return pickSeedlessAuthData(data);
 }
 
 /**
@@ -242,6 +341,13 @@ function throwMissingSeedlessAuthData(): never {
   throw new MfaRecoveryError(
     'Identifier login did not return seedless auth data',
     'missing_seedless_auth_data',
+  );
+}
+
+function throwInvalidIdentifierToken(): never {
+  throw new MfaRecoveryError(
+    'Identifier token is not bound to this request',
+    'invalid_identifier_token',
   );
 }
 

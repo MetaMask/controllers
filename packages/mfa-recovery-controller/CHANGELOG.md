@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `authenticateIdentifier` can return seedless auth-server data with the key-bound recovery session from one social login; callers can require this for the seedless password unlock path and still reuse the session with `getRecoverySecret` ([#11224](https://github.com/MetaMask/core/pull/11224))
+- `authenticateIdentifier` can return seedless auth-server data beside a key-bound recovery `session` from one social login; callers can require this (including `revokeToken`) for the seedless password unlock path and still reuse `session` with `getRecoverySecret` ([#11224](https://github.com/MetaMask/core/pull/11224))
+  - Validates that the key-bound token matches the requested identifier, proof key, and request hash on both login and token paths.
+  - Validates that `seedlessAuthData.authConnection` matches the social identifier's issuer namespace.
 - Initial release of `MfaRecoveryController`, which manages MFA recovery flows and persists in-flight operations in its state ([#10022](https://github.com/MetaMask/core/pull/10022))
   - Requires recent, request-bound AAL2 approvals for writes and reads.
   - Sends the approval's identifiers to escrows as `approvedIdentifiers` with `register` and `updateIdentifiers` mutations, and rejects payload identifiers that are not exactly among them before writing ([#10883](https://github.com/MetaMask/core/pull/10883))
