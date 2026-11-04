@@ -42,7 +42,7 @@ The `AssetsController` is a unified asset management system that provides real-t
 Initialization has two phases, so that construction does not depend on the order in which controllers are constructed:
 
 - **Constructor**: sets up state, stores options, registers action handlers and subscribes to external events (step 1.3). It never calls messenger actions or creates data sources, so it does not need the controllers it depends on to exist yet.
-- **Bootstrap, the first time the UI opens**: triggered by `ClientController:stateChange` when `selectIsUiOpen` becomes true (or by a later keyring / account tree event if the UI was already open). It performs steps 1.2 and 1.5, subscribes to `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks, runs the unlock cleanups if the keyring is already unlocked, and starts tracking (section 2) when the keyring is unlocked and the account tree is initialized. It runs once; the client must register the controllers `AssetsController` reads (for example `AccountTreeController` and `SnapController`) before it opens the UI.
+- **Bootstrap, the first time the UI opens**: triggered by `ClientController:stateChange` when `selectIsUiOpen` becomes true (or by a later keyring / account tree event if the UI was already open). It creates the data sources (step 1.5), subscribes to `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks, runs the unlock cleanups if the keyring is already unlocked, and starts tracking (section 2) when the keyring is unlocked and the account tree is initialized. Enabled chains are read from `NetworkEnablementController` when a fetch or subscription needs them (step 1.2). It runs once; the client must register the controllers `AssetsController` reads (for example `AccountTreeController` and `SnapController`) before it opens the UI.
 
 Before the bootstrap, forced fetches return what is already in state, and pushed updates and non-lifecycle events are ignored.
 
@@ -57,16 +57,14 @@ super({
 });
 ```
 
-#### 1.2 Initialize Internal State (bootstrap)
+#### 1.2 Enabled chains (read when needed)
+
+Enabled chains are not cached. A fetch or subscription reads `NetworkEnablementController:getState` and extracts the enabled CAIP-2 chain ids. `NetworkEnablementController:stateChange` includes the new map and the patches that say which chains were enabled or disabled.
 
 ```typescript
-initializeState()
-├── enabledChains = extractEnabledChains(NetworkEnablementController.getState())
-└── assetsPrice = {}  // In-memory price cache
-
-// Note: selectedAccounts is a getter that calls AccountTreeController
-get selectedAccounts(): InternalAccount[]
-└── return messenger.call('AccountTreeController:getAccountsFromSelectedAccountGroup')
+// Selected accounts are read from AccountTreeController when needed
+getSelectedAccounts()
+└── messenger.call('AccountTreeController:getAccountsFromSelectedAccountGroup')
 ```
 
 #### 1.3 Subscribe to External Events (constructor)

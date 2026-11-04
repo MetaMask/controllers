@@ -732,6 +732,16 @@ type AssetsControllerSourceOptions = Pick<
   rpcDataSourceConfig: RpcDataSourceConfig;
 };
 
+/**
+ * Patches published with `NetworkEnablementController:stateChange`.
+ * The new enabled map is the source of truth; these patches say which
+ * entries changed, so added and removed chains do not need a cached set.
+ */
+type NetworkEnablementStateChangePatches = ControllerStateChangeEvent<
+  'NetworkEnablementController',
+  NetworkEnablementControllerState
+>['payload'][1];
+
 export class AssetsController extends BaseController<
   typeof CONTROLLER_NAME,
   AssetsControllerState,
@@ -841,16 +851,6 @@ export class AssetsController extends BaseController<
    * its forced `getAssets()` call) runs a second time for the same accounts.
    */
   #startInFlight = false;
-
-  /** Currently enabled chains from NetworkEnablementController */
-  #enabledChains: Set<ChainId> = new Set();
-
-  /**
-   * Whether `#enabledChains` has been read from NetworkEnablementController.
-   * Until then the set is empty because it has not been initialized, not
-   * because every network is disabled.
-   */
-  #hasInitializedEnabledChains = false;
 
   /**
    * Get the currently selected accounts from AccountTreeController.
@@ -1106,9 +1106,8 @@ export class AssetsController extends BaseController<
    */
   async #ensureBootstrapped(): Promise<void> {
     this.#bootstrapPromise ??= this.#bootstrap().catch((error: unknown) => {
-      // Allow a later lifecycle event to retry when the bootstrap failed
-      // before the data sources were created (e.g. a controller it reads was
-      // not registered yet).
+      // Allow a later lifecycle event to retry when a data source constructor
+      // throws before `#sources` is assigned.
       if (!this.#sources) {
         this.#bootstrapPromise = undefined;
       }
@@ -1118,14 +1117,15 @@ export class AssetsController extends BaseController<
   }
 
   /**
-   * Read enabled networks, create the data sources, subscribe to
-   * basic-functionality changes, wait for the Accounts API supported networks
-   * and run the unlock cleanups when the keyring is already unlocked. Then
-   * start asset tracking if the keyring is unlocked and the account tree is
-   * initialized.
+   * Create the data sources, subscribe to basic-functionality changes, wait
+   * for the Accounts API supported networks and run the unlock cleanups when
+   * the keyring is already unlocked. Then start asset tracking if the keyring
+   * is unlocked and the account tree is initialized.
    *
-   * By the time the UI opens, the client has registered every controller this
-   * one depends on, so reading them here is safe.
+   * Enabled chains are read from NetworkEnablementController when a fetch or
+   * subscription needs them. By the time the UI opens, the client has
+   * registered every controller this one depends on, so reading them here is
+   * safe.
    */
   async #bootstrap(): Promise<void> {
     if (this.#isDestroyed) {
@@ -1134,7 +1134,6 @@ export class AssetsController extends BaseController<
 
     log('Bootstrapping AssetsController');
 
-    this.#initializeState();
     this.#sources = this.#createSources();
     this.#subscribeToBasicFunctionality();
 
@@ -1347,17 +1346,49 @@ export class AssetsController extends BaseController<
     );
   }
 
-  #initializeState(): void {
-    const { enabledNetworkMap } = this.messenger.call(
-      'NetworkEnablementController:getState',
-    );
-    this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
-    this.#hasInitializedEnabledChains = true;
+  /**
+   * Read the currently enabled chains from NetworkEnablementController.
+   *
+   * Returns `undefined` when that action is not registered yet. Callers that
+   * filter assets must not treat "not readable" as "every network is disabled".
+   *
+   * @returns The enabled chain set, or `undefined` when enablement state cannot be read.
+   */
+  #readEnabledChains(): Set<ChainId> | undefined {
+    try {
+      const { enabledNetworkMap } = this.messenger.call(
+        'NetworkEnablementController:getState',
+      );
+      return this.#extractEnabledChains(enabledNetworkMap);
+    } catch (error) {
+      if (this.#isMissingMessengerHandler(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
 
-    log('Initialized state', {
-      enabledNetworkMap,
-      enabledChains: this.#enabledChains,
-    });
+  /**
+   * Enabled chains, or an empty set when enablement state cannot be read yet.
+   *
+   * @returns The enabled chain set.
+   */
+  #getEnabledChains(): Set<ChainId> {
+    return this.#readEnabledChains() ?? new Set();
+  }
+
+  /**
+   * Whether a messenger call failed because the action has no handler.
+   *
+   * @param error - The error thrown by `messenger.call`.
+   * @returns True when the action is not registered or not delegated.
+   */
+  #isMissingMessengerHandler(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      (error.message.includes('has not been registered') ||
+        error.message.includes('has not been delegated'))
+    );
   }
 
   /**
@@ -1378,22 +1409,188 @@ export class AssetsController extends BaseController<
     for (const [namespace, networks] of Object.entries(enabledNetworkMap)) {
       for (const [reference, isEnabled] of Object.entries(networks)) {
         if (isEnabled) {
-          // Check if reference is already a full CAIP-2 chain ID (contains colon)
-          if (reference.includes(':')) {
-            // Already a full chain ID, use as-is
-            chains.add(reference as ChainId);
-          } else {
-            // Normalize EIP155 chain references from hex to decimal (CAIP-2 standard)
-            const normalizedReference = this.#normalizeChainReference(
-              namespace,
-              reference,
-            );
-            chains.add(`${namespace}:${normalizedReference}`);
-          }
+          chains.add(this.#toEnabledChainId(namespace, reference));
         }
       }
     }
     return chains;
+  }
+
+  /**
+   * Build the CAIP-2 chain id stored for one enabled-network entry.
+   *
+   * A reference that already contains `:` is a full chain id. EIP-155 hex
+   * references are normalized to decimal.
+   *
+   * @param namespace - The CAIP namespace.
+   * @param reference - The network reference from `enabledNetworkMap`.
+   * @returns The CAIP-2 chain id.
+   */
+  #toEnabledChainId(namespace: string, reference: string): ChainId {
+    if (reference.includes(':')) {
+      return reference as ChainId;
+    }
+    return `${namespace}:${this.#normalizeChainReference(namespace, reference)}`;
+  }
+
+  /**
+   * Chains whose enablement changed in a NetworkEnablementController update.
+   *
+   * The published state is already the new map. Patches describe the edit, so
+   * a cached previous set is not required. Boolean replaces and adds are
+   * exact: immer only emits them when the value changed. A removed key does
+   * not include its previous value, so it is reported as removed.
+   *
+   * @param patches - Patches from `NetworkEnablementController:stateChange`.
+   * @returns Chains that became enabled and chains that stopped being enabled.
+   */
+  #diffEnabledChains(patches: NetworkEnablementStateChangePatches): {
+    addedChains: ChainId[];
+    removedChains: ChainId[];
+  } {
+    const addedChains: ChainId[] = [];
+    const removedChains: ChainId[] = [];
+
+    for (const patch of patches) {
+      if (String(patch.path[0]) !== 'enabledNetworkMap') {
+        continue;
+      }
+
+      const namespace = patch.path[1];
+      const reference = patch.path[2];
+      if (namespace === undefined) {
+        this.#collectEnabledChainsFromMapPatch(patch, addedChains);
+        continue;
+      }
+      if (reference === undefined) {
+        this.#collectEnabledChainsFromNamespacePatch(
+          String(namespace),
+          patch,
+          addedChains,
+        );
+        continue;
+      }
+      this.#collectEnabledChainFromEntryPatch(
+        String(namespace),
+        String(reference),
+        patch,
+        addedChains,
+        removedChains,
+      );
+    }
+
+    return {
+      addedChains: [...new Set(addedChains)],
+      removedChains: [...new Set(removedChains)],
+    };
+  }
+
+  /**
+   * Treat every currently enabled chain in a whole-map add or replace as added.
+   * NetworkEnablementController edits keys in place, so this shape is unused
+   * by that controller; it covers a replacement of `enabledNetworkMap`.
+   *
+   * @param patch - A patch whose path is `['enabledNetworkMap']`.
+   * @param addedChains - Chains to append newly enabled ids to.
+   */
+  #collectEnabledChainsFromMapPatch(
+    patch: NetworkEnablementStateChangePatches[number],
+    addedChains: ChainId[],
+  ): void {
+    if (patch.op === 'remove' || !this.#isNetworkRecord(patch.value)) {
+      return;
+    }
+    for (const [namespace, networks] of Object.entries(patch.value)) {
+      this.#pushEnabledChainIds(addedChains, namespace, networks);
+    }
+  }
+
+  /**
+   * Treat every enabled chain in an added or replaced namespace object as added.
+   * Creating a namespace and enabling a chain in one update is one `add` of
+   * that object.
+   *
+   * @param namespace - The CAIP namespace the patch targets.
+   * @param patch - A patch whose path is `['enabledNetworkMap', namespace]`.
+   * @param addedChains - Chains to append newly enabled ids to.
+   */
+  #collectEnabledChainsFromNamespacePatch(
+    namespace: string,
+    patch: NetworkEnablementStateChangePatches[number],
+    addedChains: ChainId[],
+  ): void {
+    if (patch.op === 'remove') {
+      return;
+    }
+    this.#pushEnabledChainIds(addedChains, namespace, patch.value);
+  }
+
+  /**
+   * Record one network entry that was enabled, disabled, or removed.
+   *
+   * @param namespace - The CAIP namespace.
+   * @param reference - The network reference.
+   * @param patch - A patch whose path is `['enabledNetworkMap', namespace, reference]`.
+   * @param addedChains - Chains to append newly enabled ids to.
+   * @param removedChains - Chains to append ids that are no longer enabled to.
+   */
+  #collectEnabledChainFromEntryPatch(
+    namespace: string,
+    reference: string,
+    patch: NetworkEnablementStateChangePatches[number],
+    addedChains: ChainId[],
+    removedChains: ChainId[],
+  ): void {
+    const chainId = this.#toEnabledChainId(namespace, reference);
+    switch (patch.op) {
+      case 'add':
+      case 'replace':
+        if (patch.value === true) {
+          addedChains.push(chainId);
+        } else if (patch.value === false) {
+          removedChains.push(chainId);
+        }
+        return;
+      case 'remove':
+        removedChains.push(chainId);
+        return;
+      default: {
+        const unexpected: never = patch.op;
+        log('Ignoring unknown enabled-network patch', { op: unexpected });
+      }
+    }
+  }
+
+  /**
+   * Append enabled chain ids from one namespace's network map.
+   *
+   * @param target - Chain ids to append to.
+   * @param namespace - The CAIP namespace.
+   * @param networks - The namespace's reference-to-enabled map, if it is one.
+   */
+  #pushEnabledChainIds(
+    target: ChainId[],
+    namespace: string,
+    networks: unknown,
+  ): void {
+    if (!this.#isNetworkRecord(networks)) {
+      return;
+    }
+    for (const [reference, isEnabled] of Object.entries(networks)) {
+      if (isEnabled === true) {
+        target.push(this.#toEnabledChainId(namespace, reference));
+      }
+    }
+  }
+
+  /**
+   * Whether a patch value is a string-keyed record.
+   *
+   * @param value - The patch value.
+   * @returns True when `value` is a non-null object.
+   */
+  #isNetworkRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   /**
@@ -1445,11 +1642,11 @@ export class AssetsController extends BaseController<
     // Subscribe to network enablement changes (only enabledNetworkMap)
     this.messenger.subscribe(
       'NetworkEnablementController:stateChange',
-      ({ enabledNetworkMap }) => {
+      ({ enabledNetworkMap }, patches) => {
         if (!this.#sources) {
           return;
         }
-        this.#handleEnabledNetworksChanged(enabledNetworkMap).catch(
+        this.#handleEnabledNetworksChanged(enabledNetworkMap, patches).catch(
           console.error,
         );
       },
@@ -1761,7 +1958,7 @@ export class AssetsController extends BaseController<
     const releaseLock = await this.#accountRefreshMutex.acquire();
     try {
       await this.getAssets(accounts, {
-        chainIds: [...this.#enabledChains],
+        chainIds: [...this.#getEnabledChains()],
         forceUpdate: true,
       });
       // Seed before subscribe so the price poll / update fetch sees natives
@@ -1895,15 +2092,15 @@ export class AssetsController extends BaseController<
    * Get assets for the given accounts, optionally force-fetching them first.
    *
    * Before the UI first opens there are no data sources, so a forced fetch is
-   * skipped and the assets already in state are returned. Enabled networks
-   * have not been read yet, so an omitted `chainIds` includes every asset in
-   * state rather than treating the empty enabled-chain set as a filter. The
+   * skipped and the assets already in state are returned. An omitted
+   * `chainIds` uses the networks enabled in NetworkEnablementController when
+   * that state can be read, and does not filter by chain when it cannot. The
    * loading status of the accounts is left untouched, so the first fetch
    * afterwards still reports them as loading.
    *
    * @param accounts - Accounts to get assets for.
    * @param options - Fetch options.
-   * @param options.chainIds - Chains to include. Defaults to the enabled chains once they have been read.
+   * @param options.chainIds - Chains to include. Defaults to the enabled chains.
    * @param options.assetTypes - Asset types to include. Defaults to fungible.
    * @param options.forceUpdate - Fetch from the data sources before reading state.
    * @param options.bypassServerCache - Also bypass server-side HTTP caches.
@@ -1953,14 +2150,14 @@ export class AssetsController extends BaseController<
       dataTypes?: DataType[];
     },
   ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
-    // An omitted list uses the enabled networks once they have been read.
-    // Before that, `#enabledChains` is empty because it has not been
-    // initialized. `undefined` means "do not filter by chain".
+    // An omitted list uses the enabled networks. When that state cannot be
+    // read yet, `undefined` means "do not filter by chain" rather than
+    // treating a missing read as every network being disabled.
+    const enabledChains =
+      options?.chainIds === undefined ? this.#readEnabledChains() : undefined;
     const chainIds =
       options?.chainIds ??
-      (this.#hasInitializedEnabledChains
-        ? [...this.#enabledChains]
-        : undefined);
+      (enabledChains === undefined ? undefined : [...enabledChains]);
     const assetTypes = options?.assetTypes ?? ['fungible'];
     const dataTypes = options?.dataTypes ?? ['balance', 'metadata', 'price'];
 
@@ -3158,7 +3355,7 @@ export class AssetsController extends BaseController<
    * @returns Array of native asset IDs, one per enabled chain that has a registered identifier.
    */
   #getNativeAssetIdsForEnabledChains(): Caip19AssetId[] {
-    return this.#resolveNativeAssetIds(this.#enabledChains);
+    return this.#resolveNativeAssetIds(this.#getEnabledChains());
   }
 
   /**
@@ -3278,7 +3475,7 @@ export class AssetsController extends BaseController<
     // why mUSD appears on mainnet/Linea immediately (those are normally
     // enabled at startup) but only appears on Monad once the user
     // turns the Monad network on.
-    const candidateChains = chainsToSeed ?? [...this.#enabledChains];
+    const candidateChains = chainsToSeed ?? [...this.#getEnabledChains()];
     const targetChains = candidateChains.filter((chainId) =>
       CHAINS_WITH_DEFAULT_TRACKED_ASSETS.has(chainId),
     );
@@ -3820,7 +4017,7 @@ export class AssetsController extends BaseController<
    */
   #startTracking(): void {
     const accounts = this.#getSelectedAccounts();
-    const chainIds = [...this.#enabledChains];
+    const chainIds = [...this.#getEnabledChains()];
 
     if (accounts.length === 0 || chainIds.length === 0) {
       return;
@@ -3915,10 +4112,16 @@ export class AssetsController extends BaseController<
    * @param options - Subscription options.
    * @param options.skipInitialFetch - When true, AccountsApi skips its
    * one-shot subscribe poll (use after a force `getAssets` for the same scope).
+   * @param options.chainIds - Chains to subscribe. Defaults to the enabled
+   * chains from NetworkEnablementController. The enablement-change handler
+   * passes the chains from that event.
    */
-  #subscribeAssets(options?: { skipInitialFetch?: boolean }): void {
+  #subscribeAssets(options?: {
+    skipInitialFetch?: boolean;
+    chainIds?: ChainId[];
+  }): void {
     const accounts = this.#getSelectedAccounts();
-    const enabledChains = [...this.#enabledChains];
+    const enabledChains = options?.chainIds ?? [...this.#getEnabledChains()];
     if (accounts.length === 0 || enabledChains.length === 0) {
       return;
     }
@@ -4301,7 +4504,7 @@ export class AssetsController extends BaseController<
       // Wildcard scope (e.g., "eip155:0" means all enabled chains in that namespace)
       if (reference === '0') {
         // Add enabled chains
-        for (const chain of this.#enabledChains) {
+        for (const chain of this.#getEnabledChains()) {
           if (isCaipChainId(chain)) {
             const chainParsed = parseCaipChainId(chain);
             if (chainParsed.namespace === namespace) {
@@ -4367,7 +4570,7 @@ export class AssetsController extends BaseController<
       this.#ensureDefaultTrackedAssetsSeeded();
       if (accounts.length > 0) {
         await this.getAssets(accounts, {
-          chainIds: [...this.#enabledChains],
+          chainIds: [...this.#getEnabledChains()],
           forceUpdate: true,
         });
       }
@@ -4380,29 +4583,13 @@ export class AssetsController extends BaseController<
 
   async #handleEnabledNetworksChanged(
     enabledNetworkMap: NetworkEnablementControllerState['enabledNetworkMap'],
+    patches: NetworkEnablementStateChangePatches,
   ): Promise<void> {
-    const previousChains = this.#enabledChains;
-    this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
-
-    // Find newly enabled chains (in new set but not in previous)
-    const addedChains: ChainId[] = [];
-    for (const chain of this.#enabledChains) {
-      if (!previousChains.has(chain)) {
-        addedChains.push(chain);
-      }
-    }
-
-    // Find disabled chains to clean up (in previous but not in new)
-    const removedChains: ChainId[] = [];
-    for (const chain of previousChains) {
-      if (!this.#enabledChains.has(chain)) {
-        removedChains.push(chain);
-      }
-    }
+    const enabledChains = this.#extractEnabledChains(enabledNetworkMap);
+    const { addedChains, removedChains } = this.#diffEnabledChains(patches);
 
     log('Enabled networks changed', {
-      previousCount: previousChains.size,
-      newCount: this.#enabledChains.size,
+      newCount: enabledChains.size,
       addedChains,
       removedChains,
     });
@@ -4417,8 +4604,9 @@ export class AssetsController extends BaseController<
       this.#ensureDefaultTrackedAssetsSeeded(addedChains);
     }
 
-    // Refresh subscriptions for new chain set
-    this.#subscribeAssets();
+    // Refresh subscriptions for the chain set from this event. Later reads use
+    // NetworkEnablementController state, which is already this map in production.
+    this.#subscribeAssets({ chainIds: [...enabledChains] });
 
     // One-time fetch for newly enabled chains. v6 `full` replace is scoped to
     // those chains; existing balances on other chains are left untouched.

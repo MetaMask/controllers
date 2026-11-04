@@ -976,7 +976,7 @@ describe('AssetsController', () => {
       );
     });
 
-    it('retries the bootstrap on the next UI open when it failed before creating data sources', async () => {
+    it('still creates data sources when NetworkEnablementController:getState throws', async () => {
       const subscribeToBasicFunctionalityChange = vi.fn();
       await withController(
         {
@@ -984,15 +984,9 @@ describe('AssetsController', () => {
           controllerOptions: { subscribeToBasicFunctionalityChange },
         },
         async ({ messenger }) => {
-          const getState = vi
-            .fn()
-            .mockImplementationOnce(() => {
-              throw new Error('NetworkEnablementController not registered');
-            })
-            .mockImplementation(() => ({
-              enabledNetworkMap: { eip155: { '1': true } },
-              nativeAssetIdentifiers: {},
-            }));
+          const getState = vi.fn(() => {
+            throw new Error('NetworkEnablementController not registered');
+          });
           messenger.unregisterActionHandler(
             'NetworkEnablementController:getState',
           );
@@ -1002,19 +996,12 @@ describe('AssetsController', () => {
           );
 
           publishUiOpen(messenger, true);
-          await waitUntilStable(
-            () => subscribeToBasicFunctionalityChange.mock.calls.length,
-          );
-          expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
-          expect(getState).toHaveBeenCalledTimes(1);
-
-          publishUiOpen(messenger, false);
-          publishUiOpen(messenger, true);
           await waitFor(() => {
             expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(
               1,
             );
           });
+          expect(getState).toHaveBeenCalled();
         },
       );
     });
@@ -5990,7 +5977,13 @@ describe('AssetsController', () => {
                 'eip155:1': 'eip155:1/slip44:60',
               },
             },
-            [],
+            [
+              {
+                op: 'add',
+                path: ['enabledNetworkMap', 'eip155', '59144'],
+                value: true,
+              },
+            ],
           );
 
           // The price poll snapshots state synchronously on an existing
