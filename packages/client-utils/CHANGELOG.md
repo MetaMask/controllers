@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bump `@metamask/core-backend` from `^13.0.0` to `^14.0.0` ([#PRNUM](https://github.com/MetaMask/core/pull/PRNUM))
+- Bump `@metamask/core-backend` from `^13.0.0` to `^14.0.0` ([#11300](https://github.com/MetaMask/core/pull/11300))
 - Bump `eth-chainlist` from `^0.0.844` to `^0.0.873` ([#10722](https://github.com/MetaMask/core/pull/10722))
 - Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 
