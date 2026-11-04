@@ -46,6 +46,7 @@ import type { Draft } from 'immer';
 import type {
   CONTROLLER_NAME,
   PaymentOverride,
+  TransactionPayClientId,
   TransactionPayStrategy,
 } from './constants.js';
 import type { TransactionPayControllerMethodActions } from './TransactionPayController-method-action-types.js';
@@ -263,6 +264,13 @@ export const KEYRING_TYPES_SUPPORTING_7702: `${KeyringTypes}`[] = [
 
 /** Options for the TransactionPayController. */
 export type TransactionPayControllerOptions = {
+  /**
+   * Identifies the MetaMask client, sent as the `X-Client-Id` header on
+   * requests to the intents API so the server can distinguish Mobile from
+   * Extension traffic.
+   */
+  clientId?: TransactionPayClientId;
+
   /** Optional callback to re-encode nested transaction calldata for a given amount. */
   getAmountData?: GetAmountDataCallback;
 
@@ -481,6 +489,11 @@ export type TransactionPaySourceAmount = {
  * and `detail` on {@link QuoteErrorInfo}.
  */
 export type QuoteErrorReason =
+  /**
+   * @deprecated No longer emitted. An unreadable live balance is treated as
+   * unknown rather than insufficient, so it no longer blocks the quote. Kept
+   * so existing consumers and historical analytics still type-check.
+   */
   | 'balance-unavailable'
   | 'insufficient-source-balance'
   | 'insufficient-transfer-balance'

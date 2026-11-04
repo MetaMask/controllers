@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `TokenApiClient.fetchV2Assets` and `getV2AssetsQueryOptions` for Token API `GET /v2/assets`, supporting `includeLaunchpadData` and `includeTokenSecurityData`, along with `V2AssetResponse` and `V2AssetsQueryOptions` types ([#11251](https://github.com/MetaMask/core/pull/11251))
+- Add optional `subscriptionNamespace` to `OHLCVService` so callers can select the WebSocket channel namespace (default: `ohlcv.v1`) ([#11249](https://github.com/MetaMask/core/pull/11249))
+
+### Changed
+
+- **BREAKING:** `OHLCVService` WebSocket channels now use the `ohlcv.v1` namespace instead of `market-data.v1` ([#11249](https://github.com/MetaMask/core/pull/11249))
+  - Channel strings change from `market-data.v1.<assetId>.<interval>.<currency>` to `ohlcv.v1.<assetId>.<interval>.<currency>`, and system notifications move to `system-notifications.v1.ohlcv.v1`.
+  - Pass `subscriptionNamespace: 'market-data.v1'` when constructing `OHLCVService` to keep the previous stream until `ohlcv.v1` is available in production.
+- Bump `uuid` from `^14.0.0` to `^14.0.1` ([#11179](https://github.com/MetaMask/core/pull/11179))
+
 ## [13.0.0]
 
 ### Added
