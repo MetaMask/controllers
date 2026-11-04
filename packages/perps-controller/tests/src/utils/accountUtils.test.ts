@@ -482,11 +482,11 @@ describe('spot balance helpers', () => {
     expect(parseFloat(result.withdrawableBalance)).toBe(35);
   });
 
-  it('returns the input untouched when no collateral spot balance is present', () => {
+  it('canonicalizes balances when no collateral spot balance is present', () => {
     const accountState: AccountState = {
-      spendableBalance: '1',
-      withdrawableBalance: '1',
-      totalBalance: '2',
+      spendableBalance: '1.0000009',
+      withdrawableBalance: '1.0000009',
+      totalBalance: '2.0000009',
       marginUsed: '3',
       unrealizedPnl: '4',
       returnOnEquity: '5',
@@ -496,7 +496,12 @@ describe('spot balance helpers', () => {
       balances: [],
     } as never);
 
-    expect(result).toBe(accountState);
+    expect(result).toStrictEqual({
+      ...accountState,
+      spendableBalance: '1',
+      withdrawableBalance: '1',
+      totalBalance: '2',
+    });
   });
 
   it('does NOT fold spot into spendable/withdrawable when foldIntoCollateral is false (e.g. HL Standard mode)', () => {

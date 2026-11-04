@@ -7,6 +7,7 @@ import { createModuleLogger } from '@metamask/utils';
 import { TransactionPayStrategy } from '../constants.js';
 import { projectLogger } from '../logger.js';
 import type {
+  GetBalanceCallback,
   TransactionPayControllerMessenger,
   TransactionPayQuote,
 } from '../types.js';
@@ -27,13 +28,18 @@ export class TransactionPayPublishHook {
 
   readonly #messenger: TransactionPayControllerMessenger;
 
+  readonly #getBalance?: GetBalanceCallback;
+
   constructor({
+    getBalance,
     isSmartTransaction,
     messenger,
   }: {
+    getBalance?: GetBalanceCallback;
     isSmartTransaction: (chainId: Hex) => boolean;
     messenger: TransactionPayControllerMessenger;
   }) {
+    this.#getBalance = getBalance;
     this.#isSmartTransaction = isSmartTransaction;
     this.#messenger = messenger;
   }
@@ -101,6 +107,7 @@ export class TransactionPayPublishHook {
 
     return await strategy.execute({
       accountSupports7702: accountSupports7702(this.#messenger, from),
+      getBalance: this.#getBalance,
       isSmartTransaction: this.#isSmartTransaction,
       quotes,
       messenger: this.#messenger,

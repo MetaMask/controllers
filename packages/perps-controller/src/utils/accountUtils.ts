@@ -206,8 +206,8 @@ export type AddSpotBalanceOptions = {
    * Standard mode). The caller is responsible for translating
    * provider-specific state into this flag.
    *
-   * Defaults to `true` for backward compatibility with call sites that
-   * haven't yet been wired with provider-specific context.
+   * Defaults to `false` to fail closed until a caller provides
+   * provider-specific context.
    */
   foldIntoCollateral?: boolean;
 };
@@ -218,7 +218,7 @@ export type AddSpotBalanceOptions = {
  * — the util stays provider-agnostic.
  *
  * @param accountState - Base AccountState produced by a provider adapter.
- * @param spotState - Raw spot clearinghouse response (HL-shaped); null or missing means no spot balance and the state is returned unchanged.
+ * @param spotState - Raw spot clearinghouse response (HL-shaped); null or missing means no spot contribution. Numeric balances are still canonicalized to the six-decimal USDC representation.
  * @param options - See {@link AddSpotBalanceOptions}.
  * @returns AccountState with spot folded into `totalBalance` always, and into spendable/withdrawable when `foldIntoCollateral` is true.
  */

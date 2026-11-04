@@ -736,6 +736,9 @@ export type PayStrategyExecuteRequest<OriginalRequest> = {
   /** Whether the account supports EIP-7702 authorization signing. */
   accountSupports7702: boolean;
 
+  /** Optional callback that resolves an authoritative source balance for Max flows. */
+  getBalance?: GetBalanceCallback;
+
   /** Callback to determine if the transaction is a smart transaction. */
   isSmartTransaction: (chainId: Hex) => boolean;
 

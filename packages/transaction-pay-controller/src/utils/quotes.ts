@@ -7,6 +7,7 @@ import { createModuleLogger } from '@metamask/utils';
 import { PaymentOverride, TransactionPayStrategy } from '../constants.js';
 import { projectLogger } from '../logger.js';
 import type {
+  GetBalanceCallback,
   QuoteRequest,
   QuoteErrorInfo,
   TransactionData,
@@ -32,6 +33,7 @@ import {
   getTokenFiatRate,
 } from './token.js';
 import { calculateTotals } from './totals.js';
+import { updateSourceAmounts } from './source-amounts.js';
 import { getTransaction, updateTransaction } from './transaction.js';
 import { isQuoteError } from './validation.js';
 
@@ -42,6 +44,7 @@ const log = createModuleLogger(projectLogger, 'quotes');
 const inFlightQuoteRequests = new Map<string, AbortController>();
 
 export type UpdateQuotesRequest = {
+  getBalance?: GetBalanceCallback;
   getStrategies: (transaction: TransactionMeta) => TransactionPayStrategy[];
   messenger: TransactionPayControllerMessenger;
   transactionData: TransactionData | undefined;
@@ -64,6 +67,7 @@ export async function updateQuotes(
   request: UpdateQuotesRequest,
 ): Promise<boolean> {
   const {
+    getBalance,
     getStrategies,
     messenger,
     transactionData,
@@ -105,6 +109,18 @@ export async function updateQuotes(
   const { signal } = controller;
 
   updateTransactionData(transactionId, (data) => {
+    if (isPostQuote && isMaxAmount) {
+      const previousSourceAmounts = data.sourceAmounts;
+      updateSourceAmounts(transactionId, data, messenger, getBalance);
+
+      if (!areSourceAmountsEqual(previousSourceAmounts, data.sourceAmounts)) {
+        // An accepted quote is immutable. Remove it before requesting a quote
+        // for the newly observed authoritative Max balance.
+        data.quotes = undefined;
+        data.totals = undefined;
+      }
+    }
+
     data.isLoading = true;
     data.quoteError = undefined;
   });
@@ -305,11 +321,13 @@ function syncTransaction({
  * @param messenger - Messenger instance.
  * @param updateTransactionData - Callback to update transaction data.
  * @param getStrategies - Callback to get ordered strategy names for a transaction.
+ * @param getBalance - Optional authoritative balance callback for Max flows.
  */
 export async function refreshQuotes(
   messenger: TransactionPayControllerMessenger,
   updateTransactionData: UpdateTransactionDataCallback,
   getStrategies: (transaction: TransactionMeta) => TransactionPayStrategy[],
+  getBalance?: GetBalanceCallback,
 ): Promise<void> {
   const state = messenger.call('TransactionPayController:getState');
   const transactionIds = Object.keys(state.transactionData);
@@ -346,6 +364,7 @@ export async function refreshQuotes(
     }
 
     const isUpdated = await updateQuotes({
+      getBalance,
       getStrategies,
       messenger,
       transactionData,
@@ -381,6 +400,23 @@ function clearControllerIfCurrent(
   if (inFlightQuoteRequests.get(transactionId) === controller) {
     inFlightQuoteRequests.delete(transactionId);
   }
+}
+
+function areSourceAmountsEqual(
+  first: TransactionPaySourceAmount[] | undefined,
+  second: TransactionPaySourceAmount[] | undefined,
+): boolean {
+  if (first?.length !== second?.length) {
+    return false;
+  }
+
+  return (
+    first?.every(
+      (amount, index) =>
+        amount.sourceAmountRaw === second?.[index]?.sourceAmountRaw &&
+        amount.sourceBalanceRaw === second?.[index]?.sourceBalanceRaw,
+    ) ?? true
+  );
 }
 
 /**

@@ -1734,6 +1734,8 @@ describe('Relay Submit Utils', () => {
           request.quotes[0],
           FROM_MOCK,
           messenger,
+          request.transaction,
+          undefined,
         );
         expect(addTransactionMock).not.toHaveBeenCalled();
         expect(addTransactionBatchMock).not.toHaveBeenCalled();
@@ -1756,6 +1758,8 @@ describe('Relay Submit Utils', () => {
           request.quotes[0],
           ACCOUNT_OVERRIDE_MOCK,
           messenger,
+          request.transaction,
+          undefined,
         );
       });
 

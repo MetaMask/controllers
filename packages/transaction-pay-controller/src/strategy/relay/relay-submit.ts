@@ -14,6 +14,7 @@ import { BigNumber } from 'bignumber.js';
 
 import { projectLogger } from '../../logger.js';
 import type {
+  GetBalanceCallback,
   PayStrategyExecuteRequest,
   TransactionPayControllerMessenger,
   TransactionPayQuote,
@@ -126,6 +127,7 @@ async function submitRelayQuotesInternal(
       quote,
       messenger,
       transaction,
+      request.getBalance,
     ));
   }
 
@@ -149,6 +151,7 @@ async function executeSingleQuote(
   quote: TransactionPayQuote<RelayQuote>,
   messenger: TransactionPayControllerMessenger,
   transaction: TransactionMeta,
+  getBalance?: GetBalanceCallback,
 ): Promise<{ transactionHash?: Hex }> {
   log('Executing single quote', quote);
 
@@ -172,7 +175,13 @@ async function executeSingleQuote(
   const mutableOriginal: RelayQuote = { ...quote.original };
 
   if (quote.request.isHyperliquidSource) {
-    await submitHyperliquidWithdraw(quote, quote.request.from, messenger);
+    await submitHyperliquidWithdraw(
+      quote,
+      quote.request.from,
+      messenger,
+      transaction,
+      getBalance,
+    );
   } else if (isPolymarket) {
     const { sourceHash, preSubmitUsdceBalance } =
       await submitPolymarketWithdraw({

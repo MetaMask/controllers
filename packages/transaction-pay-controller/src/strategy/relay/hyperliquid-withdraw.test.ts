@@ -87,13 +87,25 @@ function buildQuote(
   steps: unknown[] = [AUTHORIZE_STEP_MOCK, DEPOSIT_STEP_MOCK],
 ): TransactionPayQuote<RelayQuote> {
   return {
-    original: { steps },
+    original: {
+      details: {
+        currencyIn: {
+          currency: { decimals: 6 },
+        },
+      },
+      steps,
+    },
+    request: {},
+    sourceAmount: {
+      human: '10',
+      raw: '10000000',
+    },
   } as TransactionPayQuote<RelayQuote>;
 }
 
 describe('submitHyperliquidWithdraw', () => {
   const successfulFetchMock = vi.mocked(successfulFetch);
-  const { messenger } = getMessengerMock();
+  const { messenger, getControllerStateMock } = getMessengerMock();
 
   let signTypedMessageMock: Mock;
 
@@ -134,6 +146,125 @@ describe('submitHyperliquidWithdraw', () => {
     await expect(
       submitHyperliquidWithdraw(quote, FROM_MOCK, messenger),
     ).rejects.toThrow('Expected authorize and deposit steps');
+  });
+
+  it.each(['9999999', '10000001'])(
+    'rejects an action amount of %s before signing or posting',
+    async (amount) => {
+      const quote = buildQuote([
+        AUTHORIZE_STEP_MOCK,
+        {
+          ...DEPOSIT_STEP_MOCK,
+          items: [
+            {
+              ...DEPOSIT_STEP_MOCK.items[0],
+              data: {
+                ...DEPOSIT_STEP_MOCK.items[0].data,
+                action: {
+                  ...DEPOSIT_STEP_MOCK.items[0].data.action,
+                  parameters: {
+                    ...DEPOSIT_STEP_MOCK.items[0].data.action.parameters,
+                    amount,
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ]);
+
+      await expect(
+        submitHyperliquidWithdraw(quote, FROM_MOCK, messenger),
+      ).rejects.toThrow('does not match accepted quote');
+
+      expect(signTypedMessageMock).not.toHaveBeenCalled();
+      expect(successfulFetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a missing deposit amount before signing or posting', async () => {
+    const quote = buildQuote([
+      AUTHORIZE_STEP_MOCK,
+      {
+        ...DEPOSIT_STEP_MOCK,
+        items: [
+          {
+            ...DEPOSIT_STEP_MOCK.items[0],
+            data: {
+              ...DEPOSIT_STEP_MOCK.items[0].data,
+              action: {
+                ...DEPOSIT_STEP_MOCK.items[0].data.action,
+                parameters: {
+                  destination: '0xsolver',
+                  hyperliquidChain: 'Mainnet',
+                },
+              },
+            },
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      submitHyperliquidWithdraw(quote, FROM_MOCK, messenger),
+    ).rejects.toThrow('Invalid HyperLiquid deposit action amount');
+
+    expect(signTypedMessageMock).not.toHaveBeenCalled();
+    expect(successfulFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-atomic deposit amount before signing or posting', async () => {
+    const quote = buildQuote([
+      AUTHORIZE_STEP_MOCK,
+      {
+        ...DEPOSIT_STEP_MOCK,
+        items: [
+          {
+            ...DEPOSIT_STEP_MOCK.items[0],
+            data: {
+              ...DEPOSIT_STEP_MOCK.items[0].data,
+              action: {
+                ...DEPOSIT_STEP_MOCK.items[0].data.action,
+                parameters: {
+                  ...DEPOSIT_STEP_MOCK.items[0].data.action.parameters,
+                  amount: '10.5',
+                },
+              },
+            },
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      submitHyperliquidWithdraw(quote, FROM_MOCK, messenger),
+    ).rejects.toThrow('Invalid HyperLiquid deposit action amount');
+
+    expect(signTypedMessageMock).not.toHaveBeenCalled();
+    expect(successfulFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Max withdrawal when the authoritative balance decreased before signing', async () => {
+    const quote = buildQuote();
+    quote.request.isMaxAmount = true;
+    const transaction = { id: 'transaction-id' } as never;
+    const getBalance = vi.fn().mockReturnValue({ balanceRaw: '9999999' });
+    getControllerStateMock.mockReturnValue({
+      transactionData: { 'transaction-id': { tokens: [] } },
+    });
+
+    await expect(
+      submitHyperliquidWithdraw(
+        quote,
+        FROM_MOCK,
+        messenger,
+        transaction,
+        getBalance,
+      ),
+    ).rejects.toThrow('balance decreased after quote');
+
+    expect(signTypedMessageMock).not.toHaveBeenCalled();
+    expect(successfulFetchMock).not.toHaveBeenCalled();
   });
 
   it('signs authorize EIP-712 message and posts to Relay', async () => {

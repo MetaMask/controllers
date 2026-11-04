@@ -1,11 +1,14 @@
 import { successfulFetch } from '@metamask/controller-utils';
 import { SignTypedDataVersion } from '@metamask/keyring-controller';
+import type { TransactionMeta } from '@metamask/transaction-controller';
 import type { Hex } from '@metamask/utils';
 import { createModuleLogger } from '@metamask/utils';
+import { BigNumber } from 'bignumber.js';
 
 import { CHAIN_ID_ARBITRUM } from '../../constants.js';
 import { projectLogger } from '../../logger.js';
 import type {
+  GetBalanceCallback,
   TransactionPayControllerMessenger,
   TransactionPayQuote,
 } from '../../types.js';
@@ -13,6 +16,7 @@ import { RELAY_AUTHORIZE_URL, HYPERLIQUID_EXCHANGE_URL } from './constants.js';
 import type { RelayQuote, RelaySignatureStep } from './types.js';
 
 const log = createModuleLogger(projectLogger, 'hyperliquid-withdraw');
+const HYPERLIQUID_SEND_ASSET_ACTION = 'usdSend';
 
 type EIP712DomainField = { name: string; type: string };
 
@@ -41,6 +45,8 @@ export async function submitHyperliquidWithdraw(
   quote: TransactionPayQuote<RelayQuote>,
   from: Hex,
   messenger: TransactionPayControllerMessenger,
+  transaction?: TransactionMeta,
+  getBalance?: GetBalanceCallback,
 ): Promise<void> {
   const { steps } = quote.original;
 
@@ -61,6 +67,9 @@ export async function submitHyperliquidWithdraw(
     );
   }
 
+  validateDepositAction(quote, depositStep);
+  validateMaxBalance(quote, transaction, messenger, getBalance);
+
   // Step 1: Authorize (nonce-mapping signature -> POST to Relay /authorize)
   await executeAuthorizeStep(authorizeStep, from, messenger);
 
@@ -68,6 +77,123 @@ export async function submitHyperliquidWithdraw(
   await executeDepositStep(depositStep, from, messenger);
 
   log('HyperLiquid withdrawal submitted successfully');
+}
+
+function validateDepositAction(
+  quote: TransactionPayQuote<RelayQuote>,
+  step: { items: unknown[] },
+): void {
+  const item = getSingleDepositItem(step);
+  const action = item.data.action as {
+    type?: unknown;
+    parameters?: Record<string, unknown>;
+  };
+  const decimals = quote.original.details?.currencyIn?.currency?.decimals;
+  const actionAmount = action.parameters?.amount;
+
+  if (action.type !== HYPERLIQUID_SEND_ASSET_ACTION) {
+    throw new Error(
+      `Expected HyperLiquid ${HYPERLIQUID_SEND_ASSET_ACTION} action, got: ${String(action.type)}`,
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(decimals) ||
+    decimals < 0 ||
+    typeof actionAmount !== 'string' ||
+    !isAtomicAmount(actionAmount)
+  ) {
+    throw new Error('Invalid HyperLiquid deposit action amount');
+  }
+
+  const quoteAmountRaw = normalizeQuoteAmount(quote, decimals);
+
+  if (actionAmount !== quoteAmountRaw) {
+    throw new Error(
+      `HyperLiquid deposit amount does not match accepted quote: expected ${quoteAmountRaw}, got ${actionAmount}`,
+    );
+  }
+}
+
+function validateMaxBalance(
+  quote: TransactionPayQuote<RelayQuote>,
+  transaction: TransactionMeta | undefined,
+  messenger: TransactionPayControllerMessenger,
+  getBalance: GetBalanceCallback | undefined,
+): void {
+  if (!quote.request.isMaxAmount || !getBalance || !transaction) {
+    return;
+  }
+
+  const transactionData = messenger.call(
+    'TransactionPayController:getState',
+  ).transactionData[transaction.id];
+
+  if (!transactionData) {
+    throw new Error('Missing transaction data for HyperLiquid Max withdrawal');
+  }
+
+  const balance = getBalance({ transaction, transactionData });
+  const quoteAmount = quote.sourceAmount.raw;
+
+  if (
+    !balance ||
+    !isAtomicAmount(balance.balanceRaw) ||
+    !isAtomicAmount(quoteAmount) ||
+    new BigNumber(balance.balanceRaw).lt(quoteAmount)
+  ) {
+    throw new Error(
+      'HyperLiquid Max balance decreased after quote; request a new quote before submitting',
+    );
+  }
+}
+
+function getSingleDepositItem(
+  step: { items: unknown[] },
+): { data: Record<string, unknown> } {
+  if (step.items.length !== 1) {
+    throw new Error(`Expected exactly 1 deposit item, got ${step.items.length}`);
+  }
+
+  const item = step.items[0] as { data?: Record<string, unknown> } | undefined;
+
+  if (!item?.data) {
+    throw new Error('Deposit step has no items');
+  }
+
+  return { data: item.data };
+}
+
+function normalizeQuoteAmount(
+  quote: TransactionPayQuote<RelayQuote>,
+  decimals: number,
+): string {
+  const { human, raw } = quote.sourceAmount;
+
+  if (
+    typeof human !== 'string' ||
+    typeof raw !== 'string' ||
+    !isDecimalAmount(human) ||
+    !isAtomicAmount(raw)
+  ) {
+    throw new Error('Invalid accepted HyperLiquid quote amount');
+  }
+
+  const rawFromHuman = new BigNumber(human).shiftedBy(decimals);
+
+  if (!rawFromHuman.isInteger() || rawFromHuman.toFixed(0) !== raw) {
+    throw new Error('Accepted HyperLiquid quote amount is inconsistent');
+  }
+
+  return raw;
+}
+
+function isAtomicAmount(value: string): boolean {
+  return /^\d+$/.test(value);
+}
+
+function isDecimalAmount(value: string): boolean {
+  return /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value);
 }
 
 /**
