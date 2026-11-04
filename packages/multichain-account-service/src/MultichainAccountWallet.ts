@@ -154,13 +154,18 @@ export class MultichainAccountWallet<
 
       this.#log(`Creating new group for index ${groupIndex}...`);
 
-      group.init(groupState);
-
+      // Register before init publishes status events so subscribers can query the group.
       this.#accountGroups.set(groupIndex, group);
+      group.init(groupState);
     }
     if (!this.#initialized) {
       this.#initialized = true;
       this.#status = 'ready';
+      this.#messenger.publish(
+        'MultichainAccountService:walletStatusChange',
+        this.id,
+        this.#status,
+      );
     }
 
     this.#log('Finished initializing wallet state...');
@@ -1276,8 +1281,9 @@ export class MultichainAccountWallet<
           groupIndex,
           messenger: this.#messenger,
         });
-        group.init(groupState);
+        // Register before init publishes status events so subscribers can query the group.
         this.#accountGroups.set(groupIndex, group);
+        group.init(groupState);
       }
 
       // Align missing accounts from group. This is required to create missing account from non-discovered

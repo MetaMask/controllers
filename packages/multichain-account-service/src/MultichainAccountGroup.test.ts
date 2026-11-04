@@ -192,6 +192,26 @@ describe('MultichainAccountGroup', () => {
   });
 
   describe('status', () => {
+    it.each(['aligned', 'misaligned'] as const)(
+      'publishes the initial %s status',
+      (status) => {
+        const { group, providers, messenger } = setup({ initialize: false });
+        providers.forEach((provider) => {
+          provider.isAligned.mockReturnValue(status === 'aligned');
+        });
+        const publishSpy = vi.spyOn(messenger, 'publish');
+
+        group.init({});
+
+        expect(group.status).toBe(status);
+        expect(publishSpy).toHaveBeenCalledWith(
+          'MultichainAccountService:groupStatusChange',
+          group.id,
+          status,
+        );
+      },
+    );
+
     it('starts as uninitialized before init()', () => {
       const serviceMessenger =
         getMultichainAccountServiceMessenger(getRootMessenger());

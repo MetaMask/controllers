@@ -356,6 +356,43 @@ async function setup({
 }
 
 describe('MultichainAccountService', () => {
+  describe('init', () => {
+    it('makes groups and wallets queryable before publishing their initial statuses', async () => {
+      const { service, rootMessenger } = await setup({
+        accounts: [MOCK_HD_ACCOUNT_1],
+      });
+      const groupStatusChange = vi.fn((groupId, status) => {
+        const group = rootMessenger.call(
+          'MultichainAccountService:getMultichainAccountGroup',
+          { entropySource: MOCK_HD_KEYRING_1.metadata.id, groupIndex: 0 },
+        );
+        expect(group.id).toBe(groupId);
+        expect(group.status).toBe(status);
+      });
+      const walletStatusChange = vi.fn((walletId, status) => {
+        const wallet = rootMessenger.call(
+          'MultichainAccountService:getMultichainAccountWallet',
+          { entropySource: MOCK_HD_KEYRING_1.metadata.id },
+        );
+        expect(wallet.id).toBe(walletId);
+        expect(wallet.status).toBe(status);
+      });
+      rootMessenger.subscribe(
+        'MultichainAccountService:groupStatusChange',
+        groupStatusChange,
+      );
+      rootMessenger.subscribe(
+        'MultichainAccountService:walletStatusChange',
+        walletStatusChange,
+      );
+
+      await service.init();
+
+      expect(groupStatusChange).toHaveBeenCalledTimes(1);
+      expect(walletStatusChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('constructor', () => {
     it('forwards configs to each provider', async () => {
       const providerConfigs: MultichainAccountServiceOptions['providerConfigs'] =

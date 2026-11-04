@@ -119,9 +119,7 @@ export class MultichainAccountGroup<
     this.#log('Finished initializing group state...');
 
     this.#initialized = true;
-    // Set initial status without publishing — mirrors wallet init() pattern where the tree
-    // hardcodes its own initial state and events only flow after the first mutation.
-    this.#status = this.isAligned() ? 'aligned' : 'misaligned';
+    this.#setStatus(this.isAligned() ? 'aligned' : 'misaligned');
   }
 
   /**

@@ -308,8 +308,9 @@ export class MultichainAccountService {
         messenger: this.#messenger,
         trace: this.#trace,
       });
-      wallet.init(serviceState[entropySource]);
+      // Register before init publishes status events so subscribers can query the wallet.
       this.#wallets.set(wallet.id, wallet);
+      wallet.init(serviceState[entropySource]);
     }
 
     log('Initialized');
@@ -540,6 +541,8 @@ export class MultichainAccountService {
 
     assert(wallet, 'Failed to create wallet.');
 
+    // Register before init publishes status events so subscribers can query the wallet.
+    this.#wallets.set(wallet.id, wallet);
     wallet.init({});
     // READ THIS CAREFULLY:
     // We do not await for non-EVM account creations as they
@@ -548,8 +551,6 @@ export class MultichainAccountService {
     await wallet.createMultichainAccountGroup(0, {
       waitForAllProvidersToFinishCreatingAccounts: false,
     });
-
-    this.#wallets.set(wallet.id, wallet);
 
     log(`Wallet created: [${wallet.id}]`);
 

@@ -1422,6 +1422,46 @@ describe('AccountTreeController', () => {
       );
     });
 
+    it.each(['aligned', 'misaligned'] as const)(
+      'recovers uninitialized wallet and group statuses when the service initializes a %s group',
+      (status) => {
+        const { controller, mocks, messenger } = setup({
+          accounts: [MOCK_HD_ACCOUNT_1],
+          keyrings: [MOCK_HD_KEYRING_1],
+        });
+        mocks.MultichainAccountService.getMultichainAccountWallet.mockImplementation(
+          () => {
+            throw new Error('Wallet not found');
+          },
+        );
+        controller.init();
+        expect(
+          controller.state.accountTree.wallets[MOCK_PREPOPULATED_WALLET_ID],
+        ).toMatchObject({
+          status: 'uninitialized',
+          groups: { [MOCK_PREPOPULATED_GROUP_ID]: { status: 'uninitialized' } },
+        });
+
+        messenger.publish(
+          'MultichainAccountService:groupStatusChange',
+          MOCK_PREPOPULATED_GROUP_ID,
+          status,
+        );
+        messenger.publish(
+          'MultichainAccountService:walletStatusChange',
+          MOCK_PREPOPULATED_WALLET_ID,
+          'ready',
+        );
+
+        expect(
+          controller.state.accountTree.wallets[MOCK_PREPOPULATED_WALLET_ID],
+        ).toMatchObject({
+          status: 'ready',
+          groups: { [MOCK_PREPOPULATED_GROUP_ID]: { status } },
+        });
+      },
+    );
+
     it('reads group status from the service when it is already initialized', () => {
       const { controller, mocks } = setup({
         accounts: [MOCK_HD_ACCOUNT_1],
