@@ -33,6 +33,7 @@
     "start": "docusaurus serve site",
     "test": "vitest",
     "test:clean": "vitest --clearCache",
+    "test:coverage": "vitest --coverage",
     "test:verbose": "vitest --reporter=verbose",
     "test:watch": "vitest --watch"
   },
@@ -61,7 +62,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "5.0.3"
   },
   "engines": {
     "node": "^22.14.0 || ^24 || ^26"
