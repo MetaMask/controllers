@@ -383,6 +383,7 @@ describe('assetsUtil', () => {
       ['data:application/json,{}', true],
       ['DATA:image/png;base64,AAAA', true],
       [' \n\tdata:application/json,{}', true],
+      ['da\nt\ta:application/json,{}', true],
       ['https://example.com/data:', false],
       ['ipfs://QmFoo', false],
       ['', false],
@@ -418,6 +419,10 @@ describe('assetsUtil', () => {
       ['plain JSON', `data:application/json;utf8,${JSON.stringify(json)}`],
       ['mixed-case header', `Data:Application/Json; Base64,${base64}`],
       ['leading whitespace', ` \ndata:application/json;base64,${base64}`],
+      [
+        'embedded newlines',
+        `da\nta:application/json;base64,${base64.slice(0, 8)}\n${base64.slice(8)}`,
+      ],
       [
         'URL-safe base64',
         `data:application/json;base64,${base64.replace(/\+/gu, '-').replace(/\//gu, '_')}`,

@@ -286,10 +286,24 @@ export function addUrlProtocolPrefix(urlString: string): string {
  * @returns True if the URI uses the `data:` scheme.
  */
 export function isDataUri(uri: string): boolean {
-  // URL parsers (and therefore `fetch`) ignore leading whitespace and C0
-  // control characters, so treat those as `data:` URLs too.
-  // eslint-disable-next-line no-control-regex
-  return /^[\u0000-\u0020]*data:/iu.test(uri);
+  return /^data:/iu.test(normalizeUri(uri));
+}
+
+/**
+ * Normalizes a URI the way the WHATWG URL parser (and therefore `fetch`) does
+ * before reading its scheme: leading/trailing C0 control characters and spaces
+ * are trimmed, and ASCII tabs and newlines are removed everywhere.
+ *
+ * @param uri - The URI to normalize.
+ * @returns The normalized URI.
+ */
+function normalizeUri(uri: string): string {
+  return (
+    uri
+      // eslint-disable-next-line no-control-regex
+      .replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, '')
+      .replace(/[\t\n\r]/gu, '')
+  );
 }
 
 /**
@@ -356,32 +370,45 @@ function decodeBase64Payload(payload: string): string | null {
 /**
  * Decodes and parses a JSON `data:` URL (e.g. an on-chain NFT `tokenURI` such
  * as `data:application/json;base64,eyJuYW1lIjoiLi4uIn0=`) without using
- * `fetch`. Supports base64 and plain (optionally percent-encoded) payloads and
- * optional media type parameters such as `;charset=utf-8`.
+ * `fetch`.
+ *
+ * Accepted input:
+ * - Media type `application/json`, any `+json` type, `text/plain`, or none
+ * (case-insensitive), with optional parameters such as `;charset=utf-8`.
+ * - `;base64` payloads: standard or URL-safe alphabet, padded or not, and
+ * optionally percent-encoded. They are decoded as UTF-8.
+ * - Other payloads: parsed as raw JSON first, because many contracts embed
+ * unescaped JSON that may contain a literal `%`. If that fails, the payload is
+ * percent-decoded (RFC 2397) and parsed again.
+ * - URIs longer than {@link MAX_JSON_DATA_URI_LENGTH} are rejected.
  *
  * @param uri - The `data:` URL to decode.
  * @returns The parsed JSON object, or `null` if the URL is not a JSON `data:`
  * URL or cannot be decoded/parsed into an object.
  */
 export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
-  if (!isDataUri(uri) || uri.length > MAX_JSON_DATA_URI_LENGTH) {
+  if (uri.length > MAX_JSON_DATA_URI_LENGTH) {
+    return null;
+  }
+  const dataUri = normalizeUri(uri);
+  if (!isDataUri(dataUri)) {
     return null;
   }
 
-  const commaIndex = uri.indexOf(',');
+  const commaIndex = dataUri.indexOf(',');
   if (commaIndex === -1) {
     return null;
   }
 
-  const [mediaType, ...params] = uri
-    .slice(uri.indexOf(':') + 1, commaIndex)
+  const [mediaType, ...params] = dataUri
+    .slice(dataUri.indexOf(':') + 1, commaIndex)
     .split(';')
     .map((part) => part.trim().toLowerCase());
   if (!isJsonCandidateMediaType(mediaType)) {
     return null;
   }
 
-  const payload = uri.slice(commaIndex + 1);
+  const payload = dataUri.slice(commaIndex + 1);
 
   if (params.includes('base64')) {
     const json = decodeBase64Payload(payload);
