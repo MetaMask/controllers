@@ -908,6 +908,9 @@ export class AssetsController extends BaseController<
   /** The pending or settled `start()` call, so repeated calls share it. */
   #startPromise: Promise<void> | undefined;
 
+  /** Whether `start()` has finished creating sources and subscribing. */
+  #isStarted = false;
+
   /** Whether `destroy()` has been called. */
   #isDestroyed = false;
 
@@ -1118,22 +1121,40 @@ export class AssetsController extends BaseController<
     this.#subscribeToEvents();
     this.#subscribeToBasicFunctionality();
 
-    // The keyring may already be unlocked when `start()` runs, in which case
-    // the `KeyringController:unlock` handler that runs these cleanups was not
-    // subscribed in time.
-    if (this.#isKeyringUnlocked()) {
-      try {
-        this.#runOutOfScopeBalanceCleanup();
-      } catch {
-        /* Do nothing */
-      }
-      await this.#runSpamCleanup();
-    }
+    await Promise.all([
+      // AccountsApiDataSource fetches its supported networks asynchronously
+      // from its constructor. Wait for them so the first forced fetch can use
+      // the Accounts API instead of routing every chain to the slow lane.
+      // `fetchQuery` shares the in-flight request, so this does not issue a
+      // second one. Failures are logged by the data source and do not reject.
+      this.#getSources().accountsApiDataSource.refreshActiveChains(),
+      this.#runUnlockCleanupsIfUnlocked(),
+    ]);
 
     if (this.#isDestroyed) {
       return;
     }
+    // Chain updates reported while starting are ignored; `#updateActive`
+    // subscribes with every source's current chains.
+    this.#isStarted = true;
     this.#updateActive();
+  }
+
+  /**
+   * Run the unlock cleanups when the keyring is already unlocked. `start()`
+   * subscribes to `KeyringController:unlock` too late to see an unlock that
+   * happened before it.
+   */
+  async #runUnlockCleanupsIfUnlocked(): Promise<void> {
+    if (!this.#isKeyringUnlocked()) {
+      return;
+    }
+    try {
+      this.#runOutOfScopeBalanceCleanup();
+    } catch {
+      /* Do nothing */
+    }
+    await this.#runSpamCleanup();
   }
 
   /**
@@ -1704,9 +1725,10 @@ export class AssetsController extends BaseController<
     activeChains: ChainId[],
     previousChains: ChainId[],
   ): void {
-    // Data source constructors report their chains while `start()` is still
-    // creating them. `start()` subscribes afterwards with every source's chains.
-    if (!this.#sources) {
+    // Data sources report their chains while `start()` is still running.
+    // `start()` subscribes afterwards with every source's chains. Subscribing
+    // here first would make `#startTracking` skip the startup refresh.
+    if (!this.#isStarted) {
       return;
     }
     if (!this.#isUiOpen() || !this.#isKeyringUnlocked() || !this.#isEnabled()) {

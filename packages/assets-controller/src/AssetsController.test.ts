@@ -964,6 +964,54 @@ describe('AssetsController', () => {
       );
     });
 
+    it('waits for Accounts API supported networks before the first forced fetch', async () => {
+      let supportedNetworksResolved = false;
+      const queryApiClient = {
+        ...createMockQueryApiClient(),
+        accounts: {
+          fetchV2SupportedNetworks: vi.fn(
+            () =>
+              new Promise((resolve) => {
+                setTimeout(() => {
+                  supportedNetworksResolved = true;
+                  resolve({ fullSupport: [1], partialSupport: [] });
+                }, 10);
+              }),
+          ),
+          fetchV5MultiAccountBalances: vi.fn().mockResolvedValue({
+            balances: [],
+            unprocessedNetworks: [],
+          }),
+        },
+      } as unknown as ApiPlatformClient;
+      await withController(
+        {
+          skipStart: true,
+          queryApiClient,
+          clientControllerState: { isUiOpen: true },
+        },
+        async ({ controller, messenger }) => {
+          messenger.publish('AccountTreeController:initialized', {} as never);
+          messenger.publish('KeyringController:unlock');
+          const supportedNetworksResolvedAtFirstFetch: boolean[] = [];
+          const getAssets = controller.getAssets.bind(controller);
+          vi.spyOn(controller, 'getAssets').mockImplementation(
+            async (...args) => {
+              supportedNetworksResolvedAtFirstFetch.push(
+                supportedNetworksResolved,
+              );
+              return getAssets(...args);
+            },
+          );
+
+          await controller.start();
+          await flushPromises();
+
+          expect(supportedNetworksResolvedAtFirstFetch[0]).toBe(true);
+        },
+      );
+    });
+
     it('drops balances outside account scopes on start when already unlocked', async () => {
       const solanaAssetId =
         'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501' as Caip19AssetId;
