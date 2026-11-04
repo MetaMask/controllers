@@ -9,8 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bump `@metamask/transaction-controller` from `^72.0.1` to `^72.1.0` ([#10652](https://github.com/MetaMask/core/pull/10652))
-- Bump `@metamask/core-backend` from `^12.0.0` to `^12.0.1` ([#10662](https://github.com/MetaMask/core/pull/10662))
+- Bump `eth-chainlist` from `^0.0.844` to `^0.0.873` ([#10722](https://github.com/MetaMask/core/pull/10722))
+
+## [3.1.0]
+
+### Added
+
+- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
+- Add `predictionSettled` to `ActivityKind` for prediction-market payouts that settle automatically, without a manual claim ([#11169](https://github.com/MetaMask/core/pull/11169))
+  - It shares the data shape of the other prediction kinds, with the proceeds in `data.token` (direction `in`)
+
+### Changed
+
+- Bump `@metamask/transaction-controller` from `^72.0.1` to `^73.0.0` ([#10652](https://github.com/MetaMask/core/pull/10652), [#10772](https://github.com/MetaMask/core/pull/10772), [#10817](https://github.com/MetaMask/core/pull/10817), [#11154](https://github.com/MetaMask/core/pull/11154), [#11203](https://github.com/MetaMask/core/pull/11203))
+- Bump `@metamask/core-backend` from `^12.0.0` to `^13.0.0` ([#10662](https://github.com/MetaMask/core/pull/10662), [#10788](https://github.com/MetaMask/core/pull/10788), [#10857](https://github.com/MetaMask/core/pull/10857), [#10876](https://github.com/MetaMask/core/pull/10876), [#11203](https://github.com/MetaMask/core/pull/11203))
+- Bump `@metamask/contract-metadata` from `^2.4.0` to `^2.5.0` ([#10716](https://github.com/MetaMask/core/pull/10716))
+- Bump `@metamask/slip44` from `^4.3.0` to `^4.5.0` ([#10736](https://github.com/MetaMask/core/pull/10736))
+- Bump `@metamask/keyring-api` from `^24.0.0` to `^24.3.0` ([#10717](https://github.com/MetaMask/core/pull/10717), [#10792](https://github.com/MetaMask/core/pull/10792), [#10844](https://github.com/MetaMask/core/pull/10844))
+- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
+
+### Fixed
+
+- Set fees on contract interaction fallback in API transaction mapper ([#11013](https://github.com/MetaMask/core/pull/11013))
+- Add the L1 fee and operator fee from the transaction receipt to the base network fee returned by `getLocalTransactionFees`, so Mantle and other OP Stack activity shows the fee paid onchain ([#9630](https://github.com/MetaMask/core/pull/9630))
+  - The operator fee uses the Jovian formula when the receipt has `daFootprintGasScalar`, and the Isthmus formula otherwise
 
 ## [3.0.4]
 
@@ -197,7 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@metamask/transaction-controller` from `^68.2.2` to `^68.3.0` ([#9421](https://github.com/MetaMask/core/pull/9421))
 - Bump `@metamask/keyring-api` from `^23.3.0` to `^23.5.0` ([#9390](https://github.com/MetaMask/core/pull/9390))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/client-utils@3.0.4...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/client-utils@3.1.0...HEAD
+[3.1.0]: https://github.com/MetaMask/core/compare/@metamask/client-utils@3.0.4...@metamask/client-utils@3.1.0
 [3.0.4]: https://github.com/MetaMask/core/compare/@metamask/client-utils@3.0.3...@metamask/client-utils@3.0.4
 [3.0.3]: https://github.com/MetaMask/core/compare/@metamask/client-utils@3.0.2...@metamask/client-utils@3.0.3
 [3.0.2]: https://github.com/MetaMask/core/compare/@metamask/client-utils@3.0.1...@metamask/client-utils@3.0.2
