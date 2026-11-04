@@ -342,6 +342,12 @@ export type RecoveryEscrowProvider = {
    * `identifierAuthorizations` share one challenge: one proof per SIWE
    * identifier the escrow has not enrolled, plus one enrolled-identifier proof
    * for updates.
+   *
+   * Must replay this mutation's receipt, or throw `MutationRejectedError` when
+   * `newVersion` holds another receipt or the record is not at
+   * `expectedVersion`, before verifying `identifierAuthorizations`. The
+   * controller probes escrows another write moved with no proofs, so an
+   * obsolete mutation clears even if its identifier or SIWE wallet is gone.
    */
   applyMutation: (
     mutation: Mutation,

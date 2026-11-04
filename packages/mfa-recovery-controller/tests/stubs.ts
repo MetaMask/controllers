@@ -565,7 +565,10 @@ export class StubEscrowProvider implements RecoveryEscrowProvider {
   patchRecord(
     profileId: string,
     patch: Partial<
-      Pick<RecoveryRecord, 'version' | 'lastMutationId' | 'recoverySecret'>
+      Pick<
+        RecoveryRecord,
+        'version' | 'lastMutationId' | 'recoverySecret' | 'identifiers'
+      >
     >,
   ): void {
     const record = this.#records.get(profileId);

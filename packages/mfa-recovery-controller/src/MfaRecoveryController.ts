@@ -503,50 +503,35 @@ export class MfaRecoveryController extends BaseController<
   }
 
   /**
-   * Reads the enrolled identifiers from available escrows at the highest
-   * consistent version, with Auth's current identifiers. Needs no recent MFA,
-   * so a new device can build an {@link updateIdentifiers} call from it.
+   * Reads the enrolled identifiers from every escrow, with Auth's current
+   * identifiers. Needs no recent MFA, so a new device can build an
+   * {@link updateIdentifiers} call from it. Throws `replica_lagging` when
+   * escrows are at different versions.
    *
    * @returns Enrolled identifiers, `epoch`, and Auth's identifiers.
    */
   async getIdentifiers(): Promise<RecoveryIdentifiers> {
     return await this.#withLock(async () => {
-      const available = await this.#getAvailableEscrows();
-      if (available.length === 0) {
-        throw new MfaRecoveryError(
-          'No escrow is available',
-          'no_available_escrow',
-        );
-      }
+      await this.#assertEscrowsAvailable(this.#escrows);
       const { approval, identifiers: authIdentifiers } =
         await this.#authProvider.authorizeRecoveryRequest({
           requestHash: await hash({ operation: 'getIdentifiers' }),
-          audiences: available.map((escrow) => escrow.authAudience),
+          audiences: this.#escrows.map((escrow) => escrow.authAudience),
         });
-      const responses = (
-        await Promise.allSettled(
-          available.map(
-            async (escrow) => await escrow.getIdentifiers(approval),
-          ),
-        )
-      )
-        .filter(isFulfilledResult)
-        .map((result) => result.value);
-      if (responses.length === 0) {
-        throw new MfaRecoveryError(
-          'No escrow returned identifiers',
-          'read_failed',
-        );
-      }
-      const epoch = Math.max(...responses.map(({ version }) => version));
-      const highest = responses.filter(({ version }) => version === epoch);
+      const responses = await Promise.all(
+        this.#escrows.map(
+          async (escrow) => await escrow.getIdentifiers(approval),
+        ),
+      );
+      assertSameVersion(responses);
       const hashes = await Promise.all(
-        highest.map(async ({ identifiers }) => await hash(identifiers)),
+        responses.map(async ({ identifiers }) => await hash(identifiers)),
       );
       if (new Set(hashes).size !== 1) {
         throw new MfaRecoveryError('Replica corruption', 'replica_corruption');
       }
-      return { identifiers: highest[0].identifiers, epoch, authIdentifiers };
+      const [{ identifiers, version: epoch }] = responses;
+      return { identifiers, epoch, authIdentifiers };
     });
   }
 
@@ -555,14 +540,18 @@ export class MfaRecoveryController extends BaseController<
    * `identifier`, copies the highest escrow record to escrows one version
    * behind it; pass one when a mutation fails with `replica_lagging`.
    *
-   * @param identifier - Enrolled identifier, used to read the secret and to
-   * authorize a replica repair. Unused while a mutation is pending.
+   * @param identifier - Enrolled identifier that authorizes the repair, or
+   * replaces the one authorizing a pending update (e.g. if it was lost).
    */
   async resume(identifier?: Identifier): Promise<void> {
     const hadPending = await this.#withLock(async () => {
       const pending = await this.#loadPending();
       if (pending) {
-        await this.#finishPendingMutation(pending);
+        await this.#finishPendingMutation(
+          identifier && pending.identifier
+            ? { ...pending, identifier }
+            : pending,
+        );
       }
       return pending !== null;
     });
@@ -605,10 +594,11 @@ export class MfaRecoveryController extends BaseController<
 
       await this.#assertEscrowsAvailable(escrows);
       const replicas = await this.#readReplicas(escrows);
-      if (new Set(replicas.map(({ version }) => version)).size > 1) {
+      assertSameVersion(replicas);
+      if (identifier && !isEnrolledInEvery(replicas, identifier)) {
         throw new MfaRecoveryError(
-          'Escrows are at different versions; call resume with an identifier',
-          'replica_lagging',
+          'Identifier is not enrolled on every escrow',
+          'identifier_not_enrolled',
         );
       }
 
@@ -705,20 +695,42 @@ export class MfaRecoveryController extends BaseController<
       claims && claims.exp > this.#now()
         ? pending
         : { ...pending, ...(await this.#authorizeMutation(mutation)) };
-    await this.#assertPending(writing);
-    const authorizations = await this.#authorizeEscrows(
+    const { escrows, probe, replicas } = await this.#getEscrowsToWrite(
       writing,
       remainingEscrows,
     );
+    try {
+      await this.#assertPending(writing);
+    } catch (error) {
+      // A renewed approval drops identifiers removed from Auth since, and
+      // escrows fail a payload it does not cover. Once every remaining escrow
+      // moved, the mutation can no longer land anywhere. The versions were
+      // read with this approval, so they only count for the mutation's profile.
+      if (
+        probe &&
+        escrows.length === remainingEscrows.length &&
+        decodeAuthControllerToken(writing.authControllerToken)?.sub ===
+          mutation.profileId
+      ) {
+        await this.#clearPending();
+        throw new MfaRecoveryError(
+          'Mutation was superseded; reread state',
+          'mutation_superseded',
+        );
+      }
+      throw error;
+    }
+    // Probes need no proofs; see `RecoveryEscrowProvider.applyMutation`.
+    const authorizations = probe
+      ? escrows.map(() => [])
+      : await this.#authorizeEscrows(writing, escrows, replicas);
     const payloads = await Promise.all(
-      remainingEscrows.map(async (escrow) =>
-        this.#payloadForEscrow(writing, escrow),
-      ),
+      escrows.map(async (escrow) => this.#payloadForEscrow(writing, escrow)),
     );
 
     await this.#persistPending(writing);
     const results = await Promise.allSettled(
-      remainingEscrows.map((escrow, index) =>
+      escrows.map((escrow, index) =>
         escrow.applyMutation(
           mutation,
           writing.authControllerToken,
@@ -731,13 +743,19 @@ export class MfaRecoveryController extends BaseController<
 
     const { receipts, hasInvalidReceipt } = await this.#collectMutationReceipts(
       results,
-      remainingEscrows,
+      escrows,
       mutation,
       writing.receipts,
     );
     const rejection = unanimousMutationRejection(results);
     if (rejection) {
       await this.#clearPending();
+      if (writing.receipts.length > 0) {
+        throw new MfaRecoveryError(
+          'Mutation was applied on some escrows; reread state',
+          'mutation_superseded',
+        );
+      }
       throw rejection;
     }
     await this.#persistPending({ ...writing, receipts });
@@ -789,6 +807,12 @@ export class MfaRecoveryController extends BaseController<
     const identifierHashes = await Promise.all(
       replicas.map(async ({ identifiers }) => await hash(identifiers)),
     );
+    const leaderHashes = identifierHashes.filter(
+      (_, index) => replicas[index].version === epoch,
+    );
+    if (new Set(leaderHashes).size > 1) {
+      throw new MfaRecoveryError('Replica corruption', 'replica_corruption');
+    }
     if (epoch > 1 && new Set(identifierHashes).size > 1) {
       return {
         operation: 'updateIdentifiers',
@@ -835,6 +859,40 @@ export class MfaRecoveryController extends BaseController<
     return await Promise.all(
       escrows.map(async (escrow) => await escrow.getIdentifiers(approval)),
     );
+  }
+
+  // Escrows off `expectedVersion` are probed alone: a version read cannot tell
+  // whether this mutation moved them, but they replay its receipt or reject,
+  // never forking the rest. Escrows fail, rather than reject, an unenrolled
+  // identifier. `replicas` are the reads of `remainingEscrows`.
+  async #getEscrowsToWrite(
+    writing: WritingPendingOperation,
+    remainingEscrows: RecoveryEscrowProvider[],
+  ): Promise<{
+    escrows: RecoveryEscrowProvider[];
+    probe: boolean;
+    replicas: GetIdentifiersResponse[];
+  }> {
+    const { mutation, identifier } = writing;
+    const replicas = await Promise.all(
+      remainingEscrows.map(
+        async (escrow) =>
+          await escrow.getIdentifiers(writing.authControllerToken),
+      ),
+    );
+    const moved = remainingEscrows.filter(
+      (_, index) => replicas[index].version !== mutation.expectedVersion,
+    );
+    if (moved.length > 0) {
+      return { escrows: moved, probe: true, replicas };
+    }
+    if (identifier && !isEnrolledInEvery(replicas, identifier)) {
+      throw new MfaRecoveryError(
+        'Identifier is not enrolled on every escrow',
+        'identifier_not_enrolled',
+      );
+    }
+    return { escrows: remainingEscrows, probe: false, replicas };
   }
 
   #getTargetEscrows(mutation: Mutation): RecoveryEscrowProvider[] {
@@ -917,15 +975,17 @@ export class MfaRecoveryController extends BaseController<
    *
    * @param writing - Writing pending mutation.
    * @param escrows - Escrows to authorize.
+   * @param replicas - Their reads, in `escrows` order.
    * @returns Each escrow's identifier authorizations, in `escrows` order.
    */
   async #authorizeEscrows(
     writing: WritingPendingOperation,
     escrows: RecoveryEscrowProvider[],
+    replicas: GetIdentifiersResponse[],
   ): Promise<IdentifierAuthorization[][]> {
     const identifiers = [
       ...(writing.identifier ? [writing.identifier] : []),
-      ...(await this.#findNewSiweIdentifiers(writing, escrows)),
+      ...findNewSiweIdentifiers(writing, replicas),
     ];
     if (identifiers.length === 0) {
       return escrows.map(() => []);
@@ -953,40 +1013,6 @@ export class MfaRecoveryController extends BaseController<
       );
     }
     return authorized.map(({ authorizations }) => authorizations);
-  }
-
-  // SIWE identifiers some escrow has not enrolled. Escrows that already
-  // applied the mutation replay their receipt and ignore the extra proofs.
-  async #findNewSiweIdentifiers(
-    { mutation, payload, authControllerToken }: WritingPendingOperation,
-    escrows: RecoveryEscrowProvider[],
-  ): Promise<Identifier[]> {
-    const siweIdentifiers = pendingPayloadHasIdentifiers(payload)
-      ? payload.identifiers.filter(({ type }) => type === 'siwe')
-      : [];
-    if (mutation.operation === 'register' || siweIdentifiers.length === 0) {
-      return siweIdentifiers;
-    }
-    const responses = await Promise.all(
-      escrows.map((escrow) => escrow.getIdentifiers(authControllerToken)),
-    );
-    const enrolledPerEscrow = responses.map(({ identifiers }) => identifiers);
-    // Escrows compare SIWE addresses case-insensitively.
-    const isEnrolledInEveryEscrow = ({
-      namespace,
-      value,
-    }: Identifier): boolean =>
-      enrolledPerEscrow.every((enrolled) =>
-        enrolled.some(
-          (other) =>
-            other.type === 'siwe' &&
-            other.namespace === namespace &&
-            other.value.toLowerCase() === value.toLowerCase(),
-        ),
-      );
-    return siweIdentifiers.filter(
-      (identifier) => !isEnrolledInEveryEscrow(identifier),
-    );
   }
 
   async #payloadForEscrow(
@@ -1149,4 +1175,62 @@ function unanimousMutationRejection(
     rejection ??= result.reason;
   }
   return rejection;
+}
+
+/**
+ * @param replicas - Escrow reads.
+ * @throws `replica_lagging` when the escrows are at different versions.
+ */
+function assertSameVersion(replicas: GetIdentifiersResponse[]): void {
+  if (new Set(replicas.map(({ version }) => version)).size > 1) {
+    throw new MfaRecoveryError(
+      'Escrows are at different versions; call resume with an identifier',
+      'replica_lagging',
+    );
+  }
+}
+
+/**
+ * @param writing - Writing pending mutation.
+ * @param replicas - Reads of the escrows to write.
+ * @returns The payload's SIWE identifiers some escrow has not enrolled.
+ */
+function findNewSiweIdentifiers(
+  writing: WritingPendingOperation,
+  replicas: GetIdentifiersResponse[],
+): Identifier[] {
+  const { mutation, payload } = writing;
+  const siweIdentifiers = pendingPayloadHasIdentifiers(payload)
+    ? payload.identifiers.filter(({ type }) => type === 'siwe')
+    : [];
+  if (mutation.operation === 'register') {
+    return siweIdentifiers;
+  }
+  return siweIdentifiers.filter(
+    (identifier) => !isEnrolledInEvery(replicas, identifier),
+  );
+}
+
+/**
+ * Escrows compare SIWE addresses case-insensitively.
+ *
+ * @param replicas - Escrow reads.
+ * @param identifier - Identifier to find.
+ * @returns Whether every escrow has enrolled `identifier`.
+ */
+function isEnrolledInEvery(
+  replicas: GetIdentifiersResponse[],
+  identifier: Identifier,
+): boolean {
+  const { type, namespace, value } = identifier;
+  const normalize = (raw: string): string =>
+    type === 'siwe' ? raw.toLowerCase() : raw;
+  return replicas.every(({ identifiers }) =>
+    identifiers.some(
+      (other) =>
+        other.type === type &&
+        other.namespace === namespace &&
+        normalize(other.value) === normalize(value),
+    ),
+  );
 }

@@ -74,8 +74,11 @@ Public surface (all exposed as messenger actions): `register`,
 [Recovery Lock](README.md#recovery-lock)).
 
 `getIdentifiers` takes an AAL1 approval and returns the enrolled identifiers
-at the highest consistent escrow version as `epoch`, plus Auth's identifiers.
-A new device builds the `updateIdentifiers` set and `expectedEpoch` from it.
+and their escrow version as `epoch`, plus Auth's identifiers. A new device
+builds the `updateIdentifiers` set and `expectedEpoch` from it. Like a
+mutation, it requires every escrow and the same version on each
+(`replica_lagging`), so lagging escrows are repaired before Auth changes:
+repair copies identifiers that Auth must still approve.
 
 ## State machine
 
@@ -145,6 +148,7 @@ sequenceDiagram
   M->>M: lock, reject if a mutation is already pending
   M->>E: isAvailable (every escrow required)
   M->>E: getIdentifiers (AAL1); differing versions → replica_lagging
+  M->>M: update identifier not enrolled everywhere → identifier_not_enrolled
   M->>A: getAuthenticatedProfileId
   M->>M: expectedVersion from caller epoch (register uses 0)
   M->>M: build mutation, requestHash = hash(mutation fields)
@@ -153,9 +157,10 @@ sequenceDiagram
   M->>M: skip escrows with a stored receipt, re-verify stored receipts
   M->>E: isAvailable (remaining escrows)
   M->>M: reuse token, or re-issue it if exp <= now()
-  opt updateIdentifiers with SIWE identifiers
-    M->>E: getIdentifiers (enrolled set at expectedVersion)
-  end
+  M->>E: getIdentifiers (remaining escrows)
+  M->>M: some escrow off expectedVersion → probe only those, no proofs
+  M->>M: else update identifier missing at expectedVersion → identifier_not_enrolled
+  M->>M: re-issued approval misses a payload identifier and every escrow moved → clear, mutation_superseded
   opt update identifier, or SIWE identifiers not yet enrolled
     M->>I: getKeyBoundIdentifierToken per identifier
     M->>E: generateChallenge + PoPs per remaining escrow (all required)
@@ -164,9 +169,12 @@ sequenceDiagram
   par write every remaining replica
     M->>E: applyMutation
   end
-  alt every remaining escrow rejects
+  alt every remaining escrow rejects, none has a receipt
     M->>M: clear pending → idle
-    M-->>C: MutationRejectedError (reread, then start a new mutation)
+    M-->>C: MutationRejectedError (start a new mutation)
+  else every remaining escrow rejects, others have receipts
+    M->>M: clear pending → idle
+    M-->>C: mutation_superseded (reread state)
   else
     M->>M: persist valid receipts
     alt a receipt failed verification
@@ -204,10 +212,12 @@ Receipts:
   target, and `escrow.verifyReceipt` accepts it (pinned receipt key).
 - Stored receipts are re-verified before every retry. A receipt for an
   escrow that is no longer configured fails with `unknown_receipt_escrow`.
-- `MutationRejectedError` is only surfaced when **every** remaining escrow
-  threw `MutationRejectedError`, even if other escrows have receipts: the
-  mutation is obsolete or was already repaired. Anything else may have been
-  applied and stays `writing`.
+- When **every** remaining escrow throws `MutationRejectedError`, the pending
+  mutation is cleared. With no receipts nothing was applied, and that error is
+  surfaced. With receipts the mutation was applied on some escrows and is
+  obsolete or already repaired elsewhere, so `mutation_superseded` is thrown
+  instead; reread state. Anything else may have been applied and stays
+  `writing`.
 
 Versioning:
 
@@ -223,6 +233,20 @@ Versioning:
   once (a cubist-only deploy is `["cubist"]`).
 - An escrow with no record reports version `0`. New mutations require every
   escrow at the same version (`replica_lagging`).
+- That check runs before the lease, so another device may write first. Each
+  write rereads versions under the lease. Escrows off `expectedVersion` are
+  probed alone with no identifier proofs: they replay
+  this mutation's receipt or reject it. So it never forks the rest, and an
+  obsolete mutation clears even if its identifier or SIWE wallet is gone.
+- A re-issued approval drops identifiers removed from Auth, and escrows fail a
+  payload it does not cover. If every remaining escrow moved, the mutation can
+  no longer land, so it is cleared with `mutation_superseded` unsent.
+- An update's `identifier` must be enrolled on every target escrow
+  (`identifier_not_enrolled`), checked before approval and before each write:
+  escrows fail, rather than reject, an unknown one.
+- `resume(identifier)` with a pending update authorizes it with `identifier`
+  instead. Escrows accept any enrolled identifier, and `requestHash` does not
+  cover it.
 
 `resume(identifier)` with no pending mutation reads every escrow's version and
 identifiers. Escrows one version behind the highest get one mutation
@@ -253,7 +277,9 @@ and `applyMutation`. `generateChallenge` and `getIdentifiers` take the
 operation's `authControllerToken`; the escrow keys the challenge to its
 profile. Escrow JSON is parsed from C2F stdout. A policy `Deny` on
 `applyMutation` becomes `MutationRejectedError`; any other failure is
-`escrow_request_failed` / `escrow_response_invalid`. `verifyReceipt` checks
+`escrow_request_failed` / `escrow_response_invalid`. Probes send no identifier
+authorizations, so `store::apply` must replay a receipt or deny a version
+mismatch before verifying them. `verifyReceipt` checks
 the mutation id, request hash, escrow id, `version === newVersion`,
 `receiptKeyId` (SHA-256 of the pinned receipt key), and the Ed25519 signature
 locally.
