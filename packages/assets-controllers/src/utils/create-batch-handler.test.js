@@ -1,0 +1,126 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createBatchedHandler } from './create-batch-handler.js';
+const TEST_BATCH_MS = 50;
+describe('createBatchedHandler', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+    const advanceAndFlush = async () => {
+        await vi.advanceTimersByTimeAsync(TEST_BATCH_MS);
+    };
+    const createNumberHandler = (onFlush = vi.fn().mockResolvedValue(undefined)) => {
+        const capture = createBatchedHandler((buffer) => buffer.reduce((sum, item) => sum + item, 0), TEST_BATCH_MS, onFlush);
+        return { capture, onFlush };
+    };
+    function createObjectHandler(onFlush = vi.fn().mockResolvedValue(undefined)) {
+        const capture = createBatchedHandler((buffer) => ({ ids: buffer.flatMap((item) => item.ids) }), TEST_BATCH_MS, onFlush);
+        return { capture, onFlush };
+    }
+    describe('buffering and aggregation', () => {
+        it.each([
+            {
+                name: 'sums numbers and flushes once after debounce',
+                arrangeAct: () => {
+                    const ctx = createNumberHandler();
+                    return {
+                        ...ctx,
+                        act: async () => {
+                            await Promise.all([
+                                ctx.capture(1),
+                                ctx.capture(2),
+                                ctx.capture(3),
+                            ]);
+                        },
+                    };
+                },
+                expectedCalls: 1,
+                expectedArg: 6,
+            },
+            {
+                name: 'merges object arrays with custom aggregator',
+                arrangeAct: () => {
+                    const ctx = createObjectHandler();
+                    return {
+                        ...ctx,
+                        act: async () => {
+                            await Promise.all([
+                                ctx.capture({ ids: [1] }),
+                                ctx.capture({ ids: [2, 3] }),
+                            ]);
+                        },
+                    };
+                },
+                expectedCalls: 1,
+                expectedArg: { ids: [1, 2, 3] },
+            },
+        ])('$name', async ({ arrangeAct, expectedCalls, expectedArg }) => {
+            const { onFlush, act } = arrangeAct();
+            expect(onFlush).not.toHaveBeenCalled();
+            const promiseResult = act();
+            expect(onFlush).not.toHaveBeenCalled();
+            await advanceAndFlush();
+            await promiseResult;
+            expect(onFlush).toHaveBeenCalledTimes(expectedCalls);
+            expect(onFlush).toHaveBeenCalledWith(expectedArg);
+        });
+    });
+    describe('lifecycle and edge cases', () => {
+        it('does not call onFlush when capture was never invoked', async () => {
+            const onFlush = vi.fn().mockResolvedValue(undefined);
+            createBatchedHandler((b) => b.reduce((a, item) => a + item, 0), TEST_BATCH_MS, onFlush);
+            await advanceAndFlush();
+            expect(onFlush).not.toHaveBeenCalled();
+        });
+        it('resets buffer after flush and can capture again', async () => {
+            const { capture, onFlush } = createNumberHandler();
+            const promise1 = capture(1);
+            await advanceAndFlush();
+            await promise1;
+            expect(onFlush).toHaveBeenCalledWith(1);
+            const promise2 = capture(2);
+            await advanceAndFlush();
+            await promise2;
+            expect(onFlush).toHaveBeenCalledTimes(2);
+            expect(onFlush).toHaveBeenLastCalledWith(2);
+        });
+        it('returns a Promise that resolves when the batch flush completes', async () => {
+            const { capture, onFlush } = createNumberHandler();
+            const promise = capture(1);
+            expect(onFlush).not.toHaveBeenCalled();
+            await advanceAndFlush();
+            await promise;
+            expect(onFlush).toHaveBeenCalledWith(1);
+        });
+        const actAssertRejected = async (capture, expectedError) => {
+            const p1 = capture(1);
+            const p2 = capture(2);
+            const settled = Promise.allSettled([p1, p2]);
+            await advanceAndFlush();
+            const [r1, r2] = await settled;
+            expect(r1.status).toBe('rejected');
+            expect(r1.reason).toBe(expectedError);
+            expect(r2.status).toBe('rejected');
+            expect(r2.reason).toBe(expectedError);
+        };
+        it('rejects all callers in the same batch when onFlush throws', async () => {
+            const error = new Error('flush failed');
+            const onFlush = vi.fn().mockRejectedValue(error);
+            const capture = createBatchedHandler((buffer) => buffer.reduce((sum, item) => sum + item, 0), TEST_BATCH_MS, onFlush);
+            await actAssertRejected(capture, error);
+            expect(onFlush).toHaveBeenCalled();
+        });
+        it('rejects all callers in the same batch when aggregatorFn throws', async () => {
+            const error = new Error('aggregation failed');
+            const aggregatorFn = vi.fn(() => {
+                throw error;
+            });
+            const onFlush = vi.fn().mockResolvedValue(undefined);
+            const capture = createBatchedHandler(aggregatorFn, TEST_BATCH_MS, onFlush);
+            await actAssertRejected(capture, error);
+            expect(onFlush).not.toHaveBeenCalled();
+        });
+    });
+});

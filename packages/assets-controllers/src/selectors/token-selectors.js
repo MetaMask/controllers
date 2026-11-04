@@ -1,0 +1,363 @@
+import { convertHexToDecimal } from '@metamask/controller-utils';
+import { TrxScope } from '@metamask/keyring-api';
+import { hexToBigInt, parseCaipAssetType } from '@metamask/utils';
+import { createSelector, weakMapMemoize } from 'reselect';
+import { shouldIncludeNativeToken } from '../constants.js';
+import { getNativeTokenAddress } from '../token-prices-service/codefi-v2.js';
+import { parseBalanceWithDecimals, stringifyBalanceWithDecimals, } from './stringify-balance.js';
+// Asset Tron Filters
+export const TRON_RESOURCE = {
+    ENERGY: 'energy',
+    BANDWIDTH: 'bandwidth',
+    MAX_ENERGY: 'max-energy',
+    MAX_BANDWIDTH: 'max-bandwidth',
+    STRX_ENERGY: 'strx-energy',
+    STRX_BANDWIDTH: 'strx-bandwidth',
+    TRX_READY_FOR_WITHDRAWAL: 'trx-ready-for-withdrawal',
+    TRX_STAKING_REWARDS: 'trx-staking-rewards',
+    TRX_IN_LOCK_PERIOD: 'trx-in-lock-period',
+};
+export const TRON_RESOURCE_SYMBOLS = Object.values(TRON_RESOURCE);
+export const TRON_RESOURCE_SYMBOLS_SET = new Set(TRON_RESOURCE_SYMBOLS);
+const createAssetListSelector = createSelector.withTypes();
+const selectAccountsToGroupIdMap = createAssetListSelector([(state) => state.accountTree, (state) => state.internalAccounts], (accountTree, internalAccounts) => {
+    const accountsMap = {};
+    for (const { groups } of Object.values(accountTree.wallets)) {
+        for (const { id: accountGroupId, accounts } of Object.values(groups)) {
+            for (const accountId of accounts) {
+                const internalAccount = internalAccounts.accounts[accountId];
+                if (!internalAccount) {
+                    continue;
+                }
+                accountsMap[
+                // TODO: We would not need internalAccounts if evmTokens state had the accountId
+                internalAccount.type.startsWith('eip155')
+                    ? internalAccount.address
+                    : accountId] = { accountGroupId, type: internalAccount.type, accountId };
+            }
+        }
+    }
+    return accountsMap;
+});
+// TODO: This selector will not be needed once the native balances are part of the evm tokens state
+const selectAllEvmAccountNativeBalances = createAssetListSelector([
+    selectAccountsToGroupIdMap,
+    (state) => state.accountsByChainId,
+    (state) => state.marketData,
+    (state) => state.currencyRates,
+    (state) => state.currentCurrency,
+    (state) => state.networkConfigurationsByChainId,
+], (accountsMap, accountsByChainId, marketData, currencyRates, currentCurrency, networkConfigurationsByChainId) => {
+    const groupAssets = {};
+    for (const [chainId, chainAccounts] of Object.entries(accountsByChainId)) {
+        // Skip native tokens on Tempo networks
+        if (!shouldIncludeNativeToken(chainId)) {
+            continue;
+        }
+        for (const [accountAddress, accountBalance] of Object.entries(chainAccounts)) {
+            const account = accountsMap[accountAddress.toLowerCase()];
+            if (!account) {
+                continue;
+            }
+            const { accountGroupId, type, accountId } = account;
+            groupAssets[accountGroupId] ??= {};
+            groupAssets[accountGroupId][chainId] ??= [];
+            const groupChainAssets = groupAssets[accountGroupId][chainId];
+            // If a native balance is missing, we still want to show it as 0
+            const rawBalance = accountBalance.balance || '0x0';
+            const nativeCurrency = networkConfigurationsByChainId[chainId]?.nativeCurrency || 'NATIVE';
+            const nativeToken = {
+                address: getNativeTokenAddress(chainId),
+                decimals: 18,
+                name: nativeCurrency === 'ETH' ? 'Ethereum' : nativeCurrency,
+                symbol: nativeCurrency,
+                // This field need to be filled at client level for now
+                image: '',
+            };
+            const fiatData = getFiatBalanceForEvmToken(rawBalance, nativeToken.decimals, marketData, currencyRates, chainId, nativeToken.address, nativeCurrency);
+            groupChainAssets.push({
+                accountType: type,
+                assetId: nativeToken.address,
+                isNative: true,
+                address: nativeToken.address,
+                image: nativeToken.image,
+                name: nativeToken.name,
+                symbol: nativeToken.symbol,
+                accountId,
+                decimals: nativeToken.decimals,
+                rawBalance,
+                balance: stringifyBalanceWithDecimals(hexToBigInt(rawBalance), nativeToken.decimals),
+                fiat: fiatData
+                    ? {
+                        balance: fiatData.balance,
+                        currency: currentCurrency,
+                        conversionRate: fiatData.conversionRate,
+                    }
+                    : undefined,
+                chainId,
+            });
+        }
+    }
+    return groupAssets;
+});
+const selectAllEvmAssets = createAssetListSelector([
+    selectAccountsToGroupIdMap,
+    (state) => state.allTokens,
+    (state) => state.allIgnoredTokens,
+    (state) => state.tokenBalances,
+    (state) => state.marketData,
+    (state) => state.currencyRates,
+    (state) => state.currentCurrency,
+], (accountsMap, evmTokens, ignoredEvmTokens, tokenBalances, marketData, currencyRates, currentCurrency) => {
+    const groupAssets = {};
+    for (const [chainId, chainTokens] of Object.entries(evmTokens)) {
+        for (const [accountAddress, addressTokens] of Object.entries(chainTokens)) {
+            for (const token of addressTokens) {
+                const tokenAddress = token.address;
+                const account = accountsMap[accountAddress];
+                if (!account) {
+                    continue;
+                }
+                const { accountGroupId, type, accountId } = account;
+                if (ignoredEvmTokens[chainId]?.[accountAddress]?.includes(tokenAddress)) {
+                    continue;
+                }
+                const rawBalance = tokenBalances[accountAddress]?.[chainId]?.[tokenAddress];
+                if (!rawBalance) {
+                    continue;
+                }
+                groupAssets[accountGroupId] ??= {};
+                groupAssets[accountGroupId][chainId] ??= [];
+                const groupChainAssets = groupAssets[accountGroupId][chainId];
+                const fiatData = getFiatBalanceForEvmToken(rawBalance, token.decimals, marketData, currencyRates, chainId, tokenAddress);
+                groupChainAssets.push({
+                    accountType: type,
+                    assetId: tokenAddress,
+                    isNative: false,
+                    address: tokenAddress,
+                    image: token.image ?? '',
+                    name: token.name ?? token.symbol,
+                    symbol: token.symbol,
+                    accountId,
+                    decimals: token.decimals,
+                    rawBalance,
+                    balance: stringifyBalanceWithDecimals(hexToBigInt(rawBalance), token.decimals),
+                    fiat: fiatData
+                        ? {
+                            balance: fiatData.balance,
+                            currency: currentCurrency,
+                            conversionRate: fiatData.conversionRate,
+                        }
+                        : undefined,
+                    chainId,
+                    ...(token.rwaData && { rwaData: token.rwaData }),
+                });
+            }
+        }
+    }
+    return groupAssets;
+});
+const selectAllMultichainAssets = createAssetListSelector([
+    selectAccountsToGroupIdMap,
+    (state) => state.accountsAssets,
+    (state) => state.allIgnoredAssets,
+    (state) => state.assetsMetadata,
+    (state) => state.balances,
+    (state) => state.conversionRates,
+    (state) => state.currentCurrency,
+], (accountsMap, multichainTokens, ignoredMultichainAssets, multichainAssetsMetadata, multichainBalances, multichainConversionRates, currentCurrency) => {
+    const groupAssets = {};
+    for (const [accountId, accountAssets] of Object.entries(multichainTokens)) {
+        for (const assetId of accountAssets) {
+            let caipAsset;
+            try {
+                caipAsset = parseCaipAssetType(assetId);
+            }
+            catch {
+                // TODO: We should log this error when we have the ability to inject a logger from the client
+                continue;
+            }
+            const { chainId } = caipAsset;
+            const asset = `${caipAsset.assetNamespace}:${caipAsset.assetReference}`;
+            const account = accountsMap[accountId];
+            const assetMetadata = multichainAssetsMetadata[assetId];
+            if (!account || !assetMetadata) {
+                continue;
+            }
+            const { accountGroupId, type } = account;
+            if (ignoredMultichainAssets?.[accountId]?.includes(assetId)) {
+                continue;
+            }
+            groupAssets[accountGroupId] ??= {};
+            groupAssets[accountGroupId][chainId] ??= [];
+            const groupChainAssets = groupAssets[accountGroupId][chainId];
+            const balance = multichainBalances[accountId]?.[assetId];
+            const decimals = assetMetadata.units?.find((unit) => unit.name === assetMetadata.name &&
+                unit.symbol === assetMetadata.symbol)?.decimals;
+            if (!balance || decimals === undefined) {
+                continue;
+            }
+            const rawBalance = parseBalanceWithDecimals(balance.amount, decimals);
+            if (!rawBalance) {
+                continue;
+            }
+            const fiatData = getFiatBalanceForMultichainAsset(balance, multichainConversionRates, assetId);
+            // TODO: We shouldn't have to rely on fallbacks for name and symbol, they should not be optional
+            groupChainAssets.push({
+                accountType: type,
+                assetId,
+                isNative: caipAsset.assetNamespace === 'slip44',
+                image: assetMetadata.iconUrl,
+                name: assetMetadata.name ?? assetMetadata.symbol ?? asset,
+                symbol: assetMetadata.symbol ?? asset,
+                accountId,
+                decimals,
+                rawBalance,
+                balance: balance.amount,
+                fiat: fiatData
+                    ? {
+                        balance: fiatData.balance,
+                        currency: currentCurrency,
+                        conversionRate: fiatData.conversionRate,
+                    }
+                    : undefined,
+                chainId,
+            });
+        }
+    }
+    return groupAssets;
+});
+// TS2742: The inferred type of 'selectAllAssets' cannot be named without a
+// reference to '../../../../node_modules/@metamask/account-tree-controller/dist/wallet.js'.
+// This is likely not portable. A type annotation is necessary.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const selectAllAssets = createAssetListSelector([
+    selectAllEvmAssets,
+    selectAllMultichainAssets,
+    selectAllEvmAccountNativeBalances,
+], (evmAssets, multichainAssets, evmAccountNativeBalances) => {
+    const groupAssets = {};
+    mergeAssets(groupAssets, evmAssets);
+    mergeAssets(groupAssets, multichainAssets);
+    mergeAssets(groupAssets, evmAccountNativeBalances);
+    return groupAssets;
+});
+const defaultSelectAccountGroupAssetOpts = {
+    filterTronStakedTokens: true,
+};
+const filterTronStakedTokens = (assetsByAccountGroup) => {
+    const newAssetsByAccountGroup = { ...assetsByAccountGroup };
+    Object.values(TrxScope).forEach((tronChainId) => {
+        if (!newAssetsByAccountGroup[tronChainId]) {
+            return;
+        }
+        newAssetsByAccountGroup[tronChainId] = newAssetsByAccountGroup[tronChainId].filter((asset) => {
+            if (asset.chainId.startsWith('tron:') &&
+                TRON_RESOURCE_SYMBOLS_SET.has(asset.symbol?.toLowerCase())) {
+                return false;
+            }
+            return true;
+        });
+    });
+    return newAssetsByAccountGroup;
+};
+export const selectAssetsBySelectedAccountGroup = createAssetListSelector([
+    selectAllAssets,
+    (state) => state.selectedAccountGroup,
+    (_state, opts = defaultSelectAccountGroupAssetOpts) => opts,
+], (groupAssets, selectedAccountGroup, opts) => {
+    if (!selectedAccountGroup) {
+        return {};
+    }
+    let result = groupAssets[selectedAccountGroup] || {};
+    if (opts.filterTronStakedTokens) {
+        result = filterTronStakedTokens(result);
+    }
+    return result;
+}, {
+    memoize: weakMapMemoize,
+    argsMemoize: weakMapMemoize,
+});
+// TODO: Once native assets are part of the evm tokens state, this function can be simplified as chains will always be unique
+/**
+ * Merges the new assets into the existing assets
+ *
+ * @param existingAssets - The existing assets
+ * @param newAssets - The new assets
+ */
+function mergeAssets(existingAssets, newAssets) {
+    for (const [accountGroupId, accountAssets] of Object.entries(newAssets)) {
+        const existingAccountGroupAssets = existingAssets[accountGroupId];
+        if (existingAccountGroupAssets) {
+            for (const [network, chainAssets] of Object.entries(accountAssets)) {
+                existingAccountGroupAssets[network] ??= [];
+                existingAccountGroupAssets[network].push(...chainAssets);
+            }
+        }
+        else {
+            existingAssets[accountGroupId] = {};
+            for (const [network, chainAssets] of Object.entries(accountAssets)) {
+                existingAssets[accountGroupId][network] = [...chainAssets];
+            }
+        }
+    }
+}
+/**
+ * @param rawBalance - The balance of the token
+ * @param decimals - The decimals of the token
+ * @param marketData - The market data for the token
+ * @param currencyRates - The currency rates for the token
+ * @param chainId - The chain id of the token
+ * @param tokenAddress - The address of the token
+ * @param nativeCurrencySymbol - The native currency symbol (e.g., 'ETH', 'BNB') - used for fallback when market data is missing for native tokens
+ * @returns The price and currency of the token in the current currency. Returns undefined if the asset is not found in the market data or currency rates.
+ */
+function getFiatBalanceForEvmToken(rawBalance, decimals, marketData, currencyRates, chainId, tokenAddress, nativeCurrencySymbol) {
+    const tokenMarketData = marketData[chainId]?.[tokenAddress];
+    // For native tokens: if no market data exists, use price=1 and look up currency rate directly
+    // This is because native tokens are priced in themselves (1 ETH = 1 ETH)
+    if (!tokenMarketData && nativeCurrencySymbol) {
+        const currencyRate = currencyRates[nativeCurrencySymbol];
+        if (!currencyRate?.conversionRate) {
+            return;
+        }
+        const fiatBalance = (convertHexToDecimal(rawBalance) / 10 ** decimals) *
+            currencyRate.conversionRate;
+        return {
+            balance: fiatBalance,
+            conversionRate: currencyRate.conversionRate,
+        };
+    }
+    if (!tokenMarketData) {
+        return;
+    }
+    const currencyRate = currencyRates[tokenMarketData.currency];
+    if (!currencyRate?.conversionRate) {
+        return;
+    }
+    const fiatBalance = (convertHexToDecimal(rawBalance) / 10 ** decimals) *
+        tokenMarketData.price *
+        currencyRate.conversionRate;
+    return {
+        balance: fiatBalance,
+        conversionRate: currencyRate.conversionRate,
+    };
+}
+/**
+ * @param balance - The balance of the asset, in the format { amount: string; unit: string }
+ * @param balance.amount - The amount of the balance
+ * @param balance.unit - The unit of the balance
+ * @param multichainConversionRates - The conversion rates for the multichain asset
+ * @param assetId - The asset id of the asset
+ * @returns The price and currency of the token in the current currency. Returns undefined if the asset is not found in the conversion rates.
+ */
+function getFiatBalanceForMultichainAsset(balance, multichainConversionRates, assetId) {
+    const assetMarketData = multichainConversionRates[assetId];
+    if (!assetMarketData?.rate) {
+        return;
+    }
+    return {
+        balance: Number(balance.amount) * Number(assetMarketData.rate),
+        conversionRate: Number(assetMarketData.rate),
+    };
+}

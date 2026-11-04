@@ -1,0 +1,3552 @@
+import { ChainId, NetworkType, convertHexToDecimal, InfuraNetworkType, toChecksumHexAddress, } from '@metamask/controller-utils';
+import { MOCK_ANY_NAMESPACE, Messenger } from '@metamask/messenger';
+import { getDefaultNetworkControllerState, RpcEndpointType, } from '@metamask/network-controller';
+import { getDefaultPreferencesState } from '@metamask/preferences-controller';
+import BN from 'bn.js';
+import nock from 'nock';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockInternalAccount } from '../../accounts-controller/tests/mocks.js';
+import { buildCustomRpcEndpoint, buildInfuraNetworkConfiguration, } from '../../network-controller/tests/helpers.js';
+import { formatAggregatorNames } from './assetsUtil.js';
+import { MUSD_ERC20_ADDRESS_LOWER } from './constants.js';
+import { resetSuggestedOccurrenceFloorsCacheForTesting, TOKEN_END_POINT_API, } from './token-service.js';
+import { TokenDetectionController, controllerName, } from './TokenDetectionController.js';
+import { getDefaultTokenListState } from './TokenListController.js';
+import { getDefaultTokensState } from './TokensController.js';
+const DEFAULT_INTERVAL = 180000;
+const sampleAggregators = [
+    'paraswap',
+    'pmm',
+    'airswapLight',
+    'zeroEx',
+    'bancor',
+    'coinGecko',
+    'zapper',
+    'kleros',
+    'zerion',
+    'cmc',
+    'oneInch',
+];
+const formattedSampleAggregators = formatAggregatorNames(sampleAggregators);
+const sampleTokenList = [
+    {
+        address: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+        symbol: 'LINK',
+        decimals: 18,
+        iconUrl: '',
+        occurrences: 11,
+        aggregators: sampleAggregators,
+        name: 'Chainlink',
+    },
+    {
+        address: '0x1F573D6Fb3F13d689FF844B4cE37794d79a7FF1C',
+        symbol: 'BNT',
+        decimals: 18,
+        iconUrl: '',
+        occurrences: 11,
+        aggregators: sampleAggregators,
+        name: 'Bancor',
+    },
+];
+const [tokenAFromList, tokenBFromList] = sampleTokenList;
+const sampleTokenA = {
+    address: tokenAFromList.address,
+    symbol: tokenAFromList.symbol,
+    decimals: tokenAFromList.decimals,
+    image: 'https://static.cx.metamask.io/api/v1/tokenIcons/1/0x514910771af9ca656af840dff83e8264ecf986ca.png',
+    isERC721: false,
+    aggregators: formattedSampleAggregators,
+    name: 'Chainlink',
+};
+const sampleTokenB = {
+    address: tokenBFromList.address,
+    symbol: tokenBFromList.symbol,
+    decimals: tokenBFromList.decimals,
+    image: 'https://static.cx.metamask.io/api/v1/tokenIcons/1/0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c.png',
+    isERC721: false,
+    aggregators: formattedSampleAggregators,
+    name: 'Bancor',
+};
+const mockNetworkConfigurations = {
+    [InfuraNetworkType.mainnet]: buildInfuraNetworkConfiguration(InfuraNetworkType.mainnet),
+    [InfuraNetworkType.sepolia]: buildInfuraNetworkConfiguration(InfuraNetworkType.sepolia),
+    polygon: {
+        blockExplorerUrls: ['https://polygonscan.com/'],
+        chainId: '0x89',
+        defaultBlockExplorerUrlIndex: 0,
+        defaultRpcEndpointIndex: 0,
+        name: 'Polygon Mainnet',
+        nativeCurrency: 'MATIC',
+        rpcEndpoints: [
+            buildCustomRpcEndpoint({
+                url: 'https://polygon-mainnet.infura.io/v3/fakekey',
+                networkClientId: 'polygon',
+            }),
+        ],
+    },
+    avalanche: {
+        blockExplorerUrls: ['https://snowtrace.io/'],
+        chainId: '0xa86a',
+        defaultBlockExplorerUrlIndex: 0,
+        defaultRpcEndpointIndex: 0,
+        name: 'Avalanche C-Chain',
+        nativeCurrency: 'AVAX',
+        rpcEndpoints: [
+            buildCustomRpcEndpoint({
+                url: 'https://api.avax.network/ext/bc/C/rpc',
+                networkClientId: 'avalanche',
+            }),
+        ],
+    },
+};
+// Network configurations keyed by chain ID (for use when testing with explicit chainIds)
+const mockNetworkConfigurationsByChainId = {
+    '0xa86a': mockNetworkConfigurations.avalanche,
+    '0x89': mockNetworkConfigurations.polygon,
+};
+/**
+ * Builds a root messenger for testing.
+ *
+ * @returns The root messenger.
+ */
+function buildRootMessenger() {
+    return new Messenger({ namespace: MOCK_ANY_NAMESPACE });
+}
+/**
+ * Builds a messenger that `TokenDetectionController` can use to communicate with other controllers.
+ *
+ * @param messenger - The root messenger.
+ * @returns The controller messenger.
+ */
+function buildTokenDetectionControllerMessenger(messenger = buildRootMessenger()) {
+    const tokenDetectionControllerMessenger = new Messenger({
+        namespace: controllerName,
+        parent: messenger,
+    });
+    messenger.delegate({
+        messenger: tokenDetectionControllerMessenger,
+        actions: [
+            'AccountsController:getAccount',
+            'AccountsController:getSelectedAccount',
+            'KeyringController:getState',
+            'NetworkController:getNetworkClientById',
+            'NetworkController:getNetworkConfigurationByNetworkClientId',
+            'NetworkController:getState',
+            'TokensController:getState',
+            'TokensController:addDetectedTokens',
+            'PreferencesController:getState',
+            'TokensController:addTokens',
+            'NetworkController:findNetworkClientIdByChainId',
+        ],
+        events: [
+            'AccountsController:selectedEvmAccountChange',
+            'KeyringController:lock',
+            'KeyringController:unlock',
+            'NetworkController:networkDidChange',
+            'PreferencesController:stateChange',
+            'TransactionController:transactionConfirmed',
+        ],
+    });
+    return tokenDetectionControllerMessenger;
+}
+describe('TokenDetectionController', () => {
+    const defaultSelectedAccount = createMockInternalAccount();
+    beforeEach(async () => {
+        resetSuggestedOccurrenceFloorsCacheForTesting();
+        nock(TOKEN_END_POINT_API)
+            .get('/v1/suggestedOccurrenceFloors')
+            .reply(200, { '1': 3, '59144': 1 })
+            .get(getTokensPath(ChainId.mainnet))
+            .reply(200, sampleTokenList)
+            .get(`/token/${convertHexToDecimal(ChainId.mainnet)}?address=${tokenAFromList.address}`)
+            .reply(200, tokenAFromList)
+            .get(`/token/${convertHexToDecimal(ChainId.mainnet)}?address=${tokenBFromList.address}`)
+            .reply(200, tokenBFromList)
+            .persist();
+    });
+    describe('start', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+        it('should not poll and detect tokens on interval while keyring is locked', async () => {
+            await withController({
+                isKeyringUnlocked: false,
+                options: {},
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller }) => {
+                const mockTokens = vi
+                    .spyOn(controller, 'detectTokens')
+                    .mockImplementation(async () => undefined);
+                controller.setIntervalLength(10);
+                await controller.start();
+                expect(mockTokens).not.toHaveBeenCalled();
+                await vi.advanceTimersByTimeAsync(15);
+                expect(mockTokens).not.toHaveBeenCalled();
+            });
+        });
+        it('should detect tokens but not restart polling if locked keyring is unlocked', async () => {
+            await withController({
+                isKeyringUnlocked: false,
+                options: {},
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller, triggerKeyringUnlock }) => {
+                const mockTokens = vi
+                    .spyOn(controller, 'detectTokens')
+                    .mockImplementation(async () => undefined);
+                await controller.start();
+                triggerKeyringUnlock();
+                await vi.advanceTimersByTimeAsync(DEFAULT_INTERVAL * 1.5);
+                expect(mockTokens).not.toHaveBeenCalledTimes(2);
+            });
+        });
+        it('should not poll if the controller is not active', async () => {
+            await withController({
+                isKeyringUnlocked: true,
+            }, async ({ controller }) => {
+                controller.setIntervalLength(10);
+                await controller._executePoll({
+                    chainIds: [ChainId.mainnet],
+                    address: defaultSelectedAccount.address,
+                });
+                expect(controller.isActive).toBe(false);
+            });
+        });
+        it('should stop polling and detect tokens on interval if unlocked keyring is locked', async () => {
+            await withController({
+                isKeyringUnlocked: true,
+            }, async ({ controller, triggerKeyringLock }) => {
+                const mockTokens = vi
+                    .spyOn(controller, 'detectTokens')
+                    .mockImplementation(async () => undefined);
+                controller.setIntervalLength(10);
+                await controller.start();
+                triggerKeyringLock();
+                expect(mockTokens).toHaveBeenCalledTimes(1);
+                await vi.advanceTimersByTimeAsync(15);
+                expect(mockTokens).toHaveBeenCalledTimes(1);
+            });
+        });
+        it('should poll and detect tokens on interval while on supported networks', async () => {
+            await withController({
+                options: {},
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller }) => {
+                const mockTokens = vi
+                    .spyOn(controller, 'detectTokens')
+                    .mockImplementation(async () => undefined);
+                controller.setIntervalLength(10);
+                await controller.start();
+                expect(mockTokens).toHaveBeenCalledTimes(1);
+                await vi.advanceTimersByTimeAsync(15);
+                expect(mockTokens).toHaveBeenCalledTimes(2);
+            });
+        });
+        it('should not autodetect while not on supported networks', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            await withController({
+                options: {
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, mockGetNetworkClientById }) => {
+                mockNetworkState({
+                    ...getDefaultNetworkControllerState(),
+                    selectedNetworkClientId: NetworkType.sepolia,
+                });
+                mockGetNetworkClientById(() => ({
+                    configuration: { chainId: ChainId.sepolia },
+                }));
+                await controller.start();
+                expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+            });
+        });
+        it('should detect tokens correctly on supported networks', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, callActionSpy, mockGetNetworkClientById, mockNetworkState, }) => {
+                // Set selectedNetworkClientId to avalanche so the detection uses the right network
+                mockNetworkState({
+                    ...getDefaultNetworkControllerState(),
+                    selectedNetworkClientId: 'avalanche',
+                });
+                // Mock getNetworkClientById to return Avalanche chain ID
+                mockGetNetworkClientById(() => ({
+                    configuration: { chainId: '0xa86a' },
+                }));
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.start();
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [sampleTokenA], 'avalanche');
+            });
+        });
+        it('should not call add tokens if balance is not available on account api', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, callActionSpy }) => {
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                test: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: 'test',
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.start();
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens', [sampleTokenA], {
+                    chainId: ChainId.sepolia,
+                    selectedAddress: selectedAccount.address,
+                });
+            });
+        });
+        it('should detect tokens correctly on the Sepolia network', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, mockNetworkState, mockGetNetworkClientById, mockFindNetworkClientIdByChainId, callActionSpy, }) => {
+                // Use Sepolia (0xaa36a7) which is not in SUPPORTED_NETWORKS_ACCOUNTS_API_V4
+                mockNetworkState({
+                    ...getDefaultNetworkControllerState(),
+                    selectedNetworkClientId: 'avalanche',
+                });
+                mockGetNetworkClientById(() => ({
+                    configuration: { chainId: '0xa86a' },
+                }));
+                mockFindNetworkClientIdByChainId(() => 'avalanche');
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.start();
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [sampleTokenA], 'avalanche');
+            });
+        });
+        it('should update detectedTokens when new tokens are detected', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+                [sampleTokenB.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            const interval = 100;
+            await withController({
+                options: {
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    interval,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, callActionSpy, mockNetworkState, }) => {
+                mockNetworkState({
+                    ...getDefaultNetworkControllerState(),
+                    selectedNetworkClientId: 'avalanche',
+                });
+                const tokenListState = {
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                };
+                mockTokenListGetState(tokenListState);
+                await controller.start();
+                tokenListState.tokensChainsCache['0xa86a'].data[sampleTokenB.address] = {
+                    name: sampleTokenB.name,
+                    symbol: sampleTokenB.symbol,
+                    decimals: sampleTokenB.decimals,
+                    address: sampleTokenB.address,
+                    occurrences: 1,
+                    aggregators: sampleTokenB.aggregators,
+                    iconUrl: sampleTokenB.image,
+                };
+                mockTokenListGetState(tokenListState);
+                await vi.advanceTimersByTimeAsync(interval);
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [sampleTokenA, sampleTokenB], 'avalanche');
+            });
+        });
+        it('should not add ignoredTokens to the tokens list if detected with balance', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokensGetState, mockTokenListGetState, callActionSpy, }) => {
+                mockTokensGetState({
+                    ...getDefaultTokensState(),
+                });
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.start();
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+            });
+        });
+        it('should not detect tokens if there is no selectedAddress set', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            await withController({
+                options: {
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, callActionSpy }) => {
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.start();
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+            });
+        });
+    });
+    describe('AccountsController:selectedAccountChange', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+        describe('when "disabled" is false', () => {
+            it('should detect new tokens after switching between accounts', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const firstSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                const secondSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000002',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: firstSelectedAccount,
+                    },
+                }, async ({ mockGetAccount, mockTokenListGetState, triggerSelectedAccountChange, callActionSpy, mockNetworkState, }) => {
+                    // Set selectedNetworkClientId to avalanche and include it in networkConfigurationsByChainId
+                    const defaultState = getDefaultNetworkControllerState();
+                    mockNetworkState({
+                        ...defaultState,
+                        selectedNetworkClientId: 'avalanche',
+                        networkConfigurationsByChainId: {
+                            ...defaultState.networkConfigurationsByChainId,
+                            ...mockNetworkConfigurationsByChainId,
+                        },
+                    });
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    mockGetAccount(secondSelectedAccount);
+                    triggerSelectedAccountChange(secondSelectedAccount);
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [sampleTokenA], 'avalanche');
+                });
+            });
+            it('should not detect new tokens if the account is unchanged', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: selectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, triggerSelectedAccountChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    triggerSelectedAccountChange({
+                        address: selectedAccount.address,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+            describe('when keyring is locked', () => {
+                it('should not detect new tokens after switching between accounts', async () => {
+                    const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                        [sampleTokenA.address]: new BN(1),
+                    });
+                    const firstSelectedAccount = createMockInternalAccount({
+                        address: '0x0000000000000000000000000000000000000001',
+                    });
+                    const secondSelectedAccount = createMockInternalAccount({
+                        address: '0x0000000000000000000000000000000000000002',
+                    });
+                    await withController({
+                        options: {
+                            disabled: false,
+                            getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                        },
+                        mocks: {
+                            getSelectedAccount: firstSelectedAccount,
+                        },
+                        isKeyringUnlocked: false,
+                    }, async ({ mockTokenListGetState, triggerSelectedAccountChange, callActionSpy, }) => {
+                        mockTokenListGetState({
+                            ...getDefaultTokenListState(),
+                            tokensChainsCache: {
+                                '0xa86a': {
+                                    timestamp: 0,
+                                    data: {
+                                        [sampleTokenA.address]: {
+                                            name: sampleTokenA.name,
+                                            symbol: sampleTokenA.symbol,
+                                            decimals: sampleTokenA.decimals,
+                                            address: sampleTokenA.address,
+                                            occurrences: 1,
+                                            aggregators: sampleTokenA.aggregators,
+                                            iconUrl: sampleTokenA.image,
+                                        },
+                                    },
+                                },
+                            },
+                        });
+                        triggerSelectedAccountChange({
+                            address: secondSelectedAccount.address,
+                        });
+                        await vi.advanceTimersByTimeAsync(1);
+                        expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                    });
+                });
+            });
+        });
+        describe('when "disabled" is true', () => {
+            it('should not detect new tokens after switching between accounts', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const firstSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                const secondSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000002',
+                });
+                await withController({
+                    options: {
+                        disabled: true,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: firstSelectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, triggerSelectedAccountChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    triggerSelectedAccountChange({
+                        address: secondSelectedAccount.address,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+        });
+    });
+    describe('PreferencesController:stateChange', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+        describe('when "disabled" is false', () => {
+            it('should detect new tokens after switching between accounts', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const firstSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                const secondSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000002',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: firstSelectedAccount,
+                    },
+                }, async ({ mockGetAccount, mockTokenListGetState, mockNetworkState, triggerPreferencesStateChange, triggerSelectedAccountChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    mockNetworkState({
+                        networkConfigurationsByChainId: {
+                            '0xa86a': {
+                                name: 'avalanche',
+                                nativeCurrency: 'AVAX',
+                                rpcEndpoints: [
+                                    {
+                                        networkClientId: 'avalanche',
+                                        type: RpcEndpointType.Custom,
+                                        url: 'https://api.avax.network/ext/bc/C/rpc',
+                                    },
+                                ],
+                                blockExplorerUrls: [],
+                                chainId: '0xa86a',
+                                defaultRpcEndpointIndex: 0,
+                            },
+                        },
+                        networksMetadata: {},
+                        selectedNetworkClientId: 'avalanche',
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    mockGetAccount(secondSelectedAccount);
+                    triggerSelectedAccountChange(secondSelectedAccount);
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).toHaveBeenLastCalledWith('TokensController:addTokens', [sampleTokenA], 'avalanche');
+                });
+            });
+            it('should detect new tokens after switching between accounts on different chains', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const firstSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                const secondSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000002',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: firstSelectedAccount,
+                    },
+                }, async ({ mockGetAccount, mockTokenListGetState, mockNetworkState, triggerPreferencesStateChange, triggerSelectedAccountChange, controller, }) => {
+                    const mockTokens = vi.spyOn(controller, 'detectTokens');
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    // Set to avalanche which is not in SUPPORTED_NETWORKS_ACCOUNTS_API_V4
+                    mockNetworkState({
+                        ...getDefaultNetworkControllerState(),
+                        selectedNetworkClientId: 'avalanche',
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    mockGetAccount(secondSelectedAccount);
+                    triggerSelectedAccountChange(secondSelectedAccount);
+                    await vi.advanceTimersByTimeAsync(1);
+                    // detectTokens is called once when account changes
+                    // (preference change doesn't trigger since useTokenDetection was already true by default)
+                    expect(mockTokens).toHaveBeenCalledTimes(1);
+                });
+            });
+            it('should detect new tokens after enabling token detection', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: selectedAccount,
+                    },
+                }, async ({ mockGetAccount, mockTokenListGetState, triggerPreferencesStateChange, callActionSpy, mockNetworkState, }) => {
+                    // Set selectedNetworkClientId to avalanche (not in SUPPORTED_NETWORKS_ACCOUNTS_API_V4)
+                    mockNetworkState({
+                        ...getDefaultNetworkControllerState(),
+                        selectedNetworkClientId: 'avalanche',
+                    });
+                    mockGetAccount(selectedAccount);
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: false,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [sampleTokenA], 'avalanche');
+                });
+            });
+            it('should not detect new tokens after switching between account if token detection is disabled', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const firstSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                const secondSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000002',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: firstSelectedAccount,
+                    },
+                }, async ({ mockGetAccount, mockTokenListGetState, triggerSelectedAccountChange, triggerPreferencesStateChange, callActionSpy, }) => {
+                    mockGetAccount(firstSelectedAccount);
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: false,
+                    });
+                    mockGetAccount(secondSelectedAccount);
+                    triggerSelectedAccountChange(secondSelectedAccount);
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+            it('should not detect new tokens if the account is unchanged', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getAccount: selectedAccount,
+                        getSelectedAccount: selectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, triggerPreferencesStateChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+        });
+        describe('when keyring is locked', () => {
+            it('should not detect new tokens after switching between accounts', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const firstSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                const secondSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000002',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: firstSelectedAccount,
+                        getAccount: firstSelectedAccount,
+                    },
+                    isKeyringUnlocked: false,
+                }, async ({ mockGetAccount, mockTokenListGetState, triggerPreferencesStateChange, triggerSelectedAccountChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    mockGetAccount(secondSelectedAccount);
+                    triggerSelectedAccountChange(secondSelectedAccount);
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+            it('should not detect new tokens after enabling token detection', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    isKeyringUnlocked: false,
+                    mocks: {
+                        getSelectedAccount: selectedAccount,
+                        getAccount: selectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, triggerPreferencesStateChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: false,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+        });
+        describe('when "disabled" is true', () => {
+            it('should not detect new tokens after switching between accounts', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const firstSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                const secondSelectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000002',
+                });
+                await withController({
+                    options: {
+                        disabled: true,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getAccount: firstSelectedAccount,
+                        getSelectedAccount: firstSelectedAccount,
+                    },
+                }, async ({ mockGetAccount, mockTokenListGetState, triggerPreferencesStateChange, triggerSelectedAccountChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    mockGetAccount(secondSelectedAccount);
+                    triggerSelectedAccountChange(secondSelectedAccount);
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+            it('should not detect new tokens after enabling token detection', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: true,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getAccount: selectedAccount,
+                        getSelectedAccount: selectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, triggerPreferencesStateChange, callActionSpy, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: false,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    triggerPreferencesStateChange({
+                        ...getDefaultPreferencesState(),
+                        useTokenDetection: true,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+        });
+    });
+    describe('NetworkController:networkDidChange', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+        describe('when "disabled" is false', () => {
+            it('should not detect new tokens after switching to a chain that does not support token detection', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getAccount: selectedAccount,
+                        getSelectedAccount: selectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, callActionSpy, triggerNetworkDidChange, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    triggerNetworkDidChange({
+                        ...getDefaultNetworkControllerState(),
+                        selectedNetworkClientId: NetworkType.sepolia,
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+            it('should not detect new tokens if the network client id has not changed', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getAccount: selectedAccount,
+                        getSelectedAccount: selectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, callActionSpy, triggerNetworkDidChange, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerNetworkDidChange({
+                        ...getDefaultNetworkControllerState(),
+                        selectedNetworkClientId: 'avalanche',
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+            describe('when keyring is locked', () => {
+                it('should not detect new tokens after switching network client id', async () => {
+                    const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                        [sampleTokenA.address]: new BN(1),
+                    });
+                    const selectedAccount = createMockInternalAccount({
+                        address: '0x0000000000000000000000000000000000000001',
+                    });
+                    await withController({
+                        options: {
+                            disabled: false,
+                            getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                        },
+                        isKeyringUnlocked: false,
+                        mocks: {
+                            getAccount: selectedAccount,
+                            getSelectedAccount: selectedAccount,
+                        },
+                    }, async ({ mockTokenListGetState, callActionSpy, triggerNetworkDidChange, }) => {
+                        mockTokenListGetState({
+                            ...getDefaultTokenListState(),
+                            tokensChainsCache: {
+                                [ChainId.sepolia]: {
+                                    data: {
+                                        [sampleTokenA.address]: {
+                                            name: sampleTokenA.name,
+                                            symbol: sampleTokenA.symbol,
+                                            decimals: sampleTokenA.decimals,
+                                            address: sampleTokenA.address,
+                                            occurrences: 1,
+                                            aggregators: sampleTokenA.aggregators,
+                                            iconUrl: sampleTokenA.image,
+                                        },
+                                    },
+                                    timestamp: 0,
+                                },
+                            },
+                        });
+                        triggerNetworkDidChange({
+                            ...getDefaultNetworkControllerState(),
+                            selectedNetworkClientId: 'avalanche',
+                        });
+                        await vi.advanceTimersByTimeAsync(1);
+                        expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                    });
+                });
+            });
+        });
+        describe('when "disabled" is true', () => {
+            it('should not detect new tokens after switching network client id', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                    [sampleTokenA.address]: new BN(1),
+                });
+                const selectedAccount = createMockInternalAccount({
+                    address: '0x0000000000000000000000000000000000000001',
+                });
+                await withController({
+                    options: {
+                        disabled: true,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getAccount: selectedAccount,
+                        getSelectedAccount: selectedAccount,
+                    },
+                }, async ({ mockTokenListGetState, callActionSpy, triggerNetworkDidChange, }) => {
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            [ChainId.sepolia]: {
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        occurrences: 1,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                    },
+                                },
+                                timestamp: 0,
+                            },
+                        },
+                    });
+                    triggerNetworkDidChange({
+                        ...getDefaultNetworkControllerState(),
+                        selectedNetworkClientId: 'avalanche',
+                    });
+                    await vi.advanceTimersByTimeAsync(1);
+                    expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+                });
+            });
+        });
+    });
+    describe('startPolling', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+        it('should call detect tokens with networkClientId and address params', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState }) => {
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        [ChainId.sepolia]: {
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                            timestamp: 0,
+                        },
+                    },
+                });
+                const spy = vi
+                    .spyOn(controller, 'detectTokens')
+                    .mockImplementation(() => {
+                    return Promise.resolve();
+                });
+                controller.startPolling({
+                    chainIds: ['0xa86a'],
+                    address: '0x1',
+                });
+                controller.startPolling({
+                    chainIds: ['0xa86a'],
+                    address: '0xdeadbeef',
+                });
+                controller.startPolling({
+                    chainIds: ['0x5'],
+                    address: '0x3',
+                });
+                await vi.advanceTimersByTimeAsync(0);
+                expect(spy.mock.calls).toMatchObject([
+                    [{ chainIds: ['0xa86a'], selectedAddress: '0x1' }],
+                    [{ chainIds: ['0xa86a'], selectedAddress: '0xdeadbeef' }],
+                    [{ chainIds: ['0x5'], selectedAddress: '0x3' }],
+                ]);
+                await vi.advanceTimersByTimeAsync(DEFAULT_INTERVAL);
+                expect(spy.mock.calls).toMatchObject([
+                    [{ chainIds: ['0xa86a'], selectedAddress: '0x1' }],
+                    [{ chainIds: ['0xa86a'], selectedAddress: '0xdeadbeef' }],
+                    [{ chainIds: ['0x5'], selectedAddress: '0x3' }],
+                    [{ chainIds: ['0xa86a'], selectedAddress: '0x1' }],
+                    [{ chainIds: ['0xa86a'], selectedAddress: '0xdeadbeef' }],
+                    [{ chainIds: ['0x5'], selectedAddress: '0x3' }],
+                ]);
+            });
+        });
+    });
+    describe('detectTokens', () => {
+        it('should not detect tokens if token detection is disabled and current network is not mainnet', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, triggerPreferencesStateChange, callActionSpy, }) => {
+                mockNetworkState({
+                    ...getDefaultNetworkControllerState(),
+                    selectedNetworkClientId: NetworkType.sepolia,
+                });
+                triggerPreferencesStateChange({
+                    ...getDefaultPreferencesState(),
+                    useTokenDetection: false,
+                });
+                await controller.detectTokens({
+                    chainIds: [ChainId.sepolia],
+                    selectedAddress: selectedAccount.address,
+                });
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+            });
+        });
+        // Note: Test for mainnet legacy token list detection has been removed.
+        // Mainnet is now in SUPPORTED_NETWORKS_ACCOUNTS_API_V4, so RPC detection is skipped.
+        // Token detection for mainnet is handled via TokenBalancesController (Accounts API).
+        it('should detect and add tokens by networkClientId correctly', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, callActionSpy, mockNetworkState, }) => {
+                // Include Avalanche in networkConfigurationsByChainId for explicit chainId lookup
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        ...mockNetworkConfigurationsByChainId,
+                    },
+                });
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.detectTokens({
+                    chainIds: ['0xa86a'],
+                    selectedAddress: selectedAccount.address,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [sampleTokenA], 'avalanche');
+            });
+        });
+        it('should invoke the `trackMetaMetricsEvent` callback when token detection is triggered', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            const mockTrackMetaMetricsEvent = vi.fn();
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    trackMetaMetricsEvent: mockTrackMetaMetricsEvent,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, mockNetworkState }) => {
+                // Include Avalanche in networkConfigurationsByChainId for explicit chainId lookup
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        ...mockNetworkConfigurationsByChainId,
+                    },
+                });
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.detectTokens({
+                    chainIds: ['0xa86a'],
+                    selectedAddress: selectedAccount.address,
+                });
+                expect(mockTrackMetaMetricsEvent).toHaveBeenCalledWith({
+                    event: 'Token Detected',
+                    category: 'Wallet',
+                    properties: {
+                        tokens: [`${sampleTokenA.symbol} - ${sampleTokenA.address}`],
+                        token_standard: 'ERC20',
+                        asset_type: 'TOKEN',
+                    },
+                });
+            });
+        });
+        it('does not trigger `TokensController:addDetectedTokens` action when selectedAccount is not found', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const mockTrackMetaMetricsEvent = vi.fn();
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    trackMetaMetricsEvent: mockTrackMetaMetricsEvent,
+                },
+            }, async ({ controller, mockGetAccount, mockTokenListGetState, callActionSpy, mockNetworkState, }) => {
+                // Include Avalanche in networkConfigurationsByChainId for explicit chainId lookup
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        ...mockNetworkConfigurationsByChainId,
+                    },
+                });
+                // @ts-expect-error forcing an undefined value
+                mockGetAccount(undefined);
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                await controller.detectTokens({
+                    chainIds: ['0xa86a'],
+                });
+                expect(callActionSpy).toHaveBeenLastCalledWith('TokensController:addTokens', [
+                    {
+                        address: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+                        aggregators: [
+                            'Paraswap',
+                            'PMM',
+                            'AirswapLight',
+                            '0x',
+                            'Bancor',
+                            'CoinGecko',
+                            'Zapper',
+                            'Kleros',
+                            'Zerion',
+                            'CMC',
+                            '1inch',
+                        ],
+                        decimals: 18,
+                        image: 'https://static.cx.metamask.io/api/v1/tokenIcons/1/0x514910771af9ca656af840dff83e8264ecf986ca.png',
+                        isERC721: false,
+                        name: 'Chainlink',
+                        symbol: 'LINK',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('should fallback to rpc call', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, triggerPreferencesStateChange, callActionSpy, }) => {
+                mockNetworkState({
+                    ...getDefaultNetworkControllerState(),
+                    selectedNetworkClientId: 'polygon',
+                });
+                triggerPreferencesStateChange({
+                    ...getDefaultPreferencesState(),
+                    useTokenDetection: false,
+                });
+                await controller.detectTokens({
+                    chainIds: [ChainId.sepolia],
+                    selectedAddress: selectedAccount.address,
+                });
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+            });
+        });
+        it('should detect tokens when TransactionController:transactionConfirmed is triggered', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ mockTokenListGetState, mockNetworkState, callActionSpy, triggerTransactionConfirmed, }) => {
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    selectedNetworkClientId: 'avalanche',
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        ...mockNetworkConfigurationsByChainId,
+                    },
+                });
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                triggerTransactionConfirmed({ chainId: '0xa86a' });
+                // Wait for async detection to complete
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [sampleTokenA], 'avalanche');
+            });
+        });
+        it('should not detect tokens when useExternalServices returns false', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    useExternalServices: () => false,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.detectTokens();
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens');
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addDetectedTokens');
+            });
+        });
+        it('should not detect tokens when no client networks are found', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, mockGetNetworkConfigurationByNetworkClientId, callActionSpy, }) => {
+                mockNetworkState({
+                    ...getDefaultNetworkControllerState(),
+                    selectedNetworkClientId: 'unknown-network',
+                });
+                // Return undefined for unknown network to simulate no network config
+                mockGetNetworkConfigurationByNetworkClientId(() => undefined);
+                await controller.detectTokens();
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens');
+            });
+        });
+        it('should filter out tokens that are already owned by the user', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, mockTokenListGetState, mockTokensGetState, callActionSpy, }) => {
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    selectedNetworkClientId: 'avalanche',
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        ...mockNetworkConfigurationsByChainId,
+                    },
+                });
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    occurrences: 1,
+                                    aggregators: sampleTokenA.aggregators,
+                                    iconUrl: sampleTokenA.image,
+                                },
+                            },
+                        },
+                    },
+                });
+                // Mock that the user already owns this token
+                mockTokensGetState({
+                    ...getDefaultTokensState(),
+                    allTokens: {
+                        '0xa86a': {
+                            [selectedAccount.address]: [
+                                { address: sampleTokenA.address },
+                            ],
+                        },
+                    },
+                });
+                await controller.detectTokens();
+                // Should not call addTokens since token is already owned
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), 'avalanche');
+            });
+        });
+        it('should use static mainnet token list when token detection is disabled for mainnet', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': new BN(1), // USDC on mainnet
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, mockFindNetworkClientIdByChainId, triggerPreferencesStateChange, }) => {
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    selectedNetworkClientId: 'mainnet',
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        '0x1': {
+                            chainId: '0x1',
+                            name: 'Ethereum Mainnet',
+                            nativeCurrency: 'ETH',
+                            blockExplorerUrls: [],
+                            defaultBlockExplorerUrlIndex: 0,
+                            defaultRpcEndpointIndex: 0,
+                            rpcEndpoints: [
+                                {
+                                    networkClientId: 'mainnet',
+                                    type: RpcEndpointType.Custom,
+                                    url: 'https://mainnet.infura.io/v3/test',
+                                    failoverUrls: [],
+                                },
+                            ],
+                        },
+                    },
+                });
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                // Disable token detection - this should trigger static mainnet token list usage
+                triggerPreferencesStateChange({
+                    ...getDefaultPreferencesState(),
+                    useTokenDetection: false,
+                });
+                // Trigger detection with forceRpc to ensure we test the static token list path
+                await controller.detectTokens({
+                    chainIds: [ChainId.mainnet],
+                    forceRpc: true,
+                });
+                // The detection should have been attempted (static token list is used internally)
+                // We verify the getBalancesInSingleCall was called, indicating detection ran
+                expect(mockGetBalancesInSingleCall).toHaveBeenCalled();
+            });
+        });
+        it('should skip chains supported by Accounts API when forceRpc is false', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [sampleTokenA.address]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, mockFindNetworkClientIdByChainId, }) => {
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    selectedNetworkClientId: 'mainnet',
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        '0x1': {
+                            chainId: '0x1',
+                            name: 'Ethereum Mainnet',
+                            nativeCurrency: 'ETH',
+                            blockExplorerUrls: [],
+                            defaultBlockExplorerUrlIndex: 0,
+                            defaultRpcEndpointIndex: 0,
+                            rpcEndpoints: [
+                                {
+                                    networkClientId: 'mainnet',
+                                    type: RpcEndpointType.Custom,
+                                    url: 'https://mainnet.infura.io/v3/test',
+                                    failoverUrls: [],
+                                },
+                            ],
+                        },
+                    },
+                });
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                // Call detectTokens with mainnet (which is in SUPPORTED_NETWORKS_ACCOUNTS_API_V4)
+                // Without forceRpc, it should skip mainnet
+                await controller.detectTokens({
+                    chainIds: [ChainId.mainnet],
+                });
+                // Should NOT call getBalancesInSingleCall since mainnet is skipped
+                expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+            });
+        });
+        it('should detect tokens on Accounts API supported chains when forceRpc is true', async () => {
+            const mainnetUSDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({
+                [mainnetUSDC]: new BN(1),
+            });
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, mockFindNetworkClientIdByChainId, mockTokenListGetState, triggerPreferencesStateChange, }) => {
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    selectedNetworkClientId: 'mainnet',
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        '0x1': {
+                            chainId: '0x1',
+                            name: 'Ethereum Mainnet',
+                            nativeCurrency: 'ETH',
+                            blockExplorerUrls: [],
+                            defaultBlockExplorerUrlIndex: 0,
+                            defaultRpcEndpointIndex: 0,
+                            rpcEndpoints: [
+                                {
+                                    networkClientId: 'mainnet',
+                                    type: RpcEndpointType.Custom,
+                                    url: 'https://mainnet.infura.io/v3/test',
+                                    failoverUrls: [],
+                                },
+                            ],
+                        },
+                    },
+                });
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                // Provide token list data for mainnet
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0x1': {
+                            timestamp: 0,
+                            data: {
+                                [mainnetUSDC]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mainnetUSDC,
+                                    occurrences: 1,
+                                    aggregators: [],
+                                    iconUrl: '',
+                                },
+                            },
+                        },
+                    },
+                });
+                // Enable token detection for mainnet
+                triggerPreferencesStateChange({
+                    ...getDefaultPreferencesState(),
+                    useTokenDetection: true,
+                });
+                // Call detectTokens with forceRpc: true to force RPC detection on mainnet
+                await controller.detectTokens({
+                    chainIds: [ChainId.mainnet],
+                    forceRpc: true,
+                });
+                // Should call getBalancesInSingleCall since forceRpc bypasses Accounts API filter
+                expect(mockGetBalancesInSingleCall).toHaveBeenCalled();
+            });
+        });
+        it('adds mUSD from the token list cache when RPC reports zero balance', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+            }, async ({ controller, mockNetworkState, mockFindNetworkClientIdByChainId, mockTokenListGetState, triggerPreferencesStateChange, callActionSpy, }) => {
+                const defaultState = getDefaultNetworkControllerState();
+                mockNetworkState({
+                    ...defaultState,
+                    selectedNetworkClientId: 'mainnet',
+                    networkConfigurationsByChainId: {
+                        ...defaultState.networkConfigurationsByChainId,
+                        '0x1': {
+                            chainId: '0x1',
+                            name: 'Ethereum Mainnet',
+                            nativeCurrency: 'ETH',
+                            blockExplorerUrls: [],
+                            defaultBlockExplorerUrlIndex: 0,
+                            defaultRpcEndpointIndex: 0,
+                            rpcEndpoints: [
+                                {
+                                    networkClientId: 'mainnet',
+                                    type: RpcEndpointType.Custom,
+                                    url: 'https://mainnet.infura.io/v3/test',
+                                    failoverUrls: [],
+                                },
+                            ],
+                        },
+                    },
+                });
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0x1': {
+                            timestamp: 0,
+                            data: {},
+                        },
+                    },
+                });
+                triggerPreferencesStateChange({
+                    ...getDefaultPreferencesState(),
+                    useTokenDetection: true,
+                });
+                await controller.detectTokens({
+                    chainIds: [ChainId.mainnet],
+                    selectedAddress: selectedAccount.address,
+                    forceRpc: true,
+                });
+                expect(mockGetBalancesInSingleCall).toHaveBeenCalled();
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', expect.arrayContaining([
+                    expect.objectContaining({
+                        address: MUSD_ERC20_ADDRESS_LOWER,
+                        name: 'MetaMask USD',
+                        symbol: 'MUSD',
+                        decimals: 6,
+                    }),
+                ]), 'mainnet');
+            });
+        });
+    });
+    describe('constructor options', () => {
+        describe('useTokenDetection', () => {
+            it('should disable token detection when useTokenDetection is false', async () => {
+                const mockGetBalancesInSingleCall = vi.fn();
+                await withController({
+                    options: {
+                        useTokenDetection: () => false,
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: defaultSelectedAccount,
+                    },
+                }, async ({ controller }) => {
+                    // Try to detect tokens
+                    await controller.detectTokens();
+                    // Should not call getBalancesInSingleCall when useTokenDetection is false
+                    expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+                });
+            });
+            it('should enable token detection when useTokenDetection is true (default)', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+                await withController({
+                    options: {
+                        useTokenDetection: () => true,
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: defaultSelectedAccount,
+                    },
+                }, async ({ controller, mockTokenListGetState, mockNetworkState }) => {
+                    // Set selectedNetworkClientId to avalanche (not in SUPPORTED_NETWORKS_ACCOUNTS_API_V4)
+                    mockNetworkState({
+                        ...getDefaultNetworkControllerState(),
+                        selectedNetworkClientId: 'avalanche',
+                    });
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                        occurrences: 11,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    // Start the controller to make it active
+                    await controller.start();
+                    // Try to detect tokens
+                    await controller.detectTokens();
+                    // Should call getBalancesInSingleCall when useTokenDetection is true
+                    expect(mockGetBalancesInSingleCall).toHaveBeenCalled();
+                });
+            });
+            it('should not start polling when useTokenDetection is false', async () => {
+                const mockGetBalancesInSingleCall = vi.fn();
+                await withController({
+                    options: {
+                        useTokenDetection: () => false,
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: defaultSelectedAccount,
+                    },
+                }, async ({ controller }) => {
+                    await controller.start();
+                    // Should not call getBalancesInSingleCall during start when useTokenDetection is false
+                    expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+                });
+            });
+            it('should start polling when useTokenDetection is true (default)', async () => {
+                const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+                await withController({
+                    options: {
+                        useTokenDetection: () => true,
+                        disabled: false,
+                        getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                    },
+                    mocks: {
+                        getSelectedAccount: defaultSelectedAccount,
+                    },
+                }, async ({ controller, mockTokenListGetState, mockNetworkState }) => {
+                    // Set selectedNetworkClientId to avalanche (not in SUPPORTED_NETWORKS_ACCOUNTS_API_V4)
+                    mockNetworkState({
+                        ...getDefaultNetworkControllerState(),
+                        selectedNetworkClientId: 'avalanche',
+                    });
+                    mockTokenListGetState({
+                        ...getDefaultTokenListState(),
+                        tokensChainsCache: {
+                            '0xa86a': {
+                                timestamp: 0,
+                                data: {
+                                    [sampleTokenA.address]: {
+                                        name: sampleTokenA.name,
+                                        symbol: sampleTokenA.symbol,
+                                        decimals: sampleTokenA.decimals,
+                                        address: sampleTokenA.address,
+                                        aggregators: sampleTokenA.aggregators,
+                                        iconUrl: sampleTokenA.image,
+                                        occurrences: 11,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                    await controller.start();
+                    // Should call getBalancesInSingleCall during start when useTokenDetection is true
+                    expect(mockGetBalancesInSingleCall).toHaveBeenCalled();
+                });
+            });
+        });
+    });
+    describe('addDetectedTokensViaWs', () => {
+        it('should add tokens detected from websocket with metadata from cache', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [
+                    {
+                        address: checksummedTokenAddress,
+                        decimals: 6,
+                        symbol: 'USDC',
+                        aggregators: [],
+                        image: 'https://example.com/usdc.png',
+                        isERC721: false,
+                        name: 'USD Coin',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('adds mUSD from merged token list when WebSocket provides no token addresses (zero balance)', async () => {
+            await withController({
+                options: { disabled: false },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [ChainId.mainnet]: {
+                            timestamp: 0,
+                            data: {},
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy, mockFindNetworkClientIdByChainId, }) => {
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [],
+                    chainId: ChainId.mainnet,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', expect.arrayContaining([
+                    expect.objectContaining({
+                        address: toChecksumHexAddress(MUSD_ERC20_ADDRESS_LOWER),
+                        name: 'MetaMask USD',
+                        symbol: 'MUSD',
+                        decimals: 6,
+                    }),
+                ]), 'mainnet');
+            });
+        });
+        it('should skip tokens not found in cache', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {},
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                // Should not call addTokens if no tokens have metadata
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('should add all tokens provided without filtering (filtering is caller responsibility)', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const secondTokenAddress = '0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c';
+            const checksummedSecondTokenAddress = '0x1F573D6Fb3F13d689FF844B4cE37794d79a7FF1C';
+            const chainId = '0xa86a';
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                },
+                mocks: {
+                    getSelectedAccount: selectedAccount,
+                    getAccount: selectedAccount,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                                [secondTokenAddress]: {
+                                    name: 'Bancor',
+                                    symbol: 'BNT',
+                                    decimals: 18,
+                                    address: secondTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/bnt.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                // Add both tokens via websocket
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress, secondTokenAddress],
+                    chainId,
+                });
+                // Should add both tokens (no filtering in addDetectedTokensViaWs)
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [
+                    {
+                        address: checksummedTokenAddress,
+                        decimals: 6,
+                        symbol: 'USDC',
+                        aggregators: [],
+                        image: 'https://example.com/usdc.png',
+                        isERC721: false,
+                        name: 'USD Coin',
+                    },
+                    {
+                        address: checksummedSecondTokenAddress,
+                        decimals: 18,
+                        symbol: 'BNT',
+                        aggregators: [],
+                        image: 'https://example.com/bnt.png',
+                        isERC721: false,
+                        name: 'Bancor',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('should track metrics when adding tokens from websocket', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const chainId = '0xa86a';
+            const mockTrackMetricsEvent = vi.fn();
+            await withController({
+                options: {
+                    disabled: false,
+                    trackMetaMetricsEvent: mockTrackMetricsEvent,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                // Should track metrics event
+                expect(mockTrackMetricsEvent).toHaveBeenCalledWith({
+                    event: 'Token Detected',
+                    category: 'Wallet',
+                    properties: {
+                        tokens: [`USDC - ${checksummedTokenAddress}`],
+                        token_standard: 'ERC20',
+                        asset_type: 'TOKEN',
+                    },
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('should be callable directly as a public method on the controller instance', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                // Call the public method directly on the controller instance
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [
+                    {
+                        address: checksummedTokenAddress,
+                        decimals: 6,
+                        symbol: 'USDC',
+                        aggregators: [],
+                        image: 'https://example.com/usdc.png',
+                        isERC721: false,
+                        name: 'USD Coin',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('should not add tokens when useTokenDetection is false', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('should not add tokens when useExternalServices is false', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                    useExternalServices: () => false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('does not append a duplicate mUSD entry when the slice already includes mUSD', async () => {
+            const usdcAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const usdcChecksummed = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            await withController({
+                options: { disabled: false },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [ChainId.mainnet]: {
+                            timestamp: 0,
+                            data: {
+                                [usdcAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: usdcAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy, mockFindNetworkClientIdByChainId, }) => {
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [
+                        toChecksumHexAddress(MUSD_ERC20_ADDRESS_LOWER),
+                        usdcAddress,
+                    ],
+                    chainId: ChainId.mainnet,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', expect.arrayContaining([
+                    expect.objectContaining({
+                        address: toChecksumHexAddress(MUSD_ERC20_ADDRESS_LOWER),
+                    }),
+                    expect.objectContaining({ address: usdcChecksummed }),
+                ]), 'mainnet');
+                const addTokensCall = callActionSpy.mock.calls.find((call) => call[0] === 'TokensController:addTokens');
+                const payload = addTokensCall?.[1];
+                const musdRows = payload.filter((tokenRow) => tokenRow.address.toLowerCase() === MUSD_ERC20_ADDRESS_LOWER);
+                expect(musdRows).toHaveLength(1);
+            });
+        });
+    });
+    describe('addDetectedTokensViaPolling', () => {
+        it('should add tokens detected from polling with metadata from cache', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => true,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [
+                    {
+                        address: checksummedTokenAddress,
+                        decimals: 6,
+                        symbol: 'USDC',
+                        aggregators: [],
+                        image: 'https://example.com/usdc.png',
+                        isERC721: false,
+                        name: 'USD Coin',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('adds mUSD from merged token list when polling has no other token addresses (zero balance)', async () => {
+            await withController({
+                options: { disabled: false, useTokenDetection: () => true },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [ChainId.mainnet]: {
+                            timestamp: 0,
+                            data: {},
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy, mockFindNetworkClientIdByChainId, }) => {
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [],
+                    chainId: ChainId.mainnet,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', expect.arrayContaining([
+                    expect.objectContaining({
+                        address: toChecksumHexAddress(MUSD_ERC20_ADDRESS_LOWER),
+                        name: 'MetaMask USD',
+                        symbol: 'MUSD',
+                        decimals: 6,
+                    }),
+                ]), 'mainnet');
+            });
+        });
+        it('should skip if useTokenDetection is disabled', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                // Should not call addTokens when useTokenDetection is disabled
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('should skip tokens already in allTokens', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const chainId = '0xa86a';
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => true,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+                mockTokensState: {
+                    allTokens: {
+                        [chainId]: {
+                            [selectedAccount.address]: [
+                                {
+                                    address: checksummedTokenAddress,
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                },
+                            ],
+                        },
+                    },
+                    allDetectedTokens: {},
+                    allIgnoredTokens: {},
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                // Should not call addTokens for tokens already in allTokens
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('should skip tokens in allIgnoredTokens', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const chainId = '0xa86a';
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => true,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+                mockTokensState: {
+                    allTokens: {},
+                    allDetectedTokens: {},
+                    allIgnoredTokens: {
+                        [chainId]: {
+                            [selectedAccount.address]: [checksummedTokenAddress],
+                        },
+                    },
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                // Should not call addTokens for tokens in allIgnoredTokens
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('should fetch fresh token metadata cache from TokenListService at call time', async () => {
+            // This test verifies that addDetectedTokensViaPolling fetches the token list
+            // from the TokenListService at call time (not at construction time), so that
+            // tokens added to the service after construction are still detected.
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => true,
+                },
+                // Start with empty cache at construction time - simulating the bug scenario
+                mockTokenListState: {
+                    tokensChainsCache: {},
+                },
+            }, async ({ controller, callActionSpy, mockTokenListGetState }) => {
+                // Update the mock to return populated cache data
+                // This simulates TokenListController having fetched token list data after construction
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                });
+                // Call addDetectedTokensViaPolling - with the fix, it should fetch fresh cache
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                // With the fix, the token should be added because fresh cache is fetched
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [
+                    {
+                        address: checksummedTokenAddress,
+                        decimals: 6,
+                        symbol: 'USDC',
+                        aggregators: [],
+                        image: 'https://example.com/usdc.png',
+                        isERC721: false,
+                        name: 'USD Coin',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('should add only untracked tokens when mixed with tracked/ignored', async () => {
+            const trackedTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const trackedTokenChecksummed = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const ignoredTokenAddress = '0xdac17f958d2ee523a2206206994597c13d831ec7';
+            const ignoredTokenChecksummed = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
+            const newTokenAddress = '0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c';
+            const newTokenChecksummed = '0x1F573D6Fb3F13d689FF844B4cE37794d79a7FF1C';
+            const chainId = '0xa86a';
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => true,
+                },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+                mockTokensState: {
+                    allTokens: {
+                        [chainId]: {
+                            [selectedAccount.address]: [
+                                {
+                                    address: trackedTokenChecksummed,
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                },
+                            ],
+                        },
+                    },
+                    allDetectedTokens: {},
+                    allIgnoredTokens: {
+                        [chainId]: {
+                            [selectedAccount.address]: [ignoredTokenChecksummed],
+                        },
+                    },
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [trackedTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: trackedTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                                [ignoredTokenAddress]: {
+                                    name: 'Tether USD',
+                                    symbol: 'USDT',
+                                    decimals: 6,
+                                    address: ignoredTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdt.png',
+                                    occurrences: 11,
+                                },
+                                [newTokenAddress]: {
+                                    name: 'Bancor',
+                                    symbol: 'BNT',
+                                    decimals: 18,
+                                    address: newTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/bnt.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [
+                        trackedTokenAddress,
+                        ignoredTokenAddress,
+                        newTokenAddress,
+                    ],
+                    chainId,
+                });
+                // Should only add the new untracked token
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [
+                    {
+                        address: newTokenChecksummed,
+                        decimals: 18,
+                        symbol: 'BNT',
+                        aggregators: [],
+                        image: 'https://example.com/bnt.png',
+                        isERC721: false,
+                        name: 'Bancor',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('should skip if useExternalServices is disabled', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => true,
+                    useExternalServices: () => false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('should ignore slice addresses that are not in the token list map', async () => {
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const checksummedTokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const unknownAddress = '0x0000000000000000000000000000000000000002';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    disabled: false,
+                    useTokenDetection: () => true,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress, unknownAddress],
+                    chainId,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', [
+                    {
+                        address: checksummedTokenAddress,
+                        decimals: 6,
+                        symbol: 'USDC',
+                        aggregators: [],
+                        image: 'https://example.com/usdc.png',
+                        isERC721: false,
+                        name: 'USD Coin',
+                    },
+                ], 'avalanche');
+            });
+        });
+        it('does not append a duplicate mUSD entry when the slice already includes mUSD', async () => {
+            const usdcAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const usdcChecksummed = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+            const selectedAccount = createMockInternalAccount({
+                address: '0x0000000000000000000000000000000000000001',
+            });
+            await withController({
+                options: { disabled: false, useTokenDetection: () => true },
+                mocks: {
+                    getAccount: selectedAccount,
+                    getSelectedAccount: selectedAccount,
+                },
+                mockTokensState: {
+                    allTokens: {},
+                    allDetectedTokens: {},
+                    allIgnoredTokens: {},
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [ChainId.mainnet]: {
+                            timestamp: 0,
+                            data: {
+                                [usdcAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: usdcAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy, mockFindNetworkClientIdByChainId, }) => {
+                mockFindNetworkClientIdByChainId(() => 'mainnet');
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [
+                        toChecksumHexAddress(MUSD_ERC20_ADDRESS_LOWER),
+                        usdcAddress,
+                    ],
+                    chainId: ChainId.mainnet,
+                });
+                expect(callActionSpy).toHaveBeenCalledWith('TokensController:addTokens', expect.arrayContaining([
+                    expect.objectContaining({
+                        address: toChecksumHexAddress(MUSD_ERC20_ADDRESS_LOWER),
+                    }),
+                    expect.objectContaining({ address: usdcChecksummed }),
+                ]), 'mainnet');
+                const addTokensCall = callActionSpy.mock.calls.find((call) => call[0] === 'TokensController:addTokens');
+                const payload = addTokensCall?.[1];
+                const musdRows = payload.filter((tokenRow) => tokenRow.address.toLowerCase() === MUSD_ERC20_ADDRESS_LOWER);
+                expect(musdRows).toHaveLength(1);
+            });
+        });
+    });
+    describe('isDeprecated', () => {
+        it('does not throw at construction when isDeprecated() is true', async () => {
+            await withController({ options: { isDeprecated: () => true } }, ({ controller }) => {
+                expect(controller.state).toStrictEqual({});
+            });
+        });
+        it('does not make any network calls when isDeprecated() returns true from construction', async () => {
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+            await withController({
+                options: {
+                    isDeprecated: () => true,
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller, mockTokenListGetState, mockGetNetworkClientById, }) => {
+                mockTokenListGetState({
+                    ...getDefaultTokenListState(),
+                    tokensChainsCache: {
+                        '0xa86a': {
+                            timestamp: 0,
+                            data: {
+                                [sampleTokenA.address]: {
+                                    name: sampleTokenA.name,
+                                    symbol: sampleTokenA.symbol,
+                                    decimals: sampleTokenA.decimals,
+                                    address: sampleTokenA.address,
+                                    aggregators: [],
+                                    iconUrl: '',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                });
+                mockGetNetworkClientById(() => ({
+                    configuration: { chainId: '0xa86a' },
+                }));
+                await controller.detectTokens();
+                expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+                expect(controller.state).toStrictEqual({});
+            });
+        });
+        it('does not detect tokens when isDeprecated toggles to true at runtime via detectTokens', async () => {
+            let deprecated = false;
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+            await withController({
+                options: {
+                    isDeprecated: () => deprecated,
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller }) => {
+                deprecated = true;
+                await controller.detectTokens();
+                expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+                expect(controller.state).toStrictEqual({});
+            });
+        });
+        it('does not start polling when isDeprecated toggles to true at runtime via start', async () => {
+            let deprecated = false;
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+            await withController({
+                options: {
+                    isDeprecated: () => deprecated,
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller }) => {
+                const mockDetectTokens = vi
+                    .spyOn(controller, 'detectTokens')
+                    .mockImplementation(async () => undefined);
+                deprecated = true;
+                await controller.start();
+                expect(mockDetectTokens).not.toHaveBeenCalled();
+            });
+        });
+        it('does not detect tokens when isDeprecated toggles to true at runtime via _executePoll', async () => {
+            let deprecated = false;
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+            await withController({
+                options: {
+                    isDeprecated: () => deprecated,
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+            }, async ({ controller }) => {
+                deprecated = true;
+                await controller._executePoll({
+                    chainIds: ['0xa86a'],
+                    address: '0x1',
+                });
+                expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+                expect(controller.state).toStrictEqual({});
+            });
+        });
+        it('does not add tokens when isDeprecated toggles to true at runtime via addDetectedTokensViaWs', async () => {
+            let deprecated = false;
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    isDeprecated: () => deprecated,
+                    disabled: false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                deprecated = true;
+                await controller.addDetectedTokensViaWs({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('does not add tokens when isDeprecated toggles to true at runtime via addDetectedTokensViaPolling', async () => {
+            let deprecated = false;
+            const mockTokenAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+            const chainId = '0xa86a';
+            await withController({
+                options: {
+                    isDeprecated: () => deprecated,
+                    disabled: false,
+                },
+                mockTokenListState: {
+                    tokensChainsCache: {
+                        [chainId]: {
+                            timestamp: 0,
+                            data: {
+                                [mockTokenAddress]: {
+                                    name: 'USD Coin',
+                                    symbol: 'USDC',
+                                    decimals: 6,
+                                    address: mockTokenAddress,
+                                    aggregators: [],
+                                    iconUrl: 'https://example.com/usdc.png',
+                                    occurrences: 11,
+                                },
+                            },
+                        },
+                    },
+                },
+            }, async ({ controller, callActionSpy }) => {
+                deprecated = true;
+                await controller.addDetectedTokensViaPolling({
+                    tokensSlice: [mockTokenAddress],
+                    chainId,
+                });
+                expect(callActionSpy).not.toHaveBeenCalledWith('TokensController:addTokens', expect.anything(), expect.anything());
+            });
+        });
+        it('keeps polling but bails early when isDeprecated toggles to true at runtime', async () => {
+            vi.useFakeTimers();
+            let deprecated = false;
+            const mockGetBalancesInSingleCall = vi.fn().mockResolvedValue({});
+            await withController({
+                options: {
+                    isDeprecated: () => deprecated,
+                    disabled: false,
+                    getBalancesInSingleCall: mockGetBalancesInSingleCall,
+                },
+                mocks: {
+                    getSelectedAccount: defaultSelectedAccount,
+                },
+            }, async ({ controller }) => {
+                const detectTokensSpy = vi.spyOn(controller, 'detectTokens');
+                controller.setIntervalLength(10);
+                await controller.start();
+                expect(detectTokensSpy).toHaveBeenCalledTimes(1);
+                deprecated = true;
+                await controller.detectTokens();
+                mockGetBalancesInSingleCall.mockClear();
+                detectTokensSpy.mockClear();
+                await vi.advanceTimersByTimeAsync(15);
+                expect(detectTokensSpy).toHaveBeenCalled();
+                expect(mockGetBalancesInSingleCall).not.toHaveBeenCalled();
+            });
+            vi.useRealTimers();
+        });
+    });
+});
+/**
+ * Construct the path used to fetch tokens that we can pass to `nock`.
+ *
+ * @param chainId - The chain ID.
+ * @returns The constructed path.
+ */
+function getTokensPath(chainId) {
+    return `/tokens/${convertHexToDecimal(chainId)}?occurrenceFloor=3&includeNativeAssets=false&includeTokenFees=false&includeAssetType=false&includeERC20Permit=false&includeStorage=false&includeRwaData=true`;
+}
+/**
+ * Builds a controller based on the given options, and calls the given function
+ * with that controller.
+ *
+ * @param args - Either a function, or an options bag + a function. The options
+ * bag is equivalent to the controller options; the function will be called
+ * with the built controller.
+ * @returns Whatever the callback returns.
+ */
+async function withController(...args) {
+    const [{ ...rest }, fn] = args.length === 2 ? args : [{}, args[0]];
+    const { options, isKeyringUnlocked, mocks, mockTokenListState, mockTokensState, } = rest;
+    const messenger = buildRootMessenger();
+    const mockGetAccount = vi.fn();
+    messenger.registerActionHandler('AccountsController:getAccount', mockGetAccount.mockReturnValue(mocks?.getAccount ?? createMockInternalAccount({ address: '0x1' })));
+    const mockGetSelectedAccount = vi.fn();
+    messenger.registerActionHandler('AccountsController:getSelectedAccount', mockGetSelectedAccount.mockReturnValue(mocks?.getSelectedAccount ??
+        createMockInternalAccount({ address: '0x1' })));
+    const mockKeyringState = vi.fn();
+    messenger.registerActionHandler('KeyringController:getState', mockKeyringState.mockReturnValue({
+        isUnlocked: isKeyringUnlocked ?? true,
+    }));
+    const mockGetNetworkClientById = vi.fn();
+    messenger.registerActionHandler('NetworkController:getNetworkClientById', mockGetNetworkClientById.mockImplementation(() => {
+        // Default to Avalanche (0xa86a) which is in SupportedTokenDetectionNetworks
+        // but NOT in SUPPORTED_NETWORKS_ACCOUNTS_API_V4
+        return {
+            configuration: { chainId: '0xa86a' },
+            provider: {},
+            destroy: {},
+            blockTracker: {},
+        };
+    }));
+    const mockGetNetworkConfigurationByNetworkClientId = vi.fn();
+    messenger.registerActionHandler('NetworkController:getNetworkConfigurationByNetworkClientId', mockGetNetworkConfigurationByNetworkClientId.mockImplementation((networkClientId) => {
+        return mockNetworkConfigurations[networkClientId];
+    }));
+    const mockNetworkState = vi.fn();
+    messenger.registerActionHandler('NetworkController:getState', mockNetworkState.mockReturnValue({
+        ...getDefaultNetworkControllerState(),
+        // Default to avalanche so RPC detection works (not in SUPPORTED_NETWORKS_ACCOUNTS_API_V4)
+        selectedNetworkClientId: 'avalanche',
+    }));
+    const mockTokensStateFunc = vi.fn();
+    messenger.registerActionHandler('TokensController:getState', mockTokensStateFunc.mockReturnValue({
+        ...getDefaultTokensState(),
+        ...mockTokensState,
+    }));
+    // Build the initial TokenListState and a mutable reference so tests can update it.
+    let currentTokenListState = {
+        ...getDefaultTokenListState(),
+        ...mockTokenListState,
+    };
+    const mockFetchTokensByChainId = vi
+        .fn()
+        .mockImplementation((chainId) => {
+        const data = currentTokenListState.tokensChainsCache[chainId]?.data ?? {};
+        // Normalise keys to lowercase to match buildTokenListMap's output so that
+        // lookups using lowercased addresses (as done in production code) work correctly.
+        return Promise.resolve(Object.fromEntries(Object.entries(data).map(([addr, token]) => [
+            addr.toLowerCase(),
+            token,
+        ])));
+    });
+    const tokenListService = {
+        fetchTokensByChainId: mockFetchTokensByChainId,
+    };
+    const mockPreferencesState = vi.fn();
+    messenger.registerActionHandler('PreferencesController:getState', mockPreferencesState.mockReturnValue({
+        ...getDefaultPreferencesState(),
+        // Enable token detection by default for tests using Avalanche
+        useTokenDetection: true,
+    }));
+    const mockFindNetworkClientIdByChainId = vi.fn();
+    messenger.registerActionHandler('NetworkController:findNetworkClientIdByChainId', 
+    // Default to 'avalanche' which is not in SUPPORTED_NETWORKS_ACCOUNTS_API_V4
+    mockFindNetworkClientIdByChainId.mockReturnValue('avalanche'));
+    messenger.registerActionHandler('TokensController:addDetectedTokens', vi.fn().mockResolvedValue(undefined));
+    messenger.registerActionHandler('TokensController:addTokens', vi.fn().mockResolvedValue(undefined));
+    const tokenDetectionControllerMessenger = buildTokenDetectionControllerMessenger(messenger);
+    const callActionSpy = vi.spyOn(tokenDetectionControllerMessenger, 'call');
+    const controller = new TokenDetectionController({
+        getBalancesInSingleCall: vi.fn(),
+        trackMetaMetricsEvent: vi.fn(),
+        messenger: tokenDetectionControllerMessenger,
+        tokenListService,
+        ...options,
+    });
+    try {
+        return await fn({
+            controller,
+            messenger,
+            mockGetAccount: (internalAccount) => {
+                mockGetAccount.mockReturnValue(internalAccount);
+            },
+            mockGetSelectedAccount: (address) => {
+                mockGetSelectedAccount.mockReturnValue({ address });
+            },
+            mockKeyringGetState: (state) => {
+                mockKeyringState.mockReturnValue(state);
+            },
+            mockTokensGetState: (state) => {
+                mockTokensStateFunc.mockReturnValue(state);
+            },
+            mockPreferencesGetState: (state) => {
+                mockPreferencesState.mockReturnValue(state);
+            },
+            mockTokenListGetState: (state) => {
+                currentTokenListState = state;
+                mockFetchTokensByChainId.mockImplementation((chainId) => {
+                    const data = state.tokensChainsCache[chainId]?.data ?? {};
+                    // Normalise keys to lowercase to match buildTokenListMap's output.
+                    return Promise.resolve(Object.fromEntries(Object.entries(data).map(([addr, token]) => [
+                        addr.toLowerCase(),
+                        token,
+                    ])));
+                });
+            },
+            mockGetNetworkClientById: (handler) => {
+                mockGetNetworkClientById.mockImplementation(handler);
+            },
+            mockFindNetworkClientIdByChainId: (handler) => {
+                mockFindNetworkClientIdByChainId.mockImplementation(handler);
+            },
+            mockGetNetworkConfigurationByNetworkClientId: (handler) => {
+                mockGetNetworkConfigurationByNetworkClientId.mockImplementation(handler);
+            },
+            mockNetworkState: (state) => {
+                mockNetworkState.mockReturnValue(state);
+            },
+            callActionSpy,
+            triggerKeyringUnlock: () => {
+                messenger.publish('KeyringController:unlock');
+            },
+            triggerKeyringLock: () => {
+                messenger.publish('KeyringController:lock');
+            },
+            triggerPreferencesStateChange: (state) => {
+                messenger.publish('PreferencesController:stateChange', state, []);
+            },
+            triggerSelectedAccountChange: (account) => {
+                messenger.publish('AccountsController:selectedEvmAccountChange', account);
+            },
+            triggerNetworkDidChange: (state) => {
+                messenger.publish('NetworkController:networkDidChange', state);
+            },
+            triggerTransactionConfirmed: (transactionMeta) => {
+                messenger.publish('TransactionController:transactionConfirmed', 
+                // We only need chainId for this test, so cast to satisfy the type
+                transactionMeta);
+            },
+        });
+    }
+    finally {
+        controller.stop();
+        controller.stopAllPolling();
+    }
+}

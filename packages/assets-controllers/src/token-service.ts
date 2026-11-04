@@ -536,6 +536,13 @@ export type PageInfo = {
   endCursor: string | null;
 };
 
+/**
+ * Service profiles accepted by the token search API, sent as the
+ * `x-mm-service-profile` header. Add new members here as new profiles are
+ * registered.
+ */
+export type TokenSearchServiceProfile = 'assets--trending-search';
+
 type SearchTokenOptions = {
   limit?: number;
   /** Cursor returned by a previous response's `pageInfo.endCursor` to fetch the next page. */
@@ -543,8 +550,7 @@ type SearchTokenOptions = {
   includeMarketData?: boolean;
   includeRwaData?: boolean;
   includeTokenSecurityData?: boolean;
-  /** Value sent as the `x-mm-service-profile` header on the request. Omitted when unset. */
-  serviceProfile?: string;
+  serviceProfile?: TokenSearchServiceProfile;
 };
 
 /**
@@ -558,7 +564,7 @@ type SearchTokenOptions = {
  * @param options.includeMarketData - Optional flag to include market data in the results (defaults to false).
  * @param options.includeRwaData - Optional flag to include RWA data in the results (defaults to false).
  * @param options.includeTokenSecurityData - Optional flag to include token security data in the results (defaults to false).
- * @param options.serviceProfile - Optional service profile sent as the `x-mm-service-profile` header.
+ * @param options.serviceProfile - Service profile sent as the `x-mm-service-profile` header (defaults to `assets--trending-search`).
  * @returns Object containing count, totalCount, data array, optional pageInfo for pagination, and an optional error message if the request failed.
  */
 export async function searchTokens(
@@ -570,7 +576,7 @@ export async function searchTokens(
     includeMarketData = false,
     includeRwaData = true,
     includeTokenSecurityData,
-    serviceProfile,
+    serviceProfile = 'assets--trending-search',
   }: SearchTokenOptions = {},
 ): Promise<{
   count: number;
@@ -595,12 +601,9 @@ export async function searchTokens(
       totalCount?: number;
       data: TokenSearchItem[];
       pageInfo?: PageInfo;
-    } = await handleFetch(
-      tokenSearchURL,
-      serviceProfile
-        ? { headers: { 'x-mm-service-profile': serviceProfile } }
-        : undefined,
-    );
+    } = await handleFetch(tokenSearchURL, {
+      headers: { 'x-mm-service-profile': serviceProfile },
+    });
 
     if (result && typeof result === 'object' && Array.isArray(result.data)) {
       return {

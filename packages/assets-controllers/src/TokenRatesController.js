@@ -1,0 +1,332 @@
+import { toChecksumHexAddress } from '@metamask/controller-utils';
+import { StaticIntervalPollingController } from '@metamask/polling-controller';
+import { isEqual } from 'lodash-es';
+import { reduceInBatchesSerially, TOKEN_PRICES_BATCH_SIZE, } from './assetsUtil.js';
+import { getNativeTokenAddress } from './token-prices-service/codefi-v2.js';
+const DEFAULT_INTERVAL = 180000;
+/**
+ * The name of the {@link TokenRatesController}.
+ */
+export const controllerName = 'TokenRatesController';
+const tokenRatesControllerMetadata = {
+    marketData: {
+        includeInStateLogs: false,
+        persist: false,
+        includeInDebugSnapshot: false,
+        usedInUi: true,
+    },
+};
+/**
+ * Get the default {@link TokenRatesController} state.
+ *
+ * @returns The default {@link TokenRatesController} state.
+ */
+export const getDefaultTokenRatesControllerState = () => {
+    return {
+        marketData: {},
+    };
+};
+/**
+ * Controller that passively polls on a set interval for token-to-fiat exchange rates
+ * for tokens stored in the TokensController
+ */
+export class TokenRatesController extends StaticIntervalPollingController() {
+    #tokenPricesService;
+    #disabled;
+    #isDeprecated;
+    #allTokens;
+    #allDetectedTokens;
+    /**
+     * Creates a TokenRatesController instance.
+     *
+     * @param options - The controller options.
+     * @param options.interval - The polling interval in ms
+     * @param options.disabled - Boolean to track if network requests are blocked
+     * @param options.isDeprecated - Optional function that returns true to completely
+     * disable this controller (no requests, no state updates). When it returns
+     * `true`, `marketData` is reset to `{}` at construction and at every polling
+     * entry point, so no stale rates remain in state. The function is evaluated
+     * dynamically on each entry point so it can be toggled at runtime. Intended for
+     * use when a higher-level controller (e.g. AssetsController) supersedes this one.
+     * @param options.tokenPricesService - An object in charge of retrieving token price
+     * @param options.messenger - The messenger instance for communication
+     * @param options.state - Initial state to set on this controller
+     */
+    constructor({ interval = DEFAULT_INTERVAL, disabled = false, isDeprecated = () => false, tokenPricesService, messenger, state, }) {
+        super({
+            name: controllerName,
+            messenger,
+            state: { ...getDefaultTokenRatesControllerState(), ...state },
+            metadata: tokenRatesControllerMetadata,
+        });
+        this.setIntervalLength(interval);
+        this.#tokenPricesService = tokenPricesService;
+        this.#disabled = disabled;
+        this.#isDeprecated = isDeprecated;
+        if (this.#isDeprecated()) {
+            this.#enforceDisabledState();
+        }
+        const { allTokens, allDetectedTokens } = this.#getTokensControllerState();
+        this.#allTokens = allTokens;
+        this.#allDetectedTokens = allDetectedTokens;
+        // Set native asset identifiers from NetworkEnablementController for CAIP-19 native token lookups
+        this.#initNativeAssetIdentifiers();
+        this.#subscribeToTokensStateChange();
+        this.#subscribeToNetworkStateChange();
+    }
+    /**
+     * Clears all persisted `marketData` so that no stale rates remain in state.
+     *
+     * Called from every polling entry point when `isDeprecated()` is true so that
+     * a runtime toggle propagates to state immediately, even if the controller was
+     * originally constructed while it was enabled. The update is skipped when
+     * `marketData` is already empty to avoid emitting redundant state changes.
+     */
+    #enforceDisabledState() {
+        if (Object.keys(this.state.marketData).length === 0) {
+            return;
+        }
+        this.update((state) => {
+            state.marketData = {};
+        });
+    }
+    #subscribeToTokensStateChange() {
+        this.messenger.subscribe('TokensController:stateChange', 
+        // TODO: Either fix this lint violation or explain why it's necessary to ignore.
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        async ({ allTokens, allDetectedTokens }) => {
+            if (this.#isDeprecated()) {
+                this.#enforceDisabledState();
+                return;
+            }
+            if (this.#disabled) {
+                return;
+            }
+            const { networkConfigurationsByChainId } = this.messenger.call('NetworkController:getState');
+            const chainIds = [
+                ...new Set([
+                    ...Object.keys(allTokens),
+                    ...Object.keys(allDetectedTokens),
+                ]),
+            ];
+            const chainIdsToUpdate = chainIds.filter((chainId) => !isEqual(this.#allTokens[chainId], allTokens[chainId]) ||
+                !isEqual(this.#allDetectedTokens[chainId], allDetectedTokens[chainId]));
+            this.#allTokens = allTokens;
+            this.#allDetectedTokens = allDetectedTokens;
+            const chainIdAndNativeCurrency = chainIdsToUpdate.reduce((acc, chainId) => {
+                const networkConfiguration = networkConfigurationsByChainId[chainId];
+                if (!networkConfiguration) {
+                    console.error(`TokenRatesController: No network configuration found for chainId ${chainId}`);
+                    return acc;
+                }
+                acc.push({
+                    chainId,
+                    nativeCurrency: networkConfiguration.nativeCurrency,
+                });
+                return acc;
+            }, []);
+            await this.updateExchangeRates(chainIdAndNativeCurrency);
+        }, ({ allTokens, allDetectedTokens }) => {
+            return { allTokens, allDetectedTokens };
+        });
+    }
+    #subscribeToNetworkStateChange() {
+        this.messenger.subscribe('NetworkController:stateChange', (_state, patches) => {
+            if (this.#isDeprecated()) {
+                this.#enforceDisabledState();
+                return;
+            }
+            // Remove state for deleted networks
+            for (const patch of patches) {
+                if (patch.op === 'remove' &&
+                    patch.path[0] === 'networkConfigurationsByChainId') {
+                    const removedChainId = patch.path[1];
+                    this.update((state) => {
+                        delete state.marketData[removedChainId];
+                    });
+                }
+            }
+        });
+    }
+    /**
+     * Initialize the native asset identifiers from NetworkEnablementController.
+     * This provides CAIP-19 native asset IDs for the token prices service.
+     */
+    #initNativeAssetIdentifiers() {
+        if (this.#tokenPricesService.setNativeAssetIdentifiers) {
+            const { nativeAssetIdentifiers } = this.messenger.call('NetworkEnablementController:getState');
+            this.#tokenPricesService.setNativeAssetIdentifiers(nativeAssetIdentifiers);
+        }
+    }
+    /**
+     * Get the tokens for the given chain.
+     *
+     * @param chainId - The chain ID.
+     * @returns The list of tokens addresses for the current chain
+     */
+    #getTokenAddresses(chainId) {
+        const getTokens = (allTokens) => Object.values(allTokens ?? {}).flatMap((tokens) => tokens.map(({ address }) => toChecksumHexAddress(address)));
+        const tokenAddresses = getTokens(this.#allTokens[chainId]);
+        const detectedTokenAddresses = getTokens(this.#allDetectedTokens[chainId]);
+        return [
+            ...new Set([
+                ...tokenAddresses,
+                ...detectedTokenAddresses,
+                getNativeTokenAddress(chainId),
+            ]),
+        ].sort();
+    }
+    /**
+     * Allows controller to make active and passive polling requests
+     */
+    enable() {
+        this.#disabled = false;
+    }
+    /**
+     * Blocks controller from making network calls
+     */
+    disable() {
+        this.#disabled = true;
+    }
+    #getTokensControllerState() {
+        const { allTokens, allDetectedTokens } = this.messenger.call('TokensController:getState');
+        return {
+            allTokens,
+            allDetectedTokens,
+        };
+    }
+    /**
+     * Updates exchange rates for all tokens.
+     *
+     * @param chainIdAndNativeCurrency - The chain ID and native currency.
+     */
+    async updateExchangeRates(chainIdAndNativeCurrency) {
+        if (this.#isDeprecated()) {
+            this.#enforceDisabledState();
+            return;
+        }
+        if (this.#disabled) {
+            return;
+        }
+        const marketData = {};
+        const assetsByNativeCurrency = {};
+        const unsupportedAssetsByNativeCurrency = {};
+        for (const { chainId, nativeCurrency } of chainIdAndNativeCurrency) {
+            if (this.#tokenPricesService.validateChainIdSupported(chainId)) {
+                for (const tokenAddress of this.#getTokenAddresses(chainId)) {
+                    if (this.#tokenPricesService.validateCurrencySupported(nativeCurrency)) {
+                        (assetsByNativeCurrency[nativeCurrency] ??= []).push({
+                            chainId,
+                            tokenAddress,
+                        });
+                    }
+                    else {
+                        (unsupportedAssetsByNativeCurrency[nativeCurrency] ??= []).push({
+                            chainId,
+                            tokenAddress,
+                        });
+                    }
+                }
+            }
+        }
+        const promises = [
+            ...Object.entries(assetsByNativeCurrency).map(([nativeCurrency, assets]) => this.#fetchAndMapExchangeRatesForSupportedNativeCurrency(assets, nativeCurrency, marketData)),
+            ...Object.entries(unsupportedAssetsByNativeCurrency).map(([nativeCurrency, assets]) => this.#fetchAndMapExchangeRatesForUnsupportedNativeCurrency(assets, nativeCurrency, marketData)),
+        ];
+        await Promise.allSettled(promises);
+        const chainIds = new Set(Object.values(chainIdAndNativeCurrency).map((chain) => chain.chainId));
+        for (const chainId of chainIds) {
+            if (!marketData[chainId]) {
+                marketData[chainId] = {};
+            }
+        }
+        if (Object.keys(marketData).length > 0) {
+            this.update((state) => {
+                state.marketData = {
+                    ...state.marketData,
+                    ...marketData,
+                };
+            });
+        }
+    }
+    async #fetchAndMapExchangeRatesForSupportedNativeCurrency(assets, currency, marketData = {}) {
+        return await reduceInBatchesSerially({
+            values: assets,
+            batchSize: TOKEN_PRICES_BATCH_SIZE,
+            eachBatch: async (partialMarketData, assetsBatch) => {
+                const batchMarketData = await this.#tokenPricesService.fetchTokenPrices({
+                    assets: assetsBatch,
+                    currency,
+                });
+                for (const tokenPrice of batchMarketData) {
+                    (partialMarketData[tokenPrice.chainId] ??= {})[tokenPrice.tokenAddress] = tokenPrice;
+                }
+                return partialMarketData;
+            },
+            initialResult: marketData,
+        });
+    }
+    async #fetchAndMapExchangeRatesForUnsupportedNativeCurrency(assets, currency, marketData) {
+        // Step -1: Then fetch all tracked tokens priced in USD
+        const marketDataInUSD = await this.#fetchAndMapExchangeRatesForSupportedNativeCurrency(assets, 'usd');
+        // Formula: price_in_native = token_usd / native_usd
+        const convertUSDToNative = (valueInUSD, nativeTokenPriceInUSD) => valueInUSD / nativeTokenPriceInUSD;
+        // Step -2: Convert USD prices to native currency
+        for (const [chainId, marketDataByTokenAddress] of Object.entries(marketDataInUSD)) {
+            const nativeTokenPriceInUSD = marketDataByTokenAddress[getNativeTokenAddress(chainId)]?.price;
+            // Return here if it's null, undefined or 0
+            if (!nativeTokenPriceInUSD) {
+                continue;
+            }
+            for (const [tokenAddress, tokenData] of Object.entries(marketDataByTokenAddress)) {
+                (marketData[chainId] ??= {})[tokenAddress] = {
+                    ...tokenData,
+                    currency,
+                    price: convertUSDToNative(tokenData.price, nativeTokenPriceInUSD),
+                    marketCap: convertUSDToNative(tokenData.marketCap, nativeTokenPriceInUSD),
+                    allTimeHigh: convertUSDToNative(tokenData.allTimeHigh, nativeTokenPriceInUSD),
+                    allTimeLow: convertUSDToNative(tokenData.allTimeLow, nativeTokenPriceInUSD),
+                    totalVolume: convertUSDToNative(tokenData.totalVolume, nativeTokenPriceInUSD),
+                    high1d: convertUSDToNative(tokenData.high1d, nativeTokenPriceInUSD),
+                    low1d: convertUSDToNative(tokenData.low1d, nativeTokenPriceInUSD),
+                    dilutedMarketCap: convertUSDToNative(tokenData.dilutedMarketCap, nativeTokenPriceInUSD),
+                };
+            }
+        }
+    }
+    /**
+     * Updates token rates for the given networkClientId
+     *
+     * @param input - The input for the poll.
+     * @param input.chainIds - The chain ids to poll token rates on.
+     */
+    async _executePoll({ chainIds }) {
+        if (this.#isDeprecated()) {
+            this.#enforceDisabledState();
+            return;
+        }
+        const { networkConfigurationsByChainId } = this.messenger.call('NetworkController:getState');
+        const chainIdAndNativeCurrency = chainIds.reduce((acc, chainId) => {
+            const networkConfiguration = networkConfigurationsByChainId[chainId];
+            if (!networkConfiguration) {
+                console.error(`TokenRatesController: No network configuration found for chainId ${chainId}`);
+                return acc;
+            }
+            acc.push({
+                chainId,
+                nativeCurrency: networkConfiguration.nativeCurrency,
+            });
+            return acc;
+        }, []);
+        await this.updateExchangeRates(chainIdAndNativeCurrency);
+    }
+    /**
+     * Reset the controller state to the default state.
+     */
+    resetState() {
+        this.update(() => {
+            return getDefaultTokenRatesControllerState();
+        });
+    }
+}
+export default TokenRatesController;
