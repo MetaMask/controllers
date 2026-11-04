@@ -3,7 +3,7 @@ import { execa } from 'execa';
 import type { Result } from 'execa';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, it, vi } from 'vitest';
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..', '..', '..');
 const RESOLVER_PATH = path.join(ROOT_DIR, 'scripts', 'resolver', 'register.ts');
@@ -54,13 +54,17 @@ async function listGeneratedFiles(dir: string): Promise<string[]> {
   return results.sort();
 }
 
-const { withinSandbox } = createSandbox('messenger/cli-functional');
+const withinSandbox: ReturnType<typeof createSandbox>['withinSandbox'] = async (
+  test,
+) => await createSandbox('messenger/cli-functional').withinSandbox(test);
 
 vi.setConfig({ testTimeout: 30_000 });
 
-describe('generate-action-types CLI (functional)', () => {
+describe.concurrent('generate-action-types CLI (functional)', () => {
   describe('--generate', () => {
-    it('generates FooController-method-action-types.ts for a controller with multiple documented methods', async () => {
+    it('generates FooController-method-action-types.ts for a controller with multiple documented methods', async ({
+      expect,
+    }) => {
       expect.assertions(3);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -134,7 +138,9 @@ class FooController {
       });
     });
 
-    it('generates DataService-method-action-types.ts for a service with JSDoc containing @param and @returns', async () => {
+    it('generates DataService-method-action-types.ts for a service with JSDoc containing @param and @returns', async ({
+      expect,
+    }) => {
       expect.assertions(3);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -196,7 +202,9 @@ class DataService {
       });
     });
 
-    it('generates correct types for a controller with many methods without JSDoc', async () => {
+    it('generates correct types for a controller with many methods without JSDoc', async ({
+      expect,
+    }) => {
       expect.assertions(3);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -261,7 +269,9 @@ class BarController {
       });
     });
 
-    it('generates AuthService-method-action-types.ts for a service with @param and @returns JSDoc', async () => {
+    it('generates AuthService-method-action-types.ts for a service with @param and @returns JSDoc', async ({
+      expect,
+    }) => {
       expect.assertions(3);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -325,7 +335,9 @@ class AuthService {
       });
     });
 
-    it('generates separate files for both a controller and service in the same directory', async () => {
+    it('generates separate files for both a controller and service in the same directory', async ({
+      expect,
+    }) => {
       expect.assertions(8);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -377,7 +389,9 @@ class MyService {
       });
     });
 
-    it('discovers and generates files for sources in nested subdirectories', async () => {
+    it('discovers and generates files for sources in nested subdirectories', async ({
+      expect,
+    }) => {
       expect.assertions(4);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -411,7 +425,9 @@ class NestedController {
       });
     });
 
-    it('warns and generates no files when no sources are found', async () => {
+    it('warns and generates no files when no sources are found', async ({
+      expect,
+    }) => {
       expect.assertions(3);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -432,7 +448,9 @@ class NestedController {
   });
 
   describe('--esm', () => {
-    it('adds .js extension to import paths in generated files', async () => {
+    it('adds .js extension to import paths in generated files', async ({
+      expect,
+    }) => {
       expect.assertions(3);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -484,7 +502,7 @@ class FooController {
       });
     });
 
-    it('--check passes for files generated with --esm', async () => {
+    it('--check passes for files generated with --esm', async ({ expect }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -512,7 +530,7 @@ class FooController {
   });
 
   describe('--check', () => {
-    it('exits 0 when generated files are up to date', async () => {
+    it('exits 0 when generated files are up to date', async ({ expect }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -535,7 +553,7 @@ class TestController {
       });
     });
 
-    it('exits 1 when generated files are out of date', async () => {
+    it('exits 1 when generated files are out of date', async ({ expect }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -562,7 +580,7 @@ class TestController {
       });
     });
 
-    it('exits 1 when generated files are missing', async () => {
+    it('exits 1 when generated files are missing', async ({ expect }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -586,7 +604,9 @@ class TestController {
   });
 
   describe('argument validation', () => {
-    it('exits 1 when neither --check nor --fix is provided', async () => {
+    it('exits 1 when neither --check nor --fix is provided', async ({
+      expect,
+    }) => {
       expect.assertions(1);
 
       await withinSandbox(async ({ directoryPath }) => {
