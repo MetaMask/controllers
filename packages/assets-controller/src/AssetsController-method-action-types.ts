@@ -9,13 +9,15 @@ import type { AssetsController } from './AssetsController.js';
  * Get assets for the given accounts, optionally force-fetching them first.
  *
  * Before the UI first opens there are no data sources, so a forced fetch is
- * skipped and the assets already in state are returned. The loading status
- * of the accounts is left untouched, so the first fetch afterwards still
- * reports them as loading.
+ * skipped and the assets already in state are returned. Enabled networks
+ * have not been read yet, so an omitted `chainIds` includes every asset in
+ * state rather than treating the empty enabled-chain set as a filter. The
+ * loading status of the accounts is left untouched, so the first fetch
+ * afterwards still reports them as loading.
  *
  * @param accounts - Accounts to get assets for.
  * @param options - Fetch options.
- * @param options.chainIds - Chains to include. Defaults to the enabled chains.
+ * @param options.chainIds - Chains to include. Defaults to the enabled chains once they have been read.
  * @param options.assetTypes - Asset types to include. Defaults to fungible.
  * @param options.forceUpdate - Fetch from the data sources before reading state.
  * @param options.bypassServerCache - Also bypass server-side HTTP caches.
