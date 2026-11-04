@@ -67,6 +67,7 @@ const MESSENGER_EXPOSED_METHODS = [
   'getSessionStatus',
   'getSessionStatusForVendor',
   'getDataShares',
+  'postOnboardingStep',
 ] as const;
 
 /**
@@ -349,11 +350,10 @@ export type CreateUkycSessionParams = {
    */
   residenceCountry: string;
   /**
-   * Identity vendor for the UKYC session. Defaults to `moonpay` for the
-   * existing Check/Auth flow. Pass a non-MoonPay vendor (e.g. `iron`) for
-   * the consents path (no MoonPay metadata required).
+   * Identity vendor for the UKYC session. MoonPay sessions also need
+   * `vendorMetadata`; other vendors (e.g. `iron`) use the consents path.
    */
-  vendor?: KycVendor;
+  vendor: KycVendor;
   /**
    * Vendor-specific metadata. Required for MoonPay (`moonPayAccessToken` /
    * `moonPayUserId`); optional / omitted for other vendors.
@@ -371,7 +371,21 @@ export type CreateUkycSessionParams = {
    * vendor audience. Omitted from the request body when not provided.
    */
   partnerIdentityToken?: string;
+  /**
+   * Email the vendor registers the new user with, for vendors the relay
+   * registers itself (see `VENDORS_REGISTERED_BY_RELAY`).
+   */
+  email?: string;
 };
+
+/**
+ * Vendor onboarding steps under `POST /sessions/{id}/onboarding/...`.
+ */
+export type KycOnboardingStep =
+  | 'email/verify-otp'
+  | 'email/resend-otp'
+  | 'phone/send-otp'
+  | 'phone/verify-otp';
 
 /**
  * Encrypted capability authorization payload (base64url nonce + ciphertext)
@@ -555,15 +569,15 @@ export class KycService extends BaseDataService<
    * created.
    *
    * @param params - The parameters.
-   * @param params.vendor - Identity vendor. Defaults to `moonpay`.
+   * @param params.vendor - Identity vendor.
    * @param params.country - ISO 3166-1 alpha-3 country code.
    * @returns The disclaimers.
    */
   async fetchVendorDisclaimers({
-    vendor = 'moonpay',
+    vendor,
     country,
   }: {
-    vendor?: KycVendor;
+    vendor: KycVendor;
     country: string;
   }): Promise<KycDisclaimer[]> {
     const url = new URL(`/vendors/${vendor}/disclaimers`, this.#baseUrl);
@@ -858,7 +872,7 @@ export class KycService extends BaseDataService<
       {
         method: 'POST',
         body: JSON.stringify({
-          vendorId: params.vendor ?? 'moonpay',
+          vendorId: params.vendor,
           vendorUserId: 'mockedId',
           sessionClientPublicKey: params.sessionClientPublicKey,
           residenceCountry: params.residenceCountry,
@@ -866,6 +880,7 @@ export class KycService extends BaseDataService<
           ...(params.partnerIdentityToken && {
             partnerIdentityToken: params.partnerIdentityToken,
           }),
+          ...(params.email && { email: params.email }),
         }),
       },
       { bearerToken: params.aal2Token },
@@ -1031,6 +1046,33 @@ export class KycService extends BaseDataService<
     );
     const data = await this.#requestJson(url, { method: 'GET' });
     return this.#validateAndPatchSessionStatus(data, 'session status');
+  }
+
+  /**
+   * Runs one vendor onboarding step for a session
+   * (`POST /sessions/{id}/onboarding/{step}`): verify or resend the vendor's
+   * email code, or send or verify its SMS code.
+   *
+   * @param params - The parameters.
+   * @param params.sessionId - UKYC session id.
+   * @param params.step - The onboarding step.
+   * @param params.body - Step payload: `{ otp }` or `{ phoneNumber }`.
+   * @returns The session status after the step.
+   */
+  async postOnboardingStep(params: {
+    sessionId: string;
+    step: KycOnboardingStep;
+    body?: Record<string, string>;
+  }): Promise<KycSessionStatus> {
+    const url = new URL(
+      `/sessions/${encodeURIComponent(params.sessionId)}/onboarding/${params.step}`,
+      this.#baseUrl,
+    );
+    const data = await this.#requestJson(url, {
+      method: 'POST',
+      body: JSON.stringify(params.body ?? {}),
+    });
+    return this.#validateAndPatchSessionStatus(data, 'onboarding step');
   }
 
   /**

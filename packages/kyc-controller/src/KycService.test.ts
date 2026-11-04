@@ -40,7 +40,10 @@ describe('KycService', () => {
       const { service } = getService({ omitFetch: true });
 
       expect(
-        await service.fetchVendorDisclaimers({ country: 'USA' }),
+        await service.fetchVendorDisclaimers({
+          vendor: 'moonpay',
+          country: 'USA',
+        }),
       ).toStrictEqual(disclaimers);
     });
 
@@ -115,7 +118,10 @@ describe('KycService', () => {
       const { service } = getService();
 
       expect(
-        await service.fetchVendorDisclaimers({ country: 'USA' }),
+        await service.fetchVendorDisclaimers({
+          vendor: 'moonpay',
+          country: 'USA',
+        }),
       ).toStrictEqual(disclaimers);
     });
 
@@ -127,14 +133,14 @@ describe('KycService', () => {
       const { service } = getService();
 
       await expect(
-        service.fetchVendorDisclaimers({ country: 'USA' }),
+        service.fetchVendorDisclaimers({ vendor: 'moonpay', country: 'USA' }),
       ).rejects.toThrow(/Malformed response received from disclaimers API/u);
     });
 
     it('throws when no bearer token is available', async () => {
       const { service } = getService({ bearerToken: '' });
       await expect(
-        service.fetchVendorDisclaimers({ country: 'USA' }),
+        service.fetchVendorDisclaimers({ vendor: 'moonpay', country: 'USA' }),
       ).rejects.toThrow(/Unable to obtain an authentication bearer token/u);
     });
 
@@ -146,7 +152,7 @@ describe('KycService', () => {
       const { service } = getService();
 
       await expect(
-        service.fetchVendorDisclaimers({ country: 'USA' }),
+        service.fetchVendorDisclaimers({ vendor: 'moonpay', country: 'USA' }),
       ).rejects.toThrow(/failed with status '500'/u);
     });
   });
@@ -368,6 +374,7 @@ describe('KycService', () => {
 
       expect(
         await service.createUkycSession({
+          vendor: 'moonpay',
           sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
           residenceCountry: RESIDENCE_COUNTRY,
           vendorMetadata: { foo: 'bar' },
@@ -388,6 +395,7 @@ describe('KycService', () => {
 
       expect(
         await service.createUkycSession({
+          vendor: 'moonpay',
           sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
           residenceCountry: RESIDENCE_COUNTRY,
           aal2Token: AAL2_TOKEN,
@@ -407,6 +415,7 @@ describe('KycService', () => {
 
       expect(
         await service.createUkycSession({
+          vendor: 'moonpay',
           sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
           residenceCountry: RESIDENCE_COUNTRY,
           aal2Token: AAL2_TOKEN,
@@ -426,6 +435,7 @@ describe('KycService', () => {
 
       expect(
         await service.createUkycSession({
+          vendor: 'moonpay',
           sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
           residenceCountry: RESIDENCE_COUNTRY,
           aal2Token: AAL2_TOKEN,
@@ -438,6 +448,7 @@ describe('KycService', () => {
 
       await expect(
         service.createUkycSession({
+          vendor: 'moonpay',
           sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
           residenceCountry: RESIDENCE_COUNTRY,
           aal2Token: '',
@@ -451,6 +462,7 @@ describe('KycService', () => {
 
       await expect(
         service.createUkycSession({
+          vendor: 'moonpay',
           sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
           residenceCountry: RESIDENCE_COUNTRY,
           vendorMetadata: {},
@@ -1476,7 +1488,7 @@ describe('KycService', () => {
       jwtChain: 'jwt.chain.sig',
     };
 
-    it('defaults vendorId to moonpay and forwards vendorMetadata', async () => {
+    it('sends vendorId and forwards vendorMetadata', async () => {
       const response = {
         sessionId: 'sid',
         encryptionDataKey: encryptionSchema,
@@ -1498,6 +1510,7 @@ describe('KycService', () => {
 
       expect(
         await service.createUkycSession({
+          vendor: 'moonpay',
           sessionClientPublicKey: SESSION_CLIENT_PUBLIC_KEY,
           residenceCountry: RESIDENCE_COUNTRY,
           vendorMetadata: { moonPayAccessToken: 'tok' },
@@ -1548,7 +1561,10 @@ describe('KycService', () => {
       const { service } = getService({ baseUrl: customUrl });
 
       expect(
-        await service.fetchVendorDisclaimers({ country: 'USA' }),
+        await service.fetchVendorDisclaimers({
+          vendor: 'moonpay',
+          country: 'USA',
+        }),
       ).toStrictEqual(disclaimers);
     });
 
@@ -1569,6 +1585,7 @@ describe('KycService', () => {
 
       expect(
         await rootMessenger.call('KycService:fetchVendorDisclaimers', {
+          vendor: 'moonpay',
           country: 'USA',
         }),
       ).toStrictEqual([]);

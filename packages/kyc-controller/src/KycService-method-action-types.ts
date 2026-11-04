@@ -22,7 +22,7 @@ export type KycServiceGetGeoCountryAction = {
  * created.
  *
  * @param params - The parameters.
- * @param params.vendor - Identity vendor. Defaults to `moonpay`.
+ * @param params.vendor - Identity vendor.
  * @param params.country - ISO 3166-1 alpha-3 country code.
  * @returns The disclaimers.
  */
@@ -273,6 +273,22 @@ export type KycServiceGetSessionStatusAction = {
 };
 
 /**
+ * Runs one vendor onboarding step for a session
+ * (`POST /sessions/{id}/onboarding/{step}`): verify or resend the vendor's
+ * email code, or send or verify its SMS code.
+ *
+ * @param params - The parameters.
+ * @param params.sessionId - UKYC session id.
+ * @param params.step - The onboarding step.
+ * @param params.body - Step payload: `{ otp }` or `{ phoneNumber }`.
+ * @returns The session status after the step.
+ */
+export type KycServicePostOnboardingStepAction = {
+  type: `KycService:postOnboardingStep`;
+  handler: KycService['postOnboardingStep'];
+};
+
+/**
  * Fetches the latest UKYC session status for an identity vendor
  * (`GET /sessions/latest/status/{vendor}`).
  *
@@ -322,5 +338,6 @@ export type KycServiceMethodActions =
   | KycServiceCompleteDeletionAction
   | KycServiceCreateJourneyAction
   | KycServiceGetSessionStatusAction
+  | KycServicePostOnboardingStepAction
   | KycServiceGetSessionStatusForVendorAction
   | KycServiceGetDataSharesAction;

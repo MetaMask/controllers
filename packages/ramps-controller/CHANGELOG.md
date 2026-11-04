@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** `RampsController` requires the per-vendor `KycController` actions from `@metamask/kyc-controller` `^0.16.0` ([#11275](https://github.com/MetaMask/core/pull/11275))
+  - `KycController:readSessionStatus`, `fetchSessionStatusOnce`, `getProviderFlowStatus`, `hasCompletedVendorDisclaimers` and `hasCompletedSessionDisclaimers` are called with `{ vendor: 'iron' }`, and `KycController:getSessionDecision` is added to `RAMPS_CONTROLLER_REQUIRED_CONTROLLER_ACTIONS`
+  - `hydrateVbaOnboarding` reads `kycStatus` from `KycController:getSessionDecision`. `VbaKycStatus` and `VbaOnboardingSnapshot` are unchanged
 - **BREAKING:** `NeoBankService` now extends `BaseDataService` from `@metamask/base-data-service`, so reads and writes share one circuit breaker (previously each had its own) and repeated read failures can now block writes ([#10882](https://github.com/MetaMask/core/pull/10882))
   - `NeoBankServiceMessenger` now includes the `NeoBankService:invalidateQueries` action and `NeoBankService:cacheUpdated` events. Messengers built from `NeoBankServiceActions` / `NeoBankServiceEvents` pick these up automatically.
 - `NeoBankService.getAutorampQuote`, `getAutorampQuoteForAutoramp`, `getCustomerByExternalId`, `registerPixAddress` and `attachAutorampQuote` now return `Promise<Json>` instead of `Promise<unknown>` ([#10882](https://github.com/MetaMask/core/pull/10882))
