@@ -831,7 +831,7 @@ describe('NetworkController', () => {
                 {
                   rpcEndpoints: [
                     buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
-                      failoverUrls: [],
+                      failoverUrls: ['https://failover.endpoint/1'],
                     }),
                   ],
                 },
@@ -842,7 +842,7 @@ describe('NetworkController', () => {
                   buildCustomRpcEndpoint({
                     networkClientId: 'AAAA-AAAA-AAAA-AAAA',
                     url: 'https://test.network/1',
-                    failoverUrls: ['https://failover.endpoint/1'],
+                    failoverUrls: [],
                   }),
                 ],
               }),
@@ -864,10 +864,10 @@ describe('NetworkController', () => {
           expect(autoManagedNetworkClients).toHaveLength(2);
           expect(
             autoManagedNetworkClients[0].setRpcFailoverMode,
-          ).not.toHaveBeenCalled();
+          ).toHaveBeenCalledWith('forced');
           expect(
             autoManagedNetworkClients[1].setRpcFailoverMode,
-          ).toHaveBeenCalledWith('forced');
+          ).not.toHaveBeenCalled();
         },
       );
     });
@@ -900,7 +900,7 @@ describe('NetworkController', () => {
                 {
                   rpcEndpoints: [
                     buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
-                      failoverUrls: [],
+                      failoverUrls: ['https://failover.endpoint/1'],
                     }),
                   ],
                 },
@@ -911,7 +911,7 @@ describe('NetworkController', () => {
                   buildCustomRpcEndpoint({
                     networkClientId: 'AAAA-AAAA-AAAA-AAAA',
                     url: 'https://test.network/1',
-                    failoverUrls: ['https://failover.endpoint/1'],
+                    failoverUrls: [],
                   }),
                 ],
               }),
@@ -931,17 +931,17 @@ describe('NetworkController', () => {
           );
 
           expect(autoManagedNetworkClients).toHaveLength(2);
-          expect(
-            autoManagedNetworkClients[0].setRpcFailoverMode,
-          ).not.toHaveBeenCalled();
           // `setRpcFailoverMode` has already been called once via `init`;
           // we test that it's not called again.
           expect(
-            autoManagedNetworkClients[1].setRpcFailoverMode,
+            autoManagedNetworkClients[0].setRpcFailoverMode,
           ).toHaveBeenCalledWith('forced');
           expect(
-            autoManagedNetworkClients[1].setRpcFailoverMode,
+            autoManagedNetworkClients[0].setRpcFailoverMode,
           ).toHaveBeenCalledTimes(1);
+          expect(
+            autoManagedNetworkClients[1].setRpcFailoverMode,
+          ).not.toHaveBeenCalled();
         },
       );
     });
@@ -974,7 +974,7 @@ describe('NetworkController', () => {
                 {
                   rpcEndpoints: [
                     buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
-                      failoverUrls: [],
+                      failoverUrls: ['https://failover.endpoint/1'],
                     }),
                   ],
                 },
@@ -985,7 +985,7 @@ describe('NetworkController', () => {
                   buildCustomRpcEndpoint({
                     networkClientId: 'AAAA-AAAA-AAAA-AAAA',
                     url: 'https://test.network/1',
-                    failoverUrls: ['https://failover.endpoint/1'],
+                    failoverUrls: [],
                   }),
                 ],
               }),
@@ -1003,17 +1003,17 @@ describe('NetworkController', () => {
           );
 
           expect(autoManagedNetworkClients).toHaveLength(2);
-          expect(
-            autoManagedNetworkClients[0].setRpcFailoverMode,
-          ).not.toHaveBeenCalled();
           // `setRpcFailoverMode` has already been called once via `init`;
           // we test that it's not called again.
           expect(
-            autoManagedNetworkClients[1].setRpcFailoverMode,
+            autoManagedNetworkClients[0].setRpcFailoverMode,
           ).toHaveBeenCalledWith('forced');
           expect(
-            autoManagedNetworkClients[1].setRpcFailoverMode,
+            autoManagedNetworkClients[0].setRpcFailoverMode,
           ).toHaveBeenCalledTimes(1);
+          expect(
+            autoManagedNetworkClients[1].setRpcFailoverMode,
+          ).not.toHaveBeenCalled();
         },
       );
     });
