@@ -2,7 +2,7 @@ import type {
   AccountTreeControllerGetAccountsFromSelectedAccountGroupAction,
   AccountTreeControllerInitializedEvent,
   AccountTreeControllerIsInitializedAction,
-  AccountTreeControllerSelectedAccountGroupChangeEvent,
+  AccountTreeControllerSelectedAccountGroupReadyChangeEvent,
   AccountTreeControllerUninitializedEvent,
 } from '@metamask/account-tree-controller';
 import type { AccountsControllerGetSelectedAccountAction } from '@metamask/accounts-controller';
@@ -337,7 +337,7 @@ type AllowedActions =
 
 type AllowedEvents =
   // AssetsController — account tree lifecycle and group switches
-  | AccountTreeControllerSelectedAccountGroupChangeEvent
+  | AccountTreeControllerSelectedAccountGroupReadyChangeEvent
   | AccountTreeControllerInitializedEvent
   | AccountTreeControllerUninitializedEvent
   | ClientControllerStateChangeEvent
@@ -1176,11 +1176,9 @@ export class AssetsController extends BaseController<
 
   #subscribeToEvents(): void {
     this.messenger.subscribe(
-      'AccountTreeController:selectedAccountGroupChange',
-      (groupId, previousGroupId) => {
-        this.#handleAccountGroupChanged(groupId, previousGroupId).catch(
-          console.error,
-        );
+      'AccountTreeController:selectedAccountGroupReadyChange',
+      (groupId) => {
+        this.#handleAccountGroupChanged(groupId).catch(console.error);
       },
     );
 
@@ -3955,32 +3953,28 @@ export class AssetsController extends BaseController<
   // EVENT HANDLERS
   // ============================================================================
 
-  async #handleAccountGroupChanged(
-    groupId: string,
-    previousGroupId: string = '',
-  ): Promise<void> {
+  async #handleAccountGroupChanged(groupId: string): Promise<void> {
     if (!groupId) {
       return;
     }
 
     // First start is owned by `AccountTreeController:initialized` / `#start`.
-    // ATC also re-publishes `selectedAccountGroupChange` on every `init()`
-    // (including when the group did not change) so late subscribers can catch
-    // up — ignore those until we are already tracking.
+    // Init also emits this event; ignore it until tracking has started.
     if (this.#activeSubscriptions.size === 0) {
       return;
     }
-    if (groupId === previousGroupId) {
-      return;
-    }
 
+    log('Selected account group is ready', { groupId });
+
+    await this.#refreshSelectedAccounts();
+  }
+
+  async #refreshSelectedAccounts(): Promise<void> {
     const accounts = this.#getSelectedAccounts();
 
-    log('Account group changed', {
+    log('Refreshing selected accounts', {
       accountCount: accounts.length,
-      accountIds: accounts.map((a) => a.id),
-      groupId,
-      previousGroupId,
+      accountIds: accounts.map((account) => account.id),
     });
 
     const releaseLock = await this.#accountRefreshMutex.acquire();

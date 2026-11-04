@@ -30,7 +30,11 @@ import type {
   MultichainAccountServiceCreateMultichainAccountWalletAction,
   MultichainAccountServiceRemoveMultichainAccountWalletAction,
 } from '@metamask/multichain-account-service';
-import type { MultichainAccountServiceWalletStatusChangeEvent } from '@metamask/multichain-account-service';
+import type {
+  MultichainAccountServiceMultichainAccountGroupAlignedEvent,
+  MultichainAccountServiceMultichainAccountGroupCreatedEvent,
+  MultichainAccountServiceWalletStatusChangeEvent,
+} from '@metamask/multichain-account-service';
 import type {
   AuthenticationController,
   UserStorageController,
@@ -142,6 +146,18 @@ export type AccountTreeControllerSelectedAccountGroupChangeEvent = {
 };
 
 /**
+ * Emitted when the selected account group is ready to read.
+ *
+ * Fires after onboarding, after an account switch, and after a wallet import
+ * finishes non-EVM alignment. `getAccountsFromSelectedAccountGroup` then
+ * includes every account in the group.
+ */
+export type AccountTreeControllerSelectedAccountGroupReadyChangeEvent = {
+  type: `${typeof controllerName}:selectedAccountGroupReadyChange`;
+  payload: [AccountGroupId | ''];
+};
+
+/**
  * Represents the `AccountTreeController:accountGroupCreated` event.
  * This event is emitted when a new account group is added to the tree
  * after the controller has been initialized.
@@ -197,12 +213,15 @@ export type AllowedEvents =
   | AccountsControllerAccountsRemovedEvent
   | AccountsControllerSelectedAccountChangeEvent
   | UserStorageController.UserStorageControllerStateChangeEvent
-  | MultichainAccountServiceWalletStatusChangeEvent;
+  | MultichainAccountServiceWalletStatusChangeEvent
+  | MultichainAccountServiceMultichainAccountGroupCreatedEvent
+  | MultichainAccountServiceMultichainAccountGroupAlignedEvent;
 
 export type AccountTreeControllerEvents =
   | AccountTreeControllerStateChangeEvent
   | AccountTreeControllerAccountTreeChangeEvent
   | AccountTreeControllerSelectedAccountGroupChangeEvent
+  | AccountTreeControllerSelectedAccountGroupReadyChangeEvent
   | AccountTreeControllerAccountGroupCreatedEvent
   | AccountTreeControllerAccountGroupUpdatedEvent
   | AccountTreeControllerAccountGroupRemovedEvent

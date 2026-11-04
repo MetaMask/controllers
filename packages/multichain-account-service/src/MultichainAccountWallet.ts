@@ -775,7 +775,14 @@ export class MultichainAccountWallet<
         for (let groupIndex = from; groupIndex <= to; groupIndex++) {
           const groupState = groupStateByGroupIndex.get(groupIndex);
           if (groupState) {
-            this.#createOrUpdateMultichainAccountGroup(groupIndex, groupState);
+            const group = this.#createOrUpdateMultichainAccountGroup(
+              groupIndex,
+              groupState,
+            );
+            this.#messenger.publish(
+              'MultichainAccountService:multichainAccountGroupAligned',
+              group.id,
+            );
           }
         }
       },
@@ -989,9 +996,15 @@ export class MultichainAccountWallet<
       providers,
     );
 
-    // We need to run a post-alignment since non-EVM accounts have not
-    // been created yet.
-    if (!waitForAllProvidersToFinishCreatingAccounts) {
+    if (waitForAllProvidersToFinishCreatingAccounts) {
+      for (const group of groups) {
+        this.#messenger.publish(
+          'MultichainAccountService:multichainAccountGroupAligned',
+          group.id,
+        );
+      }
+    } else {
+      // Non-EVM accounts are created after this method returns.
       const alignOtherAccounts = async (): Promise<void> => {
         // Ensure the Snap platform is ready for each non-EVM provider BEFORE
         // acquiring the wallet lock. Without this guard the lock would be held

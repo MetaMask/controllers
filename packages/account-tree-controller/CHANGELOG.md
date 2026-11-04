@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **BREAKING:** Add `AccountTreeController:selectedAccountGroupReadyChange`, emitted when the selected group is ready to read at onboarding, on account switch, and after wallet import alignment ([#11301](https://github.com/MetaMask/core/pull/11301))
+  - Clients must delegate `MultichainAccountService:multichainAccountGroupCreated` and `MultichainAccountService:multichainAccountGroupAligned` to the AccountTreeController messenger.
+  - Wallet import still emits `selectedAccountGroupChange` when the EVM account is selected. `selectedAccountGroupReadyChange` waits until non-EVM alignment finishes, so `getAccountsFromSelectedAccountGroup` includes those accounts.
+
 ### Changed
 
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))

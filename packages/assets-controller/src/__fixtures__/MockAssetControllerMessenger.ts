@@ -109,7 +109,7 @@ export function createMockAssetsControllerMessenger(
 
     events: [
       // AssetsController
-      'AccountTreeController:selectedAccountGroupChange',
+      'AccountTreeController:selectedAccountGroupReadyChange',
       'AccountTreeController:initialized',
       'AccountTreeController:uninitialized',
       'ClientController:stateChange',

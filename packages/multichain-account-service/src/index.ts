@@ -4,6 +4,7 @@ export type {
   MultichainAccountServiceMessenger,
   MultichainAccountServiceMultichainAccountGroupCreatedEvent,
   MultichainAccountServiceMultichainAccountGroupUpdatedEvent,
+  MultichainAccountServiceMultichainAccountGroupAlignedEvent,
   MultichainAccountServiceWalletStatusChangeEvent,
 } from './types.js';
 export type {

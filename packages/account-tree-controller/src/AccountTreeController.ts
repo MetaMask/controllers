@@ -186,6 +186,12 @@ export class AccountTreeController extends BaseController<
   #initialized: boolean;
 
   /**
+   * Entropy groups created before non-EVM alignment finishes.
+   * Selection of one of these waits for `multichainAccountGroupAligned`.
+   */
+  readonly #groupsAwaitingAlignment = new Set<AccountGroupId>();
+
+  /**
    * Constructor for AccountTreeController.
    *
    * @param options - The controller options.
@@ -291,6 +297,20 @@ export class AccountTreeController extends BaseController<
       'MultichainAccountService:walletStatusChange',
       (walletId, status) => {
         this.#handleMultichainAccountWalletStatusChange(walletId, status);
+      },
+    );
+
+    this.messenger.subscribe(
+      'MultichainAccountService:multichainAccountGroupAligned',
+      (groupId) => {
+        this.#handleMultichainAccountGroupAligned(groupId);
+      },
+    );
+
+    this.messenger.subscribe(
+      'MultichainAccountService:multichainAccountGroupCreated',
+      (group) => {
+        this.#groupsAwaitingAlignment.add(group.id);
       },
     );
 
@@ -445,6 +465,9 @@ export class AccountTreeController extends BaseController<
       `${controllerName}:selectedAccountGroupChange`,
       this.state.selectedAccountGroup,
       previousSelectedAccountGroup,
+    );
+    this.#publishSelectedAccountGroupReadyChange(
+      this.state.selectedAccountGroup,
     );
 
     this.#initialized = true;
@@ -1254,6 +1277,9 @@ export class AccountTreeController extends BaseController<
         newSelectedAccountGroup,
         previousSelectedAccountGroup,
       );
+      this.#publishSelectedAccountGroupReadyChange(
+        newSelectedAccountGroup,
+      );
     }
   }
 
@@ -1552,6 +1578,7 @@ export class AccountTreeController extends BaseController<
       groupId,
       previousSelectedAccountGroup,
     );
+    this.#publishSelectedAccountGroupReadyChange(groupId);
 
     if (forwardSelectedAccount) {
       // Update AccountsController - this will trigger selectedAccountChange event,
@@ -1633,8 +1660,44 @@ export class AccountTreeController extends BaseController<
   }
 
   /**
-   * Handles multichain account wallet status change from
-   * the MultichainAccountService.
+   * Publish `selectedAccountGroupReadyChange` once the group is readable.
+   * Groups still waiting on non-EVM alignment publish when that alignment ends.
+   *
+   * @param groupId - The selected account group, or `''` when none is selected.
+   */
+  #publishSelectedAccountGroupReadyChange(
+    groupId: AccountGroupId | '',
+  ): void {
+    if (groupId !== '' && this.#groupsAwaitingAlignment.has(groupId)) {
+      return;
+    }
+
+    this.messenger.publish(
+      `${controllerName}:selectedAccountGroupReadyChange`,
+      groupId,
+    );
+  }
+
+  /**
+   * Mark a group ready after alignment and notify consumers when it is selected.
+   *
+   * @param groupId - The group that finished alignment.
+   */
+  #handleMultichainAccountGroupAligned(groupId: AccountGroupId): void {
+    this.#groupsAwaitingAlignment.delete(groupId);
+
+    if (!this.#initialized || this.state.selectedAccountGroup !== groupId) {
+      return;
+    }
+
+    this.messenger.publish(
+      `${controllerName}:selectedAccountGroupReadyChange`,
+      groupId,
+    );
+  }
+
+  /**
+   * Copies a multichain wallet status onto the account tree wallet.
    *
    * @param walletId - Multichain account wallet ID.
    * @param walletStatus - New multichain account wallet status.
@@ -1996,14 +2059,14 @@ export class AccountTreeController extends BaseController<
     // between this call and the next init().
     this.#accountIdToContext.clear();
     this.#groupIdToWalletId.clear();
-
-    // Notify subscribers that the selected group has been cleared,
+    this.#groupsAwaitingAlignment.clear();
     // mirroring what #setSelectedAccountGroup does on normal transitions.
     this.messenger.publish(
       `${controllerName}:selectedAccountGroupChange`,
       '',
       previousSelectedAccountGroup,
     );
+    this.#publishSelectedAccountGroupReadyChange('');
 
     // So we know we have to call `init` again.
     this.#initialized = false;

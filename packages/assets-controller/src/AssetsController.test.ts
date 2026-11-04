@@ -5704,9 +5704,8 @@ describe('AssetsController', () => {
         getAssetsSpy.mockClear();
 
         (messenger as unknown as { publish: LifecyclePublish }).publish(
-          'AccountTreeController:selectedAccountGroupChange',
+          'AccountTreeController:selectedAccountGroupReadyChange',
           'entropy:mock-keyring-id-1/1',
-          'entropy:mock-keyring-id-1/0',
         );
 
         await flushPromises();
@@ -5721,9 +5720,8 @@ describe('AssetsController', () => {
         const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
         (messenger as unknown as { publish: LifecyclePublish }).publish(
-          'AccountTreeController:selectedAccountGroupChange',
+          'AccountTreeController:selectedAccountGroupReadyChange',
           '',
-          'entropy:mock-keyring-id-1/0',
         );
 
         await flushPromises();
@@ -5733,7 +5731,7 @@ describe('AssetsController', () => {
       });
     });
 
-    it('skips init-time selectedAccountGroupChange so :initialized owns first start', async () => {
+    it('skips init-time selectedAccountGroupReadyChange so :initialized owns first start', async () => {
       await withController(async ({ controller, messenger }) => {
         const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
@@ -5746,9 +5744,8 @@ describe('AssetsController', () => {
         await flushPromises();
 
         (messenger as unknown as { publish: LifecyclePublish }).publish(
-          'AccountTreeController:selectedAccountGroupChange',
+          'AccountTreeController:selectedAccountGroupReadyChange',
           'entropy:mock-keyring-id-1/0',
-          '',
         );
         await flushPromises();
 
@@ -5765,7 +5762,7 @@ describe('AssetsController', () => {
       });
     });
 
-    it('skips selectedAccountGroupChange when group id did not change', async () => {
+    it('refreshes assets when the same group is announced again while tracking', async () => {
       await withController(async ({ controller, messenger }) => {
         const getAssetsSpy = vi
           .spyOn(controller, 'getAssets')
@@ -5776,13 +5773,12 @@ describe('AssetsController', () => {
         getAssetsSpy.mockClear();
 
         messenger.publish(
-          'AccountTreeController:selectedAccountGroupChange',
-          'entropy:mock-keyring-id-1/0',
+          'AccountTreeController:selectedAccountGroupReadyChange',
           'entropy:mock-keyring-id-1/0',
         );
         await flushPromises();
 
-        expect(getAssetsSpy).not.toHaveBeenCalled();
+        expect(getAssetsSpy).toHaveBeenCalled();
         getAssetsSpy.mockRestore();
       });
     });
@@ -5790,24 +5786,18 @@ describe('AssetsController', () => {
 
   describe('assets loading status', () => {
     /**
-     * Publishes an account group switch on the mock messenger. The event
-     * publishes one entropy per previously selected account variadically,
-     * which the mock messenger's single-payload publish type cannot express,
-     * hence the one cast here instead of in every test.
+     * Publishes a ready selected account group on the mock messenger.
      *
      * @param messenger - The root messenger to publish on.
-     * @param fromEntropy - Entropy of the previously selected account.
-     * @param toEntropy - Entropy of the newly selected account.
+     * @param groupId - The selected account group.
      */
     const switchSelectedAccountGroup = (
       messenger: RootMessenger,
-      fromEntropy: `entropy:${string}/${string}`,
-      toEntropy: `entropy:${string}/${string}`,
+      groupId: `entropy:${string}/${string}`,
     ): void => {
       messenger.publish(
-        'AccountTreeController:selectedAccountGroupChange',
-        fromEntropy,
-        toEntropy,
+        'AccountTreeController:selectedAccountGroupReadyChange',
+        groupId,
       );
     };
 
@@ -5846,11 +5836,7 @@ describe('AssetsController', () => {
           // act: switch the selected account group, freezing the switch
           // fetch mid-flight.
           arm();
-          switchSelectedAccountGroup(
-            messenger,
-            'entropy:mock-keyring-id-1/1',
-            'entropy:mock-keyring-id-1/0',
-          );
+          switchSelectedAccountGroup(messenger, 'entropy:mock-keyring-id-1/1');
 
           // assert: the newly selected account is marked loading while the
           // fetch is in flight, then loaded once it settles; the account the
@@ -5886,11 +5872,7 @@ describe('AssetsController', () => {
           });
           getSelectedAccountsMock.mockReturnValue([accountB]);
           arm();
-          switchSelectedAccountGroup(
-            messenger,
-            'entropy:mock-keyring-id-1/1',
-            'entropy:mock-keyring-id-1/0',
-          );
+          switchSelectedAccountGroup(messenger, 'entropy:mock-keyring-id-1/1');
 
           await waitForAccountLoadingStatus(controller, accountB.id, 'loading');
 
@@ -5900,11 +5882,7 @@ describe('AssetsController', () => {
             id: 'mock-account-id-3',
           });
           getSelectedAccountsMock.mockReturnValue([accountC]);
-          switchSelectedAccountGroup(
-            messenger,
-            'entropy:mock-keyring-id-1/2',
-            'entropy:mock-keyring-id-1/1',
-          );
+          switchSelectedAccountGroup(messenger, 'entropy:mock-keyring-id-1/2');
 
           // assert: the queued switch has not fetched yet, so its accounts
           // are not marked while the previous refresh still holds the mutex.

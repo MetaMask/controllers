@@ -1246,6 +1246,36 @@ describe('MultichainAccountWallet', () => {
       );
     });
 
+    it('emits multichainAccountGroupAligned when alignment adds accounts', async () => {
+      const mockEvmAccount = MockAccountBuilder.from(MOCK_HD_ACCOUNT_1)
+        .withEntropySource(MOCK_HD_KEYRING_1.metadata.id)
+        .withGroupIndex(0)
+        .get();
+      const mockSolAccount = MockAccountBuilder.from(MOCK_SOL_ACCOUNT_1)
+        .withEntropySource(MOCK_HD_KEYRING_1.metadata.id)
+        .withGroupIndex(0)
+        .withUuid()
+        .get();
+
+      const { wallet, providers, messenger } = setup({
+        accounts: [[mockEvmAccount], []],
+      });
+      mockCreateAccountsOnce(providers[1], [mockSolAccount]);
+
+      const alignedListener = vi.fn();
+      messenger.subscribe(
+        'MultichainAccountService:multichainAccountGroupAligned',
+        alignedListener,
+      );
+
+      await wallet.alignAccounts();
+
+      expect(alignedListener).toHaveBeenCalledTimes(1);
+      expect(alignedListener).toHaveBeenCalledWith(
+        wallet.getMultichainAccountGroup(0)?.id,
+      );
+    });
+
     it('logs a warning and does not throw when a provider fails during alignment', async () => {
       const mockEvmAccount = MockAccountBuilder.from(MOCK_HD_ACCOUNT_1)
         .withEntropySource(MOCK_HD_KEYRING_1.metadata.id)
