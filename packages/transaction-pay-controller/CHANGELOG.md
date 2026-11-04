@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Quote Across perps deposits in the 6 decimals Across uses for HyperCore USDC-PERPS, instead of requesting 100 times the deposit amount ([#11270](https://github.com/MetaMask/core/pull/11270))
+  - Reject Across perps deposit quotes whose USDC-PERPS decimals differ from those used to scale the request, so the next strategy is tried instead of showing a mispriced quote.
+
 ## [30.4.1]
 
 ### Added
