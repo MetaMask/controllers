@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `@metamask/assets-controller` from `^20.2.0` to `^20.2.1` ([#11285](https://github.com/MetaMask/core/pull/11285))
+
 ### Fixed
 
 - Quote Across perps deposits in the 6 decimals Across uses for HyperCore USDC-PERPS, instead of requesting 100 times the deposit amount ([#11270](https://github.com/MetaMask/core/pull/11270))
