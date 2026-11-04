@@ -699,12 +699,38 @@ export class SeedlessOnboardingController<
         let encKey: Uint8Array;
         let pwEncKey: Uint8Array;
         let authKeyPair: KeyPair;
+        let envelope:
+          | {
+              vaultKeySet: VaultKeySet;
+              passwordAuthPubKey: SEC1EncodedPublicKey;
+            }
+          | undefined;
 
         if (password) {
           const recoverEncKeyResult = await this.#recoverEncKey(password);
-          encKey = recoverEncKeyResult.encKey;
-          pwEncKey = recoverEncKeyResult.pwEncKey;
-          authKeyPair = recoverEncKeyResult.authKeyPair;
+          let vaultKeySet: VaultKeySet | undefined;
+          try {
+            // an envelope-managed vault keeps its keys across password
+            // changes, so the password only opens them (I6)
+            vaultKeySet = await this.#openPasswordEnvelope(
+              recoverEncKeyResult.seed,
+            );
+          } finally {
+            recoverEncKeyResult.seed.fill(0);
+          }
+          if (vaultKeySet) {
+            encKey = vaultKeySet.encKey;
+            pwEncKey = vaultKeySet.localWrapKey;
+            authKeyPair = vaultKeySet.authKeyPair;
+            envelope = {
+              vaultKeySet,
+              passwordAuthPubKey: recoverEncKeyResult.authKeyPair.pk,
+            };
+          } else {
+            encKey = recoverEncKeyResult.encKey;
+            pwEncKey = recoverEncKeyResult.pwEncKey;
+            authKeyPair = recoverEncKeyResult.authKeyPair;
+          }
         } else {
           this.#assertIsUnlocked();
           // verify the password and unlock the vault
@@ -727,6 +753,12 @@ export class SeedlessOnboardingController<
             rawToprfPwEncryptionKey: pwEncKey as Uint8Array<ArrayBuffer>,
             rawToprfAuthKeyPair: authKeyPair,
           });
+          if (envelope) {
+            this.#setEnvelopeState(
+              envelope.vaultKeySet,
+              envelope.passwordAuthPubKey,
+            );
+          }
         }
 
         return secrets;

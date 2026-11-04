@@ -1,11 +1,14 @@
 import { deriveStateFromMetadata } from '@metamask/base-controller';
 import type {
-  EncAccountDataType,
   FetchedSecretDataItem,
   KeyPair,
   ToprfSecureBackup,
 } from '@metamask/toprf-secure-backup';
-import { TOPRFError, TOPRFErrorCode } from '@metamask/toprf-secure-backup';
+import {
+  EncAccountDataType,
+  TOPRFError,
+  TOPRFErrorCode,
+} from '@metamask/toprf-secure-backup';
 import {
   base64ToBytes,
   bytesToBase64,
@@ -38,6 +41,7 @@ import {
 } from './envelope/envelope-keys.js';
 import type { ControlItem, VaultKeySet } from './envelope/envelope-keys.js';
 import { EnvelopeItemId, EnvelopeStore } from './envelope/EnvelopeStore.js';
+import { SecretMetadata } from './SecretMetadata.js';
 
 describe('SeedlessOnboardingController', () => {
   describe('MFA recovery', () => {
@@ -1684,6 +1688,126 @@ describe('SeedlessOnboardingController', () => {
             expect(recoverPwEncKeySpy).not.toHaveBeenCalled();
           },
         );
+      });
+    });
+
+    describe('fetchAllSecretData with a password on a new device', () => {
+      /**
+       * Stores the primary seed phrase in the secret data partition of a
+       * vault key set.
+       *
+       * @param store - The metadata store.
+       * @param vaultKeySet - The vault key set.
+       */
+      function storeSeedPhrase(
+        store: MetadataStore,
+        vaultKeySet: VaultKeySet,
+      ): void {
+        store.set(
+          bytesToHex(vaultKeySet.authKeyPair.pk),
+          new Map([
+            [
+              'server-item-0',
+              {
+                encKey: bytesToHex(vaultKeySet.encKey),
+                dataType: EncAccountDataType.PrimarySrp,
+                data: new SecretMetadata(MOCK_SEED_PHRASE, {
+                  dataType: EncAccountDataType.PrimarySrp,
+                }).toBytes(),
+              },
+            ],
+          ]),
+        );
+      }
+
+      /**
+       * Runs the callback with an authenticated controller that has no vault.
+       *
+       * @param fn - The callback.
+       * @returns Whatever the callback returns.
+       */
+      async function withNewDeviceController<ReturnValue>(
+        fn: (args: ControllerArgs) => Promise<ReturnValue>,
+      ): Promise<ReturnValue> {
+        return await withController(
+          {
+            state: getMockInitialControllerState({
+              withMockAuthenticatedUser: true,
+            }),
+          },
+          fn,
+        );
+      }
+
+      it('restores with the vault keys sealed for the password after an envelope password change', async () => {
+        const store: MetadataStore = new Map();
+        await withUnlockedController(async (args) => {
+          await migrate(args, mockNetwork(args.toprfClient, { store }));
+          await args.baseMessenger.call(
+            'SeedlessOnboardingController:changePassword',
+            NEW_PASSWORD,
+            MOCK_PASSWORD,
+          );
+        });
+        storeSeedPhrase(store, vaultKeySetFor());
+
+        await withNewDeviceController(async ({ controller, toprfClient }) => {
+          mockNetwork(toprfClient, { store, globalPassword: NEW_PASSWORD });
+
+          const secrets = await controller.fetchAllSecretData(NEW_PASSWORD);
+
+          expect(secrets.map(({ data }) => data)).toStrictEqual([
+            MOCK_SEED_PHRASE,
+          ]);
+          expect(controller.state.authPubKey).toBe(authPubKeyOf(MOCK_PASSWORD));
+          expect(controller.state.envelope).toStrictEqual({
+            v: 1,
+            vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+            passwordAuthPubKey: authPubKeyOf(NEW_PASSWORD),
+          });
+          expect(
+            await controller.verifyVaultPassword(NEW_PASSWORD),
+          ).toBeUndefined();
+        });
+      });
+
+      it('restores with the password keys when the password has no envelope', async () => {
+        const store: MetadataStore = new Map();
+        storeSeedPhrase(store, vaultKeySetFor());
+
+        await withNewDeviceController(async ({ controller, toprfClient }) => {
+          mockNetwork(toprfClient, { store });
+
+          const secrets = await controller.fetchAllSecretData(MOCK_PASSWORD);
+
+          expect(secrets.map(({ data }) => data)).toStrictEqual([
+            MOCK_SEED_PHRASE,
+          ]);
+          expect(controller.state.authPubKey).toBe(authPubKeyOf(MOCK_PASSWORD));
+          expect(controller.state.envelope).toBeUndefined();
+        });
+      });
+
+      it('does not fall back to the password keys when the envelope fetch fails', async () => {
+        const store: MetadataStore = new Map();
+        storeSeedPhrase(store, vaultKeySetFor());
+
+        await withNewDeviceController(async ({ controller, toprfClient }) => {
+          const network = mockNetwork(toprfClient, { store });
+          network.spies.fetchAllSecretDataItems.mockRejectedValueOnce(
+            new Error('network'),
+          );
+
+          await expect(
+            controller.fetchAllSecretData(MOCK_PASSWORD),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.FailedToFetchSecretMetadata,
+          );
+          expect(network.spies.fetchAllSecretDataItems).toHaveBeenCalledTimes(
+            1,
+          );
+          expect(controller.state.vault).toBeUndefined();
+        });
       });
     });
 

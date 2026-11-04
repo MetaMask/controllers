@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
 - `changePassword` on an envelope-managed vault keeps the vault keys: it seals them for the new password, appends a control record, and then swaps the password OPRF key, under the vault's metadata lock. Vaults that another device migrated are detected through their control record ([#11220](https://github.com/MetaMask/core/pull/11220))
 - `syncLatestGlobalPassword` and `submitGlobalPassword` open the envelope sealed for the global password first, and fall back to the existing key chain if there is none. A failed envelope fetch is reported as an error, not treated as a missing envelope ([#11220](https://github.com/MetaMask/core/pull/11220))
+- `fetchAllSecretData` with a password opens the envelope sealed for that password first, and restores the vault with the sealed vault keys and sets `envelope` state if there is one ([#11220](https://github.com/MetaMask/core/pull/11220))
 - `checkIsPasswordOutdated` compares the global password key with `envelope.passwordAuthPubKey` on an envelope-managed vault ([#11220](https://github.com/MetaMask/core/pull/11220))
 - Bump `@metamask/auth-network-utils` from `^0.3.0` to `^0.4.0` ([#11220](https://github.com/MetaMask/core/pull/11220))
 
