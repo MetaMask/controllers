@@ -13,9 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Set RPC failover mode to "enabled" by default ([#11307](https://github.com/MetaMask/core/pull/11307))
 - Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
 - Bump `uuid` from `^11.1.1` to `^14.0.1` ([#10941](https://github.com/MetaMask/core/pull/10941), [#11179](https://github.com/MetaMask/core/pull/11179))
+
+### Fixed
+
+- Don't re-interpret `corePlatformRpcFailoverMode` feature flag as "disabled" if absent or malformed ([#11307](https://github.com/MetaMask/core/pull/11307))
 
 ## [37.1.1]
 
