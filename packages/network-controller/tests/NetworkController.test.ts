@@ -989,6 +989,163 @@ describe('NetworkController', () => {
     });
   });
 
+  describe('setRpcFailoverMode', () => {
+    it('builds Infura clients in forced mode when set before init', async () => {
+      const originalCreateAutoManagedNetworkClient =
+        createAutoManagedNetworkClientModule.createAutoManagedNetworkClient;
+      const autoManagedNetworkClients: AutoManagedNetworkClient<NetworkClientConfiguration>[] =
+        [];
+      vi.spyOn(
+        createAutoManagedNetworkClientModule,
+        'createAutoManagedNetworkClient',
+      ).mockImplementation((...args) => {
+        const autoManagedNetworkClient = originalCreateAutoManagedNetworkClient(
+          ...args,
+        );
+        vi.spyOn(autoManagedNetworkClient, 'setRpcFailoverMode');
+        autoManagedNetworkClients.push(autoManagedNetworkClient);
+        return autoManagedNetworkClient;
+      });
+
+      await withController(
+        {
+          initializeController: false,
+          rpcFailoverMode: 'disabled',
+          state: {
+            selectedNetworkClientId: InfuraNetworkType.mainnet,
+            networkConfigurationsByChainId: {
+              [ChainId.mainnet]: buildInfuraNetworkConfiguration(
+                InfuraNetworkType.mainnet,
+                {
+                  rpcEndpoints: [
+                    buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
+                      failoverUrls: ['https://failover.endpoint/1'],
+                    }),
+                  ],
+                },
+              ),
+            },
+          },
+        },
+        ({ controller }) => {
+          controller.setRpcFailoverMode('forced');
+          controller.init();
+
+          expect(
+            autoManagedNetworkClients[0].setRpcFailoverMode,
+          ).toHaveBeenCalledWith('forced');
+        },
+      );
+    });
+
+    it('keeps forced mode when the feature flag later says disabled', async () => {
+      const originalCreateAutoManagedNetworkClient =
+        createAutoManagedNetworkClientModule.createAutoManagedNetworkClient;
+      const autoManagedNetworkClients: AutoManagedNetworkClient<NetworkClientConfiguration>[] =
+        [];
+      vi.spyOn(
+        createAutoManagedNetworkClientModule,
+        'createAutoManagedNetworkClient',
+      ).mockImplementation((...args) => {
+        const autoManagedNetworkClient = originalCreateAutoManagedNetworkClient(
+          ...args,
+        );
+        vi.spyOn(autoManagedNetworkClient, 'setRpcFailoverMode');
+        autoManagedNetworkClients.push(autoManagedNetworkClient);
+        return autoManagedNetworkClient;
+      });
+
+      await withController(
+        {
+          initializeController: false,
+          rpcFailoverMode: 'disabled',
+          state: {
+            selectedNetworkClientId: InfuraNetworkType.mainnet,
+            networkConfigurationsByChainId: {
+              [ChainId.mainnet]: buildInfuraNetworkConfiguration(
+                InfuraNetworkType.mainnet,
+                {
+                  rpcEndpoints: [
+                    buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
+                      failoverUrls: ['https://failover.endpoint/1'],
+                    }),
+                  ],
+                },
+              ),
+            },
+          },
+        },
+        ({ controller, messenger }) => {
+          controller.setRpcFailoverMode('forced');
+          controller.init();
+          messenger.publish(
+            'RemoteFeatureFlagController:stateChange',
+            {
+              remoteFeatureFlags: {
+                corePlatformRpcFailoverMode: 'disabled',
+              },
+              cacheTimestamp: 0,
+            },
+            [],
+          );
+
+          expect(
+            autoManagedNetworkClients[0].setRpcFailoverMode,
+          ).not.toHaveBeenCalledWith('disabled');
+        },
+      );
+    });
+
+    it('follows the feature flag again after the session override is cleared', async () => {
+      const originalCreateAutoManagedNetworkClient =
+        createAutoManagedNetworkClientModule.createAutoManagedNetworkClient;
+      const autoManagedNetworkClients: AutoManagedNetworkClient<NetworkClientConfiguration>[] =
+        [];
+      vi.spyOn(
+        createAutoManagedNetworkClientModule,
+        'createAutoManagedNetworkClient',
+      ).mockImplementation((...args) => {
+        const autoManagedNetworkClient = originalCreateAutoManagedNetworkClient(
+          ...args,
+        );
+        vi.spyOn(autoManagedNetworkClient, 'setRpcFailoverMode');
+        autoManagedNetworkClients.push(autoManagedNetworkClient);
+        return autoManagedNetworkClient;
+      });
+
+      await withController(
+        {
+          initializeController: false,
+          rpcFailoverMode: 'disabled',
+          state: {
+            selectedNetworkClientId: InfuraNetworkType.mainnet,
+            networkConfigurationsByChainId: {
+              [ChainId.mainnet]: buildInfuraNetworkConfiguration(
+                InfuraNetworkType.mainnet,
+                {
+                  rpcEndpoints: [
+                    buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
+                      failoverUrls: ['https://failover.endpoint/1'],
+                    }),
+                  ],
+                },
+              ),
+            },
+          },
+        },
+        ({ controller }) => {
+          controller.setRpcFailoverMode('forced');
+          controller.init();
+          controller.setRpcFailoverMode(null);
+
+          expect(
+            autoManagedNetworkClients[0].setRpcFailoverMode,
+          ).toHaveBeenCalledWith('disabled');
+        },
+      );
+    });
+  });
+
   describe('init', () => {
     it('auto-enables networks that are set as auto-enabled in the config registry', async () => {
       const networkConfig = buildMockConfigRegistryControllerNetwork({

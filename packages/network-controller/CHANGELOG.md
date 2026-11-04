@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `NetworkController.setRpcFailoverMode` so a session can force Infura failover before `init` builds network clients. A later `corePlatformRpcFailoverMode` update does not clear `forced`; pass `null` to follow the feature flag again
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
 
 ### Changed

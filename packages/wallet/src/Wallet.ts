@@ -1,4 +1,5 @@
 import type { StateMetadataConstraint } from '@metamask/base-controller';
+import type { GeolocationControllerState } from '@metamask/geolocation-controller';
 import { Messenger } from '@metamask/messenger';
 import { hasProperty } from '@metamask/utils';
 
@@ -23,6 +24,33 @@ export class Wallet {
   >;
 
   #isDestroyed = false;
+
+  #geolocationFailoverSubscribed = false;
+
+  /**
+   * Keeps Infura failover aligned with the latest completed geolocation.
+   * A failed or in-flight refresh does not change the mode.
+   *
+   * @param state - The latest geolocation controller state.
+   */
+  readonly #onGeolocationStateChange = (
+    state: GeolocationControllerState,
+  ): void => {
+    if (state.status !== 'complete') {
+      return;
+    }
+    const network = this.#instances.NetworkController;
+    if (state.country === 'CN') {
+      network.setRpcFailoverMode('forced');
+      return;
+    }
+    if (
+      typeof state.country === 'string' &&
+      /^[A-Z]{2}$/u.test(state.country)
+    ) {
+      network.setRpcFailoverMode(null);
+    }
+  };
 
   /**
    * Creates a `Wallet` instance, initializing all instances as specified by the passed options.
@@ -126,9 +154,14 @@ export class Wallet {
   /**
    * Complete additional initialization of instantiated controllers or services after instantiating `Wallet`.
    *
+   * When no country is persisted, this waits up to 5 seconds for geolocation
+   * before other `init` calls. Mainland China then skips Infura for endpoints
+   * that have failover URLs. A persisted country does not block this method.
+   *
    * @returns The results of all initialization calls.
    */
-  init(): Promise<PromiseSettledResult<unknown>[]> {
+  async init(): Promise<PromiseSettledResult<unknown>[]> {
+    await this.#applyGeolocationRpcFailover();
     return Promise.allSettled(
       Object.values(this.#instances)
         .filter(
@@ -150,6 +183,13 @@ export class Wallet {
     }
 
     this.#isDestroyed = true;
+    if (this.#geolocationFailoverSubscribed) {
+      this.#messenger.unsubscribe(
+        'GeolocationController:stateChange',
+        this.#onGeolocationStateChange,
+      );
+      this.#geolocationFailoverSubscribed = false;
+    }
 
     await Promise.allSettled(
       Object.values(this.#instances).map(async (instance) => {
@@ -162,5 +202,34 @@ export class Wallet {
         return;
       }),
     );
+  }
+
+  /**
+   * Choose Infura failover from geolocation before network clients are created.
+   *
+   * A persisted country returns immediately. The first launch waits on the
+   * geolocation request the controller would make anyway, capped at 5 seconds.
+   * A request that finishes after the cap still updates failover through the
+   * state subscription.
+   */
+  async #applyGeolocationRpcFailover(): Promise<void> {
+    if (this.#geolocationFailoverSubscribed) {
+      return;
+    }
+    this.#messenger.subscribe(
+      'GeolocationController:stateChange',
+      this.#onGeolocationStateChange,
+    );
+    this.#geolocationFailoverSubscribed = true;
+
+    try {
+      const country =
+        await this.#instances.GeolocationController.resolveStartupCountry();
+      if (country === 'CN') {
+        this.#instances.NetworkController.setRpcFailoverMode('forced');
+      }
+    } catch {
+      // Startup continues on the feature-flag failover mode when geolocation throws.
+    }
   }
 }

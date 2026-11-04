@@ -7,6 +7,7 @@ import {
 import { CONNECTIVITY_STATUSES } from '@metamask/connectivity-controller';
 import { LoggingController, LogType } from '@metamask/logging-controller';
 import { Messenger } from '@metamask/messenger';
+import { NetworkController } from '@metamask/network-controller';
 import {
   PermissionController,
   SubjectMetadataController,
@@ -58,6 +59,19 @@ function getInstanceOptions(): WalletOptions['instanceOptions'] {
     },
     gasFeeController: {
       clientId: 'test',
+    },
+    geolocationApiService: {
+      fetch: vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              country: 'US',
+              region: 'NY',
+              timezone: 'America/New_York',
+            }),
+            { status: 200 },
+          ),
+      ),
     },
     networkController: {
       infuraProjectId: 'fake-infura-project-id',
@@ -200,6 +214,105 @@ describe('Wallet', () => {
     const results = await wallet.init();
 
     expect(results).toHaveLength(10);
+  });
+
+  it('sets forced Infura failover before network init when geolocation is CN', async () => {
+    const order: string[] = [];
+    const originalSetRpcFailoverMode =
+      NetworkController.prototype.setRpcFailoverMode;
+    const originalInit = NetworkController.prototype.init;
+    vi.spyOn(
+      NetworkController.prototype,
+      'setRpcFailoverMode',
+    ).mockImplementation(function (this: NetworkController, mode) {
+      order.push(`mode:${String(mode)}`);
+      return originalSetRpcFailoverMode.call(this, mode);
+    });
+    vi.spyOn(NetworkController.prototype, 'init').mockImplementation(function (
+      this: NetworkController,
+    ) {
+      order.push('network-init');
+      return originalInit.call(this);
+    });
+
+    const wallet = new Wallet({
+      instanceOptions: {
+        ...getInstanceOptions(),
+        geolocationApiService: {
+          fetch: vi.fn(
+            async () =>
+              new Response(
+                JSON.stringify({
+                  country: 'CN',
+                  region: 'SC',
+                  timezone: 'Asia/Shanghai',
+                }),
+                { status: 200 },
+              ),
+          ),
+        },
+        networkController: {
+          infuraProjectId: 'fake-infura-project-id',
+          failoverUrls: {
+            '0x1': ['https://quicknode.example'],
+          },
+        },
+      },
+    });
+
+    await wallet.init();
+
+    expect(order.indexOf('mode:forced')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('mode:forced')).toBeLessThan(
+      order.indexOf('network-init'),
+    );
+  });
+
+  it('does not wait on geolocation when a country is already persisted', async () => {
+    let releaseGeolocation: ((response: Response) => void) | undefined;
+    const fetchStarted = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseGeolocation = resolve;
+        }),
+    );
+    const setRpcFailoverMode = vi.spyOn(
+      NetworkController.prototype,
+      'setRpcFailoverMode',
+    );
+
+    const wallet = new Wallet({
+      state: {
+        GeolocationController: {
+          country: 'CN',
+          location: 'CN',
+          region: 'SC',
+          timezone: 'Asia/Shanghai',
+          lastFetchedAt: 1,
+        },
+      },
+      instanceOptions: {
+        ...getInstanceOptions(),
+        geolocationApiService: {
+          fetch: fetchStarted,
+        },
+      },
+    });
+
+    await wallet.init();
+
+    expect(setRpcFailoverMode).toHaveBeenCalledWith('forced');
+    expect(fetchStarted).toHaveBeenCalled();
+    releaseGeolocation?.(
+      new Response(
+        JSON.stringify({
+          country: 'CN',
+          region: 'SC',
+          timezone: 'Asia/Shanghai',
+        }),
+        { status: 200 },
+      ),
+    );
   });
 
   it('disallows modifying the messenger', async () => {

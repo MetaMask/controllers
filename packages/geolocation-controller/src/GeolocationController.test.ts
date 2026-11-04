@@ -84,7 +84,7 @@ describe('GeolocationController', () => {
       });
     });
 
-    it('persists no state', async () => {
+    it('persists the last geolocation result', async () => {
       await withController(({ controller }) => {
         expect(
           deriveStateFromMetadata(
@@ -92,7 +92,15 @@ describe('GeolocationController', () => {
             controller.metadata,
             'persist',
           ),
-        ).toMatchInlineSnapshot(`{}`);
+        ).toMatchInlineSnapshot(`
+          {
+            "country": null,
+            "lastFetchedAt": null,
+            "location": "UNKNOWN",
+            "region": null,
+            "timezone": null,
+          }
+        `);
       });
     });
 
@@ -450,6 +458,73 @@ describe('GeolocationController', () => {
             region: '13',
             timezone: 'Asia/Tokyo',
           });
+        },
+      );
+    });
+  });
+
+  describe('resolveStartupCountry', () => {
+    it('returns a persisted country before the refresh resolves', async () => {
+      let resolveRefresh: ((value: GeolocationData) => void) | undefined;
+
+      await withController(
+        {
+          options: {
+            state: {
+              country: 'CN',
+              location: 'CN',
+              region: 'SC',
+              timezone: 'Asia/Shanghai',
+            },
+          },
+          serviceHandler: () =>
+            new Promise((resolve) => {
+              resolveRefresh = resolve;
+            }),
+        },
+        async ({ controller }) => {
+          await expect(controller.resolveStartupCountry()).resolves.toBe('CN');
+          resolveRefresh?.(
+            buildGeolocationData({
+              country: 'CN',
+              region: 'SC',
+              timezone: 'Asia/Shanghai',
+            }),
+          );
+        },
+      );
+    });
+
+    it('returns the fetched country when nothing is persisted', async () => {
+      await withController(
+        { serviceResponse: { country: 'DE' } },
+        async ({ controller }) => {
+          await expect(controller.resolveStartupCountry()).resolves.toBe('DE');
+        },
+      );
+    });
+
+    it('returns null when the geolocation fetch fails', async () => {
+      await withController(
+        {
+          serviceHandler: () => Promise.reject(new Error('offline')),
+        },
+        async ({ controller }) => {
+          await expect(controller.resolveStartupCountry()).resolves.toBeNull();
+        },
+      );
+    });
+
+    it('returns null when geolocation does not respond within the cap', async () => {
+      await withController(
+        {
+          serviceHandler: () => new Promise(() => undefined),
+        },
+        async ({ controller }) => {
+          const pending = controller.resolveStartupCountry({ timeoutMs: 5000 });
+          await vi.advanceTimersByTimeAsync(5000);
+
+          await expect(pending).resolves.toBeNull();
         },
       );
     });
