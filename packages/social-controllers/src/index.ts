@@ -46,6 +46,7 @@ export type {
   SocialServiceFetchPositionByIdAction,
   SocialServiceFetchTraderFeedAction,
   SocialServiceFetchTraderProfileAction,
+  SocialServiceFetchTrendingGifsAction,
   SocialServiceFollowAction,
   SocialServiceOptInToLeaderboardAction,
   SocialServiceOptOutOfLeaderboardAction,
@@ -55,6 +56,7 @@ export type {
   SocialServiceTranslateCommentAction,
   SocialServiceRefreshNotificationPreferencesCacheAction,
   SocialServiceRemoveCommentReactionAction,
+  SocialServiceSearchGifsAction,
   SocialServiceUnblockProfileAction,
   SocialServiceUnfollowAction,
 } from './SocialService-method-action-types.js';
@@ -64,6 +66,7 @@ export {
   INSIDER_POSITION_FLAG,
   TRADER_RANKING_TAGS,
   TradeStruct,
+  UNSUPPORTED_TOKEN_POSITION_FLAG,
 } from './social-types.js';
 export {
   SOCIAL_FEED_CHANNELS,
@@ -117,6 +120,11 @@ export type {
   FollowingResponse,
   FollowOptions,
   FollowResponse,
+  GifItem,
+  GifMediaFile,
+  GifMediaSize,
+  GifPageResponse,
+  GifQueryParams,
   LeaderboardEntry,
   LeaderboardResponse,
   ModerationStatusResponse,
