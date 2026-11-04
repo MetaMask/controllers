@@ -46,6 +46,7 @@
     "since-latest-release": "../../scripts/since-latest-release.sh",
     "test": "vitest",
     "test:clean": "vitest --clearCache",
+    "test:coverage": "vitest --coverage",
     "test:verbose": "vitest --reporter=verbose",
     "test:watch": "vitest --watch"
   },
@@ -56,7 +57,7 @@
     "@metamask/messenger": "^3.0.0",
     "@metamask/profile-sync-controller": "^36.0.0",
     "@metamask/signature-controller": "^40.0.0",
-    "@metamask/transaction-controller": "^73.0.0",
+    "@metamask/transaction-controller": "^73.1.0",
     "@metamask/utils": "^12.0.1",
     "@tanstack/query-core": "^5.103.2",
     "cockatiel": "^3.2.1"
@@ -73,7 +74,7 @@
     "typedoc-plugin-missing-exports": "^4.1.4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "uuid": "^14.0.1",
-    "vitest": "^5.0.0"
+    "vitest": "5.0.3"
   },
   "engines": {
     "node": "^22.14.0 || ^24 || ^26"

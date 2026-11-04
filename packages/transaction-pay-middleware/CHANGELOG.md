@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `@metamask/perps-controller` from `^22.1.0` to `^22.1.1` ([#11269](https://github.com/MetaMask/core/pull/11269))
+- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
+
 ## [2.0.1]
 
 ### Changed

@@ -70,7 +70,9 @@ function buildSimulation(
 describe('validateQuoteExecution', () => {
   let messengerMock: ReturnType<typeof getMessengerMock>;
   const simulateQuoteTransactionsMock = vi.mocked(simulateQuoteTransactions);
-  const getLiveTokenBalanceMock = vi.mocked(tokenModule.getLiveTokenBalance);
+  const getLiveTokenBalanceMock = vi.mocked(
+    tokenModule.getLiveTokenBalanceOrUndefined,
+  );
   const getNativeTokenMock = vi.mocked(tokenModule.getNativeToken);
   const getTokenInfoMock = vi.mocked(tokenModule.getTokenInfo);
   const normalizeTokenAddressMock = vi.mocked(
@@ -231,8 +233,29 @@ describe('validateQuoteExecution', () => {
       ).toBeUndefined();
     });
 
-    it('throws balance-unavailable when getLiveTokenBalance rejects', async () => {
-      getLiveTokenBalanceMock.mockRejectedValue(new Error('RPC timeout'));
+    it('skips the balance check when the live balance is unavailable', async () => {
+      // An unreadable balance is unknown, not insufficient, so validation
+      // falls through to simulation rather than blocking the quote.
+      getLiveTokenBalanceMock.mockResolvedValue(undefined);
+
+      expect(
+        await validateQuoteExecution({
+          messenger: messengerMock.messenger,
+          quote: buildQuote(),
+          simulation: buildSimulation(),
+        }),
+      ).toBeUndefined();
+
+      expect(simulateQuoteTransactionsMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('still fails when the live balance is unavailable and simulation reverts', async () => {
+      getLiveTokenBalanceMock.mockResolvedValue(undefined);
+      simulateQuoteTransactionsMock.mockRejectedValue(
+        new TransactionPaySimulationError(
+          'ERC20: transfer amount exceeds balance',
+        ),
+      );
 
       await expect(
         validateQuoteExecution({
@@ -242,9 +265,8 @@ describe('validateQuoteExecution', () => {
         }),
       ).rejects.toMatchObject({
         info: {
-          reason: 'balance-unavailable',
-          message: 'Unable to verify balance',
-          detail: ['RPC timeout'],
+          reason: 'simulation-failed',
+          detail: ['ERC20: transfer amount exceeds balance'],
         },
       });
     });

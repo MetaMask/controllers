@@ -46,6 +46,7 @@
     "since-latest-release": "../../scripts/since-latest-release.sh",
     "test": "vitest",
     "test:clean": "vitest --clearCache",
+    "test:coverage": "vitest --coverage",
     "test:verbose": "vitest --reporter=verbose",
     "test:watch": "vitest --watch"
   },
@@ -61,7 +62,7 @@
     "@metamask/config-registry-controller": "^5.0.0",
     "@metamask/connectivity-controller": "^1.0.0",
     "@metamask/controller-utils": "^13.0.0",
-    "@metamask/gas-fee-controller": "^27.0.0",
+    "@metamask/gas-fee-controller": "^27.1.0",
     "@metamask/geolocation-controller": "^2.0.0",
     "@metamask/keyring-controller": "^28.2.0",
     "@metamask/logging-controller": "^10.0.0",
@@ -76,8 +77,8 @@
     "@metamask/selected-network-controller": "^27.0.0",
     "@metamask/shield-controller": "^7.1.1",
     "@metamask/storage-service": "^2.0.0",
-    "@metamask/subscription-controller": "^15.1.2",
-    "@metamask/transaction-controller": "^73.0.0",
+    "@metamask/subscription-controller": "^15.2.0",
+    "@metamask/transaction-controller": "^73.1.0",
     "@metamask/utils": "^12.0.1"
   },
   "devDependencies": {
@@ -87,7 +88,7 @@
     "typedoc": "^0.28.20",
     "typedoc-plugin-missing-exports": "^4.1.4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "5.0.3"
   },
   "engines": {
     "node": "^22.14.0 || ^24 || ^26"
