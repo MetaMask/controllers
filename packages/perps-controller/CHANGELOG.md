@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Include `number_orders_canceled` in batch `OrderCancelTransaction` events, counting successful cancellations and reporting zero for empty or failed batches. ([#11276](https://github.com/MetaMask/core/pull/11276))
+
+## [22.1.1]
+
+### Changed
+
+- Bump `uuid` from `^14.0.0` to `^14.0.1` ([#11179](https://github.com/MetaMask/core/pull/11179))
+
+### Fixed
+
+- Prevent HyperLiquid `userFills` from going silent after a WebSocket reconnect when an in-flight subscribe races with `restoreSubscriptions` (same pending + generation pattern TWAP already uses) ([#11160](https://github.com/MetaMask/core/pull/11160))
+  - Without this, live fills can keep attaching to a dead pre-reconnect listener (MetaMask/metamask-extension#47287).
+
 ## [22.1.0]
 
 ### Added
@@ -1316,7 +1331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `@metamask/controller-utils` from `^11.18.0` to `^11.19.0` ([#7995](https://github.com/MetaMask/core/pull/7995))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.1...HEAD
+[22.1.1]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.0...@metamask/perps-controller@22.1.1
 [22.1.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.0.0...@metamask/perps-controller@22.1.0
 [22.0.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@21.0.0...@metamask/perps-controller@22.0.0
 [21.0.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@20.1.0...@metamask/perps-controller@21.0.0

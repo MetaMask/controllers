@@ -46,6 +46,7 @@
     "since-latest-release": "../../scripts/since-latest-release.sh",
     "test": "vitest",
     "test:clean": "vitest --clearCache",
+    "test:coverage": "vitest --coverage",
     "test:verbose": "vitest --reporter=verbose",
     "test:watch": "vitest --watch"
   },
@@ -64,7 +65,7 @@
     "@metamask/transaction-controller": "^73.0.0",
     "@metamask/utils": "^12.0.1",
     "async-mutex": "^0.5.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@metamask/auto-changelog": "^7.1.0",
@@ -75,7 +76,7 @@
     "typedoc": "^0.28.20",
     "typedoc-plugin-missing-exports": "^4.1.4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "5.0.3"
   },
   "engines": {
     "node": "^22.14.0 || ^24 || ^26"

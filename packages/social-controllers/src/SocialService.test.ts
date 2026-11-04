@@ -1307,6 +1307,62 @@ describe('SocialService', () => {
       );
     });
 
+    it('keeps every author comment on each trade', async () => {
+      const tradeComment = {
+        uid: 'comment-1',
+        text: 'My trade thesis',
+        timestamp: 1700000000,
+        sourceLanguage: null,
+        translations: {},
+        engagement: { reactions: [], userReaction: null, replyCount: 2 },
+      };
+      const positionWithComments = {
+        ...mockPosition,
+        trades: mockPosition.trades.map((trade) => ({
+          ...trade,
+          comments: [tradeComment, { ...tradeComment, uid: 'comment-0' }],
+        })),
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(positionWithComments),
+      });
+
+      const service = createService();
+      const result = await service.fetchPositionById({
+        positionId: 'position-1',
+      });
+
+      expect(result.trades[0].comments).toStrictEqual([
+        tradeComment,
+        { ...tradeComment, uid: 'comment-0' },
+      ]);
+    });
+
+    it('throws when a trade comment is malformed', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            ...mockPosition,
+            trades: mockPosition.trades.map((trade) => ({
+              ...trade,
+              comments: [{ uid: 'comment-1', text: 1 }],
+            })),
+          }),
+      });
+
+      const service = createService();
+
+      await expect(
+        service.fetchPositionById({ positionId: 'position-1' }),
+      ).rejects.toThrow(
+        SocialServiceErrorMessage.FETCH_POSITION_BY_ID_INVALID_RESPONSE,
+      );
+    });
+
     it('encodes the positionId in the URL', async () => {
       mockFetch.mockResolvedValue({
         ok: true,

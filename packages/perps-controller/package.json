@@ -1,6 +1,6 @@
 {
   "name": "@metamask/perps-controller",
-  "version": "22.1.0",
+  "version": "22.1.1",
   "description": "Controller for perpetual trading functionality in MetaMask",
   "keywords": [
     "Ethereum",
@@ -70,6 +70,7 @@
     "since-latest-release": "../../scripts/since-latest-release.sh",
     "test": "vitest",
     "test:clean": "vitest --clearCache",
+    "test:coverage": "vitest --coverage",
     "test:verbose": "vitest --reporter=verbose",
     "test:watch": "vitest --watch"
   },
@@ -83,7 +84,7 @@
     "@nktkas/hyperliquid": "^0.33.3",
     "bignumber.js": "^9.1.2",
     "reselect": "^5.3.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@metamask/account-tree-controller": "^11.2.0",
@@ -104,7 +105,7 @@
     "typedoc-plugin-missing-exports": "^4.1.4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "viem": "^2.56.8",
-    "vitest": "^5.0.0"
+    "vitest": "5.0.3"
   },
   "engines": {
     "node": "^22.14.0 || ^24 || ^26"
