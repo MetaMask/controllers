@@ -3,7 +3,7 @@ import { execa } from 'execa';
 import type { Result } from 'execa';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, it, vi } from 'vitest';
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..', '..', '..');
 const RESOLVER_PATH = path.join(ROOT_DIR, 'scripts', 'resolver', 'register.ts');
@@ -29,12 +29,14 @@ async function runCLI(args: string[]): Promise<Result> {
   });
 }
 
-const { withinSandbox } = createSandbox('platform-api-docs/cli');
+const withinSandbox: ReturnType<typeof createSandbox>['withinSandbox'] = async (
+  test,
+) => await createSandbox('platform-api-docs/cli').withinSandbox(test);
 
 vi.setConfig({ testTimeout: 30_000 });
 
-describe('platform-api-docs CLI (functional)', () => {
-  it('generates docs for a project with action types', async () => {
+describe.concurrent('platform-api-docs CLI (functional)', () => {
+  it('generates docs for a project with action types', async ({ expect }) => {
     expect.assertions(3);
 
     await withinSandbox(async ({ directoryPath }) => {
@@ -60,7 +62,7 @@ export type FooControllerMessenger = Messenger<'FooController', FooControllerGet
     });
   });
 
-  it('accepts --scan-dir flag', async () => {
+  it('accepts --scan-dir flag', async ({ expect }) => {
     expect.assertions(2);
 
     await withinSandbox(async ({ directoryPath }) => {
@@ -85,7 +87,7 @@ export type BarMessenger = Messenger<'Bar', BarDoAction, never>;
     });
   });
 
-  it('accepts --output flag', async () => {
+  it('accepts --output flag', async ({ expect }) => {
     expect.assertions(2);
 
     await withinSandbox(async ({ directoryPath }) => {
@@ -116,7 +118,9 @@ export type BazMessenger = Messenger<'Baz', BazAction, never>;
     });
   });
 
-  it('stamps the project label on the generated index when --project-label is given', async () => {
+  it('stamps the project label on the generated index when --project-label is given', async ({
+    expect,
+  }) => {
     expect.assertions(2);
 
     await withinSandbox(async ({ directoryPath }) => {
@@ -145,7 +149,7 @@ export type QuxMessenger = Messenger<'Qux', QuxAction, never>;
     });
   });
 
-  it('shows help with --help', async () => {
+  it('shows help with --help', async ({ expect }) => {
     expect.assertions(2);
 
     const result = await runCLI(['--help']);
@@ -156,7 +160,9 @@ export type QuxMessenger = Messenger<'Qux', QuxAction, never>;
     expect(result.all).toContain('Produces documentation for the platform API');
   });
 
-  it('exits with error when no scannable directories found', async () => {
+  it('exits with error when no scannable directories found', async ({
+    expect,
+  }) => {
     expect.assertions(2);
 
     await withinSandbox(async ({ directoryPath }) => {
@@ -197,7 +203,9 @@ export type GlobalEvents = FooControllerStateChangeEvent;
       );
     }
 
-    it('generates docs from the named root messenger unions', async () => {
+    it('generates docs from the named root messenger unions', async ({
+      expect,
+    }) => {
       expect.assertions(3);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -219,7 +227,9 @@ export type GlobalEvents = FooControllerStateChangeEvent;
       });
     });
 
-    it('exits with error when the root type references are missing', async () => {
+    it('exits with error when the root type references are missing', async ({
+      expect,
+    }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -238,7 +248,9 @@ export type GlobalEvents = FooControllerStateChangeEvent;
       });
     });
 
-    it('exits with error when a root type reference is malformed', async () => {
+    it('exits with error when a root type reference is malformed', async ({
+      expect,
+    }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -261,7 +273,9 @@ export type GlobalEvents = FooControllerStateChangeEvent;
       });
     });
 
-    it('exits with error when the named type is not declared', async () => {
+    it('exits with error when the named type is not declared', async ({
+      expect,
+    }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -282,7 +296,9 @@ export type GlobalEvents = FooControllerStateChangeEvent;
       });
     });
 
-    it('exits with error when --scan-dir is combined with it', async () => {
+    it('exits with error when --scan-dir is combined with it', async ({
+      expect,
+    }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -307,7 +323,9 @@ export type GlobalEvents = FooControllerStateChangeEvent;
       });
     });
 
-    it('exits with error when root type references are used with --strategy scan', async () => {
+    it('exits with error when root type references are used with --strategy scan', async ({
+      expect,
+    }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
@@ -326,7 +344,7 @@ export type GlobalEvents = FooControllerStateChangeEvent;
       });
     });
 
-    it('rejects an unknown strategy', async () => {
+    it('rejects an unknown strategy', async ({ expect }) => {
       expect.assertions(2);
 
       await withinSandbox(async ({ directoryPath }) => {
