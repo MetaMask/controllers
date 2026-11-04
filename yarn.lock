@@ -5105,7 +5105,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
     "@metamask/providers": ^22.0.0
@@ -5143,7 +5143,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
     "@metamask/providers": ^22.0.0
@@ -5176,7 +5176,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5190,7 +5190,7 @@ __metadata:
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5207,7 +5207,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5228,7 +5228,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5249,7 +5249,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5265,7 +5265,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5288,7 +5288,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5307,7 +5307,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5368,7 +5368,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5440,7 +5440,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
     "@metamask/providers": ^22.0.0
@@ -5498,7 +5498,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5564,7 +5564,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5600,7 +5600,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5615,7 +5615,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   bin:
     bitcoin-regtest-up: ./dist/bin/bitcoin-regtest-up.js
   languageName: unknown
@@ -5660,7 +5660,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5692,7 +5692,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5717,7 +5717,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5733,7 +5733,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5754,7 +5754,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5775,7 +5775,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5798,7 +5798,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5814,7 +5814,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5837,7 +5837,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5858,7 +5858,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5876,7 +5876,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5903,7 +5903,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -5920,7 +5920,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6001,7 +6001,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   peerDependencies:
     "@babel/runtime": ^7.0.0
   languageName: unknown
@@ -6029,7 +6029,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6128,7 +6128,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6146,7 +6146,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6189,7 +6189,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6213,7 +6213,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6231,7 +6231,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6252,7 +6252,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6268,7 +6268,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6288,7 +6288,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6357,7 +6357,7 @@ __metadata:
     safe-stable-stringify: "npm:^2.5.0"
     typedoc: "npm:^0.28.20"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6393,7 +6393,7 @@ __metadata:
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6629,7 +6629,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     unzipper: "npm:^0.12.3"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     yaml: "npm:^2.9.1"
     yargs: "npm:^18.2.0"
     yargs-parser: "npm:^22.0.0"
@@ -6661,7 +6661,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   peerDependencies:
     "@babel/runtime": ^7.0.0
   languageName: unknown
@@ -6691,7 +6691,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6710,7 +6710,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6725,7 +6725,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   bin:
     java-tron-up: ./dist/bin/java-tron-up.js
   languageName: unknown
@@ -6764,7 +6764,7 @@ __metadata:
     rimraf: "npm:^6.1.3"
     typedoc: "npm:^0.28.20"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6796,7 +6796,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     webextension-polyfill-ts: "npm:^0.26.0"
   languageName: unknown
   linkType: soft
@@ -6859,7 +6859,7 @@ __metadata:
     typescript: "npm:@typescript/typescript6@^6.0.2"
     ulid: "npm:^2.4.0"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -6996,7 +6996,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7011,7 +7011,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     yaml: "npm:^2.9.1"
   languageName: unknown
   linkType: soft
@@ -7030,7 +7030,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7050,7 +7050,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7071,7 +7071,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7090,7 +7090,7 @@ __metadata:
     prettier: "npm:^3.9.9"
     rimraf: "npm:^6.1.3"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     yargs: "npm:^18.2.0"
   peerDependencies:
     oxfmt: ^0.44.0
@@ -7142,7 +7142,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   peerDependencies:
     typescript: ">=5.0.0"
   languageName: unknown
@@ -7175,7 +7175,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7234,7 +7234,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7260,7 +7260,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7283,7 +7283,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7306,7 +7306,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7342,7 +7342,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7368,7 +7368,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7387,7 +7387,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7433,7 +7433,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
     "@metamask/providers": ^22.0.0
@@ -7467,7 +7467,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7496,7 +7496,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7525,7 +7525,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7544,7 +7544,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7567,7 +7567,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7615,7 +7615,7 @@ __metadata:
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uri-js: "npm:^4.4.1"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7640,7 +7640,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7657,7 +7657,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7704,7 +7704,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7791,7 +7791,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7814,7 +7814,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7878,7 +7878,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7899,7 +7899,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7935,7 +7935,7 @@ __metadata:
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
     viem: "npm:^2.56.8"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7961,7 +7961,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -7991,7 +7991,7 @@ __metadata:
     rimraf: "npm:^6.1.3"
     ts-morph: "npm:^28.0.0"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     yargs: "npm:^18.2.0"
   bin:
     platform-api-docs: ./dist/cli.js
@@ -8013,7 +8013,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8039,7 +8039,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8060,7 +8060,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8091,7 +8091,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8130,7 +8130,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     webextension-polyfill: "npm:^0.12.0"
   peerDependencies:
     "@metamask/providers": ^22.0.0
@@ -8180,7 +8180,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8198,7 +8198,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8219,7 +8219,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   peerDependencies:
     react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -8249,7 +8249,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8289,7 +8289,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8331,7 +8331,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8356,7 +8356,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8377,7 +8377,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8406,7 +8406,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8434,7 +8434,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8485,7 +8485,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8512,7 +8512,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8652,7 +8652,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8667,7 +8667,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   bin:
     solana-test-validator-up: ./dist/bin/solana-test-validator-up.js
   languageName: unknown
@@ -8690,7 +8690,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8716,7 +8716,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8754,7 +8754,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8839,7 +8839,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   peerDependencies:
     "@babel/runtime": ^7.0.0
     "@metamask/eth-block-tracker": ">=9"
@@ -8877,7 +8877,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8903,7 +8903,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8917,7 +8917,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -8949,7 +8949,7 @@ __metadata:
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
     uuid: "npm:^14.0.1"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   peerDependencies:
     "@metamask/eth-block-tracker": ">=9"
   languageName: unknown
@@ -8999,7 +8999,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
     web3: "npm:^4.16.0"
   languageName: unknown
   linkType: soft
@@ -9047,7 +9047,7 @@ __metadata:
     react: "npm:^19.3.0"
     react-dom: "npm:^19.3.0"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -9090,7 +9090,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -9107,7 +9107,7 @@ __metadata:
     typedoc: "npm:^0.28.20"
     typedoc-plugin-missing-exports: "npm:^4.1.4"
     typescript: "npm:@typescript/typescript6@^6.0.2"
-    vitest: "npm:5.0.3"
+    vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
@@ -12438,26 +12438,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vitest/mocker@npm:5.0.3":
-  version: 5.0.3
-  resolution: "@vitest/mocker@npm:5.0.3"
-  dependencies:
-    "@jridgewell/trace-mapping": "npm:0.3.31"
-    "@vitest/spy": "npm:5.0.3"
-    estree-walker: "npm:^3.0.3"
-    magic-string: "npm:^1.2.3"
-  peerDependencies:
-    msw: ^2.4.9
-    vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-  peerDependenciesMeta:
-    msw:
-      optional: true
-    vite:
-      optional: true
-  checksum: 10/40affdebd815d2153fd8708874ac8134472f8921baac3c7109ec8bd2bb2ba60aac0f3ded81a2acdab4688345d74659f9c89479c38795eda222f7faff87ed8e52
-  languageName: node
-  linkType: hard
-
 "@vitest/mocker@npm:5.1.0":
   version: 5.1.0
   resolution: "@vitest/mocker@npm:5.1.0"
@@ -14500,7 +14480,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chai@npm:^6.2.2, chai@npm:^6.3.0":
+"chai@npm:^6.3.0":
   version: 6.3.0
   resolution: "chai@npm:6.3.0"
   checksum: 10/8798b98c6df6ad8d880239e8d6a2de8a1472c4dd19430e712bd1d846433679be8217427a2ceb9344af2db108a99030a6eaee689aa19baed7f917fa90354a50fa
@@ -19760,7 +19740,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"magic-string@npm:^1.2.3, magic-string@npm:^1.4.3":
+"magic-string@npm:^1.4.3":
   version: 1.4.5
   resolution: "magic-string@npm:1.4.5"
   dependencies:
@@ -21458,13 +21438,6 @@ __metadata:
   version: 1.1.2
   resolution: "obuf@npm:1.1.2"
   checksum: 10/53ff4ab3a13cc33ba6c856cf281f2965c0aec9720967af450e8fd06cfd50aceeefc791986a16bcefa14e7898b3ca9acdfcf15b9d9a1b9c7e1366581a8ad6e65e
-  languageName: node
-  linkType: hard
-
-"obug@npm:^2.1.4":
-  version: 2.2.1
-  resolution: "obug@npm:2.2.1"
-  checksum: 10/306f1bf423aafdd46bc4a99108ffa2a1f6f82b87b10f535ad9853b580d565612f7913a0e71542914fb88d8920b97d6313c36fc1eec858d08071fe2eea0a8aa12
   languageName: node
   linkType: hard
 
@@ -25074,7 +25047,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"std-env@npm:^4.2.0, std-env@npm:^4.3.0":
+"std-env@npm:^4.3.0":
   version: 4.3.0
   resolution: "std-env@npm:4.3.0"
   checksum: 10/1a44e665e05aafab70880b253d7c3ee96611e375dec317e8af2392305e68809decd399a78fd2480c687705e29836137dac49f4df19ce0470d50dd48aabd54d26
@@ -25546,14 +25519,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tinybench@npm:^6.1.4, tinybench@npm:^6.2.2":
+"tinybench@npm:^6.2.2":
   version: 6.2.3
   resolution: "tinybench@npm:6.2.3"
   checksum: 10/3c19a02f28c936bf843946e93f9f4cf66265ac3717d4a641cff5a5b486c8c825e0a4f0ac948dcdbe24951b0eba8aefa9a9153855ae4b30321db0bf8a6d465135
   languageName: node
   linkType: hard
 
-"tinyexec@npm:^1.3.0, tinyexec@npm:^1.3.1":
+"tinyexec@npm:^1.3.1":
   version: 1.3.1
   resolution: "tinyexec@npm:1.3.1"
   checksum: 10/9c7a8ce2633f76c776d9ff663531c7b34d605f41909c2f97a27397e8c12bcaf721dae7680b6683232ffe7a6d465090be9926d5ffd00b5d7be9336a43b45289b1
@@ -26461,67 +26434,6 @@ __metadata:
   bin:
     vite: bin/vite.js
   checksum: 10/b1f7cbae6aae9ce8851c5ac86fde04b2193379d33eca99da653d4a4cff61705381a954bacc5a985aacad65ee72e783b19c12a2eca95ef3c97aeb91f147f371de
-  languageName: node
-  linkType: hard
-
-"vitest@npm:5.0.3":
-  version: 5.0.3
-  resolution: "vitest@npm:5.0.3"
-  dependencies:
-    "@types/chai": "npm:^5.2.2"
-    "@vitest/mocker": "npm:5.0.3"
-    chai: "npm:^6.2.2"
-    es-module-lexer: "npm:^2.3.2"
-    expect-type: "npm:^1.4.0"
-    magic-string: "npm:^1.2.3"
-    obug: "npm:^2.1.4"
-    picomatch: "npm:^4.0.7"
-    std-env: "npm:^4.2.0"
-    tinybench: "npm:^6.1.4"
-    tinyexec: "npm:^1.3.0"
-    tinyglobby: "npm:^0.2.17"
-    why-is-node-running: "npm:3.2.1"
-  peerDependencies:
-    "@edge-runtime/vm": "*"
-    "@opentelemetry/api": ^1.9.0
-    "@types/node": ^22.0.0 || >=24.0.0
-    "@vitest/browser-playwright": 5.0.3
-    "@vitest/browser-preview": 5.0.3
-    "@vitest/browser-webdriverio": ^5.0.0-beta.5 || >=5.0.0
-    "@vitest/coverage-istanbul": 5.0.3
-    "@vitest/coverage-v8": 5.0.3
-    "@vitest/ui": 5.0.3
-    happy-dom: "*"
-    jsdom: "*"
-    vite: ^6.4.0 || ^7.0.0 || ^8.0.0
-  peerDependenciesMeta:
-    "@edge-runtime/vm":
-      optional: true
-    "@opentelemetry/api":
-      optional: true
-    "@types/node":
-      optional: true
-    "@vitest/browser-playwright":
-      optional: true
-    "@vitest/browser-preview":
-      optional: true
-    "@vitest/browser-webdriverio":
-      optional: true
-    "@vitest/coverage-istanbul":
-      optional: true
-    "@vitest/coverage-v8":
-      optional: true
-    "@vitest/ui":
-      optional: true
-    happy-dom:
-      optional: true
-    jsdom:
-      optional: true
-    vite:
-      optional: false
-  bin:
-    vitest: ./vitest.mjs
-  checksum: 10/4ac26bfd065401008772678640e264737e75c4d8c47a2b68e17d73f27cec00128ae53e027a9368741094d08bc5e0ada0d56bcfce4fa5831b6ae0b97a976ac332
   languageName: node
   linkType: hard
 
