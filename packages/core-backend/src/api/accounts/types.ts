@@ -276,7 +276,8 @@ export type V5Transaction = {
   blockHash: string;
   nonce?: string;
   value?: string;
-  methodId?: string;
+  /** `null` for plain native transfers. */
+  methodId?: string | null;
   operationCount?: number;
   memo?: string;
   transactionType?: string;
