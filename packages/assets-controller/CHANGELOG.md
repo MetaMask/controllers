@@ -13,13 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The constructor only registers action handlers and subscribes to messenger events, so it no longer depends on the order in which controllers are constructed.
   - The first `ClientController:stateChange` with the UI open (or a later `KeyringController:unlock`, `KeyringController:lock` or `AccountTreeController` event while the UI is open) reads `NetworkEnablementController:getState`, creates the data sources, invokes `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks and runs the unlock cleanups when the keyring is already unlocked. Register the controllers `AssetsController` reads, such as `AccountTreeController` and `SnapController`, before opening the UI.
   - Until then, `getAssets` (and the methods built on it) with `forceUpdate: true` return what is already in state without fetching and without changing `assetsLoadingStatus`; `handleAssetsUpdate`, `syncAssetsPrices`, `subscribeAssetsPrice` and `handleBasicFunctionalityChange` do nothing; `setSelectedCurrency` updates state without refreshing prices; network, transaction and account group events are ignored.
-
-## [20.2.1]
+- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 
 ### Fixed
 
 - Keep the first forced asset fetch when `subscribeToBasicFunctionalityChange` calls its listener synchronously during bootstrap ([#10885](https://github.com/MetaMask/core/pull/10885))
 - Return persisted balances from `getAssets` before the UI opens when `chainIds` is omitted ([#10885](https://github.com/MetaMask/core/pull/10885))
+
+## [20.2.1]
+
+### Fixed
+
 - Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#11251](https://github.com/MetaMask/core/pull/11251))
   - Applies to metadata enrichment, websocket balance updates, and the unlock spam cleanup.
 

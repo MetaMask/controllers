@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Treat an unreadable live payment token balance as unknown rather than insufficient, so a failing RPC no longer blocks the transaction ([#11284](https://github.com/MetaMask/core/pull/11284))
+  - The live balance check is a fast-fail optimisation; when the RPC request fails the check is now skipped, and quote simulation plus on-chain execution still reject a genuinely underfunded transaction.
+  - Affects quote validation (`Unable to verify balance`) and both the Relay and server submit paths (`Cannot validate payment token balance`).
+  - The `balance-unavailable` `QuoteErrorReason` is no longer emitted and is deprecated. It is kept in the union so existing consumers and historical analytics still type-check.
 - Bump `@metamask/assets-controller` from `^20.2.0` to `^20.2.1` ([#11285](https://github.com/MetaMask/core/pull/11285))
+- Bump `@metamask/gas-fee-controller` from `^27.0.0` to `^27.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
+- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 
 ### Fixed
 
@@ -23,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support fiat payments for `membershipSubscription` transactions ([#11256](https://github.com/MetaMask/core/pull/11256))
   - Add `membershipSubscription` to the default fiat-enabled transaction types and fiat asset map.
   - Treat `membershipSubscription` as a Money Account deposit, so it uses the direct mUSD on-ramp when `directMoneyMusdEnabled` is set, and CHOMP vault recovery on the second leg.
+- Send the `X-Client-Id` header on Relay API requests (`/quote`, `/execute` and `/status`), matching the behaviour already in place for the server intents API ([#11282](https://github.com/MetaMask/core/pull/11282))
+  - The header is omitted when `clientId` is not provided, so existing consumers are unaffected.
+  - `getRelayStatus` now takes the controller messenger as its first argument so it can resolve the configured client ID. This function is internal and not exported from the package, so there is no impact on consumers.
 
 ## [30.4.0]
 

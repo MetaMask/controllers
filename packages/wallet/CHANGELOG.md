@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Add `@metamask/assets-controller` `^20.2.1` as a dependency ([#10885](https://github.com/MetaMask/core/pull/10885))
+- Bump `@metamask/gas-fee-controller` from `^27.0.0` to `^27.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
+- Bump `@metamask/subscription-controller` from `^15.1.2` to `^15.2.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
+- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 
 ## [21.0.0]
 

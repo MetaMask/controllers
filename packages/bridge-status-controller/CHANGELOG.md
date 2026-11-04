@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump `uuid` from `^14.0.0` to `^14.0.1` ([#11179](https://github.com/MetaMask/core/pull/11179))
+- Bump `@metamask/gas-fee-controller` from `^27.0.0` to `^27.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
+- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 
 ## [78.0.1]
 
