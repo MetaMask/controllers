@@ -1,7 +1,0 @@
-Testing types with tsc and vue-tsc is an experimental feature.
-Breaking changes might not follow SemVer, please pin Vitest's version when using it.
-(node:25176) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 user-operation-confirmed listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:25176) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 user-operation-failed listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
-(node:25176) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 user-operation-updated listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
-blob report written to /Users/morten/Development/MetaMask/core/.vitest/blob/blob-5-8.json
