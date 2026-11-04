@@ -24,10 +24,15 @@ mutation can then be aborted. Set `CubistEscrowProviderOptions.authAudience` to 
 
 ## Seedless password unlock
 
-For a social login that unlocks a seedless vault with a password, provide
-`RecoveryIdentifierAuthProvider.getKeyBoundIdentifierLogin`. It must perform
-one AAL1 social login and return both the key-bound recovery token and the
-auth-server token set. Mobile then calls:
+`authenticateIdentifier` always goes through one helper
+(`requestKeyBoundIdentifierToken`). That helper prefers optional
+`RecoveryIdentifierAuthProvider.getKeyBoundIdentifierLogin` when present, and
+otherwise uses `getKeyBoundIdentifierToken`.
+
+`seedlessAuthData` on the result is **optional**: passkey / SIWE logins omit
+it; only seedless social password unlock needs it. For that path, implement
+`getKeyBoundIdentifierLogin` to perform one AAL1 social login and return the
+key-bound recovery token plus the auth-server token set, then call:
 
 ```typescript
 const { session, seedlessAuthData } =
@@ -47,6 +52,7 @@ await seedlessOnboardingController.authenticate({
 
 With `requireSeedlessAuthData: true`, the result always includes
 `seedlessAuthData` (including `revokeToken`) beside a key-bound `session`.
+Without that flag (default), missing seedless data is fine — e.g. passkey.
 `authConnection` must match the social identifier's issuer namespace and uses
 the same string values as seedless `AuthConnection`. Cast to `AuthConnection`
 if TypeScript treats that enum nominally. Pass only `session` to

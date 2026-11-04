@@ -66,40 +66,6 @@ export type AuthorizedEscrow = {
   authorization: IdentifierAuthorization;
 };
 
-/**
- * Requests a key-bound identifier token and returns the private key used to
- * prove possession of it.
- *
- * @param params - Identifier authorization parameters.
- * @param params.identifier - Identifier to authenticate.
- * @param params.requestHash - Request hash bound to the authorization.
- * @param params.identifierAuthProvider - Provider for key-bound assertions.
- * @returns Key-bound identifier token and its proof private key.
- * @throws If the returned token is not bound to this identifier and request.
- */
-export async function requestKeyBoundIdentifierToken({
-  identifier,
-  requestHash,
-  identifierAuthProvider,
-}: {
-  identifier: Identifier;
-  requestHash: string;
-  identifierAuthProvider: RecoveryIdentifierAuthProvider;
-}): Promise<KeyBoundCredential> {
-  const proofKey = await generateSigningKey();
-  const token = await identifierAuthProvider.getKeyBoundIdentifierToken({
-    identifier,
-    proofPublicKey: proofKey.publicKey,
-    requestHash,
-  });
-  if (
-    !isTokenBoundToRequest(token, identifier, proofKey.publicKey, requestHash)
-  ) {
-    throwInvalidIdentifierToken();
-  }
-  return { token, proofPrivateKey: proofKey.privateKey };
-}
-
 const NonEmptyStringStruct = size(string(), 1, Infinity);
 
 const SeedlessAuthDataStruct = structType({
@@ -116,72 +82,87 @@ const SeedlessAuthDataStruct = structType({
 });
 
 /**
- * Performs one identifier login and returns the key-bound credential plus any
- * seedless auth data issued by the same login. Falls back to
- * {@link requestKeyBoundIdentifierToken} when the provider has no
- * `getKeyBoundIdentifierLogin`.
+ * Requests a key-bound identifier credential (and optional seedless auth data)
+ * from one provider call.
  *
- * @param params - Identifier login parameters.
+ * Prefers `getKeyBoundIdentifierLogin` when the provider implements it so a
+ * social login can return seedless auth-server tokens beside the recovery
+ * token. Otherwise falls back to `getKeyBoundIdentifierToken` (passkey / SIWE /
+ * providers that do not return seedless data).
+ *
+ * `seedlessAuthData` is always optional on the success path — passkey logins
+ * typically omit it. Set `requireSeedlessAuthData` only for the seedless
+ * password-unlock path that must have a complete seedless token set.
+ *
+ * @param params - Identifier authorization parameters.
  * @param params.identifier - Identifier to authenticate.
- * @param params.requestHash - Request hash bound to the token.
+ * @param params.requestHash - Request hash bound to the authorization.
  * @param params.identifierAuthProvider - Provider for key-bound assertions.
- * @param params.requireSeedlessAuthData - Whether seedless auth data must be
- * returned.
+ * @param params.requireSeedlessAuthData - When true, fail unless complete
+ * seedless auth data (including `revokeToken`) is returned.
  * @returns Key-bound credential and optional seedless auth data.
- * @throws If seedless auth data is required but missing or incomplete, or the
- * returned token is not bound to this request.
+ * @throws If the returned token is not bound to this identifier and request,
+ * or seedless auth data is required but missing / incomplete.
  */
-export async function requestKeyBoundIdentifierLogin({
+export async function requestKeyBoundIdentifierToken({
   identifier,
   requestHash,
   identifierAuthProvider,
-  requireSeedlessAuthData,
+  requireSeedlessAuthData = false,
 }: {
   identifier: Identifier;
   requestHash: string;
   identifierAuthProvider: RecoveryIdentifierAuthProvider;
-  requireSeedlessAuthData: boolean;
+  requireSeedlessAuthData?: boolean;
 }): Promise<KeyBoundCredential & { seedlessAuthData?: SeedlessAuthData }> {
-  if (identifierAuthProvider.getKeyBoundIdentifierLogin === undefined) {
-    if (requireSeedlessAuthData) {
-      throwMissingSeedlessAuthData();
+  const proofKey = await generateSigningKey();
+
+  if (identifierAuthProvider.getKeyBoundIdentifierLogin !== undefined) {
+    const login: Partial<KeyBoundIdentifierLogin> | null | undefined =
+      await identifierAuthProvider.getKeyBoundIdentifierLogin({
+        identifier,
+        proofPublicKey: proofKey.publicKey,
+        requestHash,
+      });
+    const token: unknown = login?.token;
+    if (
+      !login ||
+      !isTokenBoundToRequest(token, identifier, proofKey.publicKey, requestHash)
+    ) {
+      throwInvalidIdentifierToken();
     }
-    return await requestKeyBoundIdentifierToken({
-      identifier,
-      requestHash,
-      identifierAuthProvider,
-    });
+    const credential = { token, proofPrivateKey: proofKey.privateKey };
+
+    if (login.seedlessAuthData === undefined) {
+      if (requireSeedlessAuthData) {
+        throwMissingSeedlessAuthData();
+      }
+      return credential;
+    }
+    return {
+      ...credential,
+      seedlessAuthData: validateSeedlessAuthData(login.seedlessAuthData, {
+        identifier,
+        requireRevokeToken: requireSeedlessAuthData,
+      }),
+    };
   }
 
-  const proofKey = await generateSigningKey();
-  const login: Partial<KeyBoundIdentifierLogin> | null | undefined =
-    await identifierAuthProvider.getKeyBoundIdentifierLogin({
-      identifier,
-      proofPublicKey: proofKey.publicKey,
-      requestHash,
-    });
-  const token: unknown = login?.token;
+  if (requireSeedlessAuthData) {
+    throwMissingSeedlessAuthData();
+  }
+
+  const token = await identifierAuthProvider.getKeyBoundIdentifierToken({
+    identifier,
+    proofPublicKey: proofKey.publicKey,
+    requestHash,
+  });
   if (
-    !login ||
     !isTokenBoundToRequest(token, identifier, proofKey.publicKey, requestHash)
   ) {
     throwInvalidIdentifierToken();
   }
-  const credential = { token, proofPrivateKey: proofKey.privateKey };
-
-  if (login.seedlessAuthData === undefined) {
-    if (requireSeedlessAuthData) {
-      throwMissingSeedlessAuthData();
-    }
-    return credential;
-  }
-  return {
-    ...credential,
-    seedlessAuthData: validateSeedlessAuthData(login.seedlessAuthData, {
-      identifier,
-      requireRevokeToken: requireSeedlessAuthData,
-    }),
-  };
+  return { token, proofPrivateKey: proofKey.privateKey };
 }
 
 /**

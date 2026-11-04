@@ -182,8 +182,8 @@ export type KeyBoundIdentifierTokenRequest = {
 /**
  * Result of one identifier login. `token` is the key-bound recovery material
  * presented to escrows (its `providerAssertion` carries the provider ID token
- * or assertion). `seedlessAuthData` is present when the login also completed a
- * seedless auth-server exchange.
+ * or assertion). `seedlessAuthData` is optional — social password-unlock may
+ * include it from the same exchange; passkey / SIWE typically omit it.
  */
 export type KeyBoundIdentifierLogin = {
   token: KeyBoundIdentifierToken;
@@ -393,17 +393,23 @@ export type RecoveryAuthProvider = {
 
 /**
  * Obtains a key-bound identifier assertion from an IdP (OIDC, Passkey, SIWE).
+ *
+ * Implement `getKeyBoundIdentifierToken` for every provider. Optionally also
+ * implement `getKeyBoundIdentifierLogin` when one social login should return
+ * seedless auth-server tokens beside the recovery token; `seedlessAuthData`
+ * on that result stays optional (passkey providers omit it).
  */
 export type RecoveryIdentifierAuthProvider = {
   getKeyBoundIdentifierToken: (
     params: KeyBoundIdentifierTokenRequest,
   ) => Promise<KeyBoundIdentifierToken>;
   /**
-   * Optional. Performs one identifier login and returns the key-bound token
-   * plus, for seedless social logins, the auth-server tokens from the same
-   * exchange. When present, `authenticateIdentifier` calls this instead of
-   * `getKeyBoundIdentifierToken`. The returned token must be bound to the
-   * requested `proofPublicKey` and `requestHash`.
+   * Optional. One identifier login that returns the key-bound token and, when
+   * available, seedless auth-server tokens from the same exchange. When
+   * present, the controller prefers this over {@link getKeyBoundIdentifierToken}.
+   * The returned token must be bound to the requested `proofPublicKey` and
+   * `requestHash`. Omit `seedlessAuthData` when the IdP does not issue it
+   * (e.g. passkey).
    */
   getKeyBoundIdentifierLogin?: (
     params: KeyBoundIdentifierTokenRequest,

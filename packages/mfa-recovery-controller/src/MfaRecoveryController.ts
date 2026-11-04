@@ -33,7 +33,6 @@ import {
   countDistinctIdentifiers,
   getIdentifierAuthMode,
   MIN_IDENTIFIERS,
-  requestKeyBoundIdentifierLogin,
   requestKeyBoundIdentifierToken,
 } from './identifier-auth.js';
 import type { AuthorizedEscrow } from './identifier-auth.js';
@@ -363,7 +362,7 @@ export class MfaRecoveryController extends BaseController<
       pkE,
     });
     const { seedlessAuthData, ...credential } =
-      await requestKeyBoundIdentifierLogin({
+      await requestKeyBoundIdentifierToken({
         identifier,
         requestHash,
         identifierAuthProvider: this.#identifierAuthProvider,
