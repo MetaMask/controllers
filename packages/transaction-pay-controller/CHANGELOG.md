@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support fiat payments for `membershipSubscription` transactions ([#11256](https://github.com/MetaMask/core/pull/11256))
   - Add `membershipSubscription` to the default fiat-enabled transaction types and fiat asset map.
   - Treat `membershipSubscription` as a Money Account deposit, so it uses the direct mUSD on-ramp when `directMoneyMusdEnabled` is set, and CHOMP vault recovery on the second leg.
-- Send the `X-Client-Id` header on Relay API requests (`/quote`, `/execute` and `/status`), matching the behaviour already in place for the server intents API ([#11259](https://github.com/MetaMask/core/pull/11259))
+- Send the `X-Client-Id` header on Relay API requests (`/quote`, `/execute` and `/status`), matching the behaviour already in place for the server intents API ([#11282](https://github.com/MetaMask/core/pull/11282))
   - The header is omitted when `clientId` is not provided, so existing consumers are unaffected.
   - `getRelayStatus` now takes the controller messenger as its first argument so it can resolve the configured client ID. This function is internal and not exported from the package, so there is no impact on consumers.
 
