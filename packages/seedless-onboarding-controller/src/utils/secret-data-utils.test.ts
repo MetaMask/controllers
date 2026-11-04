@@ -72,7 +72,7 @@ describe('secret data utilities', () => {
     it('leaves out WrappedKeys (MFA recovery) items', () => {
       const results = parseSecretMetadata([
         {
-          itemId: WrappedKeysItemId.WrappedRecovery,
+          itemId: WrappedKeysItemId.WrappedRecoveryKeys,
           dataType: EncAccountDataType.WrappedKeys,
           data: serializeRecoveryKeysItem({
             recoveryEncKey: new Uint8Array(32).fill(1),

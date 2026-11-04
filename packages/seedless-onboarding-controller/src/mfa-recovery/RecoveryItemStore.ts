@@ -39,7 +39,7 @@ export function findRecoveryKeys(
 ): RecoveryKeys | undefined {
   const item = items.find(
     (candidate) =>
-      candidate.itemId === WrappedKeysItemId.WrappedRecovery &&
+      candidate.itemId === WrappedKeysItemId.WrappedRecoveryKeys &&
       candidate.dataType === EncAccountDataType.WrappedKeys,
   );
   if (!item) {
@@ -105,7 +105,7 @@ export class RecoveryItemStore {
     const item = await this.#fetchWrappedKeysItem(
       recoveryKeys.recoveryEncKey,
       recoveryKeys.recoveryAuthKeyPair,
-      WrappedKeysItemId.WrappedSeedless,
+      WrappedKeysItemId.WrappedSeedKeys,
     );
     if (!item) {
       return [];
@@ -133,7 +133,7 @@ export class RecoveryItemStore {
       encKey: recoveryKeys.recoveryEncKey,
       authKeyPair: recoveryKeys.recoveryAuthKeyPair,
       secretData: serializeWrappedKeys(keySets),
-      itemId: WrappedKeysItemId.WrappedSeedless,
+      itemId: WrappedKeysItemId.WrappedSeedKeys,
       dataType: EncAccountDataType.WrappedKeys,
     });
   }
@@ -160,7 +160,7 @@ export class RecoveryItemStore {
       encKey,
       authKeyPair,
       secretData: serializeRecoveryKeysItem(recoveryKeys),
-      itemId: WrappedKeysItemId.WrappedRecovery,
+      itemId: WrappedKeysItemId.WrappedRecoveryKeys,
       dataType: EncAccountDataType.WrappedKeys,
     });
   }

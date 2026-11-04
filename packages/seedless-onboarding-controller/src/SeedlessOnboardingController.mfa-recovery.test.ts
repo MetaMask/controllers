@@ -184,7 +184,7 @@ describe('SeedlessOnboardingController', () => {
       return source.map((data, index) => {
         if (isRecoveryKeysItem(data)) {
           return {
-            itemId: WrappedKeysItemId.WrappedRecovery,
+            itemId: WrappedKeysItemId.WrappedRecoveryKeys,
             data,
             version: 'v2',
             dataType: EncAccountDataType.WrappedKeys,
@@ -192,7 +192,7 @@ describe('SeedlessOnboardingController', () => {
         }
         if (new TextDecoder().decode(data).startsWith(WRAPPED_KEYS_PREFIX)) {
           return {
-            itemId: WrappedKeysItemId.WrappedSeedless,
+            itemId: WrappedKeysItemId.WrappedSeedKeys,
             data,
             version: 'v2',
             dataType: EncAccountDataType.WrappedKeys,
@@ -1080,7 +1080,7 @@ describe('SeedlessOnboardingController', () => {
                   encKey: created.encKey,
                   authKeyPair: created.authKeyPair,
                   secretData: serializeWrappedKeys([vaultKeySet]),
-                  itemId: WrappedKeysItemId.WrappedSeedless,
+                  itemId: WrappedKeysItemId.WrappedSeedKeys,
                   dataType: EncAccountDataType.WrappedKeys,
                 },
               ],
@@ -1089,7 +1089,7 @@ describe('SeedlessOnboardingController', () => {
                   encKey: vaultKeySet.encKey,
                   authKeyPair: vaultKeySet.authKeyPair,
                   secretData: expect.any(Uint8Array),
-                  itemId: WrappedKeysItemId.WrappedRecovery,
+                  itemId: WrappedKeysItemId.WrappedRecoveryKeys,
                   dataType: EncAccountDataType.WrappedKeys,
                 },
               ],
@@ -1205,7 +1205,7 @@ describe('SeedlessOnboardingController', () => {
                 encKey: existing.encKey,
                 authKeyPair: existing.authKeyPair,
                 secretData: serializeWrappedKeys([vaultKeySet]),
-                itemId: WrappedKeysItemId.WrappedSeedless,
+                itemId: WrappedKeysItemId.WrappedSeedKeys,
                 dataType: EncAccountDataType.WrappedKeys,
               },
             ],
@@ -1214,7 +1214,7 @@ describe('SeedlessOnboardingController', () => {
                 encKey: vaultKeySet.encKey,
                 authKeyPair: vaultKeySet.authKeyPair,
                 secretData: expect.any(Uint8Array),
-                itemId: WrappedKeysItemId.WrappedRecovery,
+                itemId: WrappedKeysItemId.WrappedRecoveryKeys,
                 dataType: EncAccountDataType.WrappedKeys,
               },
             ],
@@ -1488,7 +1488,7 @@ describe('SeedlessOnboardingController', () => {
           expect(
             transformDataItems?.([
               {
-                itemId: WrappedKeysItemId.WrappedRecovery,
+                itemId: WrappedKeysItemId.WrappedRecoveryKeys,
                 data: recoveryKeysData,
                 version: 'v2',
                 dataType: EncAccountDataType.WrappedKeys,
@@ -1501,7 +1501,7 @@ describe('SeedlessOnboardingController', () => {
               data: recoveryKeysData,
               dataType: EncAccountDataType.WrappedKeys,
               version: 'v2',
-              itemId: WrappedKeysItemId.WrappedRecovery,
+              itemId: WrappedKeysItemId.WrappedRecoveryKeys,
             },
           ]);
         });

@@ -2556,7 +2556,7 @@ describe('SeedlessOnboardingController', () => {
                     },
                   }),
                   type: RECOVERY_KEYS_SECRET_TYPE as unknown as SecretType,
-                  itemId: WrappedKeysItemId.WrappedRecovery,
+                  itemId: WrappedKeysItemId.WrappedRecoveryKeys,
                   dataType: EncAccountDataType.WrappedKeys,
                 },
                 {
@@ -4269,7 +4269,7 @@ describe('SeedlessOnboardingController', () => {
             data: stringToBytes('wrapped-recovery'),
             dataType: EncAccountDataType.WrappedKeys,
             version: 'v2' as const,
-            itemId: WrappedKeysItemId.WrappedRecovery,
+            itemId: WrappedKeysItemId.WrappedRecoveryKeys,
           };
           const withWrappedKeys = transformDataItems?.([
             wrappedKeysItem,

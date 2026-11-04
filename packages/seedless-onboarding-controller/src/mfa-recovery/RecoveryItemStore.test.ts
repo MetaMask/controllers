@@ -154,7 +154,7 @@ describe('RecoveryItemStore', () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
         createWrappedKeysItem(
-          WrappedKeysItemId.WrappedRecovery,
+          WrappedKeysItemId.WrappedRecoveryKeys,
           stringToBytes(JSON.stringify({ type: RECOVERY_KEYS_SECRET_TYPE })),
         ),
       ]);
@@ -162,7 +162,7 @@ describe('RecoveryItemStore', () => {
       expect(await store.fetchRecoveryKeys(VAULT_KEYS)).toBeUndefined();
     });
 
-    it('returns the keys from the wrapped_recovery item', async () => {
+    it('returns the keys from the wrapped_recovery_keys item', async () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
         createItem(
@@ -170,7 +170,7 @@ describe('RecoveryItemStore', () => {
           new SecretMetadata(stringToBytes('seed phrase')).toBytes(),
         ),
         createWrappedKeysItem(
-          WrappedKeysItemId.WrappedRecovery,
+          WrappedKeysItemId.WrappedRecoveryKeys,
           serializeRecoveryKeysItem(RECOVERY_KEYS),
         ),
       ]);
@@ -180,12 +180,12 @@ describe('RecoveryItemStore', () => {
       );
     });
 
-    it('ignores recovery-keys data that is not under the wrapped_recovery WrappedKeys item', async () => {
+    it('ignores recovery-keys data that is not under the wrapped_recovery_keys WrappedKeys item', async () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
         createItem('item-1', serializeRecoveryKeysItem(RECOVERY_KEYS)),
         createWrappedKeysItem(
-          WrappedKeysItemId.WrappedRecoveryPending,
+          WrappedKeysItemId.WrappedPasswordKeys,
           serializeRecoveryKeysItem(OTHER_RECOVERY_KEYS),
         ),
       ]);
@@ -222,12 +222,12 @@ describe('RecoveryItemStore', () => {
   });
 
   describe('fetchWrappedKeys', () => {
-    it('returns the key sets from the wrapped_seedless item', async () => {
+    it('returns the key sets from the wrapped_seed_keys item', async () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
         createItem('item-1', serializeWrappedKeys(OTHER_WRAPPED_KEY_SETS)),
         createWrappedKeysItem(
-          WrappedKeysItemId.WrappedSeedless,
+          WrappedKeysItemId.WrappedSeedKeys,
           serializeWrappedKeys(WRAPPED_KEY_SETS),
         ),
       ]);
@@ -245,7 +245,7 @@ describe('RecoveryItemStore', () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
         createWrappedKeysItem(
-          WrappedKeysItemId.WrappedSeedless,
+          WrappedKeysItemId.WrappedSeedKeys,
           stringToBytes('garbage'),
         ),
       ]);
@@ -271,7 +271,7 @@ describe('RecoveryItemStore', () => {
   });
 
   describe('writeWrappedKeys', () => {
-    it('writes the wrapped_seedless item to the TOPRF2 namespace', async () => {
+    it('writes the wrapped_seed_keys item to the TOPRF2 namespace', async () => {
       const { store, toprf } = createStore();
       toprf.addSecretDataItem.mockResolvedValue(undefined);
 
@@ -281,14 +281,14 @@ describe('RecoveryItemStore', () => {
         encKey: RECOVERY_KEYS.recoveryEncKey,
         authKeyPair: RECOVERY_KEYS.recoveryAuthKeyPair,
         secretData: serializeWrappedKeys(WRAPPED_KEY_SETS),
-        itemId: WrappedKeysItemId.WrappedSeedless,
+        itemId: WrappedKeysItemId.WrappedSeedKeys,
         dataType: EncAccountDataType.WrappedKeys,
       });
     });
   });
 
   describe('writeRecoveryKeys', () => {
-    it('writes the wrapped_recovery item to the TOPRF1 namespace', async () => {
+    it('writes the wrapped_recovery_keys item to the TOPRF1 namespace', async () => {
       vi.useFakeTimers({ now: 1234 });
       try {
         const { store, toprf } = createStore();
@@ -303,7 +303,7 @@ describe('RecoveryItemStore', () => {
           encKey: ENC_KEY,
           authKeyPair: AUTH_KEY_PAIR,
           secretData: serializeRecoveryKeysItem(RECOVERY_KEYS, 1234),
-          itemId: WrappedKeysItemId.WrappedRecovery,
+          itemId: WrappedKeysItemId.WrappedRecoveryKeys,
           dataType: EncAccountDataType.WrappedKeys,
         });
       } finally {
