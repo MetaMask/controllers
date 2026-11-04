@@ -720,6 +720,20 @@ describe('MfaRecoveryController', () => {
         );
       });
 
+      it('rejects seedless auth data for a non-social identifier', async () => {
+        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
+        await withController(
+          { identifierAuthProvider },
+          async ({ controller }) => {
+            await expect(
+              controller.authenticateIdentifier(PASSKEY, {
+                requireSeedlessAuthData: true,
+              }),
+            ).rejects.toMatchObject({ code: 'invalid_seedless_auth_data' });
+          },
+        );
+      });
+
       it('returns a recovery session without seedless auth data when not required', async () => {
         const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
         identifierAuthProvider.seedlessAuthData = undefined;

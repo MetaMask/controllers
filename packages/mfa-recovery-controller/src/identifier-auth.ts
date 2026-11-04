@@ -93,12 +93,7 @@ export async function requestKeyBoundIdentifierToken({
     requestHash,
   });
   if (
-    !isTokenBoundToRequest(
-      token,
-      identifier,
-      proofKey.publicKey,
-      requestHash,
-    )
+    !isTokenBoundToRequest(token, identifier, proofKey.publicKey, requestHash)
   ) {
     throwInvalidIdentifierToken();
   }
@@ -168,12 +163,7 @@ export async function requestKeyBoundIdentifierLogin({
   const token: unknown = login?.token;
   if (
     !login ||
-    !isTokenBoundToRequest(
-      token,
-      identifier,
-      proofKey.publicKey,
-      requestHash,
-    )
+    !isTokenBoundToRequest(token, identifier, proofKey.publicKey, requestHash)
   ) {
     throwInvalidIdentifierToken();
   }
