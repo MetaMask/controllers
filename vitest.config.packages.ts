@@ -43,7 +43,6 @@ export default defineConfig({
 
     coverage: {
       enabled: false,
-      provider: 'istanbul',
 
       // The files to include in the coverage report.
       include: ['src/**/*.ts'],
