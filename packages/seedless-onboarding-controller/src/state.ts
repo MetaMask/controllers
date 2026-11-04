@@ -121,6 +121,24 @@ export const seedlessOnboardingMetadata: StateMetadata<SeedlessOnboardingControl
       includeInDebugSnapshot: false,
       usedInUi: false,
     },
+    recoverySession: {
+      includeInStateLogs: false,
+      persist: false,
+      includeInDebugSnapshot: false,
+      usedInUi: false,
+    },
+    envelope: {
+      includeInStateLogs: true,
+      persist: true,
+      includeInDebugSnapshot: false,
+      usedInUi: false,
+    },
+    pendingEnvelopeMigration: {
+      includeInStateLogs: false,
+      persist: true,
+      includeInDebugSnapshot: false,
+      usedInUi: false,
+    },
     encryptedSeedlessEncryptionKey: {
       includeInStateLogs: false,
       persist: true,

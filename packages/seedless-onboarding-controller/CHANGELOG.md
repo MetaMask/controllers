@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
+- Add `authenticateForRecovery` and the `SeedlessOnboardingController:authenticateForRecovery` messenger action ([#11220](https://github.com/MetaMask/core/pull/11220))
+  - `authenticateForRecovery` takes `authConnectionId` and `groupedAuthConnectionId`, and uses the aal2 token as the id token and its `sub` as the user ID.
+- Add non-persisted `recoverySession` state and the `RecoverySession` type. The session holds recovery-node tokens, expiry, profile ID, verifier IDs, and whether the nodes hold a recovery share, and is cleared on lock and `clearState` ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Add `migrateToEnvelope` and the `SeedlessOnboardingController:migrateToEnvelope` messenger action, which make the current vault keys the stable vault key set of the account ([#11220](https://github.com/MetaMask/core/pull/11220))
+  - Takes the current `password` and the 32-byte `recoverySecret`, and requires an aal2 session from `authenticateForRecovery` and `migrationVersion` `V1` or later.
+  - Registers the Recovery Secret on the recovery verifier if the nodes hold no share for it yet.
+  - Writes the vault keys sealed for the password and for the Recovery Secret, plus a control record, as `WrappedKeys` items in their own metadata partitions, under the vault's metadata lock. Secret data items and the vault are not changed.
+  - The sealed envelopes are checkpointed before the first write, so a failed call can be retried with the same arguments. Does nothing if the vault is already envelope-managed.
+- Add persisted `envelope` state and the `EnvelopeState` type, set once the vault is envelope-managed, and persisted, encrypted `pendingEnvelopeMigration` state for the migration checkpoint ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Add `Aal2Required`, `RecoveryKeyShareConflict`, `InvalidEnvelope`, `EnvelopeVaultKeyMismatch`, `EnvelopeControlRecordNotFound`, and `EnvelopeMigrationRequiresDataTypes` error messages ([#11220](https://github.com/MetaMask/core/pull/11220))
 
 ### Changed
 
@@ -18,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
 - Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
+- `changePassword` on an envelope-managed vault keeps the vault keys: it seals them for the new password, appends a control record, and then swaps the password OPRF key, under the vault's metadata lock. Vaults that another device migrated are detected through their control record ([#11220](https://github.com/MetaMask/core/pull/11220))
+- `syncLatestGlobalPassword` and `submitGlobalPassword` open the envelope sealed for the global password first, and fall back to the existing key chain if there is none. A failed envelope fetch is reported as an error, not treated as a missing envelope ([#11220](https://github.com/MetaMask/core/pull/11220))
+- `checkIsPasswordOutdated` compares the global password key with `envelope.passwordAuthPubKey` on an envelope-managed vault ([#11220](https://github.com/MetaMask/core/pull/11220))
+- Bump `@metamask/auth-network-utils` from `^0.3.0` to `^0.4.0` ([#11220](https://github.com/MetaMask/core/pull/11220))
 
 ## [12.0.0]
 

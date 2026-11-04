@@ -39,11 +39,15 @@ export type {
   SeedlessOnboardingControllerCheckMetadataAccessTokenExpiredAction,
   SeedlessOnboardingControllerCheckAccessTokenExpiredAction,
   SeedlessOnboardingControllerRunMigrationsAction,
+  SeedlessOnboardingControllerAuthenticateForRecoveryAction,
+  SeedlessOnboardingControllerMigrateToEnvelopeAction,
 } from './SeedlessOnboardingController-method-action-types.js';
 export type {
   AuthenticatedUserDetails,
+  EnvelopeState,
   SocialBackupsMetadata,
   SeedlessOnboardingControllerState,
+  RecoverySession,
   ToprfKeyDeriver,
   RecoveryErrorData,
   InvalidPrimarySecretDataTypeErrorData,

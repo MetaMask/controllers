@@ -21,7 +21,9 @@ import {
 } from '@metamask/toprf-secure-backup';
 import {
   base64ToBytes,
+  bigIntToHex,
   bytesToBase64,
+  bytesToHex,
   bytesToString,
   stringToBytes,
   concatBytes,
@@ -39,11 +41,42 @@ import {
   Web3AuthNetwork,
 } from './constants.js';
 import {
+  appendControlRecord,
+  deriveControlKeys,
+  deriveEnvelopeKeys,
+  getPasswordNamespaceAuthKeyPair,
+  openEnvelope,
+  pubKeysEqual,
+  sealEnvelope,
+  selectControlRecord,
+} from './envelope/envelope-keys.js';
+import type {
+  ControlItem,
+  ControlRecord,
+  Envelope,
+  EnvelopeKeys,
+  VaultKeySet,
+} from './envelope/envelope-keys.js';
+import { EnvelopeStore } from './envelope/EnvelopeStore.js';
+import {
+  decryptPendingMigration,
+  encryptPendingMigration,
+} from './envelope/pending-migration.js';
+import type {
+  PendingEnvelopeMigration,
+  SealedEnvelope,
+} from './envelope/pending-migration.js';
+import {
   PasswordSyncError,
   RecoveryError,
   SeedlessOnboardingError,
 } from './errors.js';
 import { projectLogger, createModuleLogger } from './logger.js';
+import {
+  decodeAal2Token,
+  getValidRecoverySession,
+} from './mfa-recovery/recovery-session.js';
+import type { RecoveryRequest } from './mfa-recovery/recovery-session.js';
 import { SecretMetadata } from './SecretMetadata.js';
 import type {
   SeedlessOnboardingControllerMessenger,
@@ -63,6 +96,7 @@ import type {
   RenewRefreshToken,
   VaultData,
   DeserializedVaultData,
+  RecoverySession,
 } from './types.js';
 import {
   assertIsEncryptedKeyringEncryptionKeySet,
@@ -78,6 +112,7 @@ import {
   getNewSocialBackupsMetadata,
   trackIncompleteMetadataBackupEvents,
   isAuthTokenError,
+  isCouldNotDeriveEncryptionKeyError,
   isMaxKeyChainLengthError,
   isTokenNearExpiry,
   parseVaultData,
@@ -97,6 +132,37 @@ export type {
 export { getInitialSeedlessOnboardingControllerStateWithDefaults } from './state.js';
 
 const log = createModuleLogger(projectLogger, controllerName);
+
+/**
+ * @param vaultData - The decrypted vault data.
+ * @returns The vault's key set, as the envelope vault key set `K_v`.
+ */
+function toVaultKeySet(vaultData: DeserializedVaultData): VaultKeySet {
+  return {
+    authKeyPair: vaultData.toprfAuthKeyPair,
+    encKey: vaultData.toprfEncryptionKey,
+    localWrapKey: vaultData.toprfPwEncryptionKey,
+  };
+}
+
+/**
+ * Seal the vault key set for an envelope partition.
+ *
+ * @param keys - The envelope keys of the partition.
+ * @param path - The path the keys were derived on.
+ * @param vaultKeySet - The vault key set.
+ * @returns The envelope and its partition keys.
+ */
+async function sealFor(
+  keys: EnvelopeKeys,
+  path: Envelope['path'],
+  vaultKeySet: VaultKeySet,
+): Promise<SealedEnvelope> {
+  return {
+    keys,
+    envelope: await sealEnvelope(keys.wrapKey, path, vaultKeySet),
+  };
+}
 
 const MESSENGER_EXPOSED_METHODS = [
   'fetchMetadataAccessCreds',
@@ -127,6 +193,8 @@ const MESSENGER_EXPOSED_METHODS = [
   'checkMetadataAccessTokenExpired',
   'checkAccessTokenExpired',
   'runMigrations',
+  'authenticateForRecovery',
+  'migrateToEnvelope',
 ] as const;
 
 export class SeedlessOnboardingController<
@@ -158,6 +226,8 @@ export class SeedlessOnboardingController<
   #pendingRefreshPromise: Promise<void> | undefined;
 
   readonly toprfClient: ToprfSecureBackup;
+
+  readonly #envelopeStore: EnvelopeStore;
 
   readonly #refreshJWTToken: RefreshJWTToken;
 
@@ -229,6 +299,9 @@ export class SeedlessOnboardingController<
       network,
       keyDeriver: toprfKeyDeriver,
       fetchMetadataAccessCreds: this.fetchMetadataAccessCreds.bind(this),
+    });
+    this.#envelopeStore = new EnvelopeStore({
+      getToprfClient: (): ToprfSecureBackup => this.toprfClient,
     });
     this.#refreshJWTToken = refreshJWTToken;
     this.#revokeRefreshToken = revokeRefreshToken;
@@ -665,6 +738,9 @@ export class SeedlessOnboardingController<
    * Update the password of the seedless onboarding flow.
    *
    * Changing password will also update the encryption key, metadata store and the vault with new encrypted values.
+   * If the vault is envelope-managed, only the password envelope and the
+   * password OPRF key change; the vault keys and the backend vault stay as
+   * they are.
    *
    * @param newPassword - The new password to update.
    * @param oldPassword - The old password to verify.
@@ -682,34 +758,68 @@ export class SeedlessOnboardingController<
       });
 
       const attemptChangePassword = async (): Promise<void> => {
-        const { latestKeyIndex } = await this.#assertPasswordInSync({
-          skipCache: true,
-          skipLock: true, // skip lock since we already have the lock
-        });
+        const { authPubKey: globalAuthPubKey, latestKeyIndex } =
+          await this.#assertPasswordInSync({
+            skipCache: true,
+            skipLock: true, // skip lock since we already have the lock
+          });
         // load keyring encryption key if it exists
         let keyringEncryptionKey: string | undefined;
         if (this.state.encryptedKeyringEncryptionKey) {
           keyringEncryptionKey = await this.loadKeyringEncryptionKey();
         }
 
-        // update the encryption key with new password and update the Metadata Store
-        const {
-          encKey: newEncKey,
-          pwEncKey: newPwEncKey,
-          authKeyPair: newAuthKeyPair,
-        } = await this.#changeEncryptionKey({
-          oldPassword,
-          newPassword,
-          latestKeyIndex,
-        });
+        const vaultKeySet = toVaultKeySet(
+          await this.#unlockVaultAndGetVaultData(),
+        );
+        // another device may have migrated the vault, so the control record
+        // decides, not local state (I6)
+        const controlItem = await this.#envelopeStore.fetchControlItem(
+          deriveControlKeys(vaultKeySet),
+        );
 
-        // update and encrypt the vault with new password
-        await this.#createNewVaultWithAuthData({
-          password: newPassword,
-          rawToprfEncryptionKey: newEncKey as Uint8Array<ArrayBuffer>,
-          rawToprfPwEncryptionKey: newPwEncKey as Uint8Array<ArrayBuffer>,
-          rawToprfAuthKeyPair: newAuthKeyPair,
-        });
+        if (controlItem) {
+          const newPasswordAuthPubKey = await this.#changePasswordEnveloped({
+            vaultKeySet,
+            controlItem,
+            globalAuthPubKey,
+            latestKeyIndex,
+            newPassword,
+          });
+          await this.#createNewVaultWithAuthData({
+            password: newPassword,
+            rawToprfEncryptionKey:
+              vaultKeySet.encKey as Uint8Array<ArrayBuffer>,
+            rawToprfPwEncryptionKey:
+              vaultKeySet.localWrapKey as Uint8Array<ArrayBuffer>,
+            rawToprfAuthKeyPair: vaultKeySet.authKeyPair,
+          });
+          this.#setEnvelopeState(vaultKeySet, newPasswordAuthPubKey);
+        } else {
+          if (this.state.envelope) {
+            throw new SeedlessOnboardingError(
+              SeedlessOnboardingControllerErrorMessage.EnvelopeControlRecordNotFound,
+            );
+          }
+          // update the encryption key with new password and update the Metadata Store
+          const {
+            encKey: newEncKey,
+            pwEncKey: newPwEncKey,
+            authKeyPair: newAuthKeyPair,
+          } = await this.#changeEncryptionKey({
+            oldPassword,
+            newPassword,
+            latestKeyIndex,
+          });
+
+          // update and encrypt the vault with new password
+          await this.#createNewVaultWithAuthData({
+            password: newPassword,
+            rawToprfEncryptionKey: newEncKey as Uint8Array<ArrayBuffer>,
+            rawToprfPwEncryptionKey: newPwEncKey as Uint8Array<ArrayBuffer>,
+            rawToprfAuthKeyPair: newAuthKeyPair,
+          });
+        }
 
         this.#resetPasswordOutdatedCache();
 
@@ -734,6 +844,83 @@ export class SeedlessOnboardingController<
         );
       }
     });
+  }
+
+  /**
+   * Change the password of an envelope-managed vault: seal `K_v` under the
+   * new password's envelope keys, write the next control record, and swap
+   * the password OPRF key, all under the vault's metadata lock. The vault
+   * data is not touched.
+   *
+   * @param params - The function parameters.
+   * @param params.vaultKeySet - The vault key set `K_v`.
+   * @param params.controlItem - The vault's control item.
+   * @param params.globalAuthPubKey - The live password OPRF auth public key.
+   * @param params.latestKeyIndex - The live password OPRF key index.
+   * @param params.newPassword - The new password.
+   * @returns The auth public key of the new password OPRF key.
+   */
+  async #changePasswordEnveloped({
+    vaultKeySet,
+    controlItem,
+    globalAuthPubKey,
+    latestKeyIndex,
+    newPassword,
+  }: {
+    vaultKeySet: VaultKeySet;
+    controlItem: ControlItem;
+    globalAuthPubKey: SEC1EncodedPublicKey;
+    latestKeyIndex: number;
+    newPassword: string;
+  }): Promise<SEC1EncodedPublicKey> {
+    const currentRecord = selectControlRecord(controlItem, globalAuthPubKey);
+    if (!currentRecord) {
+      throw new SeedlessOnboardingError(
+        SeedlessOnboardingControllerErrorMessage.EnvelopeControlRecordNotFound,
+      );
+    }
+
+    const { oprfKey, seed, authKeyPair } =
+      await this.toprfClient.createLocalKey({ password: newPassword });
+    const keys = deriveEnvelopeKeys(seed);
+    seed.fill(0);
+    const sealed = await sealFor(keys, 'password', vaultKeySet);
+    const nextControlItem = appendControlRecord(controlItem, {
+      ...currentRecord,
+      seq: Math.max(...controlItem.records.map(({ seq }) => seq)) + 1,
+      passwordNamespace: {
+        ...currentRecord.passwordNamespace,
+        authSk: bigIntToHex(authKeyPair.sk),
+        keyIndex: latestKeyIndex + 1,
+        enabled: true,
+      },
+    });
+
+    await this.#withMetadataLock(vaultKeySet.authKeyPair, async () => {
+      await this.#assertGlobalAuthPubKeyUnchanged(globalAuthPubKey);
+      await this.#writeAndVerifyEnvelope(sealed, vaultKeySet);
+      await this.#envelopeStore.writeControlItem(
+        deriveControlKeys(vaultKeySet),
+        nextControlItem,
+      );
+
+      this.#assertIsAuthenticatedUser(this.state);
+      const { nodeAuthTokens, authConnectionId, groupedAuthConnectionId } =
+        this.state;
+      // commit point: from here on the new password is global
+      await this.toprfClient.persistLocalKey({
+        nodeAuthTokens,
+        authConnectionId,
+        groupedAuthConnectionId,
+        userId: this.state.userId,
+        oprfKey,
+        authPubKey: authKeyPair.pk,
+        keyShareIndex: latestKeyIndex,
+        oldAuthKeyPair: getPasswordNamespaceAuthKeyPair(currentRecord),
+      });
+    });
+
+    return authKeyPair.pk;
   }
 
   /**
@@ -876,6 +1063,7 @@ export class SeedlessOnboardingController<
         delete state.vaultEncryptionSalt;
         delete state.revokeToken;
         delete state.accessToken;
+        delete state.recoverySession;
       });
 
       this.#cachedDecryptedVaultData = undefined;
@@ -901,15 +1089,39 @@ export class SeedlessOnboardingController<
       this.#assertIsUnlocked();
       const doSyncPassword = async (): Promise<void> => {
         // update vault with latest globalPassword
-        const { encKey, pwEncKey, authKeyPair } =
+        const { seed, encKey, pwEncKey, authKeyPair } =
           await this.#recoverEncKey(globalPassword);
-        // update and encrypt the vault with new password
-        await this.#createNewVaultWithAuthData({
-          password: globalPassword,
-          rawToprfEncryptionKey: encKey as Uint8Array<ArrayBuffer>,
-          rawToprfPwEncryptionKey: pwEncKey as Uint8Array<ArrayBuffer>,
-          rawToprfAuthKeyPair: authKeyPair,
-        });
+        let vaultKeySet: VaultKeySet | undefined;
+        try {
+          vaultKeySet = await this.#openPasswordEnvelope(seed);
+        } finally {
+          seed.fill(0);
+        }
+
+        if (vaultKeySet) {
+          // envelope-managed: keep K_v and re-encrypt under the new password
+          await this.#createNewVaultWithAuthData({
+            password: globalPassword,
+            rawToprfEncryptionKey:
+              vaultKeySet.encKey as Uint8Array<ArrayBuffer>,
+            rawToprfPwEncryptionKey:
+              vaultKeySet.localWrapKey as Uint8Array<ArrayBuffer>,
+            rawToprfAuthKeyPair: vaultKeySet.authKeyPair,
+          });
+          this.#setEnvelopeState(vaultKeySet, authKeyPair.pk);
+        } else {
+          // update and encrypt the vault with new password
+          await this.#createNewVaultWithAuthData({
+            password: globalPassword,
+            rawToprfEncryptionKey: encKey as Uint8Array<ArrayBuffer>,
+            rawToprfPwEncryptionKey: pwEncKey as Uint8Array<ArrayBuffer>,
+            rawToprfAuthKeyPair: authKeyPair,
+          });
+          // the vault now follows the legacy layout of the new password
+          this.update((state) => {
+            delete state.envelope;
+          });
+        }
 
         this.#resetPasswordOutdatedCache();
       };
@@ -968,18 +1180,34 @@ export class SeedlessOnboardingController<
     globalPassword: string;
     maxKeyChainLength: number;
   }): Promise<void> {
-    const { pwEncKey: globalPwEncKey, authKeyPair: globalAuthKeyPair } =
-      await this.#recoverEncKey(globalPassword);
+    const {
+      seed,
+      pwEncKey: globalPwEncKey,
+      authKeyPair: globalAuthKeyPair,
+    } = await this.#recoverEncKey(globalPassword);
 
     try {
+      // Envelope first (I6): the global password opens K_v, whose PW_BACKUP
+      // chain leads back to this device's key set if it lagged behind.
+      const vaultKeySet = await this.#openPasswordEnvelope(seed);
+      const chainStart = vaultKeySet
+        ? {
+            pwEncKey: vaultKeySet.localWrapKey,
+            authKeyPair: vaultKeySet.authKeyPair,
+          }
+        : { pwEncKey: globalPwEncKey, authKeyPair: globalAuthKeyPair };
+
       // Recover vault encryption key.
-      const res = await this.toprfClient.recoverPwEncKey({
-        targetAuthPubKey,
-        curPwEncKey: globalPwEncKey,
-        curAuthKeyPair: globalAuthKeyPair,
-        maxPwChainLength: maxKeyChainLength,
-      });
-      const { pwEncKey } = res;
+      const { pwEncKey } =
+        vaultKeySet &&
+        pubKeysEqual(vaultKeySet.authKeyPair.pk, targetAuthPubKey)
+          ? { pwEncKey: vaultKeySet.localWrapKey }
+          : await this.toprfClient.recoverPwEncKey({
+              targetAuthPubKey,
+              curPwEncKey: chainStart.pwEncKey,
+              curAuthKeyPair: chainStart.authKeyPair,
+              maxPwChainLength: maxKeyChainLength,
+            });
       const vaultKey = await this.#loadSeedlessEncryptionKey(
         pwEncKey as Uint8Array<ArrayBuffer>,
       );
@@ -1010,6 +1238,8 @@ export class SeedlessOnboardingController<
         );
       }
       throw PasswordSyncError.getInstance(error);
+    } finally {
+      seed.fill(0);
     }
   }
 
@@ -1052,7 +1282,11 @@ export class SeedlessOnboardingController<
         userId,
       } = this.state;
 
-      const currentDeviceAuthPubKey = this.#recoverAuthPubKey();
+      // an envelope-managed vault keeps its key set, so the password OPRF
+      // key it last synced with is tracked separately
+      const currentDeviceAuthPubKey = this.state.envelope
+        ? base64ToBytes(this.state.envelope.passwordAuthPubKey)
+        : this.#recoverAuthPubKey();
 
       let globalAuthPubKey = options?.globalAuthPubKey;
       if (!globalAuthPubKey) {
@@ -1991,6 +2225,31 @@ export class SeedlessOnboardingController<
     authPubKey: SEC1EncodedPublicKey;
     latestKeyIndex: number;
   }> {
+    const { authPubKey, keyIndex: latestKeyIndex } =
+      await this.#fetchGlobalAuthPubKey();
+    const isPasswordOutdated = await this.checkIsPasswordOutdated({
+      ...options,
+      globalAuthPubKey: authPubKey,
+    });
+    if (isPasswordOutdated) {
+      throw new Error(
+        SeedlessOnboardingControllerErrorMessage.OutdatedPassword,
+      );
+    }
+    return { authPubKey, latestKeyIndex };
+  }
+
+  /**
+   * Fetch the live (global) TOPRF1 auth public key and its key index with the
+   * aal1 node auth tokens.
+   *
+   * @returns The global auth public key and its key index.
+   * @throws `FailedToFetchAuthPubKey` if the request fails.
+   */
+  async #fetchGlobalAuthPubKey(): Promise<{
+    authPubKey: SEC1EncodedPublicKey;
+    keyIndex: number;
+  }> {
     this.#assertIsAuthenticatedUser(this.state);
     const {
       nodeAuthTokens,
@@ -1999,7 +2258,7 @@ export class SeedlessOnboardingController<
       userId,
     } = this.state;
 
-    const { authPubKey, keyIndex: latestKeyIndex } = await this.toprfClient
+    return await this.toprfClient
       .fetchAuthPubKey({
         nodeAuthTokens,
         authConnectionId,
@@ -2015,16 +2274,6 @@ export class SeedlessOnboardingController<
           },
         );
       });
-    const isPasswordOutdated = await this.checkIsPasswordOutdated({
-      ...options,
-      globalAuthPubKey: authPubKey,
-    });
-    if (isPasswordOutdated) {
-      throw new Error(
-        SeedlessOnboardingControllerErrorMessage.OutdatedPassword,
-      );
-    }
-    return { authPubKey, latestKeyIndex };
   }
 
   #resetPasswordOutdatedCache(): void {
@@ -2206,6 +2455,520 @@ export class SeedlessOnboardingController<
         },
       );
     }
+  }
+
+  /**
+   * Authenticate on the recovery verifier with the aal2 token and store the
+   * issued node auth tokens, the token's `exp` and `sub` (profile ID), the
+   * verifier IDs, and whether a share already exists, as `recoverySession`.
+   * The aal1 `nodeAuthTokens`, `accessToken` and `metadataAccessToken` are
+   * left as they are.
+   *
+   * @param params - The function parameters.
+   * @param params.aal2Token - The aal2 token minted by the authentication API.
+   * Its `exp` caps the lifetime of the aal2 node auth tokens.
+   * @param params.authConnectionId - The recovery sub-verifier ID.
+   * @param params.groupedAuthConnectionId - The recovery aggregate verifier ID.
+   * @returns A promise that resolves once the aal2 set is stored.
+   * @throws `MissingAuthUserInfo` if either verifier ID is empty or not a string.
+   */
+  async authenticateForRecovery({
+    aal2Token,
+    authConnectionId,
+    groupedAuthConnectionId,
+  }: {
+    aal2Token: string;
+    authConnectionId: string;
+    groupedAuthConnectionId: string;
+  }): Promise<void> {
+    if (
+      typeof authConnectionId !== 'string' ||
+      !authConnectionId ||
+      typeof groupedAuthConnectionId !== 'string' ||
+      !groupedAuthConnectionId
+    ) {
+      throw new SeedlessOnboardingError(
+        SeedlessOnboardingControllerErrorMessage.MissingAuthUserInfo,
+      );
+    }
+
+    return await this.#withControllerLock(async () => {
+      const { exp, sub } = decodeAal2Token(
+        aal2Token,
+        Math.floor(Date.now() / 1000),
+      );
+
+      try {
+        const { nodeAuthTokens, isNewUser } =
+          await this.toprfClient.authenticate({
+            authConnectionId,
+            groupedAuthConnectionId,
+            userId: sub,
+            idTokens: [aal2Token],
+          });
+        this.update((state) => {
+          state.recoverySession = {
+            nodeAuthTokens,
+            expiresAt: exp,
+            userId: sub,
+            authConnectionId,
+            groupedAuthConnectionId,
+            hasRecoveryShare: !isNewUser,
+          };
+        });
+      } catch (error) {
+        log('Error authenticating at aal2', error);
+        throw new SeedlessOnboardingError(
+          SeedlessOnboardingControllerErrorMessage.AuthenticationError,
+          { cause: error },
+        );
+      }
+    });
+  }
+
+  /**
+   * Migrate the vault to envelope encryption, adopting its current key set
+   * as the vault key set `K_v`.
+   *
+   * Writes `rbek` (sealed for the Recovery Secret), `pbek` (sealed for the
+   * password) and the control record into their own partitions. No secret
+   * data item is moved. The sealed envelopes are checkpointed before the
+   * first remote write, so a failed call can be retried with the same
+   * arguments. Does nothing if the vault is already envelope-managed.
+   *
+   * Register the Recovery Secret at the escrows first, then call
+   * {@link authenticateForRecovery}.
+   *
+   * @param params - The function parameters.
+   * @param params.password - The current password.
+   * @param params.recoverySecret - The 32-byte Recovery Secret held in escrow.
+   * @returns A promise that resolves once the vault is envelope-managed.
+   */
+  async migrateToEnvelope({
+    password,
+    recoverySecret,
+  }: {
+    password: string;
+    recoverySecret: Uint8Array;
+  }): Promise<void> {
+    return await this.#withControllerLock(async () =>
+      this.#executeWithTokenRefresh(async () => {
+        this.#assertIsUnlocked();
+        if (this.state.envelope) {
+          return;
+        }
+        if (
+          this.state.migrationVersion < SeedlessOnboardingMigrationVersion.V1
+        ) {
+          throw new SeedlessOnboardingError(
+            SeedlessOnboardingControllerErrorMessage.EnvelopeMigrationRequiresDataTypes,
+          );
+        }
+
+        const vaultKeySet = toVaultKeySet(
+          await this.#unlockVaultAndGetVaultData(),
+        );
+        const recoverySecretHex = bytesToHex(recoverySecret);
+
+        let pending = await this.#loadPendingEnvelopeMigration(vaultKeySet);
+        if (pending?.recoverySecret !== recoverySecretHex) {
+          pending = await this.#sealEnvelopeMigration({
+            password,
+            recoverySecretHex,
+            vaultKeySet,
+          });
+          const encrypted = await encryptPendingMigration(
+            pending,
+            vaultKeySet.localWrapKey,
+          );
+          this.update((state) => {
+            state.pendingEnvelopeMigration = encrypted;
+          });
+        }
+
+        await this.#writeEnvelopeMigration(pending, vaultKeySet);
+
+        this.update((state) => {
+          delete state.pendingEnvelopeMigration;
+        });
+        this.#setEnvelopeState(
+          vaultKeySet,
+          base64ToBytes(pending.passwordAuthPubKey),
+        );
+      }, 'migrateToEnvelope'),
+    );
+  }
+
+  /**
+   * Seal the envelopes and the first control record of an envelope
+   * migration (steps 3 and 4).
+   *
+   * @param params - The function parameters.
+   * @param params.password - The current password.
+   * @param params.recoverySecretHex - The hex encoded Recovery Secret.
+   * @param params.vaultKeySet - The vault key set to adopt as `K_v`.
+   * @returns The migration checkpoint.
+   * @throws `EnvelopeVaultKeyMismatch` if the password does not derive the
+   * vault keys.
+   */
+  async #sealEnvelopeMigration({
+    password,
+    recoverySecretHex,
+    vaultKeySet,
+  }: {
+    password: string;
+    recoverySecretHex: string;
+    vaultKeySet: VaultKeySet;
+  }): Promise<PendingEnvelopeMigration> {
+    await this.verifyVaultPassword(password, { skipLock: true });
+    await this.#assertPasswordInSync({ skipCache: true, skipLock: true });
+
+    const recoverySeed = await this.#evalRecoverySecretSeed(recoverySecretHex);
+    let passwordSeed: Uint8Array | undefined;
+    try {
+      const {
+        seed,
+        authKeyPair: passwordAuthKeyPair,
+        encKey,
+        keyShareIndex,
+      } = await this.#recoverEncKey(password);
+      passwordSeed = seed;
+      if (
+        !pubKeysEqual(passwordAuthKeyPair.pk, vaultKeySet.authKeyPair.pk) ||
+        bytesToHex(encKey) !== bytesToHex(vaultKeySet.encKey)
+      ) {
+        throw new SeedlessOnboardingError(
+          SeedlessOnboardingControllerErrorMessage.EnvelopeVaultKeyMismatch,
+        );
+      }
+
+      this.#assertIsAuthenticatedUser(this.state);
+      const { authConnectionId, groupedAuthConnectionId, userId } = this.state;
+      const record: ControlRecord = {
+        v: 1,
+        seq: 1,
+        passwordNamespace: {
+          verifier: groupedAuthConnectionId ?? authConnectionId,
+          verifierId: userId,
+          authSk: bigIntToHex(vaultKeySet.authKeyPair.sk),
+          keyIndex: keyShareIndex,
+          enabled: true,
+        },
+        migratedAt: Date.now(),
+      };
+
+      return {
+        v: 1,
+        recoverySecret: recoverySecretHex,
+        passwordAuthPubKey: bytesToBase64(vaultKeySet.authKeyPair.pk),
+        envelopes: {
+          password: await sealFor(
+            deriveEnvelopeKeys(passwordSeed),
+            'password',
+            vaultKeySet,
+          ),
+          'recovery-secret': await sealFor(
+            deriveEnvelopeKeys(recoverySeed),
+            'recovery-secret',
+            vaultKeySet,
+          ),
+        },
+        control: appendControlRecord(undefined, record),
+      };
+    } finally {
+      recoverySeed.fill(0);
+      passwordSeed?.fill(0);
+    }
+  }
+
+  /**
+   * Evaluate the Recovery Secret seed `S_rs` on the recovery verifier,
+   * registering the Recovery Secret OPRF key first if the nodes hold none
+   * (step 3).
+   *
+   * @param recoverySecretHex - The hex encoded Recovery Secret.
+   * @returns The seed. The caller zeroes it.
+   * @throws `RecoveryKeyShareConflict` if the registered key belongs to a
+   * different Recovery Secret.
+   */
+  async #evalRecoverySecretSeed(
+    recoverySecretHex: string,
+  ): Promise<Uint8Array> {
+    const recoverySession = this.#requireRecoverySession();
+    if (recoverySession.hasRecoveryShare) {
+      const { seed, rateLimitResetResult } = await this.#withRecoverySession(
+        async (session) =>
+          this.toprfClient
+            .recoverEncKey({ ...session, password: recoverySecretHex })
+            .catch((error) => {
+              if (isCouldNotDeriveEncryptionKeyError(error)) {
+                throw new SeedlessOnboardingError(
+                  SeedlessOnboardingControllerErrorMessage.RecoveryKeyShareConflict,
+                  { cause: error },
+                );
+              }
+              throw error;
+            }),
+      );
+      rateLimitResetResult.catch((error) => {
+        log('Error resetting recovery secret rate limit', error);
+      });
+      return seed;
+    }
+
+    const { oprfKey, seed, authKeyPair } =
+      await this.toprfClient.createLocalKey({ password: recoverySecretHex });
+    await this.#withRecoverySession(async (session) =>
+      this.toprfClient.persistLocalKey({
+        ...session,
+        oprfKey,
+        authPubKey: authKeyPair.pk,
+      }),
+    );
+    this.update((state) => {
+      state.recoverySession = { ...recoverySession, hasRecoveryShare: true };
+    });
+    return seed;
+  }
+
+  /**
+   * Write the checkpointed envelopes and control record under the vault's
+   * metadata lock, and read each back (step 5).
+   *
+   * @param pending - The migration checkpoint.
+   * @param vaultKeySet - The vault key set `K_v`.
+   * @throws `OutdatedPassword`, after discarding the checkpoint, if the
+   * password changed since the envelopes were sealed.
+   */
+  async #writeEnvelopeMigration(
+    pending: PendingEnvelopeMigration,
+    vaultKeySet: VaultKeySet,
+  ): Promise<void> {
+    const passwordAuthPubKey = base64ToBytes(pending.passwordAuthPubKey);
+    await this.#withMetadataLock(vaultKeySet.authKeyPair, async () => {
+      try {
+        await this.#assertGlobalAuthPubKeyUnchanged(passwordAuthPubKey);
+      } catch (error) {
+        this.update((state) => {
+          delete state.pendingEnvelopeMigration;
+        });
+        throw error;
+      }
+
+      await this.#writeAndVerifyEnvelope(
+        pending.envelopes['recovery-secret'],
+        vaultKeySet,
+      );
+      await this.#writeAndVerifyEnvelope(
+        pending.envelopes.password,
+        vaultKeySet,
+      );
+
+      const controlKeys = deriveControlKeys(vaultKeySet);
+      await this.#envelopeStore.writeControlItem(controlKeys, pending.control);
+      const controlItem =
+        await this.#envelopeStore.fetchControlItem(controlKeys);
+      if (
+        !controlItem ||
+        !selectControlRecord(controlItem, passwordAuthPubKey)
+      ) {
+        throw new SeedlessOnboardingError(
+          SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
+        );
+      }
+    });
+  }
+
+  /**
+   * @param vaultKeySet - The vault key set the checkpoint belongs to.
+   * @returns The migration checkpoint, or undefined when there is none for
+   * this key set.
+   */
+  async #loadPendingEnvelopeMigration(
+    vaultKeySet: VaultKeySet,
+  ): Promise<PendingEnvelopeMigration | undefined> {
+    const { pendingEnvelopeMigration } = this.state;
+    if (!pendingEnvelopeMigration) {
+      return undefined;
+    }
+    return await decryptPendingMigration(
+      pendingEnvelopeMigration,
+      vaultKeySet.localWrapKey,
+    );
+  }
+
+  /**
+   * Open the password envelope `pbek` of a password seed.
+   *
+   * @param seed - The password seed `S_pw`.
+   * @returns The vault key set, or undefined when the password has no
+   * envelope (legacy layout).
+   * @throws If the envelope cannot be fetched or does not open. A fetch error
+   * is never treated as "absent" (I6).
+   */
+  async #openPasswordEnvelope(
+    seed: Uint8Array,
+  ): Promise<VaultKeySet | undefined> {
+    const keys = deriveEnvelopeKeys(seed);
+    const envelope = await this.#envelopeStore.fetchEnvelope(keys, 'password');
+    return envelope
+      ? await openEnvelope(envelope, keys.wrapKey, 'password')
+      : undefined;
+  }
+
+  /**
+   * Write an envelope, then read it back and check that it opens to the
+   * vault key set (I1).
+   *
+   * @param sealed - The envelope and its partition keys.
+   * @param vaultKeySet - The vault key set the envelope seals.
+   * @throws `InvalidEnvelope` if the envelope does not read back.
+   */
+  async #writeAndVerifyEnvelope(
+    sealed: SealedEnvelope,
+    vaultKeySet: VaultKeySet,
+  ): Promise<void> {
+    const { keys, envelope } = sealed;
+    await this.#envelopeStore.writeEnvelope(keys, envelope);
+    const stored = await this.#envelopeStore.fetchEnvelope(keys, envelope.path);
+    if (!stored) {
+      throw new SeedlessOnboardingError(
+        SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
+      );
+    }
+    const opened = await openEnvelope(stored, keys.wrapKey, envelope.path);
+    if (!pubKeysEqual(opened.authKeyPair.pk, vaultKeySet.authKeyPair.pk)) {
+      throw new SeedlessOnboardingError(
+        SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
+      );
+    }
+  }
+
+  /**
+   * Re-check, under the metadata lock, that the password OPRF key is still
+   * the one the caller started with (I7).
+   *
+   * @param expected - The password OPRF auth public key the caller saw.
+   * @throws `OutdatedPassword` if the nodes now return a different key.
+   */
+  async #assertGlobalAuthPubKeyUnchanged(
+    expected: SEC1EncodedPublicKey,
+  ): Promise<void> {
+    const { authPubKey } = await this.#fetchGlobalAuthPubKey();
+    if (!pubKeysEqual(authPubKey, expected)) {
+      throw new Error(
+        SeedlessOnboardingControllerErrorMessage.OutdatedPassword,
+      );
+    }
+  }
+
+  /**
+   * Run a callback while holding the metadata lock of a partition.
+   *
+   * @param authKeyPair - The auth key pair of the partition.
+   * @param callback - The callback.
+   * @returns The callback result.
+   */
+  async #withMetadataLock<Result>(
+    authKeyPair: KeyPair,
+    callback: () => Promise<Result>,
+  ): Promise<Result> {
+    const lockId = await this.toprfClient.acquireMetadataLock(authKeyPair);
+    try {
+      return await callback();
+    } finally {
+      await this.toprfClient
+        .releaseMetadataLock(authKeyPair, lockId)
+        .catch((error) => {
+          log('Error releasing metadata lock', error);
+        });
+    }
+  }
+
+  /**
+   * Mark the vault as envelope-managed.
+   *
+   * @param vaultKeySet - The vault key set `K_v`.
+   * @param passwordAuthPubKey - The live password OPRF auth public key.
+   */
+  #setEnvelopeState(
+    vaultKeySet: VaultKeySet,
+    passwordAuthPubKey: SEC1EncodedPublicKey,
+  ): void {
+    this.update((state) => {
+      state.envelope = {
+        v: 1,
+        vaultAuthPubKey: bytesToBase64(vaultKeySet.authKeyPair.pk),
+        passwordAuthPubKey: bytesToBase64(passwordAuthPubKey),
+      };
+    });
+  }
+
+  /**
+   * @returns The recovery session, or undefined when it is missing or expired.
+   */
+  #getRecoverySession(): RecoverySession | undefined {
+    return getValidRecoverySession(
+      this.state.recoverySession,
+      Math.floor(Date.now() / 1000),
+    );
+  }
+
+  /**
+   * @returns The recovery session.
+   * @throws `Aal2Required`, after clearing the session, if it is missing or
+   * expired. It is never refreshed, because that needs a new aal2 token.
+   */
+  #requireRecoverySession(): RecoverySession {
+    const session = this.#getRecoverySession();
+    if (!session) {
+      this.#clearRecoverySession();
+      throw new SeedlessOnboardingError(
+        SeedlessOnboardingControllerErrorMessage.Aal2Required,
+      );
+    }
+    return session;
+  }
+
+  /**
+   * Run a recovery verifier TOPRF call with the aal2 set. A missing, expired
+   * or rejected set is cleared and surfaces as `Aal2Required`.
+   *
+   * @param operation - The TOPRF call, given the request params.
+   * @returns The operation result.
+   */
+  async #withRecoverySession<Result>(
+    operation: (request: RecoveryRequest) => Promise<Result>,
+  ): Promise<Result> {
+    const {
+      nodeAuthTokens,
+      userId,
+      authConnectionId,
+      groupedAuthConnectionId,
+    } = this.#requireRecoverySession();
+    try {
+      return await operation({
+        nodeAuthTokens,
+        authConnectionId,
+        groupedAuthConnectionId,
+        userId,
+      });
+    } catch (error) {
+      if (isAuthTokenError(error)) {
+        this.#clearRecoverySession();
+        throw new SeedlessOnboardingError(
+          SeedlessOnboardingControllerErrorMessage.Aal2Required,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+  }
+
+  #clearRecoverySession(): void {
+    this.update((state) => {
+      delete state.recoverySession;
+    });
   }
 
   /**

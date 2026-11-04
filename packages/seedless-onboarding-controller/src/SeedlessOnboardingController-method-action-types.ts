@@ -105,6 +105,9 @@ export type SeedlessOnboardingControllerFetchAllSecretDataAction = {
  * Update the password of the seedless onboarding flow.
  *
  * Changing password will also update the encryption key, metadata store and the vault with new encrypted values.
+ * If the vault is envelope-managed, only the password envelope and the
+ * password OPRF key change; the vault keys and the backend vault stay as
+ * they are.
  *
  * @param newPassword - The new password to update.
  * @param oldPassword - The old password to verify.
@@ -302,6 +305,49 @@ export type SeedlessOnboardingControllerRefreshAuthTokensAction = {
 };
 
 /**
+ * Authenticate on the recovery verifier with the aal2 token and store the
+ * issued node auth tokens, the token's `exp` and `sub` (profile ID), the
+ * verifier IDs, and whether a share already exists, as `recoverySession`.
+ * The aal1 `nodeAuthTokens`, `accessToken` and `metadataAccessToken` are
+ * left as they are.
+ *
+ * @param params - The function parameters.
+ * @param params.aal2Token - The aal2 token minted by the authentication API.
+ * Its `exp` caps the lifetime of the aal2 node auth tokens.
+ * @param params.authConnectionId - The recovery sub-verifier ID.
+ * @param params.groupedAuthConnectionId - The recovery aggregate verifier ID.
+ * @returns A promise that resolves once the aal2 set is stored.
+ * @throws `MissingAuthUserInfo` if either verifier ID is empty or not a string.
+ */
+export type SeedlessOnboardingControllerAuthenticateForRecoveryAction = {
+  type: `SeedlessOnboardingController:authenticateForRecovery`;
+  handler: SeedlessOnboardingController['authenticateForRecovery'];
+};
+
+/**
+ * Migrate the vault to envelope encryption, adopting its current key set
+ * as the vault key set `K_v`.
+ *
+ * Writes `rbek` (sealed for the Recovery Secret), `pbek` (sealed for the
+ * password) and the control record into their own partitions. No secret
+ * data item is moved. The sealed envelopes are checkpointed before the
+ * first remote write, so a failed call can be retried with the same
+ * arguments. Does nothing if the vault is already envelope-managed.
+ *
+ * Register the Recovery Secret at the escrows first, then call
+ * {@link authenticateForRecovery}.
+ *
+ * @param params - The function parameters.
+ * @param params.password - The current password.
+ * @param params.recoverySecret - The 32-byte Recovery Secret held in escrow.
+ * @returns A promise that resolves once the vault is envelope-managed.
+ */
+export type SeedlessOnboardingControllerMigrateToEnvelopeAction = {
+  type: `SeedlessOnboardingController:migrateToEnvelope`;
+  handler: SeedlessOnboardingController['migrateToEnvelope'];
+};
+
+/**
  * Rotate the refresh token — fetch a new refresh/revoke token pair from the
  * auth service and persist the new revoke token in the vault.
  *
@@ -400,6 +446,8 @@ export type SeedlessOnboardingControllerMethodActions =
   | SeedlessOnboardingControllerStoreKeyringEncryptionKeyAction
   | SeedlessOnboardingControllerLoadKeyringEncryptionKeyAction
   | SeedlessOnboardingControllerRefreshAuthTokensAction
+  | SeedlessOnboardingControllerAuthenticateForRecoveryAction
+  | SeedlessOnboardingControllerMigrateToEnvelopeAction
   | SeedlessOnboardingControllerRotateRefreshTokenAction
   | SeedlessOnboardingControllerRevokePendingRefreshTokensAction
   | SeedlessOnboardingControllerGetAccessTokenAction
