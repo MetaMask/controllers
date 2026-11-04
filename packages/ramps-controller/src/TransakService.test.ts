@@ -2761,6 +2761,51 @@ describe('TransakService', () => {
       ]);
     });
 
+    it('does not share a read between requests for different paths', async () => {
+      const orderIds = ['order-a', 'order-b'];
+      for (const orderId of orderIds) {
+        nock(STAGING_ORDERS_BASE)
+          .get(`${STAGING_PROVIDER_PATH}/orders/${orderId}`)
+          .query(true)
+          .reply(200, { ...MOCK_DEPOSIT_ORDER, paymentDetails: [] });
+        nock(STAGING_TRANSAK_BASE)
+          .get(`/api/v2/orders/${orderId}`)
+          .query(true)
+          .reply(200, {
+            data: {
+              ...MOCK_TRANSAK_ORDER,
+              paymentDetails: [
+                {
+                  fiatCurrency: 'USD',
+                  paymentMethod: 'credit_debit_card',
+                  fields: [{ name: 'reference', id: 'ref', value: orderId }],
+                },
+              ],
+            },
+          });
+      }
+      const { service } = getService();
+      authenticateService(service);
+
+      const results = await settle(
+        Promise.all(
+          orderIds.map((orderId) =>
+            service.getOrder(
+              `${STAGING_PROVIDER_PATH}/orders/${orderId}`,
+              '0x1234',
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        results.map(({ paymentDetails }) => paymentDetails?.[0]?.fields[0]),
+      ).toStrictEqual([
+        { name: 'reference', id: 'ref', value: 'order-a' },
+        { name: 'reference', id: 'ref', value: 'order-b' },
+      ]);
+    });
+
     it('refetches on sequential reads', async () => {
       nock(STAGING_TRANSAK_BASE)
         .get('/api/v2/user/')

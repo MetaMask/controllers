@@ -871,6 +871,7 @@ export class TransakService extends BaseDataService<
       // names of published `cacheUpdated` events.
       queryKey: [
         `${this.name}:${queryName}`,
+        path,
         params ?? {},
         this.#getSessionId(),
       ],
@@ -919,6 +920,8 @@ export class TransakService extends BaseDataService<
   }): Promise<unknown> {
     return (await this.executeMutation({
       mutationKey: [`${this.name}:${mutationName}`],
+      // Some responses carry credentials (`verifyUserOtp` returns the access
+      // token), so do not keep finished mutations in the cache.
       gcTime: 0,
       responseStruct,
       mutationFn: async () => {
