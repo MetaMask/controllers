@@ -5635,7 +5635,7 @@
       "count": 1
     },
     "typescript/no-unsafe-argument": {
-      "count": 60
+      "count": 63
     },
     "typescript/no-unsafe-call": {
       "count": 59
@@ -5679,7 +5679,7 @@
   },
   "packages/transaction-pay-controller/src/utils/validation.test.ts": {
     "typescript/no-unsafe-member-access": {
-      "count": 22
+      "count": 23
     }
   },
   "packages/transaction-pay-controller/src/utils/validation.ts": {
