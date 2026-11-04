@@ -115,10 +115,7 @@ const INFURA_URL_REGEX =
   /^https:\/\/(?<networkName>[^.]+)\.infura\.io\/v\d+\/(?<apiKey>.+)$/u;
 
 /**
- * The value to use as the RPC failover mode in two cases: 1) immediately
- * after initializing the NetworkController but before retrieving the feature
- * flag, and 2) after attempting to retrieve the feature flag but it is not
- * present.
+ * The failover mode that network clients will be initialized with.
  */
 export const DEFAULT_RPC_FAILOVER_MODE: RpcFailoverMode = 'enabled';
 
