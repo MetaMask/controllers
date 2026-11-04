@@ -11,12 +11,11 @@ const { withinSandbox } = createSandbox('platform-api-docs/generate');
 
 vi.setConfig({ testTimeout: 30_000 });
 
-vi.mock('./ts-project.js', async (importOriginal) => {
-  const original = await importOriginal<typeof import('./ts-project.js')>();
+vi.mock(import('./ts-project.js'), async (importOriginal) => {
+  const { createProject } = await importOriginal();
   return {
-    ...original,
     createProject: (): Project => {
-      const project = original.createProject();
+      const project = createProject();
       project.compilerOptions.set({ noLib: true });
       return project;
     },
