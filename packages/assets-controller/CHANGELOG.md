@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Refresh the newly selected account after startup completes when it changes while the initial asset fetch is in progress ([#10885](https://github.com/MetaMask/core/pull/10885))
+- Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#11251](https://github.com/MetaMask/core/pull/11251))
+  - Applies to metadata enrichment, websocket balance updates, and the unlock spam cleanup.
 
 ## [20.2.0]
 
