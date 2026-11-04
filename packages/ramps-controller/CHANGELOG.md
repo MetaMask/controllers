@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **BREAKING:** `TransakService` now extends `BaseDataService` ([#11216](https://github.com/MetaMask/core/pull/11216))
-  - This is breaking because `TransakServiceMessenger` has new required actions and events, writes are no longer retried, and reads and writes now share one circuit breaker (see below).
+  - This is breaking because `TransakServiceMessenger` has new required actions and events, writes are no longer retried, and `verifyUserOtp` now shares the circuit breaker with every other request (see below).
   - `TransakServiceActions` now includes `TransakService:invalidateQueries`, and `TransakServiceEvents` now includes the `TransakService:cacheUpdated` events. A host messenger built from `MessengerActions<TransakServiceMessenger>` and `MessengerEvents<TransakServiceMessenger>` picks these up automatically.
   - The constructor options are unchanged.
 - **BREAKING:** `RampsService` now extends `BaseDataService` from `@metamask/base-data-service` ([#11214](https://github.com/MetaMask/core/pull/11214))
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Concurrent identical `TransakService` reads are now deduplicated: while one request is in flight, identical calls reuse it instead of sending another. Reads still always hit the API ([#11216](https://github.com/MetaMask/core/pull/11216))
 - Responses are now validated, and a malformed response throws `Query function for "TransakService:<method>" returned an unexpected response: ...` for reads or `Mutation function for "TransakService:<method>" returned an unexpected response: ...` for writes. Previously the response was returned unchecked ([#11216](https://github.com/MetaMask/core/pull/11216))
 - Writes (every POST, PATCH and DELETE request) are no longer retried. Previously only `verifyUserOtp` was exempt from retries ([#11216](https://github.com/MetaMask/core/pull/11216))
-- Reads and writes now share one circuit breaker. Previously `verifyUserOtp` had its own ([#11216](https://github.com/MetaMask/core/pull/11216))
+- `verifyUserOtp` now shares the circuit breaker with every other `TransakService` request. Previously it had its own, so repeated failures on other requests can now block it ([#11216](https://github.com/MetaMask/core/pull/11216))
 - Concurrent identical `RampsService` calls are now deduplicated: while one request is in flight, calls with the same method and arguments reuse it instead of sending another. Sequential calls still always hit the API ([#11214](https://github.com/MetaMask/core/pull/11214))
 - Responses that do not match the expected shape now throw `Query function for "RampsService:<method>" returned an unexpected response: ...`, instead of `Malformed response received from <api name>` ([#11214](https://github.com/MetaMask/core/pull/11214))
 - `NeoBankService.getAutorampQuote`, `getAutorampQuoteForAutoramp`, `getCustomerByExternalId`, `registerPixAddress` and `attachAutorampQuote` now return `Promise<Json>` instead of `Promise<unknown>` ([#10882](https://github.com/MetaMask/core/pull/10882))
