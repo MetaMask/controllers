@@ -1096,6 +1096,33 @@ describe('AssetsController', () => {
       );
     });
 
+    it('still force-fetches on first open when basic functionality notifies synchronously', async () => {
+      await withController(
+        {
+          skipBootstrap: true,
+          controllerOptions: {
+            subscribeToBasicFunctionalityChange: (onChange) => {
+              onChange(true);
+            },
+          },
+        },
+        async ({ controller, messenger }) => {
+          messenger.publish('AccountTreeController:initialized', {} as never);
+          messenger.publish('KeyringController:unlock');
+          await flushPromises();
+          const getAssetsSpy = vi.spyOn(controller, 'getAssets');
+
+          publishUiOpen(messenger, true);
+          await flushPromises();
+
+          expect(getAssetsSpy).toHaveBeenCalledWith(
+            [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
+            expect.objectContaining({ forceUpdate: true }),
+          );
+        },
+      );
+    });
+
     it('bootstraps on unlock when the UI was already open before construction', async () => {
       await withController(
         { skipBootstrap: true, clientControllerState: { isUiOpen: true } },
@@ -1302,6 +1329,39 @@ describe('AssetsController', () => {
             const assets = await controller.getAssets(
               [createMockInternalAccount()],
               { chainIds: ['eip155:1'], forceUpdate: true },
+            );
+
+            expect(
+              assets[MOCK_ACCOUNT_ID][MOCK_NATIVE_ASSET_ID].balance,
+            ).toStrictEqual({ amount: '1' });
+          },
+        );
+      });
+
+      it('returns persisted assets when chainIds are omitted', async () => {
+        await withController(
+          {
+            skipBootstrap: true,
+            state: {
+              assetsInfo: {
+                [MOCK_NATIVE_ASSET_ID]: {
+                  type: 'native',
+                  symbol: 'ETH',
+                  name: 'Ether',
+                  decimals: 18,
+                },
+              },
+              assetsBalance: {
+                [MOCK_ACCOUNT_ID]: {
+                  [MOCK_NATIVE_ASSET_ID]: { amount: '1' },
+                },
+              },
+            },
+          },
+          async ({ controller }) => {
+            const assets = await controller.getAssets(
+              [createMockInternalAccount()],
+              { forceUpdate: true },
             );
 
             expect(
@@ -2214,6 +2274,46 @@ describe('AssetsController', () => {
   });
 
   describe('getAssets', () => {
+    it('limits omitted chainIds to enabled networks after the UI opens', async () => {
+      const polygonAssetId = 'eip155:137/slip44:966' as Caip19AssetId;
+      await withController(
+        {
+          state: {
+            assetsInfo: {
+              [MOCK_NATIVE_ASSET_ID]: {
+                type: 'native',
+                symbol: 'ETH',
+                name: 'Ether',
+                decimals: 18,
+              },
+              [polygonAssetId]: {
+                type: 'native',
+                symbol: 'POL',
+                name: 'Polygon',
+                decimals: 18,
+              },
+            },
+            assetsBalance: {
+              [MOCK_ACCOUNT_ID]: {
+                [MOCK_NATIVE_ASSET_ID]: { amount: '1' },
+                [polygonAssetId]: { amount: '2' },
+              },
+            },
+          },
+        },
+        async ({ controller }) => {
+          const assets = await controller.getAssets([
+            createMockInternalAccount(),
+          ]);
+
+          expect(
+            assets[MOCK_ACCOUNT_ID][MOCK_NATIVE_ASSET_ID].balance,
+          ).toStrictEqual({ amount: '1' });
+          expect(assets[MOCK_ACCOUNT_ID][polygonAssetId]).toBeUndefined();
+        },
+      );
+    });
+
     it('returns empty object when no balances exist', async () => {
       await withController(async ({ controller }) => {
         const accounts = [createMockInternalAccount()];

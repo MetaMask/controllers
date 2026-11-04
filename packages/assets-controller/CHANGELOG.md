@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep the first forced asset fetch when `subscribeToBasicFunctionalityChange` calls its listener synchronously during bootstrap ([#10885](https://github.com/MetaMask/core/pull/10885))
+- Return persisted balances from `getAssets` before the UI opens when `chainIds` is omitted ([#10885](https://github.com/MetaMask/core/pull/10885))
 - Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#11251](https://github.com/MetaMask/core/pull/11251))
   - Applies to metadata enrichment, websocket balance updates, and the unlock spam cleanup.
 

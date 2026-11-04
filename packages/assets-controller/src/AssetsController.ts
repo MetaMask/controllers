@@ -846,6 +846,13 @@ export class AssetsController extends BaseController<
   #enabledChains: Set<ChainId> = new Set();
 
   /**
+   * Whether `#enabledChains` has been read from NetworkEnablementController.
+   * Until then the set is empty because it has not been initialized, not
+   * because every network is disabled.
+   */
+  #hasInitializedEnabledChains = false;
+
+  /**
    * Get the currently selected accounts from AccountTreeController.
    * This includes all accounts in the same group as the selected account
    * (EVM, Bitcoin, Solana, Tron, etc. that belong to the same logical account group).
@@ -1295,8 +1302,9 @@ export class AssetsController extends BaseController<
 
   /**
    * Subscribe to the host's basic-functionality setting, if the host provided
-   * a way to. Runs during the bootstrap, after the data sources exist, so a
-   * synchronous `onChange` cannot run before they are created.
+   * a way to. Runs during the bootstrap, after the data sources exist and
+   * before `#isBootstrapped` is set. A synchronous `onChange` is ignored
+   * until the bootstrap finishes; `#updateActive` subscribes afterwards.
    */
   #subscribeToBasicFunctionality(): void {
     const { subscribeToBasicFunctionalityChange } = this.#sourceOptions;
@@ -1344,6 +1352,7 @@ export class AssetsController extends BaseController<
       'NetworkEnablementController:getState',
     );
     this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
+    this.#hasInitializedEnabledChains = true;
 
     log('Initialized state', {
       enabledNetworkMap,
@@ -1886,13 +1895,15 @@ export class AssetsController extends BaseController<
    * Get assets for the given accounts, optionally force-fetching them first.
    *
    * Before the UI first opens there are no data sources, so a forced fetch is
-   * skipped and the assets already in state are returned. The loading status
-   * of the accounts is left untouched, so the first fetch afterwards still
-   * reports them as loading.
+   * skipped and the assets already in state are returned. Enabled networks
+   * have not been read yet, so an omitted `chainIds` includes every asset in
+   * state rather than treating the empty enabled-chain set as a filter. The
+   * loading status of the accounts is left untouched, so the first fetch
+   * afterwards still reports them as loading.
    *
    * @param accounts - Accounts to get assets for.
    * @param options - Fetch options.
-   * @param options.chainIds - Chains to include. Defaults to the enabled chains.
+   * @param options.chainIds - Chains to include. Defaults to the enabled chains once they have been read.
    * @param options.assetTypes - Asset types to include. Defaults to fungible.
    * @param options.forceUpdate - Fetch from the data sources before reading state.
    * @param options.bypassServerCache - Also bypass server-side HTTP caches.
@@ -1942,15 +1953,22 @@ export class AssetsController extends BaseController<
       dataTypes?: DataType[];
     },
   ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
-    const chainIds = options?.chainIds ?? [...this.#enabledChains];
+    // An omitted list uses the enabled networks once they have been read.
+    // Before that, `#enabledChains` is empty because it has not been
+    // initialized. `undefined` means "do not filter by chain".
+    const chainIds =
+      options?.chainIds ??
+      (this.#hasInitializedEnabledChains
+        ? [...this.#enabledChains]
+        : undefined);
     const assetTypes = options?.assetTypes ?? ['fungible'];
     const dataTypes = options?.dataTypes ?? ['balance', 'metadata', 'price'];
 
-    if (accounts.length === 0 || chainIds.length === 0) {
+    if (accounts.length === 0 || chainIds?.length === 0) {
       return this.#getAssetsFromState(accounts, chainIds, assetTypes);
     }
 
-    if (options?.forceUpdate) {
+    if (options?.forceUpdate && chainIds) {
       await this.#forceUpdateAssets({
         accounts,
         chainIds,
@@ -3625,17 +3643,27 @@ export class AssetsController extends BaseController<
     }
   }
 
+  /**
+   * Read combined assets from state.
+   *
+   * @param accounts - Accounts to read.
+   * @param chainIds - Chains to include. `undefined` includes every chain.
+   * @param assetTypes - Asset types to include.
+   * @returns Assets keyed by account ID and asset ID.
+   */
   #getAssetsFromState(
     accounts: Pick<InternalAccount, 'id'>[],
-    chainIds: ChainId[],
+    chainIds: ChainId[] | undefined,
     assetTypes: AssetType[],
   ): Record<AccountId, Record<Caip19AssetId, Asset>> {
     const result = Object.create(null) as Record<
       AccountId,
       Record<Caip19AssetId, Asset>
     >;
-    // Convert to Sets for O(1) lookups
-    const chainIdSet = new Set(chainIds);
+    // Convert to Sets for O(1) lookups. An undefined list is not a filter:
+    // `new Set(undefined)` is empty and would hide every asset.
+    const chainIdSet =
+      chainIds === undefined ? undefined : new Set<ChainId>(chainIds);
     const assetTypeSet = new Set(assetTypes);
 
     for (const account of accounts) {
@@ -3869,7 +3897,12 @@ export class AssetsController extends BaseController<
    * @param _isBasic - The new value (for call-site clarity; the getter is the source of truth).
    */
   handleBasicFunctionalityChange(_isBasic: boolean): void {
-    if (!this.#sources) {
+    // Data sources exist before `#isBootstrapped` is set. A synchronous
+    // `onChange` from the host subscribe callback lands in that window.
+    // Subscribing here would fill `#activeSubscriptions` and make
+    // `#startTracking` skip the startup refresh. `#updateActive` subscribes
+    // afterwards with the current basic-functionality setting.
+    if (!this.#sources || !this.#isBootstrapped) {
       return;
     }
     this.#stopTracking();
