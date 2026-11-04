@@ -205,25 +205,37 @@ function isTokenBoundToRequest(
     candidate.requestHash === requestHash &&
     candidate.proofPublicKey instanceof Uint8Array &&
     areUint8ArraysEqual(candidate.proofPublicKey, proofPublicKey) &&
-    isSameIdentifier(candidate.identifier, identifier)
+    isTokenIdentifierBoundToRequest(candidate.identifier, identifier)
   );
 }
 
 /**
- * @param left - Identifier from the token, if any.
- * @param right - Identifier requested by the controller.
- * @returns Whether both share the same type, namespace, and value.
+ * Whether the token's identifier is bound to the requested identifier.
+ *
+ * Type and namespace must always match. Value must match when the request
+ * already knows the subject. An empty request `value` is allowed for password
+ * unlock: mobile discovers the IdP `sub` from the provider ID token and writes
+ * it onto the returned token (see metamask-mobile OIDC identifier provider).
+ *
+ * @param tokenIdentifier - Identifier from the token, if any.
+ * @param requested - Identifier requested by the controller.
+ * @returns Whether the token identifier is acceptable for this request.
  */
-function isSameIdentifier(
-  left: Identifier | undefined,
-  right: Identifier,
+function isTokenIdentifierBoundToRequest(
+  tokenIdentifier: Identifier | undefined,
+  requested: Identifier,
 ): boolean {
-  return (
-    left !== undefined &&
-    left.type === right.type &&
-    left.namespace === right.namespace &&
-    left.value === right.value
-  );
+  if (
+    tokenIdentifier === undefined ||
+    tokenIdentifier.type !== requested.type ||
+    tokenIdentifier.namespace !== requested.namespace
+  ) {
+    return false;
+  }
+  if (requested.value === '') {
+    return tokenIdentifier.value.length > 0;
+  }
+  return tokenIdentifier.value === requested.value;
 }
 
 /**

@@ -720,6 +720,61 @@ describe('MfaRecoveryController', () => {
         );
       });
 
+      it('accepts a token that discovers the provider subject when request value is empty', async () => {
+        const socialWithoutSubject: Identifier = { ...SOCIAL, value: '' };
+        const providerSubject = 'provider-oidc-sub';
+        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
+        const login = identifierAuthProvider.getKeyBoundIdentifierLogin.bind(
+          identifierAuthProvider,
+        );
+        vi.spyOn(
+          identifierAuthProvider,
+          'getKeyBoundIdentifierLogin',
+        ).mockImplementation(async (params) => {
+          const result = await login(params);
+          return {
+            ...result,
+            token: {
+              ...result.token,
+              identifier: {
+                ...params.identifier,
+                value: providerSubject,
+              },
+            },
+          };
+        });
+        await withController(
+          { identifierAuthProvider },
+          async ({ controller }) => {
+            const { session, seedlessAuthData } =
+              await controller.authenticateIdentifier(socialWithoutSubject, {
+                requireSeedlessAuthData: true,
+              });
+
+            expect(seedlessAuthData).toStrictEqual(STUB_SEEDLESS_AUTH_DATA);
+            expect(session.token.identifier).toStrictEqual({
+              ...socialWithoutSubject,
+              value: providerSubject,
+            });
+          },
+        );
+      });
+
+      it('rejects an empty request value when the token also has an empty value', async () => {
+        const socialWithoutSubject: Identifier = { ...SOCIAL, value: '' };
+        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
+        await withController(
+          { identifierAuthProvider },
+          async ({ controller }) => {
+            await expect(
+              controller.authenticateIdentifier(socialWithoutSubject, {
+                requireSeedlessAuthData: true,
+              }),
+            ).rejects.toMatchObject({ code: 'invalid_identifier_token' });
+          },
+        );
+      });
+
       it('rejects seedless auth data for a non-social identifier', async () => {
         const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
         await withController(
@@ -920,6 +975,32 @@ describe('MfaRecoveryController', () => {
               identifier: {
                 ...SOCIAL,
                 value: 'other-user',
+              },
+            },
+          }),
+        },
+        {
+          name: 'a token with a different identifier type',
+          update: (login: KeyBoundIdentifierLogin): unknown => ({
+            ...login,
+            token: {
+              ...login.token,
+              identifier: {
+                ...SOCIAL,
+                type: 'passkey',
+              },
+            },
+          }),
+        },
+        {
+          name: 'a token with a different identifier namespace',
+          update: (login: KeyBoundIdentifierLogin): unknown => ({
+            ...login,
+            token: {
+              ...login.token,
+              identifier: {
+                ...SOCIAL,
+                namespace: 'https://appleid.apple.com',
               },
             },
           }),
