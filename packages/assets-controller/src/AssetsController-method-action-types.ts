@@ -6,35 +6,11 @@
 import type { AssetsController } from './AssetsController.js';
 
 /**
- * Start the controller once every controller it depends on is registered.
- *
- * The constructor does not touch other controllers. `start()` reads enabled
- * networks, creates the data sources (whose constructors read network, snap
- * and feature-flag state), subscribes to external events and to
- * basic-functionality changes, and begins asset tracking when the UI is
- * open, the keyring is unlocked and the account tree is initialized.
- *
- * Call it after the client has constructed and initialized its own
- * controllers, such as `AccountTreeController` and `SnapController`.
- * Until then, asset tracking does not run: forced fetches return what is
- * already in state, and pushed updates are ignored.
- *
- * Repeated calls return the same promise. Calls after `destroy()` do
- * nothing.
- *
- * @returns A promise that resolves once the controller has started.
- */
-export type AssetsControllerStartAction = {
-  type: `AssetsController:start`;
-  handler: AssetsController['start'];
-};
-
-/**
  * Get assets for the given accounts, optionally force-fetching them first.
  *
- * Before `start()` there are no data sources, so a forced fetch is skipped
- * and the assets already in state are returned. The loading status of the
- * accounts is left untouched, so the first fetch after `start()` still
+ * Before the UI first opens there are no data sources, so a forced fetch is
+ * skipped and the assets already in state are returned. The loading status
+ * of the accounts is left untouched, so the first fetch afterwards still
  * reports them as loading.
  *
  * @param accounts - Accounts to get assets for.
@@ -258,7 +234,6 @@ export type AssetsControllerSetSelectedCurrencyAction = {
  * Union of all AssetsController action types.
  */
 export type AssetsControllerMethodActions =
-  | AssetsControllerStartAction
   | AssetsControllerGetAssetsAction
   | AssetsControllerSyncAssetsPricesAction
   | AssetsControllerGetAssetsBalanceAction

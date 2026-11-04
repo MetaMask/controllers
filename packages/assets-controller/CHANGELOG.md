@@ -7,19 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Add `start()` and the `AssetsController:start` messenger action ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - `start()` reads enabled networks from `NetworkEnablementController:getState`, creates the data sources, subscribes to external events and to `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks, runs the unlock cleanups when the keyring is already unlocked, and starts asset tracking when the UI is open, the keyring is unlocked and the account tree is initialized.
-  - Call it once the client has constructed and initialized the controllers `AssetsController` depends on, such as `AccountTreeController` and `SnapController`. Repeated calls return the same promise; calls after `destroy()` do nothing.
-- Export the `AssetsControllerStartAction` type ([#10885](https://github.com/MetaMask/core/pull/10885))
-
 ### Changed
 
-- **BREAKING:** The `AssetsController` constructor no longer calls messenger actions, creates data sources or subscribes to external events; asset tracking does not run until `start()` is called ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - Call `start()` (or the `AssetsController:start` action) after the controllers `AssetsController` depends on are registered. Data sources are created in `start()`, so their constructors still read `NetworkController`, `NetworkEnablementController`, `SnapController`, `PermissionController` and `RemoteFeatureFlagController` as before, only later.
-  - `subscribeToBasicFunctionalityChange` is invoked by `start()` instead of the constructor.
-  - Before `start()`, `getAssets` (and the methods built on it) with `forceUpdate: true` return what is already in state without fetching and without changing `assetsLoadingStatus`; `handleAssetsUpdate`, `syncAssetsPrices`, `subscribeAssetsPrice` and `handleBasicFunctionalityChange` do nothing; `setSelectedCurrency` updates state without refreshing prices.
+- **BREAKING:** The `AssetsController` constructor no longer calls messenger actions or creates data sources; they are created the first time the UI opens ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - The constructor only registers action handlers and subscribes to messenger events, so it no longer depends on the order in which controllers are constructed.
+  - The first `ClientController:stateChange` with the UI open (or a later `KeyringController:unlock`, `KeyringController:lock` or `AccountTreeController` event while the UI is open) reads `NetworkEnablementController:getState`, creates the data sources, invokes `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks and runs the unlock cleanups when the keyring is already unlocked. Register the controllers `AssetsController` reads, such as `AccountTreeController` and `SnapController`, before opening the UI.
+  - Until then, `getAssets` (and the methods built on it) with `forceUpdate: true` return what is already in state without fetching and without changing `assetsLoadingStatus`; `handleAssetsUpdate`, `syncAssetsPrices`, `subscribeAssetsPrice` and `handleBasicFunctionalityChange` do nothing; `setSelectedCurrency` updates state without refreshing prices; network, transaction and account group events are ignored.
 
 ### Fixed
 

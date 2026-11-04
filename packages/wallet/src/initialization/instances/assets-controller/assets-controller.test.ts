@@ -101,7 +101,10 @@ describe('assetsController', () => {
       },
     });
 
-    await wallet.getInstance('AssetsController').start();
+    expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
+
+    openUi(wallet);
+    await flushPromises();
     await wallet.destroy();
 
     expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
@@ -244,7 +247,7 @@ describe('assetsController', () => {
 
     await wallet.init();
 
-    // Without `start()`, a forced fetch reads what is already in state.
+    // Before the UI opens, a forced fetch reads what is already in state.
     const assets = await instance.getAssets(
       [
         { id: accountId } as Parameters<
@@ -257,20 +260,40 @@ describe('assetsController', () => {
     expect(Object.keys(assets[accountId])).toStrictEqual([nativeAssetId]);
   });
 
-  it('exposes AssetsController:start on the wallet messenger', async () => {
+  it('does not expose an AssetsController:start action', () => {
     const wallet = new Wallet({
       instanceOptions: getInstanceOptions(),
     });
     wallets.push(wallet);
-    await wallet.init();
 
-    expect(
-      await (
+    expect(() =>
+      (
         wallet.messenger as unknown as {
-          call(action: 'AssetsController:start'): Promise<void>;
+          call(action: string): unknown;
         }
       ).call('AssetsController:start'),
-    ).toBeUndefined();
+    ).toThrow(/AssetsController:start has not been/u);
+  });
+
+  it('bootstraps when the client opens the UI, while AccountTreeController and SnapController are absent', async () => {
+    const subscribeToBasicFunctionalityChange = vi.fn();
+    const wallet = new Wallet({
+      instanceOptions: {
+        ...getInstanceOptions(),
+        assetsController: {
+          queryApiClient: createMockQueryApiClient(),
+          subscribeToBasicFunctionalityChange,
+        },
+      },
+    });
+    wallets.push(wallet);
+    await wallet.init();
+    expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
+
+    openUi(wallet);
+    await flushPromises();
+
+    expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
   });
 
   it('exposes AssetsController state on the wallet messenger by default', () => {
@@ -303,6 +326,28 @@ describe('assetsController', () => {
     expect(destroy).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Open the UI the way a client does, through `ClientController:setUiOpen`.
+ *
+ * @param wallet - The wallet whose `ClientController` to update.
+ */
+function openUi(wallet: Wallet): void {
+  (
+    wallet.messenger as unknown as {
+      call(action: 'ClientController:setUiOpen', open: boolean): void;
+    }
+  ).call('ClientController:setUiOpen', true);
+}
+
+/**
+ * Let pending promises and immediates settle.
+ */
+async function flushPromises(): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
 
 /**
  * Builds a minimal `queryApiClient` that serves the controller's native asset

@@ -231,6 +231,35 @@ async function activateTracking(messenger: RootMessenger): Promise<void> {
   await flushPromises();
 }
 
+/**
+ * Bootstrap the controller the way a client does: publish
+ * `ClientController:stateChange` with the UI open, which creates the data
+ * sources, and wait for the bootstrap to settle. When the UI was closed
+ * beforehand, publish it closed again so the lifecycle state the test set up
+ * is kept.
+ *
+ * @param messenger - The root messenger.
+ */
+async function bootstrapController(messenger: RootMessenger): Promise<void> {
+  const { isUiOpen: wasUiOpen } = messenger.call('ClientController:getState');
+  publishUiOpen(messenger, true);
+  await flushPromises();
+  if (!wasUiOpen) {
+    publishUiOpen(messenger, false);
+    await flushPromises();
+  }
+}
+
+/**
+ * Publish `ClientController:stateChange` with the given UI open state.
+ *
+ * @param messenger - The root messenger.
+ * @param isUiOpen - Whether the UI is open.
+ */
+function publishUiOpen(messenger: RootMessenger, isUiOpen: boolean): void {
+  messenger.publish('ClientController:stateChange', { isUiOpen }, []);
+}
+
 function createMockInternalAccount(
   overrides?: Partial<InternalAccount>,
 ): InternalAccount {
@@ -279,10 +308,11 @@ type WithControllerOptions = {
    */
   clientControllerState?: { isUiOpen: boolean };
   /**
-   * When true, the controller is constructed but `start()` is not called, so
-   * no data source exists yet. Defaults to false.
+   * When true, the controller is constructed but the UI is never published
+   * open, so the controller is not bootstrapped and no data source exists
+   * yet. Defaults to false.
    */
-  skipStart?: boolean;
+  skipBootstrap?: boolean;
   /**
    * When set, registers RemoteFeatureFlagController:getState so the controller can
    * read feature flags (e.g. `assetsAccountsApiV6` gating the balances endpoint).
@@ -332,7 +362,7 @@ async function withController<ReturnValue>(
       remoteFeatureFlags = {},
       queryApiClient = createMockQueryApiClient(),
       controllerOptions = {},
-      skipStart = false,
+      skipBootstrap = false,
     },
     fn,
   ]: [WithControllerOptions, WithControllerCallback<ReturnValue>] =
@@ -424,6 +454,13 @@ async function withController<ReturnValue>(
     },
     clientControllerSelectors.selectIsUiOpen,
   );
+  messenger.subscribe(
+    'ClientController:stateChange',
+    (open: boolean) => {
+      clientControllerState = { isUiOpen: open };
+    },
+    clientControllerSelectors.selectIsUiOpen,
+  );
 
   registerKeyringUnlockMock(messenger);
 
@@ -449,8 +486,8 @@ async function withController<ReturnValue>(
       ...incomingPriceDataSourceConfig,
     },
   });
-  if (!skipStart) {
-    await controller.start();
+  if (!skipBootstrap) {
+    await bootstrapController(messenger);
   }
 
   try {
@@ -785,7 +822,7 @@ describe('AssetsController', () => {
     });
   });
 
-  describe('start', () => {
+  describe('bootstrap', () => {
     it('does not call any messenger action during construction', async () => {
       const messenger: RootMessenger = new Messenger({
         namespace: MOCK_ANY_NAMESPACE,
@@ -802,17 +839,148 @@ describe('AssetsController', () => {
       controller.destroy();
     });
 
-    it('does not invoke subscribeToBasicFunctionalityChange until started', async () => {
+    it('does not expose a start messenger action', async () => {
+      await withController({ skipBootstrap: true }, async ({ messenger }) => {
+        expect(() =>
+          (messenger as unknown as { call: (action: string) => unknown }).call(
+            'AssetsController:start',
+          ),
+        ).toThrow(
+          'A handler for AssetsController:start has not been registered',
+        );
+      });
+    });
+
+    it('subscribes to external events during construction', async () => {
+      const messenger: RootMessenger = new Messenger({
+        namespace: MOCK_ANY_NAMESPACE,
+      });
+      const subscribeSpy = vi.spyOn(messenger, 'subscribe');
+
+      const controller = new AssetsController({
+        messenger: messenger as unknown as AssetsControllerMessenger,
+        queryApiClient: createMockQueryApiClient(),
+      });
+
+      const subscribedEvents = subscribeSpy.mock.calls.map(([event]) => event);
+      expect(subscribedEvents).toStrictEqual(
+        expect.arrayContaining([
+          'ClientController:stateChange',
+          'KeyringController:unlock',
+          'KeyringController:lock',
+          'AccountTreeController:initialized',
+          'NetworkEnablementController:stateChange',
+          'TransactionController:transactionConfirmed',
+        ]),
+      );
+      controller.destroy();
+    });
+
+    it('does not read other controllers until the UI opens', async () => {
+      await withController({ skipBootstrap: true }, async ({ messenger }) => {
+        const callSpy = vi.spyOn(messenger, 'call');
+
+        publishUiOpen(messenger, true);
+        await flushPromises();
+
+        const calledActions = callSpy.mock.calls.map(([action]) => action);
+        expect(calledActions).toContain('NetworkEnablementController:getState');
+        expect(calledActions).toContain('NetworkController:getState');
+      });
+    });
+
+    it('does not create data sources when the UI is published closed', async () => {
+      await withController({ skipBootstrap: true }, async ({ messenger }) => {
+        const callSpy = vi.spyOn(messenger, 'call');
+
+        publishUiOpen(messenger, false);
+        await flushPromises();
+
+        expect(callSpy.mock.calls.map(([action]) => action)).not.toContain(
+          'NetworkEnablementController:getState',
+        );
+      });
+    });
+
+    it('does not invoke subscribeToBasicFunctionalityChange until the UI opens', async () => {
       const subscribeToBasicFunctionalityChange = vi.fn();
       await withController(
         {
-          skipStart: true,
+          skipBootstrap: true,
           controllerOptions: { subscribeToBasicFunctionalityChange },
         },
-        async ({ controller }) => {
+        async ({ messenger }) => {
           expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
 
-          await controller.start();
+          publishUiOpen(messenger, true);
+          await flushPromises();
+
+          expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
+        },
+      );
+    });
+
+    it('bootstraps only once across UI open and close cycles', async () => {
+      const subscribeToBasicFunctionalityChange = vi.fn();
+      await withController(
+        {
+          skipBootstrap: true,
+          controllerOptions: { subscribeToBasicFunctionalityChange },
+        },
+        async ({ messenger }) => {
+          const callSpy = vi.spyOn(messenger, 'call');
+          publishUiOpen(messenger, true);
+          await flushPromises();
+          const enablementReadsAfterBootstrap = callSpy.mock.calls.filter(
+            ([action]) => action === 'NetworkEnablementController:getState',
+          ).length;
+
+          publishUiOpen(messenger, false);
+          publishUiOpen(messenger, true);
+          await flushPromises();
+
+          expect(
+            callSpy.mock.calls.filter(
+              ([action]) => action === 'NetworkEnablementController:getState',
+            ),
+          ).toHaveLength(enablementReadsAfterBootstrap);
+          expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
+        },
+      );
+    });
+
+    it('retries the bootstrap on the next UI open when it failed before creating data sources', async () => {
+      const subscribeToBasicFunctionalityChange = vi.fn();
+      await withController(
+        {
+          skipBootstrap: true,
+          controllerOptions: { subscribeToBasicFunctionalityChange },
+        },
+        async ({ messenger }) => {
+          const getState = vi
+            .fn()
+            .mockImplementationOnce(() => {
+              throw new Error('NetworkEnablementController not registered');
+            })
+            .mockImplementation(() => ({
+              enabledNetworkMap: { eip155: { '1': true } },
+              nativeAssetIdentifiers: {},
+            }));
+          messenger.unregisterActionHandler(
+            'NetworkEnablementController:getState',
+          );
+          messenger.registerActionHandler(
+            'NetworkEnablementController:getState',
+            getState,
+          );
+
+          publishUiOpen(messenger, true);
+          await flushPromises();
+          expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
+
+          publishUiOpen(messenger, false);
+          publishUiOpen(messenger, true);
+          await flushPromises();
 
           expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
         },
@@ -848,20 +1016,16 @@ describe('AssetsController', () => {
       );
     });
 
-    it('does not start tracking when destroyed while starting', async () => {
+    it('does not start tracking when destroyed while bootstrapping', async () => {
       await withController(
-        {
-          skipStart: true,
-          clientControllerState: { isUiOpen: true },
-        },
+        { skipBootstrap: true },
         async ({ controller, messenger }) => {
           messenger.publish('AccountTreeController:initialized', {} as never);
           messenger.publish('KeyringController:unlock');
           const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
-          const startPromise = controller.start();
+          publishUiOpen(messenger, true);
           controller.destroy();
-          await startPromise;
           await flushPromises();
 
           expect(getAssetsSpy).not.toHaveBeenCalled();
@@ -869,91 +1033,77 @@ describe('AssetsController', () => {
       );
     });
 
-    it('reads other controllers only once started', async () => {
+    it('does not bootstrap after the controller is destroyed', async () => {
       await withController(
-        { skipStart: true },
-        async ({ controller, messenger }) => {
-          const callSpy = vi.spyOn(messenger, 'call');
-
-          await controller.start();
-
-          const calledActions = callSpy.mock.calls.map(([action]) => action);
-          expect(calledActions).toContain(
-            'NetworkEnablementController:getState',
-          );
-          expect(calledActions).toContain('NetworkController:getState');
-        },
-      );
-    });
-
-    it('is idempotent', async () => {
-      await withController(
-        { skipStart: true },
-        async ({ controller, messenger }) => {
-          const callSpy = vi.spyOn(messenger, 'call');
-
-          await Promise.all([controller.start(), controller.start()]);
-          const callCountAfterFirstStart = callSpy.mock.calls.length;
-          await controller.start();
-
-          expect(callSpy.mock.calls).toHaveLength(callCountAfterFirstStart);
-        },
-      );
-    });
-
-    it('is exposed as the AssetsController:start messenger action', async () => {
-      await withController({ skipStart: true }, async ({ messenger }) => {
-        const callSpy = vi.spyOn(messenger, 'call');
-
-        await messenger.call('AssetsController:start');
-
-        expect(callSpy.mock.calls.map(([action]) => action)).toContain(
-          'NetworkEnablementController:getState',
-        );
-      });
-    });
-
-    it('does nothing after the controller is destroyed', async () => {
-      await withController(
-        { skipStart: true },
+        { skipBootstrap: true },
         async ({ controller, messenger }) => {
           controller.destroy();
           const callSpy = vi.spyOn(messenger, 'call');
 
-          await controller.start();
+          publishUiOpen(messenger, true);
+          await flushPromises();
 
           expect(callSpy).not.toHaveBeenCalled();
         },
       );
     });
 
-    it('ignores external events published before start', async () => {
-      await withController(
-        { skipStart: true, clientControllerState: { isUiOpen: true } },
-        async ({ messenger }) => {
-          const callSpy = vi.spyOn(messenger, 'call');
+    it('ignores non-lifecycle events published before the UI opens', async () => {
+      await withController({ skipBootstrap: true }, async ({ messenger }) => {
+        const callSpy = vi.spyOn(messenger, 'call');
 
-          messenger.publish('AccountTreeController:initialized', {} as never);
-          messenger.publish('KeyringController:unlock');
-          await flushPromises();
+        messenger.publish(
+          'NetworkEnablementController:stateChange',
+          {
+            enabledNetworkMap: { eip155: { '1': true, '10': true } },
+            nativeAssetIdentifiers: {},
+          } as never,
+          [],
+        );
+        messenger.publish('NetworkController:networkRemoved', {} as never);
+        messenger.publish('TransactionController:transactionConfirmed', {
+          chainId: '0x1',
+          txParams: { from: '0x1234567890123456789012345678901234567890' },
+        } as never);
+        messenger.publish(
+          'AccountTreeController:selectedAccountGroupChange',
+          'group-2' as never,
+          'group-1' as never,
+        );
+        await flushPromises();
 
-          expect(callSpy.mock.calls.map(([action]) => action)).not.toContain(
-            'AccountTreeController:getAccountsFromSelectedAccountGroup',
-          );
-        },
-      );
+        expect(callSpy).not.toHaveBeenCalled();
+      });
     });
 
-    it('starts tracking when the UI is open, the keyring unlocked and the account tree initialized', async () => {
+    it('starts tracking when the UI opens after the keyring is unlocked and the account tree initialized', async () => {
       await withController(
-        { skipStart: true, clientControllerState: { isUiOpen: true } },
+        { skipBootstrap: true },
         async ({ controller, messenger }) => {
           messenger.publish('AccountTreeController:initialized', {} as never);
           messenger.publish('KeyringController:unlock');
           await flushPromises();
           const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
-          await controller.start();
+          publishUiOpen(messenger, true);
+          await flushPromises();
+
+          expect(getAssetsSpy).toHaveBeenCalledWith(
+            [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
+            expect.objectContaining({ forceUpdate: true }),
+          );
+        },
+      );
+    });
+
+    it('bootstraps on unlock when the UI was already open before construction', async () => {
+      await withController(
+        { skipBootstrap: true, clientControllerState: { isUiOpen: true } },
+        async ({ controller, messenger }) => {
+          const getAssetsSpy = vi.spyOn(controller, 'getAssets');
+
+          messenger.publish('AccountTreeController:initialized', {} as never);
+          messenger.publish('KeyringController:unlock');
           await flushPromises();
 
           expect(getAssetsSpy).toHaveBeenCalledWith(
@@ -985,11 +1135,7 @@ describe('AssetsController', () => {
         },
       } as unknown as ApiPlatformClient;
       await withController(
-        {
-          skipStart: true,
-          queryApiClient,
-          clientControllerState: { isUiOpen: true },
-        },
+        { skipBootstrap: true, queryApiClient },
         async ({ controller, messenger }) => {
           messenger.publish('AccountTreeController:initialized', {} as never);
           messenger.publish('KeyringController:unlock');
@@ -1004,20 +1150,22 @@ describe('AssetsController', () => {
             },
           );
 
-          await controller.start();
-          await flushPromises();
+          publishUiOpen(messenger, true);
+          await vi.waitFor(() =>
+            expect(supportedNetworksResolvedAtFirstFetch).not.toHaveLength(0),
+          );
 
           expect(supportedNetworksResolvedAtFirstFetch[0]).toBe(true);
         },
       );
     });
 
-    it('drops balances outside account scopes on start when already unlocked', async () => {
+    it('drops balances outside account scopes when the UI opens with the keyring already unlocked', async () => {
       const solanaAssetId =
         'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501' as Caip19AssetId;
       await withController(
         {
-          skipStart: true,
+          skipBootstrap: true,
           state: {
             assetsBalance: {
               [MOCK_ACCOUNT_ID]: {
@@ -1029,8 +1177,14 @@ describe('AssetsController', () => {
         },
         async ({ controller, messenger }) => {
           messenger.publish('KeyringController:unlock');
+          await flushPromises();
+          // The unlock handler defers the cleanups to the bootstrap.
+          expect(
+            controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
+          ).toStrictEqual({ amount: '2' });
 
-          await controller.start();
+          publishUiOpen(messenger, true);
+          await flushPromises();
 
           expect(
             controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
@@ -1044,12 +1198,89 @@ describe('AssetsController', () => {
       );
     });
 
-    describe('before start', () => {
+    it('runs the unlock cleanups when the keyring unlocks while bootstrapping', async () => {
+      const solanaAssetId =
+        'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501' as Caip19AssetId;
+      let resolveSupportedNetworks: (value: unknown) => void = () => undefined;
+      const queryApiClient = {
+        ...createMockQueryApiClient(),
+        accounts: {
+          fetchV2SupportedNetworks: vi.fn(
+            () =>
+              new Promise((resolve) => {
+                resolveSupportedNetworks = resolve;
+              }),
+          ),
+          fetchV5MultiAccountBalances: vi.fn().mockResolvedValue({
+            balances: [],
+            unprocessedNetworks: [],
+          }),
+        },
+      } as unknown as ApiPlatformClient;
+      await withController(
+        {
+          skipBootstrap: true,
+          queryApiClient,
+          state: {
+            assetsBalance: {
+              [MOCK_ACCOUNT_ID]: {
+                [MOCK_NATIVE_ASSET_ID]: { amount: '1' },
+                [solanaAssetId]: { amount: '2' },
+              },
+            },
+          },
+        },
+        async ({ controller, messenger }) => {
+          publishUiOpen(messenger, true);
+          await flushPromises();
+
+          messenger.publish('KeyringController:unlock');
+          await flushPromises();
+          expect(
+            controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
+          ).toStrictEqual({ amount: '2' });
+
+          resolveSupportedNetworks({ fullSupport: [1], partialSupport: [] });
+          await flushPromises();
+
+          expect(
+            controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
+          ).toBeUndefined();
+        },
+      );
+    });
+
+    it('runs the unlock cleanups when the keyring unlocks after the bootstrap', async () => {
+      const solanaAssetId =
+        'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501' as Caip19AssetId;
+      await withController(
+        {
+          state: {
+            assetsBalance: {
+              [MOCK_ACCOUNT_ID]: {
+                [MOCK_NATIVE_ASSET_ID]: { amount: '1' },
+                [solanaAssetId]: { amount: '2' },
+              },
+            },
+          },
+        },
+        async ({ controller, messenger }) => {
+          messenger.publish('KeyringController:unlock');
+          await flushPromises();
+
+          expect(
+            controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
+          ).toBeUndefined();
+        },
+      );
+    });
+
+    describe('before the UI first opens', () => {
       it('returns assets from state without fetching on a forced getAssets', async () => {
         const queryApiClient = createMockQueryApiClient();
         await withController(
           {
-            skipStart: true,
+            skipBootstrap: true,
             queryApiClient,
             state: {
               assetsInfo: {
@@ -1081,53 +1312,67 @@ describe('AssetsController', () => {
       });
 
       it('ignores pushed asset updates', async () => {
-        await withController({ skipStart: true }, async ({ controller }) => {
-          await controller.handleAssetsUpdate(
-            {
-              assetsBalance: {
-                [MOCK_ACCOUNT_ID]: { [MOCK_NATIVE_ASSET_ID]: { amount: '5' } },
+        await withController(
+          { skipBootstrap: true },
+          async ({ controller }) => {
+            await controller.handleAssetsUpdate(
+              {
+                assetsBalance: {
+                  [MOCK_ACCOUNT_ID]: {
+                    [MOCK_NATIVE_ASSET_ID]: { amount: '5' },
+                  },
+                },
               },
-            },
-            'AccountsApiDataSource',
-          );
+              'AccountsApiDataSource',
+            );
 
-          expect(controller.state.assetsBalance).toStrictEqual({});
-        });
+            expect(controller.state.assetsBalance).toStrictEqual({});
+          },
+        );
       });
 
       it('does not fetch prices on syncAssetsPrices', async () => {
-        await withController({ skipStart: true }, async ({ controller }) => {
-          await controller.syncAssetsPrices([MOCK_NATIVE_ASSET_ID]);
+        await withController(
+          { skipBootstrap: true },
+          async ({ controller }) => {
+            await controller.syncAssetsPrices([MOCK_NATIVE_ASSET_ID]);
 
-          expect(controller.state.assetsPrice).toStrictEqual({});
-        });
+            expect(controller.state.assetsPrice).toStrictEqual({});
+          },
+        );
       });
 
       it('updates the selected currency without fetching prices', async () => {
-        await withController({ skipStart: true }, async ({ controller }) => {
-          controller.setSelectedCurrency('eur');
-          await flushPromises();
+        await withController(
+          { skipBootstrap: true },
+          async ({ controller }) => {
+            controller.setSelectedCurrency('eur');
+            await flushPromises();
 
-          expect(controller.state.selectedCurrency).toBe('eur');
-        });
+            expect(controller.state.selectedCurrency).toBe('eur');
+          },
+        );
       });
 
       it('does not throw on subscription and basic functionality calls', async () => {
-        await withController({ skipStart: true }, async ({ controller }) => {
-          expect(() => {
-            controller.subscribeAssetsPrice(
-              [createMockInternalAccount()],
-              ['eip155:1'],
-            );
-            controller.unsubscribeAssetsPrice();
-            controller.handleBasicFunctionalityChange(true);
-          }).not.toThrow();
-        });
+        await withController(
+          { skipBootstrap: true },
+          async ({ controller }) => {
+            expect(() => {
+              controller.subscribeAssetsPrice(
+                [createMockInternalAccount()],
+                ['eip155:1'],
+              );
+              controller.unsubscribeAssetsPrice();
+              controller.handleBasicFunctionalityChange(true);
+            }).not.toThrow();
+          },
+        );
       });
 
       it('ignores data source active chain updates', async () => {
         await withController(
-          { skipStart: true, clientControllerState: { isUiOpen: true } },
+          { skipBootstrap: true },
           async ({ controller, messenger }) => {
             messenger.publish('KeyringController:unlock');
             const callSpy = vi.spyOn(messenger, 'call');
@@ -5176,7 +5421,7 @@ describe('AssetsController', () => {
             {},
           );
 
-          // Allow #start() -> getAssets() to resolve so the callback runs
+          // Allow #startTracking() -> getAssets() to resolve so the callback runs
           await new Promise((resolve) => setTimeout(resolve, 100));
 
           const firstInitFetchCalls = traceMock.mock.calls.filter(
@@ -5447,7 +5692,7 @@ describe('AssetsController', () => {
                   resolveGetAssets = (): void => resolve({});
                 }),
             );
-          // First trigger: unlock + account tree ready. #start() kicks off
+          // First trigger: unlock + account tree ready. #startTracking() kicks off
           // #runStartupRefresh(), whose forced getAssets() call is still
           // pending (it never resolves until we call resolveGetAssets below).
           messenger.publish('KeyringController:unlock');
@@ -5870,7 +6115,7 @@ describe('AssetsController', () => {
           /* no-op */
         },
       });
-      await controller.start();
+      await bootstrapController(messenger);
 
       const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
@@ -6010,7 +6255,7 @@ describe('AssetsController', () => {
           /* no-op */
         },
       });
-      await controller.start();
+      await bootstrapController(messenger);
 
       let nativePresentAtPriceFetch: boolean | undefined;
       const fetchSpy = vi
@@ -6528,11 +6773,11 @@ describe('AssetsController', () => {
           /* no-op */
         },
       });
-      await controller.start();
+      await bootstrapController(messenger);
 
       const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
-      // Step 1: UI open + unlock — accounts empty, #start() is a no-op
+      // Step 1: UI open + unlock — accounts empty, #startTracking() is a no-op
       (
         messenger as unknown as {
           publish: (topic: string, payload?: unknown) => void;

@@ -4,6 +4,7 @@ import type { FeatureFlags } from '@metamask/remote-feature-flag-controller';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  bootstrapAssetsController,
   createMockInternalAccount,
   createMockMessengers,
   registerAssetsControllerActions,
@@ -120,7 +121,7 @@ async function withController<ReturnValue>(
     isBasicFunctionality,
     captureException,
   });
-  await controller.start();
+  await bootstrapAssetsController(rootMessenger);
 
   try {
     return await fn({ controller, messenger: rootMessenger });

@@ -207,7 +207,6 @@ const CONTROLLER_NAME = 'AssetsController' as const;
 
 /** Method names exposed as messenger actions (AssetsController:getAssets, etc.) */
 const MESSENGER_EXPOSED_METHODS = [
-  'start',
   'getAssets',
   'getAssetsBalance',
   'getAssetMetadata',
@@ -692,6 +691,11 @@ function effectiveAccountBalancesV6(
  *    Stops when either the UI closes or the keyring locks. See client-controller
  *    README for the combined pattern.
  *
+ * 5. **Construction order independence**: The constructor only subscribes to
+ *    messenger events; it never calls another controller. The data sources are
+ *    created the first time the UI opens (`ClientController:stateChange`), when
+ *    every controller this one depends on is registered.
+ *
  * ## Architecture
  *
  * - Data sources declare their supported chains (async, can change over time)
@@ -699,7 +703,7 @@ function effectiveAccountBalancesV6(
  * - The controller does NOT manage polling - it simply receives pushed updates
  */
 /**
- * Data sources and middlewares created by {@link AssetsController.start}.
+ * Data sources and middlewares, created the first time the UI opens.
  */
 type AssetsControllerSources = {
   accountActivityDataSource: AccountActivityDataSource;
@@ -714,8 +718,7 @@ type AssetsControllerSources = {
 };
 
 /**
- * Constructor options kept until {@link AssetsController.start} creates the
- * data sources.
+ * Constructor options kept until the data sources are created.
  */
 type AssetsControllerSourceOptions = Pick<
   AssetsControllerOptions,
@@ -827,10 +830,10 @@ export class AssetsController extends BaseController<
   readonly #activeSubscriptions: Map<string, SubscriptionResponse> = new Map();
 
   /**
-   * Guards against `#start()` re-entrancy. `#activeSubscriptions` only
+   * Guards against `#startTracking()` re-entrancy. `#activeSubscriptions` only
    * becomes non-empty once `#runStartupRefresh()`'s forced `getAssets()`
    * call resolves, which can take many seconds for accounts with many
-   * chains/snaps. `#start()` is invoked by `#updateActive()`, which is
+   * chains/snaps. `#startTracking()` is invoked by `#updateActive()`, which is
    * wired to several independent events (e.g. keyring unlock, account tree
    * init, client state change). If a second such event fires before the
    * first `getAssets()` call resolves, the `#activeSubscriptions.size > 0`
@@ -895,35 +898,36 @@ export class AssetsController extends BaseController<
   }
 
   /**
-   * Data sources and middlewares. Created by {@link AssetsController.start},
-   * not by the constructor: their constructors read other controllers
-   * (network, snaps, feature flags), which may not be registered yet when this
+   * Data sources and middlewares. Created the first time the UI opens, not by
+   * the constructor: their constructors read other controllers (network,
+   * snaps, feature flags), which may not be registered yet when this
    * controller is constructed.
    */
   #sources: AssetsControllerSources | undefined;
 
-  /** Options forwarded to the data sources when `start()` creates them. */
+  /** Options forwarded to the data sources when they are created. */
   readonly #sourceOptions: AssetsControllerSourceOptions;
 
-  /** The pending or settled `start()` call, so repeated calls share it. */
-  #startPromise: Promise<void> | undefined;
+  /** The pending or settled bootstrap, so it runs at most once. */
+  #bootstrapPromise: Promise<void> | undefined;
 
-  /** Whether `start()` has finished creating sources and subscribing. */
-  #isStarted = false;
+  /** Whether the bootstrap has finished. */
+  #isBootstrapped = false;
 
   /** Whether `destroy()` has been called. */
   #isDestroyed = false;
 
   /**
-   * Get the data sources, throwing if `start()` has not created them yet.
-   * Entry points that can run before `start()` check `#sources` first.
+   * Get the data sources, throwing if they have not been created yet.
+   * Entry points that can run before the UI first opens check `#sources`
+   * first.
    *
    * @returns The data sources and middlewares.
    */
   #getSources(): AssetsControllerSources {
     if (!this.#sources) {
       throw new Error(
-        'AssetsController has not been started. Call `start()` first.',
+        'AssetsController data sources have not been created yet. They are created when the UI first opens.',
       );
     }
     return this.#sources;
@@ -1074,11 +1078,12 @@ export class AssetsController extends BaseController<
       defaultUpdateInterval: this.#defaultUpdateInterval,
     });
 
-    // The constructor does not call messenger actions, so construction does
-    // not depend on the order in which controllers are constructed. Reading
-    // other controllers, creating data sources and subscribing to events all
-    // happen in `start()`.
+    // The constructor only registers action handlers and subscribes to
+    // events; it never calls another controller, so it does not depend on the
+    // order in which controllers are constructed. Reading other controllers
+    // and creating the data sources happen the first time the UI opens.
     this.#registerActionHandlers();
+    this.#subscribeToEvents();
   }
 
   // ============================================================================
@@ -1086,39 +1091,44 @@ export class AssetsController extends BaseController<
   // ============================================================================
 
   /**
-   * Start the controller once every controller it depends on is registered.
+   * Bootstrap the controller the first time the UI is seen open, then start
+   * or stop asset tracking. Runs at most once; later calls share the same
+   * promise.
    *
-   * The constructor does not touch other controllers. `start()` reads enabled
-   * networks, creates the data sources (whose constructors read network, snap
-   * and feature-flag state), subscribes to external events and to
-   * basic-functionality changes, and begins asset tracking when the UI is
-   * open, the keyring is unlocked and the account tree is initialized.
-   *
-   * Call it after the client has constructed and initialized its own
-   * controllers, such as `AccountTreeController` and `SnapController`.
-   * Until then, asset tracking does not run: forced fetches return what is
-   * already in state, and pushed updates are ignored.
-   *
-   * Repeated calls return the same promise. Calls after `destroy()` do
-   * nothing.
-   *
-   * @returns A promise that resolves once the controller has started.
+   * @returns A promise that resolves once the controller is bootstrapped.
    */
-  async start(): Promise<void> {
-    this.#startPromise ??= this.#runStart();
-    return this.#startPromise;
+  async #ensureBootstrapped(): Promise<void> {
+    this.#bootstrapPromise ??= this.#bootstrap().catch((error: unknown) => {
+      // Allow a later lifecycle event to retry when the bootstrap failed
+      // before the data sources were created (e.g. a controller it reads was
+      // not registered yet).
+      if (!this.#sources) {
+        this.#bootstrapPromise = undefined;
+      }
+      throw error;
+    });
+    return this.#bootstrapPromise;
   }
 
-  async #runStart(): Promise<void> {
+  /**
+   * Read enabled networks, create the data sources, subscribe to
+   * basic-functionality changes, wait for the Accounts API supported networks
+   * and run the unlock cleanups when the keyring is already unlocked. Then
+   * start asset tracking if the keyring is unlocked and the account tree is
+   * initialized.
+   *
+   * By the time the UI opens, the client has registered every controller this
+   * one depends on, so reading them here is safe.
+   */
+  async #bootstrap(): Promise<void> {
     if (this.#isDestroyed) {
       return;
     }
 
-    log('Starting AssetsController');
+    log('Bootstrapping AssetsController');
 
     this.#initializeState();
     this.#sources = this.#createSources();
-    this.#subscribeToEvents();
     this.#subscribeToBasicFunctionality();
 
     await Promise.all([
@@ -1127,34 +1137,44 @@ export class AssetsController extends BaseController<
       // the Accounts API instead of routing every chain to the slow lane.
       // `fetchQuery` shares the in-flight request, so this does not issue a
       // second one. Failures are logged by the data source and do not reject.
-      this.#getSources().accountsApiDataSource.refreshActiveChains(),
+      this.#sources.accountsApiDataSource.refreshActiveChains(),
       this.#runUnlockCleanupsIfUnlocked(),
     ]);
 
     if (this.#isDestroyed) {
       return;
     }
-    // Chain updates reported while starting are ignored; `#updateActive`
+    // Chain updates reported while bootstrapping are ignored; `#updateActive`
     // subscribes with every source's current chains.
-    this.#isStarted = true;
+    this.#isBootstrapped = true;
     this.#updateActive();
   }
 
   /**
-   * Run the unlock cleanups when the keyring is already unlocked. `start()`
-   * subscribes to `KeyringController:unlock` too late to see an unlock that
-   * happened before it.
+   * Run the unlock cleanups when the keyring is already unlocked. The
+   * `KeyringController:unlock` handler skips them before the bootstrap, so an
+   * unlock that happened earlier is handled here.
    */
   async #runUnlockCleanupsIfUnlocked(): Promise<void> {
     if (!this.#isKeyringUnlocked()) {
       return;
     }
+    await this.#runUnlockCleanups();
+  }
+
+  /**
+   * Run the cleanups that happen on unlock: drop balances outside the
+   * selected accounts' scopes, then remove spam tokens.
+   */
+  async #runUnlockCleanups(): Promise<void> {
     try {
       this.#runOutOfScopeBalanceCleanup();
     } catch {
       /* Do nothing */
     }
-    await this.#runSpamCleanup();
+    await this.#runSpamCleanup().catch(() => {
+      /* Do nothing */
+    });
   }
 
   /**
@@ -1162,8 +1182,8 @@ export class AssetsController extends BaseController<
    *
    * Data source constructors read other controllers and may report active
    * chains synchronously. `#handleActiveChainsUpdate` ignores those reports
-   * until `#sources` is assigned, and `start()` subscribes afterwards with
-   * every source's chains.
+   * until the bootstrap finishes, and `#updateActive` subscribes afterwards
+   * with every source's chains.
    *
    * @returns The data sources and middlewares.
    */
@@ -1275,7 +1295,7 @@ export class AssetsController extends BaseController<
 
   /**
    * Subscribe to the host's basic-functionality setting, if the host provided
-   * a way to. Runs from `start()`, after the data sources exist, so a
+   * a way to. Runs during the bootstrap, after the data sources exist, so a
    * synchronous `onChange` cannot run before they are created.
    */
   #subscribeToBasicFunctionality(): void {
@@ -1383,10 +1403,23 @@ export class AssetsController extends BaseController<
     return reference;
   }
 
+  /**
+   * Subscribe to every external event. Runs from the constructor: subscribing
+   * does not need the publishing controller to exist yet, so this does not
+   * depend on construction order.
+   *
+   * Lifecycle events (client, keyring, account tree) drive `#updateActive`,
+   * which bootstraps the controller the first time the UI is seen open.
+   * Every other event needs the data sources, so it is ignored until they
+   * exist.
+   */
   #subscribeToEvents(): void {
     this.messenger.subscribe(
       'AccountTreeController:selectedAccountGroupChange',
       (groupId, previousGroupId) => {
+        if (!this.#sources) {
+          return;
+        }
         this.#handleAccountGroupChanged(groupId, previousGroupId).catch(
           console.error,
         );
@@ -1404,6 +1437,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkEnablementController:stateChange',
       ({ enabledNetworkMap }) => {
+        if (!this.#sources) {
+          return;
+        }
         this.#handleEnabledNetworksChanged(enabledNetworkMap).catch(
           console.error,
         );
@@ -1419,6 +1455,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkAdded',
       (networkConfiguration) => {
+        if (!this.#sources) {
+          return;
+        }
         this.#handleNetworkAdded(networkConfiguration.chainId);
         this.#refreshAssetsAfterNetworkAdded(
           networkConfiguration.chainId,
@@ -1429,6 +1468,9 @@ export class AssetsController extends BaseController<
     );
 
     this.messenger.subscribe('NetworkController:networkRemoved', () => {
+      if (!this.#sources) {
+        return;
+      }
       this.#refreshAssetsAfterNetworkChange();
     });
 
@@ -1437,11 +1479,15 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkDidChange',
       (networkState) => {
+        if (!this.#sources) {
+          return;
+        }
         this.#handleNetworkDidChange(networkState).catch(console.error);
       },
     );
 
-    // Client + Keyring lifecycle: only run when UI is open AND keyring is unlocked
+    // Client + Keyring lifecycle: only run when UI is open AND keyring is
+    // unlocked. The first time the UI opens, this bootstraps the controller.
     this.messenger.subscribe(
       'ClientController:stateChange',
       () => {
@@ -1452,14 +1498,17 @@ export class AssetsController extends BaseController<
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.messenger.subscribe('KeyringController:unlock', async () => {
-      try {
-        this.#runOutOfScopeBalanceCleanup();
-      } catch {
-        /* Do nothing */
+      // Wait for an in-flight bootstrap: it may have checked the keyring
+      // before this unlock and skipped the cleanups. Once bootstrapped, the
+      // cleanups start synchronously, as before.
+      if (!this.#isBootstrapped && this.#bootstrapPromise) {
+        await this.#bootstrapPromise.catch(() => undefined);
       }
-      await this.#runSpamCleanup().catch(() => {
-        /* Do nothing */
-      });
+      if (this.#isBootstrapped) {
+        await this.#runUnlockCleanups();
+      }
+      // Before the bootstrap, this bootstraps the controller if the UI is
+      // open, and the bootstrap runs the cleanups.
       this.#updateActive();
     });
     this.messenger.subscribe('KeyringController:lock', () => {
@@ -1472,6 +1521,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:unapprovedTransactionAdded',
       (transactionMeta: TransactionMeta) => {
+        if (!this.#sources) {
+          return;
+        }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
       },
     );
@@ -1483,6 +1535,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:transactionConfirmed',
       (transactionMeta: TransactionMeta) => {
+        if (!this.#sources) {
+          return;
+        }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
       },
     );
@@ -1494,6 +1549,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'MultichainTransactionsController:transactionConfirmed',
       (transaction: KeyringTransaction) => {
+        if (!this.#sources) {
+          return;
+        }
         this.#refreshAssetsForNonEvmTransaction(transaction);
       },
     );
@@ -1655,8 +1713,25 @@ export class AssetsController extends BaseController<
    * Start or stop asset tracking based on client (UI) open state, keyring
    * unlock state, and account-tree readiness. Only runs when the UI is open,
    * the keyring is unlocked, and the account tree has finished `init()`.
+   *
+   * Before the bootstrap, this only bootstraps the controller when the UI is
+   * open. It reads other controllers only when one of their events fires, by
+   * which point they are registered.
    */
   #updateActive(): void {
+    if (this.#isDestroyed) {
+      return;
+    }
+    if (!this.#isBootstrapped) {
+      // Bootstrap the first time the UI is seen open. The bootstrap calls
+      // back into `#updateActive` once it finishes.
+      if (this.#isUiOpen()) {
+        this.#ensureBootstrapped().catch((error: unknown) => {
+          log('Failed to bootstrap AssetsController', { error });
+        });
+      }
+      return;
+    }
     const shouldRun =
       this.#isUiOpen() &&
       this.#isKeyringUnlocked() &&
@@ -1725,10 +1800,11 @@ export class AssetsController extends BaseController<
     activeChains: ChainId[],
     previousChains: ChainId[],
   ): void {
-    // Data sources report their chains while `start()` is still running.
-    // `start()` subscribes afterwards with every source's chains. Subscribing
-    // here first would make `#startTracking` skip the startup refresh.
-    if (!this.#isStarted) {
+    // Data sources report their chains while the bootstrap is still running.
+    // The bootstrap subscribes afterwards with every source's chains.
+    // Subscribing here first would make `#startTracking` skip the startup
+    // refresh.
+    if (!this.#isBootstrapped) {
       return;
     }
     if (!this.#isUiOpen() || !this.#isKeyringUnlocked() || !this.#isEnabled()) {
@@ -1809,9 +1885,9 @@ export class AssetsController extends BaseController<
   /**
    * Get assets for the given accounts, optionally force-fetching them first.
    *
-   * Before `start()` there are no data sources, so a forced fetch is skipped
-   * and the assets already in state are returned. The loading status of the
-   * accounts is left untouched, so the first fetch after `start()` still
+   * Before the UI first opens there are no data sources, so a forced fetch is
+   * skipped and the assets already in state are returned. The loading status
+   * of the accounts is left untouched, so the first fetch afterwards still
    * reports them as loading.
    *
    * @param accounts - Accounts to get assets for.
@@ -1840,7 +1916,7 @@ export class AssetsController extends BaseController<
     },
   ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
     if (options?.forceUpdate && !this.#sources) {
-      log('Skipping forced asset fetch: controller has not been started');
+      log('Skipping forced asset fetch: data sources have not been created');
       return this.#getAssetsTracked(accounts, {
         ...options,
         forceUpdate: false,
@@ -4232,7 +4308,7 @@ export class AssetsController extends BaseController<
       return;
     }
 
-    // First start is owned by `AccountTreeController:initialized` / `#start`.
+    // First start is owned by `AccountTreeController:initialized` / `#startTracking`.
     // ATC also re-publishes `selectedAccountGroupChange` on every `init()`
     // (including when the group did not change) so late subscribers can catch
     // up — ignore those until we are already tracking.
@@ -4494,7 +4570,7 @@ export class AssetsController extends BaseController<
     });
 
     if (!this.#sources) {
-      log('Ignoring assets update: controller has not been started', {
+      log('Ignoring assets update: data sources have not been created', {
         sourceId,
       });
       return;
@@ -4705,13 +4781,13 @@ export class AssetsController extends BaseController<
 
   destroy(): void {
     log('Destroying AssetsController', {
-      isStarted: this.#sources !== undefined,
+      isBootstrapped: this.#isBootstrapped,
       subscriptionCount: this.#activeSubscriptions.size,
     });
 
     this.#isDestroyed = true;
 
-    // Destroy instantiated data sources (none exist before `start()`)
+    // Destroy instantiated data sources (none exist before the UI first opens)
     if (this.#sources) {
       this.#sources.accountActivityDataSource.destroy();
       this.#sources.accountsApiDataSource.destroy();
@@ -4729,7 +4805,6 @@ export class AssetsController extends BaseController<
     }
 
     // Unregister action handlers
-    this.messenger.unregisterActionHandler('AssetsController:start');
     this.messenger.unregisterActionHandler('AssetsController:getAssets');
     this.messenger.unregisterActionHandler('AssetsController:getAssetsBalance');
     this.messenger.unregisterActionHandler('AssetsController:getAssetMetadata');

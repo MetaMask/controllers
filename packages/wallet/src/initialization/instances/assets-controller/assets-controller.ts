@@ -9,14 +9,17 @@ export type { AssetsControllerInstanceOptions } from './types.js';
 /**
  * Initialization configuration for `AssetsController`.
  *
- * The controller's constructor does not call other controllers, so the
- * Wallet can construct it before controllers it depends on that are not
- * Wallet defaults yet, such as `AccountTreeController` and `SnapController`.
+ * The controller's constructor only subscribes to messenger events and never
+ * calls other controllers, so the Wallet can construct it before controllers
+ * it depends on that are not Wallet defaults yet, such as
+ * `AccountTreeController` and `SnapController`.
  *
- * Asset tracking does not start on its own. Once the client has registered
- * and initialized those controllers, it must call `AssetsController:start`
- * (or `AssetsController.start()`). That reads enabled networks, creates the
- * data sources and subscribes to external events.
+ * The client does not need to start it. The first time the client opens the
+ * UI (`ClientController:setUiOpen(true)`, published as
+ * `ClientController:stateChange`), the controller reads enabled networks,
+ * creates its data sources and starts fetching once the keyring is unlocked
+ * and the account tree is initialized. The client must register those
+ * controllers before it opens the UI.
  */
 export const assetsController: InitializationConfiguration<
   AssetsController,

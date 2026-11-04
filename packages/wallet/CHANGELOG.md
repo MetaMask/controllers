@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **BREAKING:** Add `AssetsController` to the default initialization configurations ([#10885](https://github.com/MetaMask/core/pull/10885))
   - Requires `instanceOptions.assetsController.queryApiClient`.
-  - `AssetsController` does not track assets until the client calls `AssetsController:start` (or `AssetsController.start()`). Call it after the client has registered and initialized the controllers `AssetsController` depends on that `Wallet` does not construct, such as `AccountTreeController` and `SnapController`. `Wallet.init()` does not start it.
+  - `AssetsController` creates its data sources and starts tracking assets the first time the client opens the UI (`ClientController:setUiOpen(true)`); no start call is needed. Register and initialize the controllers `AssetsController` depends on that `Wallet` does not construct, such as `AccountTreeController` and `SnapController`, before opening the UI.
   - Delegates `AccountTreeController` and `SnapController` actions and events, which the client registers.
   - Also delegates the other external `AssetsControllerMessenger` actions and events (accounts, client, keyring, network, network enablement, permission, phishing, remote feature flags, preferences, and transactions). `Wallet` constructs the ones it already initializes by default.
   - Hosts that already register `AssetsController` on the wallet root messenger must remove that registration before upgrading, or messenger registration will collide.

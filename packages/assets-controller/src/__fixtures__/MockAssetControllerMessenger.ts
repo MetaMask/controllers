@@ -497,3 +497,34 @@ export function registerAssetsControllerActions(
     () => undefined,
   );
 }
+
+/**
+ * Bootstrap an `AssetsController` the way a client does: publish
+ * `ClientController:stateChange` with the UI open, which makes the controller
+ * create its data sources, then wait for the bootstrap to settle. When the UI
+ * was closed beforehand, publish it closed again so the controller is left in
+ * the lifecycle state the test set up.
+ *
+ * @param messenger - The root messenger the controller's messenger delegates
+ * from. `ClientController:getState` must be registered on it.
+ */
+export async function bootstrapAssetsController(
+  messenger: MockRootMessenger,
+): Promise<void> {
+  const { isUiOpen: wasUiOpen } = messenger.call('ClientController:getState');
+  messenger.publish('ClientController:stateChange', { isUiOpen: true }, []);
+  await flushBootstrap();
+  if (!wasUiOpen) {
+    messenger.publish('ClientController:stateChange', { isUiOpen: false }, []);
+    await flushBootstrap();
+  }
+}
+
+/**
+ * Let the controller's asynchronous bootstrap run to completion.
+ */
+async function flushBootstrap(): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}

@@ -4,7 +4,10 @@ import nock from 'nock';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { stateBalancesSurface } from './__fixtures__/assetSurfaces.js';
-import { createMockMessengers } from './__fixtures__/MockAssetControllerMessenger.js';
+import {
+  bootstrapAssetsController,
+  createMockMessengers,
+} from './__fixtures__/MockAssetControllerMessenger.js';
 import type {
   MockRootMessenger,
   RegisterWalletLifecycleMocksOptions,
@@ -142,7 +145,7 @@ async function withStaleBalanceController<ReturnValue>(
     queryApiClient,
     isBasicFunctionality: (): boolean => true,
   });
-  await controller.start();
+  await bootstrapAssetsController(rootMessenger);
 
   try {
     // `AccountsApiDataSource` loads `/v2/supportedNetworks` asynchronously

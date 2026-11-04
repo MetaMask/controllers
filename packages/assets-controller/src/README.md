@@ -41,10 +41,10 @@ The `AssetsController` is a unified asset management system that provides real-t
 
 Initialization has two phases, so that construction does not depend on the order in which controllers are constructed:
 
-- **Constructor**: sets up state, stores options and registers action handlers. It does not call messenger actions, create data sources or subscribe to external events.
-- **`start()`** (also the `AssetsController:start` action): called by the client once the controllers `AssetsController` depends on (for example `AccountTreeController` and `SnapController`) are registered. It performs steps 1.2, 1.3 and 1.5, subscribes to `subscribeToBasicFunctionalityChange`, runs the unlock cleanups if the keyring is already unlocked, and starts tracking (section 2) when the UI is open, the keyring is unlocked and the account tree is initialized. Repeated calls return the same promise.
+- **Constructor**: sets up state, stores options, registers action handlers and subscribes to external events (step 1.3). It never calls messenger actions or creates data sources, so it does not need the controllers it depends on to exist yet.
+- **Bootstrap, the first time the UI opens**: triggered by `ClientController:stateChange` when `selectIsUiOpen` becomes true (or by a later keyring / account tree event if the UI was already open). It performs steps 1.2 and 1.5, subscribes to `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks, runs the unlock cleanups if the keyring is already unlocked, and starts tracking (section 2) when the keyring is unlocked and the account tree is initialized. It runs once; the client must register the controllers `AssetsController` reads (for example `AccountTreeController` and `SnapController`) before it opens the UI.
 
-Before `start()`, forced fetches return what is already in state, and pushed updates are ignored.
+Before the bootstrap, forced fetches return what is already in state, and pushed updates and non-lifecycle events are ignored.
 
 #### 1.1 Base Controller Setup (constructor)
 
@@ -57,7 +57,7 @@ super({
 });
 ```
 
-#### 1.2 Initialize Internal State (`start()`)
+#### 1.2 Initialize Internal State (bootstrap)
 
 ```typescript
 initializeState()
@@ -69,7 +69,7 @@ get selectedAccounts(): InternalAccount[]
 └── return messenger.call('AccountTreeController:getAccountsFromSelectedAccountGroup')
 ```
 
-#### 1.3 Subscribe to External Events (`start()`)
+#### 1.3 Subscribe to External Events (constructor)
 
 | Event                                              | Handler                          | Purpose                                |
 | -------------------------------------------------- | -------------------------------- | -------------------------------------- |
@@ -77,6 +77,7 @@ get selectedAccounts(): InternalAccount[]
 | `AccountTreeController:initialized`                | `updateActive()`                 | Start tracking once the tree is built  |
 | `AccountTreeController:uninitialized`              | `updateActive()`                 | Stop tracking when the tree is cleared |
 | `NetworkEnablementController:stateChange`          | `handleEnabledNetworksChanged()` | Track enabled chains                   |
+| `ClientController:stateChange` (`selectIsUiOpen`)  | `updateActive()`                 | Bootstrap on first open, start / stop  |
 | `KeyringController:unlock`                         | `startTracking()`                | Start subscriptions                    |
 | `KeyringController:lock`                           | `stopTracking()`                 | Stop subscriptions                     |
 
@@ -84,7 +85,6 @@ get selectedAccounts(): InternalAccount[]
 
 ```typescript
 registerActionHandlers()
-├── AssetsController:start
 ├── AssetsController:getAssets
 ├── AssetsController:getAssetsBalance
 ├── AssetsController:getAssetMetadata
@@ -93,7 +93,7 @@ registerActionHandlers()
 └── AssetsController:assetsUpdate         // Data sources push asset updates
 ```
 
-#### 1.5 Balance data source priority (data sources created in `start()`)
+#### 1.5 Balance data source priority (data sources created by the bootstrap)
 
 Built-in balance data sources are fixed and processed in priority order: AccountActivityDataSource, AccountsApiDataSource, SnapDataSource, RpcDataSource. Earlier sources get first pick for chain assignment; later sources act as fallbacks. Data sources report active chains via the `onActiveChainsUpdated` callback passed at construction.
 
@@ -897,8 +897,10 @@ const assetsController = new AssetsController({
   defaultUpdateInterval: 30_000, // Optional: polling hint (30s default)
 });
 
-// After the client has registered AccountTreeController, SnapController, etc.
-await assetsController.start();
+// No start call is needed: the controller bootstraps the first time the
+// client opens the UI. Register AccountTreeController, SnapController, etc.
+// before that.
+messenger.call('ClientController:setUiOpen', true);
 ```
 
 ### Basic Usage (Controllers)
