@@ -154,14 +154,14 @@ export class Wallet {
   /**
    * Complete additional initialization of instantiated controllers or services after instantiating `Wallet`.
    *
-   * When no country is persisted, this waits up to 5 seconds for geolocation
-   * before other `init` calls. Mainland China then skips Infura for endpoints
-   * that have failover URLs. A persisted country does not block this method.
+   * A persisted mainland China geolocation forces Infura failover before
+   * network clients are created. Otherwise failover follows the geolocation
+   * response when it arrives. This method does not wait on that request.
    *
    * @returns The results of all initialization calls.
    */
   async init(): Promise<PromiseSettledResult<unknown>[]> {
-    await this.#applyGeolocationRpcFailover();
+    this.#armGeolocationRpcFailover();
     return Promise.allSettled(
       Object.values(this.#instances)
         .filter(
@@ -205,14 +205,13 @@ export class Wallet {
   }
 
   /**
-   * Choose Infura failover from geolocation before network clients are created.
+   * Follow geolocation without delaying controller init.
    *
-   * A persisted country returns immediately. The first launch waits on the
-   * geolocation request the controller would make anyway, capped at 5 seconds.
-   * A request that finishes after the cap still updates failover through the
-   * state subscription.
+   * A persisted `CN` country forces failover before network clients are
+   * created. The refresh itself is not awaited. When it completes, the state
+   * subscription applies `CN` or clears a previous forced mode.
    */
-  async #applyGeolocationRpcFailover(): Promise<void> {
+  #armGeolocationRpcFailover(): void {
     if (this.#geolocationFailoverSubscribed) {
       return;
     }
@@ -222,14 +221,13 @@ export class Wallet {
     );
     this.#geolocationFailoverSubscribed = true;
 
-    try {
-      const country =
-        await this.#instances.GeolocationController.resolveStartupCountry();
-      if (country === 'CN') {
-        this.#instances.NetworkController.setRpcFailoverMode('forced');
-      }
-    } catch {
-      // Startup continues on the feature-flag failover mode when geolocation throws.
+    const geolocation = this.#instances.GeolocationController;
+    if (geolocation.state.country === 'CN') {
+      this.#instances.NetworkController.setRpcFailoverMode('forced');
     }
+
+    geolocation.refreshGeolocation().catch(() => {
+      // A failed lookup leaves failover on the feature-flag mode.
+    });
   }
 }

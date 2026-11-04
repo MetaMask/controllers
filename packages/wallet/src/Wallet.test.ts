@@ -216,39 +216,21 @@ describe('Wallet', () => {
     expect(results).toHaveLength(10);
   });
 
-  it('sets forced Infura failover before network init when geolocation is CN', async () => {
-    const order: string[] = [];
-    const originalSetRpcFailoverMode =
-      NetworkController.prototype.setRpcFailoverMode;
-    const originalInit = NetworkController.prototype.init;
-    vi.spyOn(
+  it('does not wait on geolocation before network init', async () => {
+    let releaseGeolocation: ((response: Response) => void) | undefined;
+    const setRpcFailoverMode = vi.spyOn(
       NetworkController.prototype,
       'setRpcFailoverMode',
-    ).mockImplementation(function (this: NetworkController, mode) {
-      order.push(`mode:${String(mode)}`);
-      return originalSetRpcFailoverMode.call(this, mode);
-    });
-    vi.spyOn(NetworkController.prototype, 'init').mockImplementation(function (
-      this: NetworkController,
-    ) {
-      order.push('network-init');
-      return originalInit.call(this);
-    });
-
+    );
     const wallet = new Wallet({
       instanceOptions: {
         ...getInstanceOptions(),
         geolocationApiService: {
           fetch: vi.fn(
-            async () =>
-              new Response(
-                JSON.stringify({
-                  country: 'CN',
-                  region: 'SC',
-                  timezone: 'Asia/Shanghai',
-                }),
-                { status: 200 },
-              ),
+            () =>
+              new Promise<Response>((resolve) => {
+                releaseGeolocation = resolve;
+              }),
           ),
         },
         networkController: {
@@ -262,10 +244,21 @@ describe('Wallet', () => {
 
     await wallet.init();
 
-    expect(order.indexOf('mode:forced')).toBeGreaterThanOrEqual(0);
-    expect(order.indexOf('mode:forced')).toBeLessThan(
-      order.indexOf('network-init'),
+    expect(setRpcFailoverMode).not.toHaveBeenCalled();
+
+    releaseGeolocation?.(
+      new Response(
+        JSON.stringify({
+          country: 'CN',
+          region: 'SC',
+          timezone: 'Asia/Shanghai',
+        }),
+        { status: 200 },
+      ),
     );
+    await vi.waitFor(() => {
+      expect(setRpcFailoverMode).toHaveBeenCalledWith('forced');
+    });
   });
 
   it('does not wait on geolocation when a country is already persisted', async () => {

@@ -112,16 +112,6 @@ export function getDefaultGeolocationControllerState(): GeolocationControllerSta
   };
 }
 
-const COUNTRY_PATTERN = /^[A-Z]{2}$/u;
-
-/**
- * @param value - A candidate country code.
- * @returns Whether `value` is an ISO 3166-1 alpha-2 code.
- */
-function isCountryCode(value: string | null | undefined): value is string {
-  return typeof value === 'string' && COUNTRY_PATTERN.test(value);
-}
-
 const MESSENGER_EXPOSED_METHODS = [
   'getGeolocation',
   'getGeolocationData',
@@ -269,49 +259,6 @@ export class GeolocationController extends BaseController<
    *
    * @returns The ISO 3166-2 location code string.
    */
-  /**
-   * Country to use before the first chain request of this launch.
-   *
-   * A persisted country is returned immediately and refreshed in the
-   * background. With nothing stored, this waits on one geolocation fetch,
-   * capped by `timeoutMs`, so a stuck request cannot hold startup open.
-   * A timed-out fetch still updates state when it finishes.
-   *
-   * @param options - Startup options.
-   * @param options.timeoutMs - Maximum wait when no country is persisted.
-   * @returns The ISO country code, or `null` when it is unknown.
-   */
-  async resolveStartupCountry(options?: {
-    timeoutMs?: number;
-  }): Promise<string | null> {
-    if (isCountryCode(this.state.country)) {
-      this.refreshGeolocation().catch(() => {
-        // Keep the persisted country when the background refresh fails.
-      });
-      return this.state.country;
-    }
-
-    const timeoutMs = options?.timeoutMs ?? 5000;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timedOut = new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), timeoutMs);
-    });
-
-    try {
-      const country = await Promise.race([
-        this.getGeolocationData()
-          .then((geolocation) => geolocation.country)
-          .catch(() => null),
-        timedOut,
-      ]);
-      return isCountryCode(country) ? country : null;
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
-    }
-  }
-
   async refreshGeolocation(): Promise<string> {
     this.update((draft) => {
       draft.lastFetchedAt = null;
