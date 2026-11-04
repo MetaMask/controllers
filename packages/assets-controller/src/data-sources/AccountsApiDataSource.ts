@@ -281,6 +281,12 @@ export class AccountsApiDataSource extends AbstractDataSource<
   /** Chains refresh timer */
   #chainsRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Resolves when the first supported-networks fetch has settled.
+   * `activeChains` stays empty until then.
+   */
+  readonly #activeChainsInitialized: Promise<void>;
+
   constructor(options: AccountsApiDataSourceOptions) {
     super(CONTROLLER_NAME, {
       ...defaultState,
@@ -315,7 +321,23 @@ export class AccountsApiDataSource extends AbstractDataSource<
       (state) => getMigrationStages(state.remoteFeatureFlags).join(','),
     );
 
-    this.#initializeActiveChains().catch(console.error);
+    // Settles on success or failure. Callers that fetch before this resolves
+    // see an empty `activeChains` and skip the Accounts API.
+    this.#activeChainsInitialized = this.#initializeActiveChains().catch(
+      console.error,
+    );
+  }
+
+  /**
+   * Resolves once the initial supported-networks fetch has settled.
+   *
+   * `AssetsController.start` awaits this before the first forced fetch so
+   * chain assignment sees the chains this source can actually serve.
+   *
+   * @returns A promise that resolves when initialization has settled.
+   */
+  whenActiveChainsInitialized(): Promise<void> {
+    return this.#activeChainsInitialized;
   }
 
   /**

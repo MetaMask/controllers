@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add `start()` and the `AssetsController:start` messenger action ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - `start()` reads enabled networks from `NetworkEnablementController:getState`, creates the data sources, subscribes to external events and to `subscribeToBasicFunctionalityChange`, runs the unlock cleanups when the keyring is already unlocked, and starts asset tracking when the UI is open, the keyring is unlocked and the account tree is initialized.
+  - `start()` reads enabled networks from `NetworkEnablementController:getState`, creates the data sources, subscribes to external events and to `subscribeToBasicFunctionalityChange`, runs the unlock cleanups when the keyring is already unlocked, waits for the Accounts API supported-networks fetch to settle, and starts asset tracking when the UI is open, the keyring is unlocked and the account tree is initialized.
   - Call it once the client has constructed and initialized the controllers `AssetsController` depends on, such as `AccountTreeController` and `SnapController`. Repeated calls return the same promise; calls after `destroy()` do nothing.
 - Export the `AssetsControllerStartAction` type ([#10885](https://github.com/MetaMask/core/pull/10885))
 
@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Wait for `AccountsApiDataSource` to finish its initial supported-networks fetch before `start()` force-fetches balances, so the first fetch can use the Accounts API ([#10885](https://github.com/MetaMask/core/pull/10885))
 - Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#11251](https://github.com/MetaMask/core/pull/11251))
   - Applies to metadata enrichment, websocket balance updates, and the unlock spam cleanup.
 

@@ -908,6 +908,12 @@ export class AssetsController extends BaseController<
   /** The pending or settled `start()` call, so repeated calls share it. */
   #startPromise: Promise<void> | undefined;
 
+  /**
+   * Set while `start()` is waiting to assign chains. Chain reports during
+   * that wait must not subscribe, or `#startTracking` skips its forced fetch.
+   */
+  #deferActiveChainSubscriptions = false;
+
   /** Whether `destroy()` has been called. */
   #isDestroyed = false;
 
@@ -1088,8 +1094,9 @@ export class AssetsController extends BaseController<
    * The constructor does not touch other controllers. `start()` reads enabled
    * networks, creates the data sources (whose constructors read network, snap
    * and feature-flag state), subscribes to external events and to
-   * basic-functionality changes, and begins asset tracking when the UI is
-   * open, the keyring is unlocked and the account tree is initialized.
+   * basic-functionality changes, waits for the Accounts API supported-networks
+   * fetch to settle, and begins asset tracking when the UI is open, the
+   * keyring is unlocked and the account tree is initialized.
    *
    * Call it after the client has constructed and initialized its own
    * controllers, such as `AccountTreeController` and `SnapController`.
@@ -1113,21 +1120,33 @@ export class AssetsController extends BaseController<
 
     log('Starting AssetsController');
 
-    this.#initializeState();
-    this.#sources = this.#createSources();
-    this.#subscribeToEvents();
-    this.#subscribeToBasicFunctionality();
+    // Accounts API reports its chains asynchronously. Hold those reports
+    // until the wait below finishes, then let `#updateActive` assign chains
+    // and force-fetch with `activeChains` already populated.
+    this.#deferActiveChainSubscriptions = true;
+    try {
+      this.#initializeState();
+      this.#sources = this.#createSources();
+      this.#subscribeToEvents();
+      this.#subscribeToBasicFunctionality();
 
-    // The keyring may already be unlocked when `start()` runs, in which case
-    // the `KeyringController:unlock` handler that runs these cleanups was not
-    // subscribed in time.
-    if (this.#isKeyringUnlocked()) {
-      try {
-        this.#runOutOfScopeBalanceCleanup();
-      } catch {
-        /* Do nothing */
+      // The keyring may already be unlocked when `start()` runs, in which case
+      // the `KeyringController:unlock` handler that runs these cleanups was not
+      // subscribed in time.
+      if (this.#isKeyringUnlocked()) {
+        try {
+          this.#runOutOfScopeBalanceCleanup();
+        } catch {
+          /* Do nothing */
+        }
+        await this.#runSpamCleanup();
       }
-      await this.#runSpamCleanup();
+
+      if (!this.#isDestroyed) {
+        await this.#sources.accountsApiDataSource.whenActiveChainsInitialized();
+      }
+    } finally {
+      this.#deferActiveChainSubscriptions = false;
     }
 
     if (this.#isDestroyed) {
@@ -1141,8 +1160,9 @@ export class AssetsController extends BaseController<
    *
    * Data source constructors read other controllers and may report active
    * chains synchronously. `#handleActiveChainsUpdate` ignores those reports
-   * until `#sources` is assigned, and `start()` subscribes afterwards with
-   * every source's chains.
+   * until `#sources` is assigned. The Accounts API report arrives later,
+   * after its supported-networks fetch; `start()` waits for that fetch, then
+   * subscribes with every source's chains.
    *
    * @returns The data sources and middlewares.
    */
@@ -1704,9 +1724,16 @@ export class AssetsController extends BaseController<
     activeChains: ChainId[],
     previousChains: ChainId[],
   ): void {
-    // Data source constructors report their chains while `start()` is still
-    // creating them. `start()` subscribes afterwards with every source's chains.
-    if (!this.#sources) {
+    // Constructors report chains before `#sources` is assigned, and the
+    // Accounts API reports them while `start()` is still waiting on supported
+    // networks. `start()` subscribes afterwards, once every source's chains
+    // are known. Ignore reports after `destroy()` too: the in-flight
+    // supported-networks fetch can still resolve.
+    if (
+      !this.#sources ||
+      this.#isDestroyed ||
+      this.#deferActiveChainSubscriptions
+    ) {
       return;
     }
     if (!this.#isUiOpen() || !this.#isKeyringUnlocked() || !this.#isEnabled()) {
