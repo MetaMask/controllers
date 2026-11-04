@@ -703,21 +703,6 @@ function effectiveAccountBalancesV6(
  * - The controller does NOT manage polling - it simply receives pushed updates
  */
 /**
- * Data sources and middlewares, created the first time the UI opens.
- */
-type AssetsControllerSources = {
-  accountActivityDataSource: AccountActivityDataSource;
-  accountsApiDataSource: AccountsApiDataSource;
-  snapDataSource: SnapDataSource;
-  rpcDataSource: RpcDataSource;
-  stakedBalanceDataSource: StakedBalanceDataSource;
-  tokenDataSource: TokenDataSource;
-  priceDataSource: PriceDataSource;
-  customAssetGraduationMiddleware: CustomAssetGraduationMiddleware;
-  rpcFallbackMiddleware: RpcFallbackMiddleware;
-};
-
-/**
  * Constructor options kept until the data sources are created.
  */
 type AssetsControllerSourceOptions = Pick<
@@ -905,60 +890,22 @@ export class AssetsController extends BaseController<
   }
 
   /**
-   * Data sources and middlewares. Created the first time the UI opens, not by
-   * the constructor: their constructors read other controllers (network,
-   * snaps, feature flags), which may not be registered yet when this
-   * controller is constructed.
+   * Data sources and middlewares. Assigned in `#createSources` the first time
+   * the UI opens, not by the constructor: their constructors read other
+   * controllers (network, snaps, feature flags), which may not be registered
+   * yet. Not `readonly` because that assignment happens outside the
+   * constructor. Definite assignment (`!`) keeps call sites unchanged;
+   * `#hasSources` is the guard for paths that can run before the UI opens.
    */
-  #sources: AssetsControllerSources | undefined;
+  #accountActivityDataSource!: AccountActivityDataSource;
 
-  /** Options forwarded to the data sources when they are created. */
-  readonly #sourceOptions: AssetsControllerSourceOptions;
+  #accountsApiDataSource!: AccountsApiDataSource;
 
-  /** The pending or settled bootstrap, so it runs at most once. */
-  #bootstrapPromise: Promise<void> | undefined;
+  #snapDataSource!: SnapDataSource;
 
-  /** Whether the bootstrap has finished. */
-  #isBootstrapped = false;
+  #rpcDataSource!: RpcDataSource;
 
-  /** Whether `destroy()` has been called. */
-  #isDestroyed = false;
-
-  /**
-   * Get the data sources, throwing if they have not been created yet.
-   * Entry points that can run before the UI first opens check `#sources`
-   * first.
-   *
-   * @returns The data sources and middlewares.
-   */
-  #getSources(): AssetsControllerSources {
-    if (!this.#sources) {
-      throw new Error(
-        'AssetsController data sources have not been created yet. They are created when the UI first opens.',
-      );
-    }
-    return this.#sources;
-  }
-
-  get #accountActivityDataSource(): AccountActivityDataSource {
-    return this.#getSources().accountActivityDataSource;
-  }
-
-  get #accountsApiDataSource(): AccountsApiDataSource {
-    return this.#getSources().accountsApiDataSource;
-  }
-
-  get #snapDataSource(): SnapDataSource {
-    return this.#getSources().snapDataSource;
-  }
-
-  get #rpcDataSource(): RpcDataSource {
-    return this.#getSources().rpcDataSource;
-  }
-
-  get #stakedBalanceDataSource(): StakedBalanceDataSource {
-    return this.#getSources().stakedBalanceDataSource;
-  }
+  #stakedBalanceDataSource!: StakedBalanceDataSource;
 
   /**
    * All balance data sources in priority order for chain-claiming and cleanup.
@@ -981,21 +928,31 @@ export class AssetsController extends BaseController<
     ];
   }
 
-  get #priceDataSource(): PriceDataSource {
-    return this.#getSources().priceDataSource;
-  }
+  #priceDataSource!: PriceDataSource;
 
-  get #customAssetGraduationMiddleware(): CustomAssetGraduationMiddleware {
-    return this.#getSources().customAssetGraduationMiddleware;
-  }
+  #customAssetGraduationMiddleware!: CustomAssetGraduationMiddleware;
 
-  get #rpcFallbackMiddleware(): RpcFallbackMiddleware {
-    return this.#getSources().rpcFallbackMiddleware;
-  }
+  #rpcFallbackMiddleware!: RpcFallbackMiddleware;
 
-  get #tokenDataSource(): TokenDataSource {
-    return this.#getSources().tokenDataSource;
-  }
+  #tokenDataSource!: TokenDataSource;
+
+  /**
+   * Whether `#createSources` has assigned the data sources. Entry points that
+   * can run before the UI first opens check this and return.
+   */
+  #hasSources = false;
+
+  /** Options forwarded to the data sources when they are created. */
+  readonly #sourceOptions: AssetsControllerSourceOptions;
+
+  /** The pending or settled bootstrap, so it runs at most once. */
+  #bootstrapPromise: Promise<void> | undefined;
+
+  /** Whether the bootstrap has finished. */
+  #isBootstrapped = false;
+
+  /** Whether `destroy()` has been called. */
+  #isDestroyed = false;
 
   #unsubscribeBasicFunctionality: (() => void) | null = null;
 
@@ -1107,8 +1064,8 @@ export class AssetsController extends BaseController<
   async #ensureBootstrapped(): Promise<void> {
     this.#bootstrapPromise ??= this.#bootstrap().catch((error: unknown) => {
       // Allow a later lifecycle event to retry when a data source constructor
-      // throws before `#sources` is assigned.
-      if (!this.#sources) {
+      // throws before the data sources are assigned.
+      if (!this.#hasSources) {
         this.#bootstrapPromise = undefined;
       }
       throw error;
@@ -1134,7 +1091,7 @@ export class AssetsController extends BaseController<
 
     log('Bootstrapping AssetsController');
 
-    this.#sources = this.#createSources();
+    this.#createSources();
     this.#subscribeToBasicFunctionality();
 
     await Promise.all([
@@ -1143,7 +1100,7 @@ export class AssetsController extends BaseController<
       // the Accounts API instead of routing every chain to the slow lane.
       // `fetchQuery` shares the in-flight request, so this does not issue a
       // second one. Failures are logged by the data source and do not reject.
-      this.#sources.accountsApiDataSource.refreshActiveChains(),
+      this.#accountsApiDataSource.refreshActiveChains(),
       this.#runUnlockCleanupsIfUnlocked(),
     ]);
 
@@ -1190,10 +1147,8 @@ export class AssetsController extends BaseController<
    * chains synchronously. `#handleActiveChainsUpdate` ignores those reports
    * until the bootstrap finishes, and `#updateActive` subscribes afterwards
    * with every source's chains.
-   *
-   * @returns The data sources and middlewares.
    */
-  #createSources(): AssetsControllerSources {
+  #createSources(): void {
     const {
       queryApiClient,
       rpcDataSourceConfig,
@@ -1286,17 +1241,18 @@ export class AssetsController extends BaseController<
       getAssetsState: (): AssetsControllerState => this.state,
     });
 
-    return {
-      accountActivityDataSource,
-      accountsApiDataSource,
-      snapDataSource,
-      rpcDataSource,
-      stakedBalanceDataSource,
-      tokenDataSource,
-      priceDataSource,
-      customAssetGraduationMiddleware,
-      rpcFallbackMiddleware,
-    };
+    // Assign only after every constructor has succeeded, so a throw leaves
+    // `#hasSources` false and a later lifecycle event can retry.
+    this.#accountActivityDataSource = accountActivityDataSource;
+    this.#accountsApiDataSource = accountsApiDataSource;
+    this.#snapDataSource = snapDataSource;
+    this.#rpcDataSource = rpcDataSource;
+    this.#stakedBalanceDataSource = stakedBalanceDataSource;
+    this.#tokenDataSource = tokenDataSource;
+    this.#priceDataSource = priceDataSource;
+    this.#customAssetGraduationMiddleware = customAssetGraduationMiddleware;
+    this.#rpcFallbackMiddleware = rpcFallbackMiddleware;
+    this.#hasSources = true;
   }
 
   /**
@@ -1623,7 +1579,7 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'AccountTreeController:selectedAccountGroupChange',
       (groupId, previousGroupId) => {
-        if (!this.#sources) {
+        if (!this.#hasSources) {
           return;
         }
         this.#handleAccountGroupChanged(groupId, previousGroupId).catch(
@@ -1643,7 +1599,7 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkEnablementController:stateChange',
       ({ enabledNetworkMap }, patches) => {
-        if (!this.#sources) {
+        if (!this.#hasSources) {
           return;
         }
         this.#handleEnabledNetworksChanged(enabledNetworkMap, patches).catch(
@@ -1661,7 +1617,7 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkAdded',
       (networkConfiguration) => {
-        if (!this.#sources) {
+        if (!this.#hasSources) {
           return;
         }
         this.#handleNetworkAdded(networkConfiguration.chainId);
@@ -1674,7 +1630,7 @@ export class AssetsController extends BaseController<
     );
 
     this.messenger.subscribe('NetworkController:networkRemoved', () => {
-      if (!this.#sources) {
+      if (!this.#hasSources) {
         return;
       }
       this.#refreshAssetsAfterNetworkChange();
@@ -1685,7 +1641,7 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkDidChange',
       (networkState) => {
-        if (!this.#sources) {
+        if (!this.#hasSources) {
           return;
         }
         this.#handleNetworkDidChange(networkState).catch(console.error);
@@ -1727,7 +1683,7 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:unapprovedTransactionAdded',
       (transactionMeta: TransactionMeta) => {
-        if (!this.#sources) {
+        if (!this.#hasSources) {
           return;
         }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
@@ -1741,7 +1697,7 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:transactionConfirmed',
       (transactionMeta: TransactionMeta) => {
-        if (!this.#sources) {
+        if (!this.#hasSources) {
           return;
         }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
@@ -1755,7 +1711,7 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'MultichainTransactionsController:transactionConfirmed',
       (transaction: KeyringTransaction) => {
-        if (!this.#sources) {
+        if (!this.#hasSources) {
           return;
         }
         this.#refreshAssetsForNonEvmTransaction(transaction);
@@ -2123,7 +2079,7 @@ export class AssetsController extends BaseController<
       dataTypes?: DataType[];
     },
   ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
-    if (options?.forceUpdate && !this.#sources) {
+    if (options?.forceUpdate && !this.#hasSources) {
       log('Skipping forced asset fetch: data sources have not been created');
       return this.#getAssetsTracked(accounts, {
         ...options,
@@ -2197,7 +2153,7 @@ export class AssetsController extends BaseController<
    */
   async syncAssetsPrices(assetIds: Caip19AssetId[]): Promise<void> {
     if (
-      !this.#sources ||
+      !this.#hasSources ||
       !this.#isBasicFunctionality() ||
       assetIds.length === 0
     ) {
@@ -3105,7 +3061,7 @@ export class AssetsController extends BaseController<
       selectedCurrency,
     });
 
-    if (!this.#sources || !this.#isBasicFunctionality()) {
+    if (!this.#hasSources || !this.#isBasicFunctionality()) {
       return;
     }
 
@@ -3133,7 +3089,7 @@ export class AssetsController extends BaseController<
    * @param chainIds - Chain IDs to filter prices for.
    */
   subscribeAssetsPrice(accounts: InternalAccount[], chainIds: ChainId[]): void {
-    if (!this.#sources || !this.#isBasicFunctionality()) {
+    if (!this.#hasSources || !this.#isBasicFunctionality()) {
       return;
     }
     const subscriptionKey = 'ds:PriceDataSource';
@@ -4055,7 +4011,7 @@ export class AssetsController extends BaseController<
     this.#firstInitFetchReported = false;
     this.#stateSizeReported = false;
 
-    if (!this.#sources) {
+    if (!this.#hasSources) {
       return;
     }
 
@@ -4099,7 +4055,7 @@ export class AssetsController extends BaseController<
     // Subscribing here would fill `#activeSubscriptions` and make
     // `#startTracking` skip the startup refresh. `#updateActive` subscribes
     // afterwards with the current basic-functionality setting.
-    if (!this.#sources || !this.#isBootstrapped) {
+    if (!this.#hasSources || !this.#isBootstrapped) {
       return;
     }
     this.#stopTracking();
@@ -4790,7 +4746,7 @@ export class AssetsController extends BaseController<
       assetsPrice: response.assetsPrice,
     });
 
-    if (!this.#sources) {
+    if (!this.#hasSources) {
       log('Ignoring assets update: data sources have not been created', {
         sourceId,
       });
@@ -5009,12 +4965,12 @@ export class AssetsController extends BaseController<
     this.#isDestroyed = true;
 
     // Destroy instantiated data sources (none exist before the UI first opens)
-    if (this.#sources) {
-      this.#sources.accountActivityDataSource.destroy();
-      this.#sources.accountsApiDataSource.destroy();
-      this.#sources.snapDataSource.destroy();
-      this.#sources.rpcDataSource.destroy();
-      this.#sources.stakedBalanceDataSource.destroy();
+    if (this.#hasSources) {
+      this.#accountActivityDataSource.destroy();
+      this.#accountsApiDataSource.destroy();
+      this.#snapDataSource.destroy();
+      this.#rpcDataSource.destroy();
+      this.#stakedBalanceDataSource.destroy();
     }
 
     // Stop all active subscriptions
