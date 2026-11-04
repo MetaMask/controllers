@@ -4,13 +4,14 @@ import type { MockInstance } from 'vitest';
 import { TransactionPayClientId } from '../../constants.js';
 import type { FeatureFlags } from '../../utils/feature-flags.js';
 import { getFeatureFlags } from '../../utils/feature-flags.js';
+import { TradeType } from '../../utils/trade-type.js';
 import { RELAY_STATUS_URL } from './constants.js';
 import {
   fetchRelayQuote,
   getRelayStatus,
   submitRelayExecute,
 } from './relay-api.js';
-import type { RelayQuoteRequest } from './types.js';
+import type { RelayExecuteRequest, RelayQuoteRequest } from './types.js';
 
 vi.mock(import('../../utils/feature-flags.js'));
 
@@ -171,16 +172,30 @@ describe('relay-api', () => {
   });
 
   describe('submitRelayExecute', () => {
-    const EXECUTE_REQUEST_MOCK = {
-      executionKind: 'rawCalls' as const,
+    const EXECUTE_REQUEST_MOCK: RelayExecuteRequest = {
+      executionKind: 'rawCalls',
       data: {
         chainId: 1,
-        to: '0xaaa' as `0x${string}`,
-        data: '0xbbb' as `0x${string}`,
+        to: '0xaaa',
+        data: '0xbbb',
         value: '0',
       },
       executionOptions: { subsidizeFees: false },
       requestId: '0xreq',
+      metamask: {
+        isSubsidized: false,
+        quoteRequest: {
+          amount: '1000000',
+          destinationChainId: 1,
+          destinationCurrency: '0xaaa',
+          originChainId: 137,
+          originCurrency: '0xbbb',
+          recipient: '0xccc',
+          tradeType: TradeType.ExactOutput,
+          user: '0xccc',
+        },
+        signature: '0xsignature',
+      },
     };
 
     const EXECUTE_RESPONSE_MOCK = {
