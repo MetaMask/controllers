@@ -9,27 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `init()`, which reads enabled chains from `NetworkEnablementController:getState` after every controller has been constructed. Later enablement changes still arrive on `NetworkEnablementController:stateChange` ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - `init()` refreshes data sources that read other controllers through the messenger: `RpcDataSource.refreshActiveChainsFromNetworkState()` (`NetworkController:getState`), `StakedBalanceDataSource.refreshActiveChainsFromNetworkEnablementState()` (`NetworkEnablementController:getState`), `SnapDataSource.init()` (snap discovery), and `AccountsApiDataSource.init()` (supported networks and `RemoteFeatureFlagController:getState`).
-- Add `SnapDataSource.init()` and `AccountsApiDataSource.init()` ([#10885](https://github.com/MetaMask/core/pull/10885))
+- Add `start()` and the `AssetsController:start` messenger action ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - `start()` reads enabled networks from `NetworkEnablementController:getState`, creates the data sources, subscribes to external events and to `subscribeToBasicFunctionalityChange`, runs the unlock cleanups when the keyring is already unlocked, and starts asset tracking when the UI is open, the keyring is unlocked and the account tree is initialized.
+  - Call it once the client has constructed and initialized the controllers `AssetsController` depends on, such as `AccountTreeController` and `SnapController`. Repeated calls return the same promise; calls after `destroy()` do nothing.
+- Export the `AssetsControllerStartAction` type ([#10885](https://github.com/MetaMask/core/pull/10885))
 
 ### Changed
 
-- **BREAKING:** Subscribe to `AccountsController:selectedAccountChange` so a selected-account switch refreshes tracked assets when `AccountTreeController` is not registered ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - Hosts that restrict which events flow through the `AssetsController` messenger must also delegate `AccountsController:selectedAccountChange`.
-  - When `AccountTreeController` is registered, that event is ignored. Group switches still refresh only through `AccountTreeController:selectedAccountGroupChange`, so the two events are not both handled.
-- **BREAKING:** Constructors no longer call messenger actions. Call `AssetsController.init()` after the other controllers exist. `Wallet.init()` does this. Until `init()` runs, enabled chains and data-source active chains stay empty unless a later state change arrives ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - `AssetsController` no longer calls `NetworkEnablementController:getState` in its constructor.
-  - `RpcDataSource` no longer calls `NetworkController:getState` in its constructor. Call `refreshActiveChainsFromNetworkState()`, or `AssetsController.init()`.
-  - `StakedBalanceDataSource` no longer calls `NetworkEnablementController:getState` in its constructor. Call `refreshActiveChainsFromNetworkEnablementState()`, or `AssetsController.init()`.
-  - `SnapDataSource` no longer calls `SnapController:getRunnableSnaps` in its constructor. Call `init()`. When `SnapController` is not registered, discovery leaves active chains empty.
-  - `AccountsApiDataSource` no longer starts its supported-network fetch, which calls `RemoteFeatureFlagController:getState`, from the constructor. Call `init()`.
-- When `AccountTreeController` actions are not registered, selected-account reads fall back to `AccountsController:getSelectedAccount`, and asset tracking does not wait for account-tree initialization ([#10885](https://github.com/MetaMask/core/pull/10885))
-  - `AccountActivityDataSource` uses the same fallback when resolving the account for a balance update.
+- **BREAKING:** The `AssetsController` constructor no longer calls messenger actions, creates data sources or subscribes to external events; asset tracking does not run until `start()` is called ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - Call `start()` (or the `AssetsController:start` action) after the controllers `AssetsController` depends on are registered. Data sources are created in `start()`, so their constructors still read `NetworkController`, `NetworkEnablementController`, `SnapController`, `PermissionController` and `RemoteFeatureFlagController` as before, only later.
+  - `subscribeToBasicFunctionalityChange` is invoked by `start()` instead of the constructor.
+  - Before `start()`, `getAssets` (and the methods built on it) with `forceUpdate: true` return what is already in state without fetching and without changing `assetsLoadingStatus`; `handleAssetsUpdate`, `syncAssetsPrices`, `subscribeAssetsPrice` and `handleBasicFunctionalityChange` do nothing; `setSelectedCurrency` updates state without refreshing prices.
 
 ### Fixed
 
-- Refresh the newly selected account after startup completes when it changes while the initial asset fetch is in progress ([#10885](https://github.com/MetaMask/core/pull/10885))
 - Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#11251](https://github.com/MetaMask/core/pull/11251))
   - Applies to metadata enrichment, websocket balance updates, and the unlock spam cleanup.
 

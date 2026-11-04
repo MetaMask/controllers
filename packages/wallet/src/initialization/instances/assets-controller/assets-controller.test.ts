@@ -86,23 +86,23 @@ describe('assetsController', () => {
     expect(instance.state.selectedCurrency).toBe('eur');
   });
 
-  it('forwards the instance options to the controller', () => {
-    const rootMessenger = getRootMessenger();
-    const messenger = assetsController.getMessenger(rootMessenger);
+  it('forwards the instance options to the controller', async () => {
     const unsubscribe = vi.fn();
     const subscribeToBasicFunctionalityChange = vi
       .fn()
       .mockReturnValue(unsubscribe);
-
-    const instance = assetsController.init({
-      state: undefined,
-      messenger,
-      options: {
-        queryApiClient: createMockQueryApiClient(),
-        subscribeToBasicFunctionalityChange,
+    const wallet = new Wallet({
+      instanceOptions: {
+        ...getInstanceOptions(),
+        assetsController: {
+          queryApiClient: createMockQueryApiClient(),
+          subscribeToBasicFunctionalityChange,
+        },
       },
     });
-    instance.destroy();
+
+    await wallet.getInstance('AssetsController').start();
+    await wallet.destroy();
 
     expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
@@ -164,7 +164,6 @@ describe('assetsController', () => {
     'AccountActivityService:balanceUpdated',
     'AccountActivityService:statusChanged',
     'AccountsController:accountBalancesUpdated',
-    'AccountsController:selectedAccountChange',
     'AccountTreeController:initialized',
     'AccountTreeController:selectedAccountGroupChange',
     'AccountTreeController:uninitialized',
@@ -200,7 +199,7 @@ describe('assetsController', () => {
     expect(listener).toHaveBeenCalledWith('payload');
   });
 
-  it('is constructed by default while AccountTreeController and SnapController are absent', async () => {
+  it('is constructed and initialized by default while AccountTreeController and SnapController are absent', async () => {
     const accountId = 'account-1';
     const nativeAssetId = 'eip155:1/slip44:60';
     const wallet = new Wallet({
@@ -245,13 +244,33 @@ describe('assetsController', () => {
 
     await wallet.init();
 
-    // AssetsController is constructed before NetworkEnablementController.
-    // init() reads that controller's default state, which enables mainnet.
-    const assets = await instance.getAssets([
-      { id: accountId } as Parameters<AssetsController['getAssets']>[0][number],
-    ]);
+    // Without `start()`, a forced fetch reads what is already in state.
+    const assets = await instance.getAssets(
+      [
+        { id: accountId } as Parameters<
+          AssetsController['getAssets']
+        >[0][number],
+      ],
+      { chainIds: ['eip155:1'], forceUpdate: true },
+    );
 
     expect(Object.keys(assets[accountId])).toStrictEqual([nativeAssetId]);
+  });
+
+  it('exposes AssetsController:start on the wallet messenger', async () => {
+    const wallet = new Wallet({
+      instanceOptions: getInstanceOptions(),
+    });
+    wallets.push(wallet);
+    await wallet.init();
+
+    expect(
+      await (
+        wallet.messenger as unknown as {
+          call(action: 'AssetsController:start'): Promise<void>;
+        }
+      ).call('AssetsController:start'),
+    ).toBeUndefined();
   });
 
   it('exposes AssetsController state on the wallet messenger by default', () => {

@@ -142,7 +142,7 @@ async function withStaleBalanceController<ReturnValue>(
     queryApiClient,
     isBasicFunctionality: (): boolean => true,
   });
-  await controller.init();
+  await controller.start();
 
   try {
     // `AccountsApiDataSource` loads `/v2/supportedNetworks` asynchronously

@@ -127,7 +127,6 @@ export function createMockAssetsControllerMessenger(
       'NetworkEnablementController:stateChange',
       // SnapDataSource
       'AccountsController:accountBalancesUpdated',
-      'AccountsController:selectedAccountChange',
       'PermissionController:stateChange',
       'SnapController:snapInstalled',
       // AccountActivityService (real-time balances + chain status)
@@ -182,25 +181,21 @@ export function registerAssetsControllerStateMock(
 
 export function registerStakedMessengerActions(
   rootMessenger: MockRootMessenger,
-  opts: {
-    enabledNetworkMap?: Record<string, Record<string, boolean>>;
-    mockProvider?: ReturnType<typeof createMockWeb3Provider>;
-  } = {},
-): void {
-  const enabledNetworkMap = opts.enabledNetworkMap ?? {
-    eip155: { [MAINNET_CHAIN_ID_HEX]: true },
-  };
-  const mockProvider =
-    opts.mockProvider ??
-    createMockWeb3Provider({
+  opts = {
+    enabledNetworkMap: { eip155: { [MAINNET_CHAIN_ID_HEX]: true } } as Record<
+      string,
+      Record<string, boolean>
+    >,
+    mockProvider: createMockWeb3Provider({
       sharesWei: '1000000000000000000',
       assetsWei: '1500000000000000000',
-    });
-
+    }),
+  },
+): void {
   rootMessenger.registerActionHandler(
     'NetworkEnablementController:getState',
     () => ({
-      enabledNetworkMap,
+      enabledNetworkMap: opts.enabledNetworkMap,
       nativeAssetIdentifiers: {},
     }),
   );
@@ -209,7 +204,7 @@ export function registerStakedMessengerActions(
     'NetworkController:getNetworkClientById',
     () =>
       ({
-        provider: mockProvider,
+        provider: opts.mockProvider,
         configuration: { chainId: MAINNET_CHAIN_ID_HEX },
       }) as TestMockType,
   );

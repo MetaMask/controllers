@@ -39,6 +39,7 @@ export type {
   AssetsControllerEvents,
 } from './AssetsController.js';
 export type {
+  AssetsControllerStartAction,
   AssetsControllerGetAssetsAction,
   AssetsControllerGetAssetsBalanceAction,
   AssetsControllerGetAssetMetadataAction,

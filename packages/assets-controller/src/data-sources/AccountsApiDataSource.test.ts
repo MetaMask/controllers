@@ -199,7 +199,6 @@ async function setupController(
     remoteFeatureFlags?: Record<string, unknown>;
     getAssetsState?: () => AssetsControllerState;
     tokenDetectionEnabled?: () => boolean;
-    initialize?: boolean;
   } = {},
 ): Promise<SetupResult> {
   const {
@@ -213,7 +212,6 @@ async function setupController(
     remoteFeatureFlags = {},
     getAssetsState = (): AssetsControllerState => createAssetsState(),
     tokenDetectionEnabled,
-    initialize = true,
   } = options;
 
   const rootMessenger = new Messenger<MockAnyNamespace, AllActions, AllEvents>({
@@ -279,9 +277,7 @@ async function setupController(
     ...(tokenDetectionEnabled === undefined ? {} : { tokenDetectionEnabled }),
   });
 
-  if (initialize) {
-    await controller.init();
-  }
+  // Wait for async initialization
   await new Promise(process.nextTick);
 
   return {
@@ -323,30 +319,6 @@ describe('AccountsApiDataSource', () => {
     vi.clearAllMocks();
   });
 
-  it('does not call RemoteFeatureFlagController in the constructor', async () => {
-    const { controller, apiClient, activeChainsUpdateHandler } =
-      await setupController({
-        initialize: false,
-        supportedChains: [1],
-      });
-
-    expect(apiClient.accounts.fetchV2SupportedNetworks).not.toHaveBeenCalled();
-    expect(await controller.getActiveChains()).toStrictEqual([]);
-
-    await controller.init();
-
-    expect(apiClient.accounts.fetchV2SupportedNetworks).toHaveBeenCalledTimes(
-      1,
-    );
-    expect(activeChainsUpdateHandler).toHaveBeenCalledWith(
-      'AccountsApiDataSource',
-      [CHAIN_MAINNET],
-      [],
-    );
-
-    controller.destroy();
-  });
-
   it('initializes with correct name', async () => {
     const { controller } = await setupController();
     expect(controller.getName()).toBe('AccountsApiDataSource');
@@ -363,35 +335,6 @@ describe('AccountsApiDataSource', () => {
       [CHAIN_MAINNET, CHAIN_POLYGON, CHAIN_ARBITRUM],
       [],
     );
-
-    controller.destroy();
-  });
-
-  it('refreshes supported networks on a second init', async () => {
-    const { controller, apiClient } = await setupController({
-      supportedChains: [1],
-    });
-
-    apiClient.accounts.fetchV2SupportedNetworks.mockClear();
-
-    await controller.init();
-
-    expect(apiClient.accounts.fetchV2SupportedNetworks).toHaveBeenCalledTimes(
-      1,
-    );
-
-    controller.destroy();
-  });
-
-  it('starts one refresh timer when init is called concurrently', async () => {
-    const { controller } = await setupController({
-      initialize: false,
-      supportedChains: [1],
-    });
-
-    await Promise.all([controller.init(), controller.init()]);
-
-    expect(activeTimers).toHaveLength(1);
 
     controller.destroy();
   });
@@ -2125,7 +2068,7 @@ describe('AccountsApiDataSource', () => {
 
       const controller = new AccountsApiDataSource(controllerOptions);
 
-      await controller.init();
+      // Wait for async initialization
       await new Promise(process.nextTick);
 
       return {

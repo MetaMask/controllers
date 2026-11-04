@@ -109,7 +109,7 @@ async function withController<ReturnValue>(
     queryApiClient,
     isBasicFunctionality: (): boolean => true,
   });
-  await controller.init();
+  await controller.start();
 
   try {
     return await fn({ controller, messenger: rootMessenger });

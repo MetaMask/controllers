@@ -142,8 +142,6 @@ async function withController<ReturnValue>(
     ...options,
     pollInterval: 1000,
   });
-  // Active chains are read in init(), not the constructor.
-  controller.refreshActiveChainsFromNetworkEnablementState();
 
   try {
     return await fn({
@@ -189,29 +187,6 @@ describe('StakedBalanceDataSource', () => {
       );
     });
 
-    it('does not call messenger actions in the constructor', async () => {
-      const { assetsControllerMessenger } = createMockMessengers({
-        registerCustomRootActions: (messenger) =>
-          registerStakedMessengerActions(messenger, {
-            enabledNetworkMap: { eip155: { [MAINNET_CHAIN_ID_HEX]: true } },
-          }),
-      });
-      const callSpy = vi.spyOn(assetsControllerMessenger, 'call');
-      const source = new StakedBalanceDataSource({
-        messenger: assetsControllerMessenger,
-        onActiveChainsUpdated: vi.fn(),
-      });
-
-      expect(callSpy).not.toHaveBeenCalled();
-
-      source.refreshActiveChainsFromNetworkEnablementState();
-
-      expect(callSpy).toHaveBeenCalledWith(
-        'NetworkEnablementController:getState',
-      );
-      source.destroy();
-    });
-
     it('calls onActiveChainsUpdated with active staking chains when mainnet is enabled', async () => {
       await withController(({ onActiveChainsUpdated }) => {
         expect(onActiveChainsUpdated).toHaveBeenCalledWith(
@@ -237,31 +212,6 @@ describe('StakedBalanceDataSource', () => {
           expect.any(Function),
         );
       });
-    });
-  });
-
-  describe('refreshActiveChainsFromNetworkEnablementState', () => {
-    it('re-reads NetworkEnablementController state and updates active chains', async () => {
-      await withController(
-        { enabledNetworkMap: {} },
-        async ({ controller, mockMessengerCall, onActiveChainsUpdated }) => {
-          expect(await controller.getActiveChains()).toStrictEqual([]);
-
-          mockMessengerCall.mockReturnValueOnce({
-            enabledNetworkMap: { eip155: { [MAINNET_CHAIN_ID_HEX]: true } },
-          });
-          controller.refreshActiveChainsFromNetworkEnablementState();
-
-          expect(await controller.getActiveChains()).toStrictEqual([
-            MAINNET_CHAIN_ID_CAIP,
-          ]);
-          expect(onActiveChainsUpdated).toHaveBeenLastCalledWith(
-            'StakedBalanceDataSource',
-            [MAINNET_CHAIN_ID_CAIP],
-            [],
-          );
-        },
-      );
     });
   });
 

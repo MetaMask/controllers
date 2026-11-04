@@ -39,9 +39,14 @@ The `AssetsController` is a unified asset management system that provides real-t
 
 ### 1. Initialization
 
-When the `AssetsController` constructor is called, it performs the following steps **synchronously**:
+Initialization has two phases, so that construction does not depend on the order in which controllers are constructed:
 
-#### 1.1 Base Controller Setup
+- **Constructor**: sets up state, stores options and registers action handlers. It does not call messenger actions, create data sources or subscribe to external events.
+- **`start()`** (also the `AssetsController:start` action): called by the client once the controllers `AssetsController` depends on (for example `AccountTreeController` and `SnapController`) are registered. It performs steps 1.2, 1.3 and 1.5, subscribes to `subscribeToBasicFunctionalityChange`, runs the unlock cleanups if the keyring is already unlocked, and starts tracking (section 2) when the UI is open, the keyring is unlocked and the account tree is initialized. Repeated calls return the same promise.
+
+Before `start()`, forced fetches return what is already in state, and pushed updates are ignored.
+
+#### 1.1 Base Controller Setup (constructor)
 
 ```typescript
 super({
@@ -52,7 +57,7 @@ super({
 });
 ```
 
-#### 1.2 Initialize Internal State
+#### 1.2 Initialize Internal State (`start()`)
 
 ```typescript
 initializeState()
@@ -64,22 +69,22 @@ get selectedAccounts(): InternalAccount[]
 └── return messenger.call('AccountTreeController:getAccountsFromSelectedAccountGroup')
 ```
 
-#### 1.3 Subscribe to External Events
+#### 1.3 Subscribe to External Events (`start()`)
 
-| Event                                              | Handler                          | Purpose                                                                                                                      |
-| -------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `AccountTreeController:selectedAccountGroupChange` | `handleAccountGroupChanged()`    | Refresh when the user switches groups                                                                                        |
-| `AccountsController:selectedAccountChange`         | `handleSelectedAccountChanged()` | Refresh when the selected account changes and `AccountTreeController` is absent. Ignored while that controller is registered |
-| `AccountTreeController:initialized`                | `updateActive()`                 | Start tracking once the tree is built                                                                                        |
-| `AccountTreeController:uninitialized`              | `updateActive()`                 | Stop tracking when the tree is cleared                                                                                       |
-| `NetworkEnablementController:stateChange`          | `handleEnabledNetworksChanged()` | Track enabled chains                                                                                                         |
-| `KeyringController:unlock`                         | `start()`                        | Start subscriptions                                                                                                          |
-| `KeyringController:lock`                           | `stop()`                         | Stop subscriptions                                                                                                           |
+| Event                                              | Handler                          | Purpose                                |
+| -------------------------------------------------- | -------------------------------- | -------------------------------------- |
+| `AccountTreeController:selectedAccountGroupChange` | `handleAccountGroupChanged()`    | Refresh when the user switches groups  |
+| `AccountTreeController:initialized`                | `updateActive()`                 | Start tracking once the tree is built  |
+| `AccountTreeController:uninitialized`              | `updateActive()`                 | Stop tracking when the tree is cleared |
+| `NetworkEnablementController:stateChange`          | `handleEnabledNetworksChanged()` | Track enabled chains                   |
+| `KeyringController:unlock`                         | `startTracking()`                | Start subscriptions                    |
+| `KeyringController:lock`                           | `stopTracking()`                 | Stop subscriptions                     |
 
-#### 1.4 Register Action Handlers
+#### 1.4 Register Action Handlers (constructor)
 
 ```typescript
 registerActionHandlers()
+├── AssetsController:start
 ├── AssetsController:getAssets
 ├── AssetsController:getAssetsBalance
 ├── AssetsController:getAssetMetadata
@@ -88,7 +93,7 @@ registerActionHandlers()
 └── AssetsController:assetsUpdate         // Data sources push asset updates
 ```
 
-#### 1.5 Balance data source priority
+#### 1.5 Balance data source priority (data sources created in `start()`)
 
 Built-in balance data sources are fixed and processed in priority order: AccountActivityDataSource, AccountsApiDataSource, SnapDataSource, RpcDataSource. Earlier sources get first pick for chain assignment; later sources act as fallbacks. Data sources report active chains via the `onActiveChainsUpdated` callback passed at construction.
 
@@ -126,7 +131,7 @@ executeMiddlewares([
 When the keyring unlocks:
 
 ```
-start()  // Called by KeyringController:unlock
+startTracking()  // Called by KeyringController:unlock
 │
 ├── subscribeAssets()
 │   │
@@ -240,7 +245,7 @@ Result: Earlier registered sources get first pick; later sources act as fallback
 When the keyring locks:
 
 ```
-stop()  // Called by KeyringController:lock
+stopTracking()  // Called by KeyringController:lock
 │
 ├── For each activeSubscription:
 │   └── subscription.unsubscribe()
@@ -266,7 +271,7 @@ destroy()
 │   └── dataSources.clear()
 │
 ├── Stop all active subscriptions
-│   └── stop()
+│   └── stopTracking()
 │
 └── Unregister action handlers
     ├── AssetsController:getAssets
@@ -891,6 +896,9 @@ const assetsController = new AssetsController({
   state: existingState, // Optional: restore persisted state
   defaultUpdateInterval: 30_000, // Optional: polling hint (30s default)
 });
+
+// After the client has registered AccountTreeController, SnapController, etc.
+await assetsController.start();
 ```
 
 ### Basic Usage (Controllers)

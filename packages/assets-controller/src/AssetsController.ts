@@ -5,10 +5,7 @@ import type {
   AccountTreeControllerSelectedAccountGroupChangeEvent,
   AccountTreeControllerUninitializedEvent,
 } from '@metamask/account-tree-controller';
-import type {
-  AccountsControllerGetSelectedAccountAction,
-  AccountsControllerSelectedAccountChangeEvent,
-} from '@metamask/accounts-controller';
+import type { AccountsControllerGetSelectedAccountAction } from '@metamask/accounts-controller';
 import { BaseController } from '@metamask/base-controller';
 import type {
   ControllerGetStateAction,
@@ -210,6 +207,7 @@ const CONTROLLER_NAME = 'AssetsController' as const;
 
 /** Method names exposed as messenger actions (AssetsController:getAssets, etc.) */
 const MESSENGER_EXPOSED_METHODS = [
+  'start',
   'getAssets',
   'getAssetsBalance',
   'getAssetMetadata',
@@ -339,15 +337,10 @@ type AllowedActions =
   | RemoteFeatureFlagControllerGetStateAction;
 
 type AllowedEvents =
-  // AssetsController — account tree lifecycle and group switches.
-  // `AccountsController:selectedAccountChange` is the fallback when
-  // `AccountTreeController` is not registered. It is ignored while that
-  // controller is registered, because the tree republishes the switch as
-  // `selectedAccountGroupChange`.
+  // AssetsController — account tree lifecycle and group switches
   | AccountTreeControllerSelectedAccountGroupChangeEvent
   | AccountTreeControllerInitializedEvent
   | AccountTreeControllerUninitializedEvent
-  | AccountsControllerSelectedAccountChangeEvent
   | ClientControllerStateChangeEvent
   | KeyringControllerLockEvent
   | KeyringControllerUnlockEvent
@@ -705,6 +698,37 @@ function effectiveAccountBalancesV6(
  * - Data sources are responsible for their own update mechanisms (WebSocket, polling, events)
  * - The controller does NOT manage polling - it simply receives pushed updates
  */
+/**
+ * Data sources and middlewares created by {@link AssetsController.start}.
+ */
+type AssetsControllerSources = {
+  accountActivityDataSource: AccountActivityDataSource;
+  accountsApiDataSource: AccountsApiDataSource;
+  snapDataSource: SnapDataSource;
+  rpcDataSource: RpcDataSource;
+  stakedBalanceDataSource: StakedBalanceDataSource;
+  tokenDataSource: TokenDataSource;
+  priceDataSource: PriceDataSource;
+  customAssetGraduationMiddleware: CustomAssetGraduationMiddleware;
+  rpcFallbackMiddleware: RpcFallbackMiddleware;
+};
+
+/**
+ * Constructor options kept until {@link AssetsController.start} creates the
+ * data sources.
+ */
+type AssetsControllerSourceOptions = Pick<
+  AssetsControllerOptions,
+  | 'queryApiClient'
+  | 'accountsApiDataSourceConfig'
+  | 'priceDataSourceConfig'
+  | 'stakedBalanceDataSourceConfig'
+  | 'isOnboarded'
+  | 'subscribeToBasicFunctionalityChange'
+> & {
+  rpcDataSourceConfig: RpcDataSourceConfig;
+};
+
 export class AssetsController extends BaseController<
   typeof CONTROLLER_NAME,
   AssetsControllerState,
@@ -815,14 +839,6 @@ export class AssetsController extends BaseController<
    */
   #startInFlight = false;
 
-  /**
-   * Whether an account switch occurred while startup was force-fetching.
-   *
-   * The startup subscription skips its initial Accounts API fetch, so a
-   * selection made in that window must be refreshed once startup completes.
-   */
-  #pendingAccountRefresh = false;
-
   /** Currently enabled chains from NetworkEnablementController */
   #enabledChains: Set<ChainId> = new Set();
 
@@ -831,25 +847,15 @@ export class AssetsController extends BaseController<
    * This includes all accounts in the same group as the selected account
    * (EVM, Bitcoin, Solana, Tron, etc. that belong to the same logical account group).
    *
-   * When `AccountTreeController` is not registered, falls back to
-   * `AccountsController:getSelectedAccount`.
-   *
    * @returns Array of InternalAccount objects from the selected account group.
    */
   #getSelectedAccounts(): InternalAccount[] {
-    try {
-      const accounts = this.messenger.call(
-        'AccountTreeController:getAccountsFromSelectedAccountGroup',
-      );
-      if (accounts.length > 0) {
-        return accounts;
-      }
-    } catch (error) {
-      if (!isUnregisteredActionError(error)) {
-        throw error;
-      }
+    const accounts = this.messenger.call(
+      'AccountTreeController:getAccountsFromSelectedAccountGroup',
+    );
+    if (accounts.length > 0) {
+      return accounts;
     }
-
     const selectedAccount = this.messenger.call(
       'AccountsController:getSelectedAccount',
     );
@@ -862,42 +868,10 @@ export class AssetsController extends BaseController<
   /**
    * Whether `AccountTreeController.init()` has completed and the tree is ready.
    *
-   * When `AccountTreeController` is not registered, returns true so tracking
-   * is not blocked on a controller the host has not installed.
-   *
-   * @returns True when the account tree has been initialized, or when that controller is absent.
+   * @returns True when the account tree has been initialized.
    */
   #isAccountTreeInitialized(): boolean {
-    try {
-      return this.messenger.call('AccountTreeController:isInitialized');
-    } catch (error) {
-      if (!isUnregisteredActionError(error)) {
-        throw error;
-      }
-      return true;
-    }
-  }
-
-  /**
-   * Whether `AccountTreeController` has registered its actions.
-   *
-   * Selected-account switches are published by `AccountsController` in both
-   * setups. When the tree controller is registered it turns those switches
-   * into `selectedAccountGroupChange`, so handling both events would refresh
-   * tracked assets twice.
-   *
-   * @returns True when `AccountTreeController:isInitialized` is registered.
-   */
-  #isAccountTreeControllerRegistered(): boolean {
-    try {
-      this.messenger.call('AccountTreeController:isInitialized');
-      return true;
-    } catch (error) {
-      if (!isUnregisteredActionError(error)) {
-        throw error;
-      }
-      return false;
-    }
+    return this.messenger.call('AccountTreeController:isInitialized');
   }
 
   /**
@@ -920,15 +894,57 @@ export class AssetsController extends BaseController<
     return this.messenger.call('KeyringController:isUnlocked');
   }
 
-  readonly #accountActivityDataSource: AccountActivityDataSource;
+  /**
+   * Data sources and middlewares. Created by {@link AssetsController.start},
+   * not by the constructor: their constructors read other controllers
+   * (network, snaps, feature flags), which may not be registered yet when this
+   * controller is constructed.
+   */
+  #sources: AssetsControllerSources | undefined;
 
-  readonly #accountsApiDataSource: AccountsApiDataSource;
+  /** Options forwarded to the data sources when `start()` creates them. */
+  readonly #sourceOptions: AssetsControllerSourceOptions;
 
-  readonly #snapDataSource: SnapDataSource;
+  /** The pending or settled `start()` call, so repeated calls share it. */
+  #startPromise: Promise<void> | undefined;
 
-  readonly #rpcDataSource: RpcDataSource;
+  /** Whether `destroy()` has been called. */
+  #isDestroyed = false;
 
-  readonly #stakedBalanceDataSource: StakedBalanceDataSource;
+  /**
+   * Get the data sources, throwing if `start()` has not created them yet.
+   * Entry points that can run before `start()` check `#sources` first.
+   *
+   * @returns The data sources and middlewares.
+   */
+  #getSources(): AssetsControllerSources {
+    if (!this.#sources) {
+      throw new Error(
+        'AssetsController has not been started. Call `start()` first.',
+      );
+    }
+    return this.#sources;
+  }
+
+  get #accountActivityDataSource(): AccountActivityDataSource {
+    return this.#getSources().accountActivityDataSource;
+  }
+
+  get #accountsApiDataSource(): AccountsApiDataSource {
+    return this.#getSources().accountsApiDataSource;
+  }
+
+  get #snapDataSource(): SnapDataSource {
+    return this.#getSources().snapDataSource;
+  }
+
+  get #rpcDataSource(): RpcDataSource {
+    return this.#getSources().rpcDataSource;
+  }
+
+  get #stakedBalanceDataSource(): StakedBalanceDataSource {
+    return this.#getSources().stakedBalanceDataSource;
+  }
 
   /**
    * All balance data sources in priority order for chain-claiming and cleanup.
@@ -951,13 +967,21 @@ export class AssetsController extends BaseController<
     ];
   }
 
-  readonly #priceDataSource: PriceDataSource;
+  get #priceDataSource(): PriceDataSource {
+    return this.#getSources().priceDataSource;
+  }
 
-  readonly #customAssetGraduationMiddleware: CustomAssetGraduationMiddleware;
+  get #customAssetGraduationMiddleware(): CustomAssetGraduationMiddleware {
+    return this.#getSources().customAssetGraduationMiddleware;
+  }
 
-  readonly #rpcFallbackMiddleware: RpcFallbackMiddleware;
+  get #rpcFallbackMiddleware(): RpcFallbackMiddleware {
+    return this.#getSources().rpcFallbackMiddleware;
+  }
 
-  readonly #tokenDataSource: TokenDataSource;
+  get #tokenDataSource(): TokenDataSource {
+    return this.#getSources().tokenDataSource;
+  }
 
   #unsubscribeBasicFunctionality: (() => void) | null = null;
 
@@ -1033,17 +1057,117 @@ export class AssetsController extends BaseController<
       }
     };
 
-    this.#accountActivityDataSource = new AccountActivityDataSource({
-      messenger: this.messenger,
-      onActiveChainsUpdated: this.#onActiveChainsUpdated,
-      onAssetsUpdate: (response, request): Promise<void> =>
-        this.handleAssetsUpdate(
-          response,
-          this.#accountActivityDataSource.getName(),
-          request,
-        ),
+    this.#sourceOptions = {
+      queryApiClient,
+      rpcDataSourceConfig: rpcConfig,
+      accountsApiDataSourceConfig,
+      priceDataSourceConfig,
+      stakedBalanceDataSourceConfig,
+      isOnboarded,
+      subscribeToBasicFunctionalityChange,
+    };
+
+    log('Initializing AssetsController', {
+      defaultUpdateInterval: this.#defaultUpdateInterval,
     });
-    this.#accountsApiDataSource = new AccountsApiDataSource({
+
+    // The constructor does not call messenger actions, so construction does
+    // not depend on the order in which controllers are constructed. Reading
+    // other controllers, creating data sources and subscribing to events all
+    // happen in `start()`.
+    this.#registerActionHandlers();
+  }
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
+  /**
+   * Start the controller once every controller it depends on is registered.
+   *
+   * The constructor does not touch other controllers. `start()` reads enabled
+   * networks, creates the data sources (whose constructors read network, snap
+   * and feature-flag state), subscribes to external events and to
+   * basic-functionality changes, and begins asset tracking when the UI is
+   * open, the keyring is unlocked and the account tree is initialized.
+   *
+   * Call it after the client has constructed and initialized its own
+   * controllers, such as `AccountTreeController` and `SnapController`.
+   * Until then, asset tracking does not run: forced fetches return what is
+   * already in state, and pushed updates are ignored.
+   *
+   * Repeated calls return the same promise. Calls after `destroy()` do
+   * nothing.
+   *
+   * @returns A promise that resolves once the controller has started.
+   */
+  async start(): Promise<void> {
+    this.#startPromise ??= this.#runStart();
+    return this.#startPromise;
+  }
+
+  async #runStart(): Promise<void> {
+    if (this.#isDestroyed) {
+      return;
+    }
+
+    log('Starting AssetsController');
+
+    this.#initializeState();
+    this.#sources = this.#createSources();
+    this.#subscribeToEvents();
+    this.#subscribeToBasicFunctionality();
+
+    // The keyring may already be unlocked when `start()` runs, in which case
+    // the `KeyringController:unlock` handler that runs these cleanups was not
+    // subscribed in time.
+    if (this.#isKeyringUnlocked()) {
+      try {
+        this.#runOutOfScopeBalanceCleanup();
+      } catch {
+        /* Do nothing */
+      }
+      await this.#runSpamCleanup();
+    }
+
+    if (this.#isDestroyed) {
+      return;
+    }
+    this.#updateActive();
+  }
+
+  /**
+   * Create every data source and middleware.
+   *
+   * Data source constructors read other controllers and may report active
+   * chains synchronously. `#handleActiveChainsUpdate` ignores those reports
+   * until `#sources` is assigned, and `start()` subscribes afterwards with
+   * every source's chains.
+   *
+   * @returns The data sources and middlewares.
+   */
+  #createSources(): AssetsControllerSources {
+    const {
+      queryApiClient,
+      rpcDataSourceConfig,
+      accountsApiDataSourceConfig,
+      priceDataSourceConfig,
+      stakedBalanceDataSourceConfig,
+      isOnboarded,
+    } = this.#sourceOptions;
+
+    const accountActivityDataSource: AccountActivityDataSource =
+      new AccountActivityDataSource({
+        messenger: this.messenger,
+        onActiveChainsUpdated: this.#onActiveChainsUpdated,
+        onAssetsUpdate: (response, request): Promise<void> =>
+          this.handleAssetsUpdate(
+            response,
+            accountActivityDataSource.getName(),
+            request,
+          ),
+      });
+    const accountsApiDataSource = new AccountsApiDataSource({
       messenger: this.messenger,
       queryApiClient,
       onActiveChainsUpdated: this.#onActiveChainsUpdated,
@@ -1052,7 +1176,7 @@ export class AssetsController extends BaseController<
       getAssetsState: (): AssetsControllerState => this.state,
       getAssetVisibility: this.#getAssetVisibility.bind(this),
     });
-    this.#snapDataSource = new SnapDataSource({
+    const snapDataSource = new SnapDataSource({
       messenger: this.messenger,
       onActiveChainsUpdated: this.#onActiveChainsUpdated,
       onAssetsUpdate: (response): Promise<void> =>
@@ -1061,7 +1185,7 @@ export class AssetsController extends BaseController<
       getAssetVisibility: this.#getAssetVisibility.bind(this),
       getAssetsState: (): AssetsControllerState => this.state,
     });
-    this.#rpcDataSource = new RpcDataSource({
+    const rpcDataSource = new RpcDataSource({
       messenger: this.messenger,
       getAssetsState: (): AssetsControllerState => this.state,
       isBalanceV6Enabled: (): boolean => this.#isBalanceV6Enabled(),
@@ -1070,17 +1194,17 @@ export class AssetsController extends BaseController<
       getNativeAssetForChain: (chainId: ChainId): Caip19AssetId | undefined =>
         this.#getNativeAssetForChain(chainId),
       queryApiClient,
-      ...rpcConfig,
-      isOnboarded: rpcConfig.isOnboarded ?? isOnboarded,
+      ...rpcDataSourceConfig,
+      isOnboarded: rpcDataSourceConfig.isOnboarded ?? isOnboarded,
       getAssetType: (assetId: Caip19AssetId): 'native' | 'erc20' | 'spl' =>
         this.#getAssetType(assetId),
     });
-    this.#stakedBalanceDataSource = new StakedBalanceDataSource({
+    const stakedBalanceDataSource = new StakedBalanceDataSource({
       messenger: this.messenger,
       onActiveChainsUpdated: this.#onActiveChainsUpdated,
       ...stakedBalanceDataSourceConfig,
     });
-    this.#tokenDataSource = new TokenDataSource(this.messenger, {
+    const tokenDataSource = new TokenDataSource(this.messenger, {
       queryApiClient,
       getNativeAssetIds: (): Caip19AssetId[] => {
         return this.#getNativeAssetIdsForEnabledChains();
@@ -1089,13 +1213,13 @@ export class AssetsController extends BaseController<
         this.#getAssetType(assetId),
       getAssetsState: (): AssetsControllerState => this.state,
     });
-    this.#priceDataSource = new PriceDataSource({
+    const priceDataSource = new PriceDataSource({
       queryApiClient,
       getSelectedCurrency: (): SupportedCurrency => this.state.selectedCurrency,
       getAssetsState: (): AssetsControllerState => this.state,
       ...priceDataSourceConfig,
     });
-    this.#customAssetGraduationMiddleware = new CustomAssetGraduationMiddleware(
+    const customAssetGraduationMiddleware = new CustomAssetGraduationMiddleware(
       {
         getSelectedAccountId: (): AccountId | undefined => {
           try {
@@ -1109,38 +1233,42 @@ export class AssetsController extends BaseController<
         getAssetsState: (): AssetsControllerState => this.state,
       },
     );
-    this.#rpcFallbackMiddleware = new RpcFallbackMiddleware({
-      rpcDataSource: this.#rpcDataSource,
+    const rpcFallbackMiddleware = new RpcFallbackMiddleware({
+      rpcDataSource,
       isBalanceV6Enabled: (): boolean => this.#isBalanceV6Enabled(),
       getAssetsState: (): AssetsControllerState => this.state,
     });
 
-    log('Initializing AssetsController', {
-      defaultUpdateInterval: this.#defaultUpdateInterval,
-    });
-
-    // Subscribe during construction so a stateChange published before init()
-    // is not missed. Enabled chains are read in init(), after every
-    // controller has been constructed.
-    this.#subscribeToEvents();
-    this.#registerActionHandlers();
-    // Subscriptions start only when both UI is open and keyring unlocked -> #updateActive().
-
-    // Subscribe to basic-functionality changes after construction so a synchronous
-    // onChange during subscribe cannot run before data sources are initialized.
-    if (subscribeToBasicFunctionalityChange) {
-      const unsubscribe = subscribeToBasicFunctionalityChange((isBasic) =>
-        this.handleBasicFunctionalityChange(isBasic),
-      );
-      if (typeof unsubscribe === 'function') {
-        this.#unsubscribeBasicFunctionality = unsubscribe;
-      }
-    }
+    return {
+      accountActivityDataSource,
+      accountsApiDataSource,
+      snapDataSource,
+      rpcDataSource,
+      stakedBalanceDataSource,
+      tokenDataSource,
+      priceDataSource,
+      customAssetGraduationMiddleware,
+      rpcFallbackMiddleware,
+    };
   }
 
-  // ============================================================================
-  // INITIALIZATION
-  // ============================================================================
+  /**
+   * Subscribe to the host's basic-functionality setting, if the host provided
+   * a way to. Runs from `start()`, after the data sources exist, so a
+   * synchronous `onChange` cannot run before they are created.
+   */
+  #subscribeToBasicFunctionality(): void {
+    const { subscribeToBasicFunctionalityChange } = this.#sourceOptions;
+    if (!subscribeToBasicFunctionalityChange) {
+      return;
+    }
+    const unsubscribe = subscribeToBasicFunctionalityChange((isBasic) =>
+      this.handleBasicFunctionalityChange(isBasic),
+    );
+    if (typeof unsubscribe === 'function') {
+      this.#unsubscribeBasicFunctionality = unsubscribe;
+    }
+  }
 
   #initializeNativeAssetsMap(queryApiClient: ApiPlatformClient): void {
     queryApiClient.queryClient
@@ -1170,40 +1298,10 @@ export class AssetsController extends BaseController<
     );
   }
 
-  /**
-   * Read the current enabled chains from NetworkEnablementController, and
-   * refresh data sources that would otherwise read other controllers through
-   * the messenger.
-   *
-   * This controller does not call messenger actions in its constructor.
-   * `Wallet` constructs every controller first, then `Wallet.init()` calls
-   * `init()`. Later enablement changes arrive on `stateChange` events.
-   */
-  async init(): Promise<void> {
-    this.#initializeState();
-    this.#rpcDataSource.refreshActiveChainsFromNetworkState();
-    this.#stakedBalanceDataSource.refreshActiveChainsFromNetworkEnablementState();
-    this.#snapDataSource.init();
-    await this.#accountsApiDataSource.init();
-  }
-
   #initializeState(): void {
-    let enabledNetworkMap: NetworkEnablementControllerState['enabledNetworkMap'];
-    try {
-      ({ enabledNetworkMap } = this.messenger.call(
-        'NetworkEnablementController:getState',
-      ));
-    } catch (error) {
-      if (!isUnregisteredActionError(error)) {
-        throw error;
-      }
-      log(
-        'NetworkEnablementController:getState is not registered yet. Enabled chains are applied from NetworkEnablementController:stateChange.',
-        { error },
-      );
-      return;
-    }
-
+    const { enabledNetworkMap } = this.messenger.call(
+      'NetworkEnablementController:getState',
+    );
     this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
 
     log('Initialized state', {
@@ -1273,13 +1371,6 @@ export class AssetsController extends BaseController<
         );
       },
     );
-
-    // Fallback for hosts that do not register AccountTreeController.
-    // Ignored while that controller is registered so a switch is not
-    // refreshed here and again on `selectedAccountGroupChange`.
-    this.messenger.subscribe('AccountsController:selectedAccountChange', () => {
-      this.#handleSelectedAccountChanged().catch(console.error);
-    });
 
     this.messenger.subscribe('AccountTreeController:initialized', () => {
       this.#updateActive();
@@ -1550,9 +1641,9 @@ export class AssetsController extends BaseController<
       this.#isKeyringUnlocked() &&
       this.#isAccountTreeInitialized();
     if (shouldRun) {
-      this.#start();
+      this.#startTracking();
     } else {
-      this.#stop();
+      this.#stopTracking();
     }
   }
 
@@ -1613,6 +1704,11 @@ export class AssetsController extends BaseController<
     activeChains: ChainId[],
     previousChains: ChainId[],
   ): void {
+    // Data source constructors report their chains while `start()` is still
+    // creating them. `start()` subscribes afterwards with every source's chains.
+    if (!this.#sources) {
+      return;
+    }
     if (!this.#isUiOpen() || !this.#isKeyringUnlocked() || !this.#isEnabled()) {
       return;
     }
@@ -1688,8 +1784,51 @@ export class AssetsController extends BaseController<
   // PUBLIC API: QUERY METHODS
   // ============================================================================
 
-  @trackAssetsLoading
+  /**
+   * Get assets for the given accounts, optionally force-fetching them first.
+   *
+   * Before `start()` there are no data sources, so a forced fetch is skipped
+   * and the assets already in state are returned. The loading status of the
+   * accounts is left untouched, so the first fetch after `start()` still
+   * reports them as loading.
+   *
+   * @param accounts - Accounts to get assets for.
+   * @param options - Fetch options.
+   * @param options.chainIds - Chains to include. Defaults to the enabled chains.
+   * @param options.assetTypes - Asset types to include. Defaults to fungible.
+   * @param options.forceUpdate - Fetch from the data sources before reading state.
+   * @param options.bypassServerCache - Also bypass server-side HTTP caches.
+   * @param options.dataTypes - Data types to fetch.
+   * @returns Assets keyed by account ID and asset ID.
+   */
   async getAssets(
+    accounts: InternalAccount[],
+    options?: {
+      chainIds?: ChainId[];
+      assetTypes?: AssetType[];
+      forceUpdate?: boolean;
+      /**
+       * Also bypass server-side HTTP caches (e.g. the Accounts API's 60s
+       * cache, via a random `bypassServerCache` query param). Only meaningful
+       * together with `forceUpdate`. Use sparingly — e.g. right after a
+       * transaction confirms, when the API's cached snapshot is known stale.
+       */
+      bypassServerCache?: boolean;
+      dataTypes?: DataType[];
+    },
+  ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
+    if (options?.forceUpdate && !this.#sources) {
+      log('Skipping forced asset fetch: controller has not been started');
+      return this.#getAssetsTracked(accounts, {
+        ...options,
+        forceUpdate: false,
+      });
+    }
+    return this.#getAssetsTracked(accounts, options);
+  }
+
+  @trackAssetsLoading
+  async #getAssetsTracked(
     accounts: InternalAccount[],
     options?: {
       chainIds?: ChainId[];
@@ -1744,7 +1883,11 @@ export class AssetsController extends BaseController<
    * @param assetIds - CAIP-19 asset IDs to sync.
    */
   async syncAssetsPrices(assetIds: Caip19AssetId[]): Promise<void> {
-    if (!this.#isBasicFunctionality() || assetIds.length === 0) {
+    if (
+      !this.#sources ||
+      !this.#isBasicFunctionality() ||
+      assetIds.length === 0
+    ) {
       return;
     }
 
@@ -2649,7 +2792,7 @@ export class AssetsController extends BaseController<
       selectedCurrency,
     });
 
-    if (!this.#isBasicFunctionality()) {
+    if (!this.#sources || !this.#isBasicFunctionality()) {
       return;
     }
 
@@ -2677,7 +2820,7 @@ export class AssetsController extends BaseController<
    * @param chainIds - Chain IDs to filter prices for.
    */
   subscribeAssetsPrice(accounts: InternalAccount[], chainIds: ChainId[]): void {
-    if (!this.#isBasicFunctionality()) {
+    if (!this.#sources || !this.#isBasicFunctionality()) {
       return;
     }
     const subscriptionKey = 'ds:PriceDataSource';
@@ -3549,7 +3692,7 @@ export class AssetsController extends BaseController<
    * Idempotent — returns early if accounts/chains are not yet available or
    * subscriptions are already active.
    */
-  #start(): void {
+  #startTracking(): void {
     const accounts = this.#getSelectedAccounts();
     const chainIds = [...this.#enabledChains];
 
@@ -3573,21 +3716,6 @@ export class AssetsController extends BaseController<
       })
       .finally(() => {
         this.#startInFlight = false;
-        const shouldRefreshPendingAccount =
-          this.#pendingAccountRefresh &&
-          this.#isUiOpen() &&
-          this.#isKeyringUnlocked() &&
-          this.#isAccountTreeInitialized();
-        this.#pendingAccountRefresh = false;
-        if (shouldRefreshPendingAccount) {
-          this.#refreshTrackedAccounts(this.#getSelectedAccounts()).catch(
-            (error: unknown) => {
-              log('Failed to refresh assets after startup account switch', {
-                error,
-              });
-            },
-          );
-        }
       });
   }
 
@@ -3595,7 +3723,7 @@ export class AssetsController extends BaseController<
    * Stop asset tracking: unsubscribe from all updates.
    * Called when app closes or keyring locks.
    */
-  #stop(): void {
+  #stopTracking(): void {
     log('Stopping asset tracking', {
       activeSubscriptionCount: this.#activeSubscriptions.size,
       hasPriceSubscription: this.#activeSubscriptions.has('ds:PriceDataSource'),
@@ -3603,6 +3731,10 @@ export class AssetsController extends BaseController<
 
     this.#firstInitFetchReported = false;
     this.#stateSizeReported = false;
+
+    if (!this.#sources) {
+      return;
+    }
 
     // Stop price subscription first (uses direct messenger call)
     this.unsubscribeAssetsPrice();
@@ -3639,7 +3771,10 @@ export class AssetsController extends BaseController<
    * @param _isBasic - The new value (for call-site clarity; the getter is the source of truth).
    */
   handleBasicFunctionalityChange(_isBasic: boolean): void {
-    this.#stop();
+    if (!this.#sources) {
+      return;
+    }
+    this.#stopTracking();
     this.#subscribeAssets();
   }
 
@@ -4080,9 +4215,6 @@ export class AssetsController extends BaseController<
     // (including when the group did not change) so late subscribers can catch
     // up — ignore those until we are already tracking.
     if (this.#activeSubscriptions.size === 0) {
-      if (this.#startInFlight && groupId !== previousGroupId) {
-        this.#pendingAccountRefresh = true;
-      }
       return;
     }
     if (groupId === previousGroupId) {
@@ -4098,46 +4230,6 @@ export class AssetsController extends BaseController<
       previousGroupId,
     });
 
-    await this.#refreshTrackedAccounts(accounts);
-  }
-
-  /**
-   * Refresh tracked assets after `AccountsController:selectedAccountChange`
-   * when `AccountTreeController` is not registered.
-   *
-   * Ignored while the account tree controller is registered, because that
-   * controller republishes the switch as `selectedAccountGroupChange`.
-   * Also ignored until tracking has started, matching group switches, so the
-   * first start stays owned by unlock and account-tree initialization.
-   */
-  async #handleSelectedAccountChanged(): Promise<void> {
-    if (this.#isAccountTreeControllerRegistered()) {
-      return;
-    }
-    if (this.#activeSubscriptions.size === 0) {
-      if (this.#startInFlight) {
-        this.#pendingAccountRefresh = true;
-      }
-      return;
-    }
-
-    const accounts = this.#getSelectedAccounts();
-
-    log('Selected account changed', {
-      accountCount: accounts.length,
-      accountIds: accounts.map((account) => account.id),
-    });
-
-    await this.#refreshTrackedAccounts(accounts);
-  }
-
-  /**
-   * Force-fetch and resubscribe for the accounts that should be tracked now.
-   *
-   * @param accounts - Accounts to refresh. An empty list skips the fetch and
-   * still resubscribes, matching a switch onto an empty selection.
-   */
-  async #refreshTrackedAccounts(accounts: InternalAccount[]): Promise<void> {
     const releaseLock = await this.#accountRefreshMutex.acquire();
     try {
       this.#ensureNativeBalancesDefaultZero();
@@ -4379,6 +4471,13 @@ export class AssetsController extends BaseController<
       assetsPrice: response.assetsPrice,
     });
 
+    if (!this.#sources) {
+      log('Ignoring assets update: controller has not been started', {
+        sourceId,
+      });
+      return;
+    }
+
     if (this.#isBalanceV6Enabled()) {
       await this.#handleAssetsUpdateV6(response, sourceId, request);
       return;
@@ -4584,19 +4683,23 @@ export class AssetsController extends BaseController<
 
   destroy(): void {
     log('Destroying AssetsController', {
-      dataSourceCount: this.#allBalanceDataSources.length,
+      isStarted: this.#sources !== undefined,
       subscriptionCount: this.#activeSubscriptions.size,
     });
 
-    // Destroy instantiated data sources
-    this.#accountActivityDataSource?.destroy?.();
-    this.#accountsApiDataSource?.destroy?.();
-    this.#snapDataSource?.destroy?.();
-    this.#rpcDataSource?.destroy?.();
-    this.#stakedBalanceDataSource?.destroy?.();
+    this.#isDestroyed = true;
+
+    // Destroy instantiated data sources (none exist before `start()`)
+    if (this.#sources) {
+      this.#sources.accountActivityDataSource.destroy();
+      this.#sources.accountsApiDataSource.destroy();
+      this.#sources.snapDataSource.destroy();
+      this.#sources.rpcDataSource.destroy();
+      this.#sources.stakedBalanceDataSource.destroy();
+    }
 
     // Stop all active subscriptions
-    this.#stop();
+    this.#stopTracking();
 
     if (this.#unsubscribeBasicFunctionality) {
       this.#unsubscribeBasicFunctionality();
@@ -4604,6 +4707,7 @@ export class AssetsController extends BaseController<
     }
 
     // Unregister action handlers
+    this.messenger.unregisterActionHandler('AssetsController:start');
     this.messenger.unregisterActionHandler('AssetsController:getAssets');
     this.messenger.unregisterActionHandler('AssetsController:getAssetsBalance');
     this.messenger.unregisterActionHandler('AssetsController:getAssetMetadata');
@@ -4635,16 +4739,4 @@ export class AssetsController extends BaseController<
       'AssetsController:setSelectedCurrency',
     );
   }
-}
-
-/**
- * Whether a messenger call failed because no controller has registered the action yet.
- *
- * @param error - The error thrown by `messenger.call`.
- * @returns True when the action handler is not registered.
- */
-function isUnregisteredActionError(error: unknown): boolean {
-  return (
-    error instanceof Error && error.message.includes('has not been registered')
-  );
 }

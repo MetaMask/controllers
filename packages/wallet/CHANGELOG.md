@@ -11,9 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **BREAKING:** Add `AssetsController` to the default initialization configurations ([#10885](https://github.com/MetaMask/core/pull/10885))
   - Requires `instanceOptions.assetsController.queryApiClient`.
-  - `Wallet.init()` calls `AssetsController.init()`, which reads `NetworkEnablementController:getState` after every controller has been constructed. Later enablement changes arrive on `NetworkEnablementController:stateChange`.
-  - Delegates `AccountTreeController` and `SnapController` actions and events. `Wallet` does not construct those controllers. Until a client registers them, account-group reads fall back to `AccountsController:getSelectedAccount`, asset tracking does not wait for the account tree, and snap discovery leaves snap chains empty.
-  - Delegates `AccountsController:selectedAccountChange`. When `AccountTreeController` is not registered, that event refreshes tracked assets. When it is registered, `AssetsController` ignores the event and still refreshes only on `AccountTreeController:selectedAccountGroupChange`.
+  - `AssetsController` does not track assets until the client calls `AssetsController:start` (or `AssetsController.start()`). Call it after the client has registered and initialized the controllers `AssetsController` depends on that `Wallet` does not construct, such as `AccountTreeController` and `SnapController`. `Wallet.init()` does not start it.
+  - Delegates `AccountTreeController` and `SnapController` actions and events, which the client registers.
   - Also delegates the other external `AssetsControllerMessenger` actions and events (accounts, client, keyring, network, network enablement, permission, phishing, remote feature flags, preferences, and transactions). `Wallet` constructs the ones it already initializes by default.
   - Hosts that already register `AssetsController` on the wallet root messenger must remove that registration before upgrading, or messenger registration will collide.
 
