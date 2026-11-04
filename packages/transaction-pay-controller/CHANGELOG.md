@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `@metamask/assets-controller` from `^20.2.1` to `^20.2.2` ([#PRNUM](https://github.com/MetaMask/core/pull/PRNUM))
+
 ## [30.4.2]
 
 ### Changed
