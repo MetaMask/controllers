@@ -2806,6 +2806,184 @@ describe('TransakService', () => {
       ]);
     });
 
+    describe('sparse responses', () => {
+      it('accepts a user profile that is missing optional fields', async () => {
+        const sparseProfile = {
+          id: 'user-1',
+          firstName: 'Test',
+          kyc: { status: 'APPROVED', type: 'SIMPLE' },
+          address: { addressLine1: '123 Test St', city: 'Test City' },
+        };
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/user/')
+          .query(true)
+          .reply(200, { data: sparseProfile });
+        const { service } = getService();
+        authenticateService(service);
+
+        const result = await settle(service.getUserDetails());
+
+        expect(result).toStrictEqual(sparseProfile);
+      });
+
+      it('accepts a profile that has no kyc or address yet', async () => {
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/user/')
+          .query(true)
+          .reply(200, { data: { id: 'user-1' } });
+        const { service } = getService();
+        authenticateService(service);
+
+        const result = await settle(service.getUserDetails());
+
+        expect(result).toStrictEqual({ id: 'user-1' });
+      });
+
+      it('still rejects a profile field with the wrong type', async () => {
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/user/')
+          .query(true)
+          .reply(200, { data: { id: 'user-1', firstName: 42 } });
+        const { service } = getService();
+        authenticateService(service);
+
+        await expect(settle(service.getUserDetails())).rejects.toThrow(
+          'unexpected response',
+        );
+      });
+
+      it('accepts a buy quote that only has the quote id and amounts', async () => {
+        nockTranslation();
+        const sparseQuote = {
+          quoteId: 'quote-1',
+          conversionPrice: 4072.34,
+          fiatCurrency: 'USD',
+          cryptoCurrency: 'ETH',
+          fiatAmount: 100,
+          cryptoAmount: 0.02455598,
+          totalFee: 23.33,
+        };
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/lookup/quotes')
+          .query(true)
+          .reply(200, { data: sparseQuote });
+        const { service } = getService();
+
+        const result = await settle(
+          service.getBuyQuote(
+            'USD',
+            'eip155:1/slip44:60',
+            'eip155:1',
+            '/payments/debit-credit-card',
+            '100',
+          ),
+        );
+
+        expect(result.quoteId).toBe('quote-1');
+      });
+
+      it('rejects a buy quote without a quote id', async () => {
+        nockTranslation();
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/lookup/quotes')
+          .query(true)
+          .reply(200, { data: { fiatAmount: 100 } });
+        const { service } = getService();
+
+        await expect(
+          settle(
+            service.getBuyQuote(
+              'USD',
+              'eip155:1/slip44:60',
+              'eip155:1',
+              '/payments/debit-credit-card',
+              '100',
+            ),
+          ),
+        ).rejects.toThrow('unexpected response');
+      });
+
+      it('accepts user limits without a shortage', async () => {
+        nockTranslation();
+        const limits = {
+          limits: { '1': 5000, '30': 25000, '365': 100000 },
+          spent: { '1': 0, '30': 0, '365': 0 },
+          remaining: { '1': 5000, '30': 25000, '365': 100000 },
+          exceeded: { '1': false, '30': false, '365': false },
+        };
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/orders/user-limit')
+          .query(true)
+          .reply(200, { data: limits });
+        const { service } = getService();
+        authenticateService(service);
+
+        const result = await settle(
+          service.getUserLimits('USD', 'credit_debit_card', 'SIMPLE'),
+        );
+
+        expect(result).toStrictEqual(limits);
+      });
+
+      it('accepts a created order whose payment details are null', async () => {
+        nockTranslation();
+        nock(STAGING_TRANSAK_BASE)
+          .post('/api/v2/orders')
+          .reply(200, {
+            data: {
+              orderId: 'order-abc-123',
+              walletAddress: '0x1234',
+              paymentDetails: null,
+            },
+          });
+        nock(STAGING_ORDERS_BASE)
+          .get(`${STAGING_PROVIDER_PATH}/orders/order-abc-123`)
+          .query(true)
+          .reply(200, { ...MOCK_DEPOSIT_ORDER, paymentDetails: [] });
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/orders/order-abc-123')
+          .query(true)
+          .reply(200, { data: { orderId: 'order-abc-123' } });
+        const { service } = getService();
+        authenticateService(service);
+
+        const result = await settle(
+          service.createOrder('quote-123', '0x1234', 'credit_debit_card'),
+        );
+
+        expect(result.id).toBe(`${STAGING_PROVIDER_PATH}/orders/order-abc-123`);
+      });
+
+      it('reads payment details from an order response without a wallet address', async () => {
+        nock(STAGING_ORDERS_BASE)
+          .get(`${STAGING_PROVIDER_PATH}/orders/order-abc-123`)
+          .query(true)
+          .reply(200, { ...MOCK_DEPOSIT_ORDER, paymentDetails: [] });
+        nock(STAGING_TRANSAK_BASE)
+          .get('/api/v2/orders/order-abc-123')
+          .query(true)
+          .reply(200, {
+            data: {
+              orderId: 'order-abc-123',
+              paymentDetails: MOCK_TRANSAK_ORDER.paymentDetails,
+            },
+          });
+        const { service } = getService();
+        authenticateService(service);
+
+        const result = await settle(
+          service.getOrder(
+            `${STAGING_PROVIDER_PATH}/orders/order-abc-123`,
+            '0x1234',
+          ),
+        );
+
+        expect(result.paymentDetails).toStrictEqual(
+          MOCK_TRANSAK_ORDER.paymentDetails,
+        );
+      });
+    });
+
     it('refetches on sequential reads', async () => {
       nock(STAGING_TRANSAK_BASE)
         .get('/api/v2/user/')

@@ -12,6 +12,7 @@ import {
   any,
   array,
   boolean,
+  nullable,
   number,
   optional,
   record,
@@ -519,9 +520,11 @@ export class TransakApiError extends HttpError {
 // === RESPONSE STRUCTS ===
 
 /**
- * The structs below are intentionally lenient: they check the fields the
- * service and its callers depend on, and ignore any extra fields the APIs
- * return.
+ * The structs below are intentionally lenient: they require only the fields
+ * the service itself depends on, check the type of any other field that is
+ * present, and ignore extra fields the APIs return. The APIs omit fields for
+ * incomplete profiles and sparse responses, and responses were not validated
+ * before, so a missing field must not fail a call.
  */
 
 const TransakPaymentDetailsStruct = array(
@@ -548,49 +551,53 @@ const VerifyUserOtpResponseStruct = looseObject({
 });
 
 const UserDetailsStruct = looseObject({
-  id: string(),
-  firstName: string(),
-  lastName: string(),
-  email: string(),
-  mobileNumber: string(),
-  status: string(),
-  dob: string(),
-  kyc: looseObject({
-    status: string(),
-    type: string(),
-    userId: string(),
-    workFlowRunId: string(),
-  }),
-  address: looseObject({
-    addressLine1: string(),
-    addressLine2: string(),
-    state: string(),
-    city: string(),
-    postCode: string(),
-    country: string(),
-    countryCode: string(),
-  }),
-  createdAt: string(),
+  id: optional(string()),
+  firstName: optional(string()),
+  lastName: optional(string()),
+  email: optional(string()),
+  mobileNumber: optional(string()),
+  status: optional(string()),
+  dob: optional(string()),
+  kyc: optional(
+    looseObject({
+      status: optional(string()),
+      type: optional(string()),
+      userId: optional(string()),
+      workFlowRunId: optional(string()),
+    }),
+  ),
+  address: optional(
+    looseObject({
+      addressLine1: optional(string()),
+      addressLine2: optional(string()),
+      state: optional(string()),
+      city: optional(string()),
+      postCode: optional(string()),
+      country: optional(string()),
+      countryCode: optional(string()),
+    }),
+  ),
+  createdAt: optional(string()),
 });
 
 const BuyQuoteStruct = looseObject({
   quoteId: string(),
-  conversionPrice: number(),
-  marketConversionPrice: number(),
-  slippage: number(),
-  fiatCurrency: string(),
-  cryptoCurrency: string(),
-  paymentMethod: string(),
-  fiatAmount: number(),
-  cryptoAmount: number(),
-  isBuyOrSell: string(),
-  network: string(),
-  feeDecimal: number(),
-  totalFee: number(),
-  feeBreakdown: array(record(string(), any())),
-  nonce: number(),
-  cryptoLiquidityProvider: string(),
-  notes: array(record(string(), any())),
+  conversionPrice: optional(number()),
+  marketConversionPrice: optional(number()),
+  slippage: optional(number()),
+  fiatCurrency: optional(string()),
+  cryptoCurrency: optional(string()),
+  paymentMethod: optional(string()),
+  fiatAmount: optional(number()),
+  cryptoAmount: optional(number()),
+  isBuyOrSell: optional(string()),
+  network: optional(string()),
+  feeDecimal: optional(number()),
+  totalFee: optional(number()),
+  feeBreakdown: optional(array(record(string(), any()))),
+  nonce: optional(number()),
+  cryptoLiquidityProvider: optional(string()),
+  notes: optional(array(record(string(), any()))),
 });
 
 const KycRequirementStruct = looseObject({
@@ -608,7 +615,11 @@ const AdditionalRequirementsStruct = looseObject({
 const TransakOrderStruct = looseObject({
   orderId: string(),
   walletAddress: string(),
-  paymentDetails: optional(TransakPaymentDetailsStruct),
+  paymentDetails: optional(nullable(TransakPaymentDetailsStruct)),
+});
+
+const TransakOrderPaymentDetailsStruct = looseObject({
+  paymentDetails: optional(nullable(TransakPaymentDetailsStruct)),
 });
 
 const ActiveOrdersStruct = array(
@@ -625,7 +636,7 @@ const UserLimitsStruct = looseObject({
   spent: looseObject({ '1': number(), '30': number(), '365': number() }),
   remaining: looseObject({ '1': number(), '30': number(), '365': number() }),
   exceeded: looseObject({ '1': boolean(), '30': boolean(), '365': boolean() }),
-  shortage: record(string(), number()),
+  shortage: optional(record(string(), number())),
 });
 
 const OttStruct = looseObject({ ott: string() });
@@ -1343,7 +1354,7 @@ export class TransakService extends BaseDataService<
         const transakOrder = await this.#transakGet<TransakOrder>(
           'getOrderPaymentDetails',
           `/api/v2/orders/${transakOrderId}`,
-          TransakOrderStruct,
+          TransakOrderPaymentDetailsStruct,
         );
         return { ...orderWithId, paymentDetails: transakOrder.paymentDetails };
       } catch {
