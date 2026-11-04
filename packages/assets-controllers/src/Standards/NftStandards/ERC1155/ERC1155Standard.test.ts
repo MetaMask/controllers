@@ -417,6 +417,7 @@ describe('ERC1155Standard', () => {
       vi.restoreAllMocks();
     });
   });
+
   describe('getDetails with a data URL tokenURI', () => {
     const metadata = {
       name: 'Data NFT',
@@ -435,7 +436,22 @@ describe('ERC1155Standard', () => {
         'https://example.com/image.png',
       ],
       ['malformed base64', 'data:application/json;base64,!!!', undefined],
-      ['a non-JSON media type', 'data:text/plain,hello', undefined],
+      ['a non-JSON media type', 'data:text/html,hello', undefined],
+      [
+        'JSON with a non-string image',
+        `data:application/json,${encodeURIComponent('{"image":42}')}`,
+        undefined,
+      ],
+      [
+        'JSON with an IPFS image',
+        `data:application/json,${encodeURIComponent(
+          JSON.stringify({
+            image:
+              'ipfs://bafybeidxfmwycgzcp4v2togflpqh2gnibuexjy4m4qqwxp7nh3jx5zlh4y',
+          }),
+        )}`,
+        'https://bafybeidxfmwycgzcp4v2togflpqh2gnibuexjy4m4qqwxp7nh3jx5zlh4y.ipfs.ipfs.example.com',
+      ],
     ])(
       'resolves the image for %s without fetching',
       async (_description, tokenURI, expectedImage) => {

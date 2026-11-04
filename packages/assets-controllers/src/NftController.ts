@@ -360,6 +360,16 @@ const NFT_UPDATE_THRESHOLD = 500;
 /**
  * Controller that stores assets and exposes convenience methods
  */
+/**
+ * Narrows an untrusted token URI metadata field to a string.
+ *
+ * @param value - The metadata field value.
+ * @returns The value if it is a string, otherwise `null`.
+ */
+function toStringOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
 export class NftController extends BaseController<
   typeof controllerName,
   NftControllerState,
@@ -762,12 +772,12 @@ export class NftController extends BaseController<
       : /* istanbul ignore next */ 'image_url';
 
     return {
-      image: object[image] as NftMetadata['image'],
-      name: object.name as NftMetadata['name'],
-      description: object.description as NftMetadata['description'],
+      image: toStringOrNull(object[image]),
+      name: toStringOrNull(object.name),
+      description: toStringOrNull(object.description),
       standard,
       favorite: false,
-      tokenURI: tokenURI ?? null,
+      tokenURI,
     };
   }
 

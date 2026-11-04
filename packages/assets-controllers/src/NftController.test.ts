@@ -2278,6 +2278,11 @@ describe('NftController', () => {
           'JSON with an upper-case media type',
           `DATA:Application/JSON;Base64,${base64Json}`,
         ],
+        [
+          'base64 JSON with a text/plain media type',
+          `data:text/plain;base64,${base64Json}`,
+        ],
+        ['base64 JSON without a media type', `data:;base64,${base64Json}`],
       ])(
         'decodes %s inline without fetching',
         async (_description, tokenURI, expected = decodedMetadata) => {
@@ -2311,6 +2316,32 @@ describe('NftController', () => {
           });
         },
       );
+
+      it('drops non-string metadata fields from a JSON data URL', async () => {
+        const tokenURI = `data:application/json,${encodeURIComponent(
+          JSON.stringify({
+            name: { evil: true },
+            description: 42,
+            image: ['https://example.com/a.png'],
+          }),
+        )}`;
+        const { nftController } = setupController({
+          getERC721TokenURI: vi.fn().mockResolvedValue(tokenURI),
+          defaultSelectedAccount: OWNER_ACCOUNT,
+        });
+
+        await nftController.addNft(
+          ERC721_KUDOSADDRESS,
+          ERC721_KUDOS_TOKEN_ID,
+          'mainnet',
+        );
+
+        expect(
+          nftController.state.allNfts[OWNER_ACCOUNT.address][
+            ChainId.mainnet
+          ][0],
+        ).toMatchObject({ ...fallbackMetadata, tokenURI });
+      });
 
       it('decodes a JSON data URL returned by an ERC-1155 uri without fetching', async () => {
         const tokenURI = `data:application/json;base64,${base64Json}`;
@@ -2352,12 +2383,12 @@ describe('NftController', () => {
         ['a JSON array', 'data:application/json,[1,2]'],
         ['JSON null', 'data:application/json,null'],
         ['a data URL without a comma', 'data:application/json;base64'],
-        ['a non-JSON media type', 'data:text/plain,hello'],
+        ['a text/plain payload that is not JSON', 'data:text/plain,hello'],
         [
           'a non-JSON media type that is base64-encoded',
           `data:text/html;base64,${btoa('<p>hi</p>')}`,
         ],
-        ['a data URL without a media type', `data:;base64,${base64Json}`],
+        ['an audio media type', 'data:audio/mpeg;base64,SUQz'],
       ])(
         'falls back to null metadata without fetching for %s',
         async (_description, tokenURI) => {

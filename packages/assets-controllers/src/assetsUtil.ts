@@ -1,6 +1,7 @@
 import type { BigNumber } from '@ethersproject/bignumber';
 import {
   convertHexToDecimal,
+  timeoutFetch,
   toChecksumHexAddress,
 } from '@metamask/controller-utils';
 import type { Hex } from '@metamask/utils';
@@ -289,6 +290,67 @@ export function isDataUri(uri: string): boolean {
 }
 
 /**
+ * Maximum length of a JSON `data:` URL that is decoded inline. Token URIs come
+ * from arbitrary contracts; this bounds the synchronous decode/parse work.
+ * Larger payloads fall back to empty metadata.
+ */
+export const MAX_JSON_DATA_URI_LENGTH = 1024 * 1024;
+
+/**
+ * Whether a `data:` URL media type may carry JSON NFT metadata. Besides
+ * `application/json` (and `+json` suffixes), some contracts emit JSON as
+ * `text/plain` or with no media type (which defaults to `text/plain`).
+ *
+ * @param mediaType - The lower-cased media type of a `data:` URL.
+ * @returns True if the payload should be parsed as JSON.
+ */
+function isJsonCandidateMediaType(mediaType: string): boolean {
+  return (
+    mediaType === '' ||
+    mediaType === 'application/json' ||
+    mediaType === 'text/plain' ||
+    mediaType.endsWith('+json')
+  );
+}
+
+/**
+ * Parses a string as a JSON object.
+ *
+ * @param json - The string to parse.
+ * @returns The parsed object, or `null` if it is not valid JSON or not an
+ * object.
+ */
+function parseJsonObject(json: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return isObject(parsed) && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decodes a base64 (standard or URL-safe, padded or not, optionally
+ * percent-encoded) `data:` URL payload as a UTF-8 string.
+ *
+ * @param payload - The base64 payload.
+ * @returns The decoded string, or `null` if it is not valid base64.
+ */
+function decodeBase64Payload(payload: string): string | null {
+  try {
+    const base64 = decodeURIComponent(payload)
+      .replace(/\s/gu, '')
+      .replace(/-/gu, '+')
+      .replace(/_/gu, '/');
+    return bytesToString(
+      base64ToBytes(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Decodes and parses a JSON `data:` URL (e.g. an on-chain NFT `tokenURI` such
  * as `data:application/json;base64,eyJuYW1lIjoiLi4uIn0=`) without using
  * `fetch`. Supports base64 and plain (optionally percent-encoded) payloads and
@@ -299,7 +361,7 @@ export function isDataUri(uri: string): boolean {
  * URL or cannot be decoded/parsed into an object.
  */
 export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
-  if (!isDataUri(uri)) {
+  if (!isDataUri(uri) || uri.length > MAX_JSON_DATA_URI_LENGTH) {
     return null;
   }
 
@@ -312,35 +374,48 @@ export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
     .slice('data:'.length, commaIndex)
     .split(';')
     .map((part) => part.trim().toLowerCase());
-  if (mediaType !== 'application/json') {
+  if (!isJsonCandidateMediaType(mediaType)) {
     return null;
   }
 
-  const isBase64 = params.includes('base64');
   const payload = uri.slice(commaIndex + 1);
 
-  try {
-    let json: string;
-    if (isBase64) {
-      const base64 = decodeURIComponent(payload).replace(/\s/gu, '');
-      json = bytesToString(
-        base64ToBytes(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')),
-      );
-    } else {
-      try {
-        json = decodeURIComponent(payload);
-      } catch {
-        // Some contracts embed raw (not percent-encoded) JSON that may contain
-        // a literal `%`; fall back to the raw payload.
-        json = payload;
-      }
-    }
+  if (params.includes('base64')) {
+    const json = decodeBase64Payload(payload);
+    return json === null ? null : parseJsonObject(json);
+  }
 
-    const parsed: unknown = JSON.parse(json);
-    return isObject(parsed) && !Array.isArray(parsed) ? parsed : null;
+  // Many contracts embed raw (not percent-encoded) JSON, which may contain
+  // literal `%` characters, so try the raw payload before percent-decoding.
+  const rawObject = parseJsonObject(payload);
+  if (rawObject) {
+    return rawObject;
+  }
+  try {
+    return parseJsonObject(decodeURIComponent(payload));
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolves the JSON metadata a token URI points to. `data:` URLs are decoded
+ * inline and never passed to `fetch`, since not every client's `fetch` can
+ * decode them (e.g. it crashes MetaMask Mobile).
+ *
+ * @param tokenURI - The token URI (an HTTP(S) URL or a `data:` URL).
+ * @returns The JSON metadata, or `null` for a `data:` URL that is not JSON.
+ * @throws If fetching or parsing a non-`data:` token URI fails.
+ */
+export async function getTokenUriJson(
+  tokenURI: string,
+): Promise<Record<string, unknown> | null> {
+  if (isDataUri(tokenURI)) {
+    return parseJsonDataUri(tokenURI);
+  }
+  const response = await timeoutFetch(tokenURI);
+  const json = (await response.json()) as Record<string, unknown> | null;
+  return json;
 }
 
 /**

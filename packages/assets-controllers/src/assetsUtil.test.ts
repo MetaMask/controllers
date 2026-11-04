@@ -7,6 +7,7 @@ import {
 } from '@metamask/controller-utils';
 import { add0x } from '@metamask/utils';
 import type { Hex } from '@metamask/utils';
+import nock from 'nock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as assetsUtil from './assetsUtil.js';
@@ -415,6 +416,17 @@ describe('assetsUtil', () => {
       ],
       ['plain JSON', `data:application/json;utf8,${JSON.stringify(json)}`],
       ['mixed-case header', `Data:Application/Json; Base64,${base64}`],
+      [
+        'URL-safe base64',
+        `data:application/json;base64,${base64.replace(/\+/gu, '-').replace(/\//gu, '_')}`,
+      ],
+      ['text/plain base64', `data:text/plain;base64,${base64}`],
+      ['base64 without a media type', `data:;base64,${base64}`],
+      ['a +json media type', `data:application/ld+json;base64,${base64}`],
+      [
+        'text/plain JSON',
+        `data:text/plain;charset=utf-8,${JSON.stringify(json)}`,
+      ],
     ])('parses %s', (_description, uri) => {
       expect(assetsUtil.parseJsonDataUri(uri)).toStrictEqual(json);
     });
@@ -425,12 +437,21 @@ describe('assetsUtil', () => {
       ).toStrictEqual({ name: '100%' });
     });
 
+    it('does not percent-decode plain JSON that is already valid', () => {
+      expect(
+        assetsUtil.parseJsonDataUri(
+          'data:application/json,{"name":"50%25 off%20now"}',
+        ),
+      ).toStrictEqual({ name: '50%25 off%20now' });
+    });
+
     it.each([
       ['a non-data URL', 'https://example.com/1.json'],
       ['a data URL without a comma', 'data:application/json;base64'],
-      ['a non-JSON media type', 'data:text/plain,{}'],
+      ['a non-JSON media type', 'data:text/csv,{}'],
       ['an image media type', 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='],
-      ['a missing media type', 'data:,{}'],
+      ['an HTML media type', 'data:text/html,{}'],
+      ['malformed percent-encoding', 'data:application/json,%E0%A4%A'],
       ['malformed base64', 'data:application/json;base64,!!!'],
       [
         'base64 that is not JSON',
@@ -440,8 +461,36 @@ describe('assetsUtil', () => {
       ['a JSON string', 'data:application/json,"a"'],
       ['a JSON array', 'data:application/json,[]'],
       ['JSON null', 'data:application/json,null'],
+      [
+        'a payload over the size limit',
+        `data:application/json,{"a":"${'x'.repeat(
+          assetsUtil.MAX_JSON_DATA_URI_LENGTH,
+        )}"}`,
+      ],
     ])('returns null for %s', (_description, uri) => {
       expect(assetsUtil.parseJsonDataUri(uri)).toBeNull();
+    });
+  });
+
+  describe('getTokenUriJson', () => {
+    it('decodes a JSON data URL without fetching', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      expect(
+        await assetsUtil.getTokenUriJson('data:application/json,{"a":1}'),
+      ).toStrictEqual({ a: 1 });
+      expect(
+        await assetsUtil.getTokenUriJson('data:text/html,<p></p>'),
+      ).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('fetches a non-data URL', async () => {
+      nock('https://example.com').get('/1.json').reply(200, { a: 1 });
+
+      expect(
+        await assetsUtil.getTokenUriJson('https://example.com/1.json'),
+      ).toStrictEqual({ a: 1 });
     });
   });
 

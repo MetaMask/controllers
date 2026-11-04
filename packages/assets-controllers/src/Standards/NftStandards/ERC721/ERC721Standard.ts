@@ -1,7 +1,6 @@
 import { Contract } from '@ethersproject/contracts';
 import type { Web3Provider } from '@ethersproject/providers';
 import {
-  timeoutFetch,
   ERC721_INTERFACE_ID,
   ERC721_METADATA_INTERFACE_ID,
   ERC721_ENUMERABLE_INTERFACE_ID,
@@ -10,11 +9,7 @@ import {
 } from '@metamask/controller-utils';
 import { abiERC721 } from '@metamask/metamask-eth-abis';
 
-import {
-  getFormattedIpfsUrl,
-  isDataUri,
-  parseJsonDataUri,
-} from '../../../assetsUtil.js';
+import { getFormattedIpfsUrl, getTokenUriJson } from '../../../assetsUtil.js';
 
 export class ERC721Standard {
   private readonly provider: Web3Provider;
@@ -203,14 +198,11 @@ export class ERC721Standard {
     let image;
     if (tokenURI) {
       try {
-        // Never hand a `data:` URL to `fetch`: not every client's `fetch` can
-        // decode them. Decode JSON `data:` URLs inline instead.
-        const object = isDataUri(tokenURI)
-          ? parseJsonDataUri(tokenURI)
-          : await (await timeoutFetch(tokenURI)).json();
-        image = object?.image;
-        if (image?.startsWith('ipfs://')) {
-          image = await getFormattedIpfsUrl(ipfsGateway, image, true);
+        const object = await getTokenUriJson(tokenURI);
+        if (typeof object?.image === 'string') {
+          image = object.image.startsWith('ipfs://')
+            ? await getFormattedIpfsUrl(ipfsGateway, object.image, true)
+            : object.image;
         }
       } catch {
         // ignore
