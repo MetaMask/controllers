@@ -302,7 +302,7 @@ function syncTransaction({
 }
 
 /**
- * Refresh quotes for all transactions if expired.
+ * Refresh source amounts and quotes for all transactions if expired.
  *
  * @param messenger - Messenger instance.
  * @param updateTransactionData - Callback to update transaction data.
@@ -350,24 +350,20 @@ export async function refreshQuotes(
       continue;
     }
 
-    let latestTransactionData = transactionData;
+    updateTransactionData(transactionId, (data) =>
+      updateSourceAmounts(
+        transactionId,
+        /* oxlint-disable typescript/no-unnecessary-type-assertion */
+        data as never,
+        /* oxlint-enable typescript/no-unnecessary-type-assertion */
+        messenger,
+        getBalance,
+      ),
+    );
 
-    if (transactionData.isMaxAmount) {
-      updateTransactionData(transactionId, (data) =>
-        updateSourceAmounts(
-          transactionId,
-          /* oxlint-disable typescript/no-unnecessary-type-assertion */
-          data as never,
-          /* oxlint-enable typescript/no-unnecessary-type-assertion */
-          messenger,
-          getBalance,
-        ),
-      );
-
-      latestTransactionData = messenger.call(
-        'TransactionPayController:getState',
-      ).transactionData[transactionId];
-    }
+    const latestTransactionData = messenger.call(
+      'TransactionPayController:getState',
+    ).transactionData[transactionId];
 
     const isUpdated = await updateQuotes({
       getStrategies,

@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Refresh max-amount source balances before periodic requotes, using a per-transaction-type interval from the `maxBalanceRefreshInterval` feature flag ([#10911](https://github.com/MetaMask/core/pull/10911))
+- Re-derive source amounts, using the `getBalance` callback if provided, before each periodic requote ([#10911](https://github.com/MetaMask/core/pull/10911))
+- Requote max-amount transactions using a per-transaction-type interval from the `maxBalanceRefreshInterval` feature flag ([#10911](https://github.com/MetaMask/core/pull/10911))
 
 ## [30.3.3]
 

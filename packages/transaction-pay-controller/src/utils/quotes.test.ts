@@ -23,6 +23,7 @@ import type {
 } from '../types.js';
 import type { UpdateQuotesRequest } from './quotes.js';
 import { refreshQuotes, updateQuotes } from './quotes.js';
+import { updateSourceAmounts } from './source-amounts.js';
 import {
   checkStrategyQuoteSupport,
   checkStrategySupport,
@@ -34,6 +35,7 @@ import { calculateTotals } from './totals.js';
 import { getTransaction, updateTransaction } from './transaction.js';
 import { QuoteError } from './validation.js';
 
+vi.mock(import('./source-amounts.js'));
 vi.mock(import('./strategy.js'));
 vi.mock(import('./transaction.js'));
 vi.mock(import('./totals.js'));
@@ -112,6 +114,7 @@ describe('Quotes Utils', () => {
     getMessengerMock();
   const updateTransactionDataMock = vi.fn();
   const getStrategyByNameMock = vi.mocked(getStrategyByName);
+  const updateSourceAmountsMock = vi.mocked(updateSourceAmounts);
   const getStrategiesByNameMock = vi.mocked(getStrategiesByName);
   const checkStrategyQuoteSupportMock = vi.mocked(checkStrategyQuoteSupport);
   const checkStrategySupportMock = vi.mocked(checkStrategySupport);
@@ -1766,7 +1769,7 @@ describe('Quotes Utils', () => {
         getStrategiesMock,
       );
 
-      expect(updateTransactionDataMock).toHaveBeenCalledTimes(4);
+      expect(updateTransactionDataMock).toHaveBeenCalledTimes(5);
 
       const transactionDataMock = {};
       updateTransactionDataMock.mock.calls.map((call) =>
@@ -1799,7 +1802,7 @@ describe('Quotes Utils', () => {
         getStrategiesMock,
       );
 
-      expect(updateTransactionDataMock).toHaveBeenCalledTimes(4);
+      expect(updateTransactionDataMock).toHaveBeenCalledTimes(5);
 
       const transactionDataMock = {};
       updateTransactionDataMock.mock.calls.map((call) =>
@@ -1878,7 +1881,7 @@ describe('Quotes Utils', () => {
       expect(updateTransactionDataMock).toHaveBeenCalledTimes(0);
     });
 
-    describe('max balance refresh', () => {
+    describe('source amount refresh', () => {
       const typedMessenger = messenger as TransactionPayControllerMessenger;
       const typedGetControllerStateMock =
         getControllerStateMock as MockedFunction<
@@ -1938,45 +1941,53 @@ describe('Quotes Utils', () => {
         });
       });
 
-      it('refreshes max source amounts with getBalance before requoting', async () => {
-        const getBalanceMock = vi.fn<GetBalanceCallback>();
-        const maxTransactionData: TransactionData = {
-          ...cloneDeep(TRANSACTION_DATA_MOCK),
-          isMaxAmount: true,
-          quotes: [QUOTE_MOCK],
-          quotesLastUpdated: 1,
-        };
+      it.each([
+        ['max amount', true],
+        ['non-max amount', false],
+      ])(
+        'refreshes source amounts before requoting for %s',
+        async (_title, isMaxAmount) => {
+          const getBalanceMock = vi.fn<GetBalanceCallback>();
+          const transactionData: TransactionData = {
+            ...cloneDeep(TRANSACTION_DATA_MOCK),
+            isMaxAmount,
+            quotes: [QUOTE_MOCK],
+            quotesLastUpdated: 1,
+          };
 
-        typedGetControllerStateMock.mockReturnValue({
-          transactionData: { [TRANSACTION_ID_MOCK]: maxTransactionData },
-        });
+          typedGetControllerStateMock.mockReturnValue({
+            transactionData: { [TRANSACTION_ID_MOCK]: transactionData },
+          });
 
-        await refreshQuotes(
-          typedMessenger,
-          typedUpdateTransactionDataMock,
-          typedGetStrategiesMock,
-          getBalanceMock,
-        );
+          await refreshQuotes(
+            typedMessenger,
+            typedUpdateTransactionDataMock,
+            typedGetStrategiesMock,
+            getBalanceMock,
+          );
 
-        const draft = cloneDeep(maxTransactionData);
-        typedUpdateTransactionDataMock.mock.calls[0][1](draft);
+          const draft = cloneDeep(transactionData);
+          typedUpdateTransactionDataMock.mock.calls[0][1](draft);
 
-        expect(getBalanceMock).toHaveBeenCalledWith({
-          transaction: TRANSACTION_META_MOCK,
-          transactionData: draft,
-        });
-        expect(getQuotesMock).toHaveBeenCalled();
-      });
+          expect(updateSourceAmountsMock).toHaveBeenCalledWith(
+            TRANSACTION_ID_MOCK,
+            draft,
+            typedMessenger,
+            getBalanceMock,
+          );
+          expect(
+            typedUpdateTransactionDataMock.mock.invocationCallOrder[0],
+          ).toBeLessThan(getQuotesMock.mock.invocationCallOrder[0]);
+        },
+      );
 
-      it('does not refresh source amounts if not max amount', async () => {
-        const getBalanceMock = vi.fn<GetBalanceCallback>();
-
+      it('does not refresh source amounts if quotes are not expired', async () => {
         typedGetControllerStateMock.mockReturnValue({
           transactionData: {
             [TRANSACTION_ID_MOCK]: {
               ...cloneDeep(TRANSACTION_DATA_MOCK),
               quotes: [QUOTE_MOCK],
-              quotesLastUpdated: 1,
+              quotesLastUpdated: Date.now(),
             },
           },
         });
@@ -1985,10 +1996,10 @@ describe('Quotes Utils', () => {
           typedMessenger,
           typedUpdateTransactionDataMock,
           typedGetStrategiesMock,
-          getBalanceMock,
+          vi.fn<GetBalanceCallback>(),
         );
 
-        expect(getBalanceMock).not.toHaveBeenCalled();
+        expect(updateSourceAmountsMock).not.toHaveBeenCalled();
       });
     });
   });
