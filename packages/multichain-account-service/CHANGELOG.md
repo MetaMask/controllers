@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `MultichainAccountService:multichainAccountGroupAligned`, emitted when an alignment pass finishes and when a group is created with every provider already included ([#11301](https://github.com/MetaMask/core/pull/11301))
 - Register `XlmAccountProvider` in `MultichainAccountService` built-in providers and accept `providerConfigs[XLM_ACCOUNT_PROVIDER_NAME]` ([#10867](https://github.com/MetaMask/core/pull/10867))
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
 

@@ -14,6 +14,7 @@ export type {
   AccountTreeControllerStateChangeEvent,
   AccountTreeControllerAccountTreeChangeEvent,
   AccountTreeControllerSelectedAccountGroupChangeEvent,
+  AccountTreeControllerSelectedAccountGroupReadyChangeEvent,
   AccountTreeControllerAccountGroupCreatedEvent,
   AccountTreeControllerAccountGroupUpdatedEvent,
   AccountTreeControllerAccountGroupRemovedEvent,

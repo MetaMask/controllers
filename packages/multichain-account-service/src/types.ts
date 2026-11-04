@@ -55,6 +55,17 @@ export type MultichainAccountServiceMultichainAccountGroupUpdatedEvent = {
   payload: [MultichainAccountGroup<Bip44Account<KeyringAccount>>];
 };
 
+/**
+ * Emitted once a multichain account group's alignment pass has finished.
+ *
+ * Wallet import creates the EVM account first and merges non-EVM accounts
+ * later. This fires after that merge, when the group's accounts are complete.
+ */
+export type MultichainAccountServiceMultichainAccountGroupAlignedEvent = {
+  type: `${typeof serviceName}:multichainAccountGroupAligned`;
+  payload: [MultichainAccountGroup<Bip44Account<KeyringAccount>>['id']];
+};
+
 export type MultichainAccountServiceWalletStatusChangeEvent = {
   type: `${typeof serviceName}:walletStatusChange`;
   payload: [MultichainAccountWalletId, MultichainAccountWalletStatus];
@@ -67,6 +78,7 @@ export type MultichainAccountServiceWalletStatusChangeEvent = {
 export type MultichainAccountServiceEvents =
   | MultichainAccountServiceMultichainAccountGroupCreatedEvent
   | MultichainAccountServiceMultichainAccountGroupUpdatedEvent
+  | MultichainAccountServiceMultichainAccountGroupAlignedEvent
   | MultichainAccountServiceWalletStatusChangeEvent;
 
 /**

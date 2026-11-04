@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Refresh selected-account balances on `AccountTreeController:selectedAccountGroupReadyChange`, so onboarding, account switches, and wallet import read the group after EVM and non-EVM accounts are present ([#11301](https://github.com/MetaMask/core/pull/11301))
 - Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 
 ## [20.2.1]

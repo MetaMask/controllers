@@ -2444,6 +2444,162 @@ describe('AccountTreeController', () => {
     });
   });
 
+  describe('selectedAccountGroupReadyChange', () => {
+    const groupIdFor = (
+      entropySourceId: string,
+    ): ReturnType<typeof toMultichainAccountGroupId> =>
+      toMultichainAccountGroupId(
+        toMultichainAccountWalletId(entropySourceId),
+        0,
+      );
+
+    const importedSolanaAccount: Bip44Account<InternalAccount> = {
+      ...MOCK_SNAP_ACCOUNT_1,
+      id: 'mock-sol-import-id',
+      options: {
+        entropy: {
+          type: KeyringAccountEntropyTypeOption.Mnemonic,
+          id: MOCK_HD_KEYRING_2.metadata.id,
+          groupIndex: 0,
+          derivationPath: '',
+        },
+      },
+    };
+
+    it('emits when the tree is initialized', () => {
+      const { controller, messenger } = setup({
+        accounts: [MOCK_HD_ACCOUNT_1],
+        keyrings: [MOCK_HD_KEYRING_1],
+      });
+      const listener = vi.fn();
+      messenger.subscribe(
+        'AccountTreeController:selectedAccountGroupReadyChange',
+        listener,
+      );
+
+      controller.init();
+
+      const groupId = groupIdFor(MOCK_HD_KEYRING_1.metadata.id);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith(groupId);
+      expect(
+        controller
+          .getAccountsFromSelectedAccountGroup()
+          .map((account) => account.id),
+      ).toStrictEqual([MOCK_HD_ACCOUNT_1.id]);
+    });
+
+    it('emits when the selected group changes', () => {
+      const { controller, messenger } = setup({
+        accounts: [MOCK_HD_ACCOUNT_1, MOCK_HD_ACCOUNT_2],
+        keyrings: [MOCK_HD_KEYRING_1, MOCK_HD_KEYRING_2],
+      });
+      controller.init();
+
+      const listener = vi.fn();
+      messenger.subscribe(
+        'AccountTreeController:selectedAccountGroupReadyChange',
+        listener,
+      );
+
+      const groupId = groupIdFor(MOCK_HD_KEYRING_2.metadata.id);
+      controller.setSelectedAccountGroup(groupId);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith(groupId);
+      expect(
+        controller
+          .getAccountsFromSelectedAccountGroup()
+          .map((account) => account.id),
+      ).toStrictEqual([MOCK_HD_ACCOUNT_2.id]);
+    });
+
+    it('emits after import alignment and then returns EVM and non-EVM accounts', () => {
+      const { controller, messenger, mocks } = setup({
+        accounts: [MOCK_HD_ACCOUNT_1],
+        keyrings: [MOCK_HD_KEYRING_1, MOCK_HD_KEYRING_2],
+      });
+      controller.init();
+
+      const importedGroupId = groupIdFor(MOCK_HD_KEYRING_2.metadata.id);
+      const listener = vi.fn();
+      messenger.subscribe(
+        'AccountTreeController:selectedAccountGroupReadyChange',
+        listener,
+      );
+
+      mocks.AccountsController.accounts.push(MOCK_HD_ACCOUNT_2);
+      messenger.publish('AccountsController:accountsAdded', [
+        MOCK_HD_ACCOUNT_2,
+      ]);
+      messenger.publish(
+        'MultichainAccountService:multichainAccountGroupCreated',
+        { id: importedGroupId } as never,
+      );
+
+      controller.setSelectedAccountGroup(importedGroupId);
+
+      expect(listener).not.toHaveBeenCalled();
+
+      mocks.AccountsController.accounts.push(importedSolanaAccount);
+      messenger.publish('AccountsController:accountsAdded', [
+        importedSolanaAccount,
+      ]);
+      messenger.publish(
+        'MultichainAccountService:multichainAccountGroupAligned',
+        importedGroupId,
+      );
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith(importedGroupId);
+      expect(
+        controller
+          .getAccountsFromSelectedAccountGroup()
+          .map((account) => account.id),
+      ).toStrictEqual([MOCK_HD_ACCOUNT_2.id, importedSolanaAccount.id]);
+    });
+
+    it('does not emit when a group that is not selected finishes alignment', () => {
+      const { controller, messenger } = setup({
+        accounts: [MOCK_HD_ACCOUNT_1, MOCK_HD_ACCOUNT_2],
+        keyrings: [MOCK_HD_KEYRING_1, MOCK_HD_KEYRING_2],
+      });
+      controller.init();
+
+      const listener = vi.fn();
+      messenger.subscribe(
+        'AccountTreeController:selectedAccountGroupReadyChange',
+        listener,
+      );
+
+      messenger.publish(
+        'MultichainAccountService:multichainAccountGroupAligned',
+        groupIdFor(MOCK_HD_KEYRING_2.metadata.id),
+      );
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('does not emit before init', () => {
+      const { messenger } = setup({
+        accounts: [MOCK_HD_ACCOUNT_1],
+        keyrings: [MOCK_HD_KEYRING_1],
+      });
+      const listener = vi.fn();
+      messenger.subscribe(
+        'AccountTreeController:selectedAccountGroupReadyChange',
+        listener,
+      );
+
+      messenger.publish(
+        'MultichainAccountService:multichainAccountGroupAligned',
+        groupIdFor(MOCK_HD_KEYRING_1.metadata.id),
+      );
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getAccountWalletObject', () => {
     it('gets a wallet using its ID', () => {
       const { controller } = setup({
