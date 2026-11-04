@@ -52,7 +52,6 @@ export default defineConfig({
       // adds it to its own config with a reason.
       exclude: ['src/**/*.d.ts', 'src/**/*-method-action-types.ts'],
 
-
       // `lcovonly` rather than `lcov`, which also writes a second HTML report.
       reporter: ['text', 'html', 'json-summary', 'lcovonly'],
 
