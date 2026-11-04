@@ -40,7 +40,10 @@ describe('KycService', () => {
       const { service } = getService({ omitFetch: true });
 
       expect(
-        await service.fetchVendorDisclaimers({ vendor: 'moonpay', country: 'USA' }),
+        await service.fetchVendorDisclaimers({
+          vendor: 'moonpay',
+          country: 'USA',
+        }),
       ).toStrictEqual(disclaimers);
     });
 
@@ -115,7 +118,10 @@ describe('KycService', () => {
       const { service } = getService();
 
       expect(
-        await service.fetchVendorDisclaimers({ vendor: 'moonpay', country: 'USA' }),
+        await service.fetchVendorDisclaimers({
+          vendor: 'moonpay',
+          country: 'USA',
+        }),
       ).toStrictEqual(disclaimers);
     });
 
@@ -1555,7 +1561,10 @@ describe('KycService', () => {
       const { service } = getService({ baseUrl: customUrl });
 
       expect(
-        await service.fetchVendorDisclaimers({ vendor: 'moonpay', country: 'USA' }),
+        await service.fetchVendorDisclaimers({
+          vendor: 'moonpay',
+          country: 'USA',
+        }),
       ).toStrictEqual(disclaimers);
     });
 
