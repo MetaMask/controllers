@@ -105,7 +105,7 @@ export class RecoveryItemStore {
     const item = await this.#fetchWrappedKeysItem(
       recoveryKeys.recoveryEncKey,
       recoveryKeys.recoveryAuthKeyPair,
-      WrappedKeysItemId.WrappedSeedKeys,
+      WrappedKeysItemId.WrappedPasswordKeys,
     );
     if (!item) {
       return [];
@@ -133,7 +133,7 @@ export class RecoveryItemStore {
       encKey: recoveryKeys.recoveryEncKey,
       authKeyPair: recoveryKeys.recoveryAuthKeyPair,
       secretData: serializeWrappedKeys(keySets),
-      itemId: WrappedKeysItemId.WrappedSeedKeys,
+      itemId: WrappedKeysItemId.WrappedPasswordKeys,
       dataType: EncAccountDataType.WrappedKeys,
     });
   }

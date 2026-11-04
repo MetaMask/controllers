@@ -227,7 +227,7 @@ describe('RecoveryItemStore', () => {
       toprf.fetchAllSecretDataItems.mockResolvedValue([
         createItem('item-1', serializeWrappedKeys(OTHER_WRAPPED_KEY_SETS)),
         createWrappedKeysItem(
-          WrappedKeysItemId.WrappedSeedKeys,
+          WrappedKeysItemId.WrappedPasswordKeys,
           serializeWrappedKeys(WRAPPED_KEY_SETS),
         ),
       ]);
@@ -245,7 +245,7 @@ describe('RecoveryItemStore', () => {
       const { store, toprf } = createStore();
       toprf.fetchAllSecretDataItems.mockResolvedValue([
         createWrappedKeysItem(
-          WrappedKeysItemId.WrappedSeedKeys,
+          WrappedKeysItemId.WrappedPasswordKeys,
           stringToBytes('garbage'),
         ),
       ]);
@@ -281,7 +281,7 @@ describe('RecoveryItemStore', () => {
         encKey: RECOVERY_KEYS.recoveryEncKey,
         authKeyPair: RECOVERY_KEYS.recoveryAuthKeyPair,
         secretData: serializeWrappedKeys(WRAPPED_KEY_SETS),
-        itemId: WrappedKeysItemId.WrappedSeedKeys,
+        itemId: WrappedKeysItemId.WrappedPasswordKeys,
         dataType: EncAccountDataType.WrappedKeys,
       });
     });

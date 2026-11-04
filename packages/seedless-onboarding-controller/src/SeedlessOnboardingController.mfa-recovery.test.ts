@@ -192,7 +192,7 @@ describe('SeedlessOnboardingController', () => {
         }
         if (new TextDecoder().decode(data).startsWith(WRAPPED_KEYS_PREFIX)) {
           return {
-            itemId: WrappedKeysItemId.WrappedSeedKeys,
+            itemId: WrappedKeysItemId.WrappedPasswordKeys,
             data,
             version: 'v2',
             dataType: EncAccountDataType.WrappedKeys,
@@ -1080,7 +1080,7 @@ describe('SeedlessOnboardingController', () => {
                   encKey: created.encKey,
                   authKeyPair: created.authKeyPair,
                   secretData: serializeWrappedKeys([vaultKeySet]),
-                  itemId: WrappedKeysItemId.WrappedSeedKeys,
+                  itemId: WrappedKeysItemId.WrappedPasswordKeys,
                   dataType: EncAccountDataType.WrappedKeys,
                 },
               ],
@@ -1205,7 +1205,7 @@ describe('SeedlessOnboardingController', () => {
                 encKey: existing.encKey,
                 authKeyPair: existing.authKeyPair,
                 secretData: serializeWrappedKeys([vaultKeySet]),
-                itemId: WrappedKeysItemId.WrappedSeedKeys,
+                itemId: WrappedKeysItemId.WrappedPasswordKeys,
                 dataType: EncAccountDataType.WrappedKeys,
               },
             ],
