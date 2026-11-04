@@ -12,6 +12,7 @@ import {
 } from '@metamask/transaction-controller';
 
 import { BridgeStatusControllerMessenger } from '../types.js';
+import { getHistoryOverridesFromTxMeta } from '../utils/history.js';
 import { getNetworkClientIdByChainId } from '../utils/network.js';
 import { getApprovalTraceParams } from '../utils/trace.js';
 import {
@@ -165,8 +166,10 @@ export async function* submitEvmHandler(
     type: SubmitStep.AddHistoryItem,
     payload: {
       historyKey: actionId,
-      actionId,
       quoteResponse,
+      bridgeTxMeta: {
+        actionId,
+      },
     },
   };
 
@@ -237,6 +240,13 @@ export async function* submitEvmHandler(
       oldHistoryKey: tradeActionId,
       newHistoryKey: tradeMeta.id,
       tradeMeta,
+      historyItemOverrides: {
+        ...getHistoryOverridesFromTxMeta(
+          false, // Ignore STX flag when rekeying
+          args.quoteResponses[0].quote.srcChainId,
+          tradeMeta,
+        ),
+      },
     },
   };
 }
