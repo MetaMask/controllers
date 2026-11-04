@@ -9,9 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `serviceProfile` option to `searchTokens`, sent as the `x-mm-service-profile` header on the `/tokens/search` request ([#11274](https://github.com/MetaMask/core/pull/11274))
+- Add `serviceProfile` string option to `searchTokens`, sent as the `x-mm-service-profile` header on the `/tokens/search` request ([#11274](https://github.com/MetaMask/core/pull/11274))
   - Defaults to `assets--trending-search`, so the header is sent on every search request
-- Add `TokenSearchServiceProfile` type, a string union of accepted service profiles (currently `assets--trending-search`) ([#11274](https://github.com/MetaMask/core/pull/11274))
 
 ### Changed
 

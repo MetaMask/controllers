@@ -360,5 +360,4 @@ export type {
   RwasResponse,
   RwaSortBy,
   FetchRwasParams,
-  TokenSearchServiceProfile,
 } from './token-service.js';

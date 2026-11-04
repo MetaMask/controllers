@@ -640,10 +640,10 @@ describe('Token service', () => {
   });
 
   describe('searchTokens', () => {
-    it('sends the x-mm-service-profile header with the given serviceProfile', async () => {
+    it('sends a custom serviceProfile string as-is in the x-mm-service-profile header', async () => {
       const searchQuery = 'USD';
       nock(TOKEN_END_POINT_API, {
-        reqheaders: { 'x-mm-service-profile': 'assets--trending-search' },
+        reqheaders: { 'x-mm-service-profile': 'my-team--custom-profile' },
       })
         .get(
           `/tokens/search?networks=${encodeURIComponent(sampleCaipChainId)}&query=${searchQuery}&first=10&includeMarketData=false&includeRwaData=true`,
@@ -651,7 +651,7 @@ describe('Token service', () => {
         .reply(200, { count: 0, data: [] });
 
       const results = await searchTokens([sampleCaipChainId], searchQuery, {
-        serviceProfile: 'assets--trending-search',
+        serviceProfile: 'my-team--custom-profile',
       });
 
       expect(results).toStrictEqual({ count: 0, data: [] });

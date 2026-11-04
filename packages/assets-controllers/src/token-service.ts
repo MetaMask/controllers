@@ -536,13 +536,6 @@ export type PageInfo = {
   endCursor: string | null;
 };
 
-/**
- * Service profiles accepted by the token search API, sent as the
- * `x-mm-service-profile` header. Add new members here as new profiles are
- * registered.
- */
-export type TokenSearchServiceProfile = 'assets--trending-search';
-
 type SearchTokenOptions = {
   limit?: number;
   /** Cursor returned by a previous response's `pageInfo.endCursor` to fetch the next page. */
@@ -550,7 +543,8 @@ type SearchTokenOptions = {
   includeMarketData?: boolean;
   includeRwaData?: boolean;
   includeTokenSecurityData?: boolean;
-  serviceProfile?: TokenSearchServiceProfile;
+  /** Service profile sent as the `x-mm-service-profile` header. */
+  serviceProfile?: string;
 };
 
 /**
@@ -564,7 +558,7 @@ type SearchTokenOptions = {
  * @param options.includeMarketData - Optional flag to include market data in the results (defaults to false).
  * @param options.includeRwaData - Optional flag to include RWA data in the results (defaults to false).
  * @param options.includeTokenSecurityData - Optional flag to include token security data in the results (defaults to false).
- * @param options.serviceProfile - Service profile sent as the `x-mm-service-profile` header (defaults to `assets--trending-search`).
+ * @param options.serviceProfile - Service profile sent as the `x-mm-service-profile` header (any string; defaults to `assets--trending-search`).
  * @returns Object containing count, totalCount, data array, optional pageInfo for pagination, and an optional error message if the request failed.
  */
 export async function searchTokens(
