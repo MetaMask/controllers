@@ -3429,4 +3429,184 @@ describe('SocialService', () => {
       );
     });
   });
+
+  describe('GIF proxy', () => {
+    const gifPage = {
+      result: true,
+      data: {
+        data: [
+          {
+            id: 'gif-1',
+            slug: 'cat-wave',
+            title: 'Cat wave',
+            file: {
+              sm: {
+                gif: {
+                  url: 'https://static.klipy.com/cat-sm.gif',
+                  width: 220,
+                  height: 124,
+                },
+              },
+              md: { gif: { url: 'https://static.klipy.com/cat-md.gif' } },
+            },
+            blur_preview: 'data:image/jpeg;base64,abc',
+          },
+        ],
+        current_page: 1,
+        per_page: 16,
+        has_next: true,
+        extra_page_field: 'kept',
+      },
+      extra_root: 'kept',
+    };
+
+    const providerParams = {
+      page: 1,
+      per_page: 16,
+      locale: 'us',
+      content_filter: 'medium',
+      format_filter: 'gif',
+      customer_id: 'mm',
+      unused: undefined,
+    };
+
+    function mockGifPage(): void {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(gifPage),
+      });
+    }
+
+    it('fetches trending GIFs and returns the provider body unchanged', async () => {
+      mockGifPage();
+
+      const service = createService();
+      const result = await service.fetchTrendingGifs(providerParams);
+
+      expect(result).toStrictEqual(gifPage);
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      const url = new URL(calledUrl);
+      expect(url.origin + url.pathname).toBe(`${V1_URL}/gifs/trending`);
+      expect(url.searchParams.get('page')).toBe('1');
+      expect(url.searchParams.get('per_page')).toBe('16');
+      expect(url.searchParams.get('locale')).toBe('us');
+      expect(url.searchParams.get('content_filter')).toBe('medium');
+      expect(url.searchParams.get('format_filter')).toBe('gif');
+      expect(url.searchParams.get('customer_id')).toBe('mm');
+      expect(url.searchParams.has('unused')).toBe(false);
+      expect(url.searchParams.has('q')).toBe(false);
+      expect(calledUrl).not.toContain('api_key');
+      expect(mockFetch).toHaveBeenCalledWith(calledUrl, {
+        headers: { Authorization: `Bearer ${MOCK_TOKEN}` },
+      });
+    });
+
+    it('searches GIFs and forwards q with the other params', async () => {
+      mockGifPage();
+
+      const service = createService();
+      await service.searchGifs({ ...providerParams, q: 'cat wave' });
+
+      const calledUrl = new URL(mockFetch.mock.calls[0][0] as string);
+      expect(calledUrl.origin + calledUrl.pathname).toBe(
+        `${V1_URL}/gifs/search`,
+      );
+      expect(calledUrl.searchParams.get('q')).toBe('cat wave');
+      expect(calledUrl.searchParams.get('per_page')).toBe('16');
+    });
+
+    it('omits the query string when no params are passed', async () => {
+      mockGifPage();
+
+      const service = createService();
+      await service.fetchTrendingGifs();
+
+      expect(mockFetch).toHaveBeenCalledWith(`${V1_URL}/gifs/trending`, {
+        headers: { Authorization: `Bearer ${MOCK_TOKEN}` },
+      });
+    });
+
+    it('reuses the cached page for the same path and params', async () => {
+      mockGifPage();
+
+      const service = createService();
+      await service.fetchTrendingGifs(providerParams);
+      await service.fetchTrendingGifs(providerParams);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('fetches again when the params change', async () => {
+      mockGifPage();
+
+      const service = createService();
+      await service.searchGifs({ q: 'cat' });
+      await service.searchGifs({ q: 'dog' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws HttpError on a non-ok trending response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 429 });
+
+      const service = createService();
+
+      await expect(service.fetchTrendingGifs({ page: 1 })).rejects.toThrow(
+        `${SocialServiceErrorMessage.FETCH_TRENDING_GIFS_FAILED}: 429`,
+      );
+    });
+
+    it('throws HttpError on a non-ok search response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 502 });
+
+      const service = createService();
+
+      await expect(service.searchGifs({ q: 'cat' })).rejects.toThrow(
+        `${SocialServiceErrorMessage.FETCH_SEARCH_GIFS_FAILED}: 502`,
+      );
+    });
+
+    it('throws when the trending page is missing data', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ result: true }),
+      });
+
+      const service = createService();
+
+      await expect(service.fetchTrendingGifs()).rejects.toThrow(
+        SocialServiceErrorMessage.FETCH_TRENDING_GIFS_INVALID_RESPONSE,
+      );
+    });
+
+    it('throws when the search page result is not a boolean', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ result: 'yes', data: {} }),
+      });
+
+      const service = createService();
+
+      await expect(service.searchGifs({ q: 'cat' })).rejects.toThrow(
+        SocialServiceErrorMessage.FETCH_SEARCH_GIFS_INVALID_RESPONSE,
+      );
+    });
+
+    it('is callable via messenger actions', async () => {
+      mockGifPage();
+
+      const messenger = createMessenger();
+      // eslint-disable-next-line no-new
+      new SocialService({ messenger, baseUrl: BASE_URL });
+
+      await messenger.call('SocialService:fetchTrendingGifs', { page: 1 });
+      await messenger.call('SocialService:searchGifs', { q: 'cat', page: 1 });
+
+      expect(mockFetch.mock.calls[0][0]).toContain('/gifs/trending');
+      expect(mockFetch.mock.calls[1][0]).toContain('/gifs/search');
+    });
+  });
 });

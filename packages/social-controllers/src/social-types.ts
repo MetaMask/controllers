@@ -974,6 +974,67 @@ export type ModerationStatusResponse = {
   reason: string | null;
 };
 
+/**
+ * Query parameters forwarded to the social-api GIF proxy.
+ *
+ * Keys and values are sent unchanged. The service does not rename them or
+ * supply defaults. Typical keys are `q`, `page`, `per_page`, `locale`,
+ * `customer_id`, `content_filter`, and `format_filter`.
+ */
+export type GifQueryParams = Record<
+  string,
+  string | number | boolean | undefined
+>;
+
+/** One rendition of a GIF (`gif`, `webp`, or `mp4`) at a single size. */
+export type GifMediaFile = {
+  url?: string;
+  width?: number;
+  height?: number;
+  size?: number;
+};
+
+/** Formats available for one GIF size (`sm`, `md`, `hd`, `xs`). */
+export type GifMediaSize = {
+  gif?: GifMediaFile;
+  webp?: GifMediaFile;
+  mp4?: GifMediaFile;
+};
+
+/**
+ * One GIF in a provider page.
+ *
+ * Known fields are listed here. The service returns the provider object
+ * itself, so fields beyond this type stay on the value at runtime.
+ */
+export type GifItem = {
+  id?: string | number;
+  slug?: string;
+  title?: string;
+  file?: {
+    hd?: GifMediaSize;
+    md?: GifMediaSize;
+    sm?: GifMediaSize;
+    xs?: GifMediaSize;
+  };
+};
+
+/**
+ * Body of `GET /api/v1/gifs/trending` and `GET /api/v1/gifs/search`.
+ *
+ * This is the GIF provider's page, passed through by social-api. Validation
+ * only checks that `result` and `data` are present, so extra fields are kept.
+ */
+export type GifPageResponse = {
+  result: boolean;
+  data: {
+    data?: GifItem[];
+    current_page?: number;
+    per_page?: number;
+    has_next?: boolean;
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Controller state
 // ---------------------------------------------------------------------------
