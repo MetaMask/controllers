@@ -417,4 +417,50 @@ describe('ERC1155Standard', () => {
       vi.restoreAllMocks();
     });
   });
+  describe('getDetails with a data URL tokenURI', () => {
+    const metadata = {
+      name: 'Data NFT',
+      image: 'https://example.com/image.png',
+    };
+
+    it.each([
+      [
+        'base64 JSON',
+        `data:application/json;base64,${btoa(JSON.stringify(metadata))}`,
+        'https://example.com/image.png',
+      ],
+      [
+        'percent-encoded JSON',
+        `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(metadata))}`,
+        'https://example.com/image.png',
+      ],
+      ['malformed base64', 'data:application/json;base64,!!!', undefined],
+      ['a non-JSON media type', 'data:text/plain,hello', undefined],
+    ])(
+      'resolves the image for %s without fetching',
+      async (_description, tokenURI, expectedImage) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch');
+        vi.spyOn(
+          erc1155Standard,
+          'contractSupportsBase1155Interface',
+        ).mockResolvedValue(true);
+        vi.spyOn(erc1155Standard, 'getAssetSymbol').mockResolvedValue('DATA');
+        vi.spyOn(erc1155Standard, 'getAssetName').mockResolvedValue('Data');
+        vi.spyOn(erc1155Standard, 'getTokenURI').mockResolvedValue(tokenURI);
+
+        const details = await erc1155Standard.getDetails(
+          '0x0000000000000000000000000000000000000001',
+          'https://ipfs.example.com',
+          '1',
+        );
+
+        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(details).toMatchObject({
+          standard: 'ERC1155',
+          tokenURI,
+          image: expectedImage,
+        });
+      },
+    );
+  });
 });

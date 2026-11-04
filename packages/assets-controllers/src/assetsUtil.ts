@@ -5,7 +5,10 @@ import {
 } from '@metamask/controller-utils';
 import type { Hex } from '@metamask/utils';
 import {
+  base64ToBytes,
+  bytesToString,
   hexToNumber,
+  isObject,
   KnownCaipNamespace,
   remove0x,
   toCaipChainId,
@@ -273,6 +276,71 @@ export function addUrlProtocolPrefix(urlString: string): string {
     return `https://${urlString}`;
   }
   return urlString;
+}
+
+/**
+ * Checks whether a URI is a `data:` URL (RFC 2397).
+ *
+ * @param uri - The URI to check.
+ * @returns True if the URI uses the `data:` scheme.
+ */
+export function isDataUri(uri: string): boolean {
+  return /^data:/iu.test(uri);
+}
+
+/**
+ * Decodes and parses a JSON `data:` URL (e.g. an on-chain NFT `tokenURI` such
+ * as `data:application/json;base64,eyJuYW1lIjoiLi4uIn0=`) without using
+ * `fetch`. Supports base64 and plain (optionally percent-encoded) payloads and
+ * optional media type parameters such as `;charset=utf-8`.
+ *
+ * @param uri - The `data:` URL to decode.
+ * @returns The parsed JSON object, or `null` if the URL is not a JSON `data:`
+ * URL or cannot be decoded/parsed into an object.
+ */
+export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
+  if (!isDataUri(uri)) {
+    return null;
+  }
+
+  const commaIndex = uri.indexOf(',');
+  if (commaIndex === -1) {
+    return null;
+  }
+
+  const [mediaType, ...params] = uri
+    .slice('data:'.length, commaIndex)
+    .split(';')
+    .map((part) => part.trim().toLowerCase());
+  if (mediaType !== 'application/json') {
+    return null;
+  }
+
+  const isBase64 = params.includes('base64');
+  const payload = uri.slice(commaIndex + 1);
+
+  try {
+    let json: string;
+    if (isBase64) {
+      const base64 = decodeURIComponent(payload).replace(/\s/gu, '');
+      json = bytesToString(
+        base64ToBytes(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')),
+      );
+    } else {
+      try {
+        json = decodeURIComponent(payload);
+      } catch {
+        // Some contracts embed raw (not percent-encoded) JSON that may contain
+        // a literal `%`; fall back to the raw payload.
+        json = payload;
+      }
+    }
+
+    const parsed: unknown = JSON.parse(json);
+    return isObject(parsed) && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -2,7 +2,7 @@ import { Web3Provider } from '@ethersproject/providers';
 import { IPFS_DEFAULT_GATEWAY_URL } from '@metamask/controller-utils';
 import HttpProvider from '@metamask/ethjs-provider-http';
 import nock from 'nock';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ERC721Standard } from './ERC721Standard.js';
 
@@ -660,5 +660,51 @@ describe('ERC721Standard', () => {
       '1627',
     );
     expect(details).toMatchObject(expectedResult);
+  });
+  describe('getDetails with a data URL tokenURI', () => {
+    const metadata = {
+      name: 'Data NFT',
+      image: 'https://example.com/image.png',
+    };
+
+    it.each([
+      [
+        'base64 JSON',
+        `data:application/json;base64,${btoa(JSON.stringify(metadata))}`,
+        'https://example.com/image.png',
+      ],
+      [
+        'percent-encoded JSON',
+        `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(metadata))}`,
+        'https://example.com/image.png',
+      ],
+      ['malformed base64', 'data:application/json;base64,!!!', undefined],
+      ['a non-JSON media type', 'data:text/plain,hello', undefined],
+    ])(
+      'resolves the image for %s without fetching',
+      async (_description, tokenURI, expectedImage) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch');
+        vi.spyOn(
+          erc721Standard,
+          'contractSupportsBase721Interface',
+        ).mockResolvedValue(true);
+        vi.spyOn(erc721Standard, 'getAssetSymbol').mockResolvedValue('DATA');
+        vi.spyOn(erc721Standard, 'getAssetName').mockResolvedValue('Data');
+        vi.spyOn(erc721Standard, 'getTokenURI').mockResolvedValue(tokenURI);
+
+        const details = await erc721Standard.getDetails(
+          '0x0000000000000000000000000000000000000001',
+          'https://ipfs.example.com',
+          '1',
+        );
+
+        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(details).toMatchObject({
+          standard: 'ERC721',
+          tokenURI,
+          image: expectedImage,
+        });
+      },
+    );
   });
 });

@@ -377,6 +377,74 @@ describe('assetsUtil', () => {
     });
   });
 
+  describe('isDataUri', () => {
+    it.each([
+      ['data:application/json,{}', true],
+      ['DATA:image/png;base64,AAAA', true],
+      ['https://example.com/data:', false],
+      ['ipfs://QmFoo', false],
+      ['', false],
+    ])('returns the correct result for %s', (uri, expected) => {
+      expect(assetsUtil.isDataUri(uri)).toBe(expected);
+    });
+  });
+
+  describe('parseJsonDataUri', () => {
+    const json = { name: 'Name', description: 'Ünïcödé ✓', image: 'x' };
+    const base64 = btoa(
+      String.fromCharCode(...new TextEncoder().encode(JSON.stringify(json))),
+    );
+
+    it.each([
+      ['base64', `data:application/json;base64,${base64}`],
+      [
+        'base64 with charset',
+        `data:application/json;charset=utf-8;base64,${base64}`,
+      ],
+      [
+        'unpadded base64',
+        `data:application/json;base64,${base64.replace(/=+$/u, '')}`,
+      ],
+      [
+        'percent-encoded base64',
+        `data:application/json;base64,${encodeURIComponent(base64)}`,
+      ],
+      [
+        'percent-encoded JSON',
+        `data:application/json,${encodeURIComponent(JSON.stringify(json))}`,
+      ],
+      ['plain JSON', `data:application/json;utf8,${JSON.stringify(json)}`],
+      ['mixed-case header', `Data:Application/Json; Base64,${base64}`],
+    ])('parses %s', (_description, uri) => {
+      expect(assetsUtil.parseJsonDataUri(uri)).toStrictEqual(json);
+    });
+
+    it('parses plain JSON that contains a literal percent sign', () => {
+      expect(
+        assetsUtil.parseJsonDataUri('data:application/json,{"name":"100%"}'),
+      ).toStrictEqual({ name: '100%' });
+    });
+
+    it.each([
+      ['a non-data URL', 'https://example.com/1.json'],
+      ['a data URL without a comma', 'data:application/json;base64'],
+      ['a non-JSON media type', 'data:text/plain,{}'],
+      ['an image media type', 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='],
+      ['a missing media type', 'data:,{}'],
+      ['malformed base64', 'data:application/json;base64,!!!'],
+      [
+        'base64 that is not JSON',
+        `data:application/json;base64,${btoa('nope')}`,
+      ],
+      ['malformed JSON', 'data:application/json,{"a":'],
+      ['a JSON string', 'data:application/json,"a"'],
+      ['a JSON array', 'data:application/json,[]'],
+      ['JSON null', 'data:application/json,null'],
+    ])('returns null for %s', (_description, uri) => {
+      expect(assetsUtil.parseJsonDataUri(uri)).toBeNull();
+    });
+  });
+
   describe('getFormattedIpfsUrl', () => {
     it('should return a correctly formatted subdomained ipfs url when passed ipfsGateway without protocol prefix, no path and subdomainSupported argument set to true', async () => {
       expect(

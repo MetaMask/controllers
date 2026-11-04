@@ -14,6 +14,8 @@ import type * as BN from 'bn.js';
 import {
   getFormattedIpfsUrl,
   ethersBigNumberToBN,
+  isDataUri,
+  parseJsonDataUri,
 } from '../../../assetsUtil.js';
 
 export class ERC1155Standard {
@@ -240,8 +242,11 @@ export class ERC1155Standard {
 
     if (tokenURI) {
       try {
-        const response = await timeoutFetch(tokenURI);
-        const object = await response.json();
+        // Never hand a `data:` URL to `fetch`: not every client's `fetch` can
+        // decode them. Decode JSON `data:` URLs inline instead.
+        const object = isDataUri(tokenURI)
+          ? parseJsonDataUri(tokenURI)
+          : await (await timeoutFetch(tokenURI)).json();
         image = object?.image;
         if (image?.startsWith('ipfs://')) {
           image = getFormattedIpfsUrl(ipfsGateway, image, true);

@@ -844,10 +844,7 @@
       "count": 2
     },
     "typescript/no-unsafe-assignment": {
-      "count": 7
-    },
-    "typescript/no-unsafe-member-access": {
-      "count": 3
+      "count": 4
     },
     "typescript/prefer-nullish-coalescing": {
       "count": 6

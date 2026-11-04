@@ -10,7 +10,11 @@ import {
 } from '@metamask/controller-utils';
 import { abiERC721 } from '@metamask/metamask-eth-abis';
 
-import { getFormattedIpfsUrl } from '../../../assetsUtil.js';
+import {
+  getFormattedIpfsUrl,
+  isDataUri,
+  parseJsonDataUri,
+} from '../../../assetsUtil.js';
 
 export class ERC721Standard {
   private readonly provider: Web3Provider;
@@ -199,8 +203,11 @@ export class ERC721Standard {
     let image;
     if (tokenURI) {
       try {
-        const response = await timeoutFetch(tokenURI);
-        const object = await response.json();
+        // Never hand a `data:` URL to `fetch`: not every client's `fetch` can
+        // decode them. Decode JSON `data:` URLs inline instead.
+        const object = isDataUri(tokenURI)
+          ? parseJsonDataUri(tokenURI)
+          : await (await timeoutFetch(tokenURI)).json();
         image = object?.image;
         if (image?.startsWith('ipfs://')) {
           image = await getFormattedIpfsUrl(ipfsGateway, image, true);
