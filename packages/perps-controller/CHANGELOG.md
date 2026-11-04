@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Include `number_orders_canceled` in batch `OrderCancelTransaction` events, counting successful cancellations and reporting zero for empty or failed batches. ([#11276](https://github.com/MetaMask/core/pull/11276))
+
 ## [22.1.1]
 
 ### Changed
