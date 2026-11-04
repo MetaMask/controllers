@@ -10,12 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add `fetchTrendingGifs` and `searchGifs` to `SocialService` (`SocialService:fetchTrendingGifs`, `SocialService:searchGifs`). They call `GET /api/v1/gifs/trending` and `GET /api/v1/gifs/search`, forward `GifQueryParams` unchanged, and return the GIF provider page. Export `GifQueryParams`, `GifItem`, `GifPageResponse`, and the messenger action types ([#11302](https://github.com/MetaMask/core/pull/11302))
+- Add `UNSUPPORTED_TOKEN_POSITION_FLAG` (`unsupported-token`) as a known value for `Position.flags`. It marks a position on a token that social-api excludes from PnL for every trader, so the position does not count toward the trader's realized PnL. It can appear alongside `insider` ([#11218](https://github.com/MetaMask/core/pull/11218))
 
 ## [3.16.0]
 
 ### Added
 
-- Add `UNSUPPORTED_TOKEN_POSITION_FLAG` (`unsupported-token`) as a known value for `Position.flags`. It marks a position on a token that social-api excludes from PnL for every trader, so the position does not count toward the trader's realized PnL. It can appear alongside `insider` ([#11218](https://github.com/MetaMask/core/pull/11218))
 - Add optional `comments` (`AuthorComment[]`) to the `Trade` type and `TradeStruct`, carrying every author comment on a fill, newest first ([#11265](https://github.com/MetaMask/core/pull/11265))
   - Position, positions, and feed responses validate each comment with the same struct as `authorComment`; responses that omit `comments` still validate.
   - The realtime feed parser maps the raw socket comments (`commentText`, `metrics`, `replies`) to the same shape. A malformed comment is dropped and the rest of the realtime item is kept.
