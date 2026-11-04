@@ -22,6 +22,10 @@ import {
   getDefaultAssetsControllerState,
 } from '../AssetsController.js';
 import { STAKING_INTERFACE } from '../data-sources/evm-rpc-services/services/StakedBalanceFetcher.js';
+import {
+  countClientStateReads,
+  waitForBootstrapToSettle,
+} from './test-utils.js';
 
 // Test escape hatch for mocking areas that do not need explicit types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -512,19 +516,20 @@ export async function bootstrapAssetsController(
   messenger: MockRootMessenger,
 ): Promise<void> {
   const { isUiOpen: wasUiOpen } = messenger.call('ClientController:getState');
+  // The controller calls `getState` on its child messenger, which invokes the
+  // root handler directly. Spying on the prototype sees that read; spying on
+  // the root messenger's own `call` does not.
+  const callSpy = vi.spyOn(Messenger.prototype, 'call');
+  const readsBeforeOpen = countClientStateReads(callSpy.mock.calls);
   messenger.publish('ClientController:stateChange', { isUiOpen: true }, []);
-  await flushBootstrap();
-  if (!wasUiOpen) {
-    messenger.publish('ClientController:stateChange', { isUiOpen: false }, []);
-    await flushBootstrap();
+  try {
+    await waitForBootstrapToSettle(callSpy.mock.calls, readsBeforeOpen);
+  } finally {
+    callSpy.mockRestore();
   }
-}
-
-/**
- * Let the controller's asynchronous bootstrap run to completion.
- */
-async function flushBootstrap(): Promise<void> {
-  for (let i = 0; i < 10; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  if (!wasUiOpen) {
+    // Bootstrap has finished, so this close is handled synchronously and
+    // leaves the controller in the lifecycle state the test set up.
+    messenger.publish('ClientController:stateChange', { isUiOpen: false }, []);
   }
 }

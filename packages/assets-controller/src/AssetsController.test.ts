@@ -14,7 +14,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Mock, MockInstance, MockedFunction } from 'vitest';
 
 import { registerKeyringUnlockMock } from './__fixtures__/MockAssetControllerMessenger.js';
-import { waitFor } from './__fixtures__/test-utils.js';
+import {
+  countClientStateReads,
+  waitFor,
+  waitForBootstrapToSettle,
+  waitUntilStable,
+} from './__fixtures__/test-utils.js';
 import {
   AssetsController,
   getDefaultAssetsControllerState,
@@ -242,11 +247,18 @@ async function activateTracking(messenger: RootMessenger): Promise<void> {
  */
 async function bootstrapController(messenger: RootMessenger): Promise<void> {
   const { isUiOpen: wasUiOpen } = messenger.call('ClientController:getState');
+  const callSpy = vi.spyOn(messenger, 'call');
+  const readsBeforeOpen = countClientStateReads(callSpy.mock.calls);
   publishUiOpen(messenger, true);
-  await flushPromises();
+  try {
+    await waitForBootstrapToSettle(callSpy.mock.calls, readsBeforeOpen);
+  } finally {
+    callSpy.mockRestore();
+  }
   if (!wasUiOpen) {
+    // Bootstrap has finished, so closing the UI is handled synchronously and
+    // restores the lifecycle state the test set up.
     publishUiOpen(messenger, false);
-    await flushPromises();
   }
 }
 
@@ -833,7 +845,7 @@ describe('AssetsController', () => {
         messenger: messenger as unknown as AssetsControllerMessenger,
         queryApiClient: createMockQueryApiClient(),
       });
-      await flushPromises();
+      await waitUntilStable(() => callSpy.mock.calls.length);
 
       expect(callSpy).not.toHaveBeenCalled();
       controller.destroy();
@@ -881,11 +893,13 @@ describe('AssetsController', () => {
         const callSpy = vi.spyOn(messenger, 'call');
 
         publishUiOpen(messenger, true);
-        await flushPromises();
-
-        const calledActions = callSpy.mock.calls.map(([action]) => action);
-        expect(calledActions).toContain('NetworkEnablementController:getState');
-        expect(calledActions).toContain('NetworkController:getState');
+        await waitFor(() => {
+          const calledActions = callSpy.mock.calls.map(([action]) => action);
+          expect(calledActions).toContain(
+            'NetworkEnablementController:getState',
+          );
+          expect(calledActions).toContain('NetworkController:getState');
+        });
       });
     });
 
@@ -894,7 +908,12 @@ describe('AssetsController', () => {
         const callSpy = vi.spyOn(messenger, 'call');
 
         publishUiOpen(messenger, false);
-        await flushPromises();
+        await waitUntilStable(
+          () =>
+            callSpy.mock.calls.filter(
+              ([action]) => action === 'NetworkEnablementController:getState',
+            ).length,
+        );
 
         expect(callSpy.mock.calls.map(([action]) => action)).not.toContain(
           'NetworkEnablementController:getState',
@@ -913,9 +932,11 @@ describe('AssetsController', () => {
           expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
 
           publishUiOpen(messenger, true);
-          await flushPromises();
-
-          expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
+          await waitFor(() => {
+            expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(
+              1,
+            );
+          });
         },
       );
     });
@@ -929,15 +950,21 @@ describe('AssetsController', () => {
         },
         async ({ messenger }) => {
           const callSpy = vi.spyOn(messenger, 'call');
+          const readsBeforeOpen = countClientStateReads(callSpy.mock.calls);
           publishUiOpen(messenger, true);
-          await flushPromises();
+          await waitForBootstrapToSettle(callSpy.mock.calls, readsBeforeOpen);
           const enablementReadsAfterBootstrap = callSpy.mock.calls.filter(
             ([action]) => action === 'NetworkEnablementController:getState',
           ).length;
 
           publishUiOpen(messenger, false);
           publishUiOpen(messenger, true);
-          await flushPromises();
+          await waitUntilStable(
+            () =>
+              callSpy.mock.calls.filter(
+                ([action]) => action === 'NetworkEnablementController:getState',
+              ).length,
+          );
 
           expect(
             callSpy.mock.calls.filter(
@@ -975,14 +1002,19 @@ describe('AssetsController', () => {
           );
 
           publishUiOpen(messenger, true);
-          await flushPromises();
+          await waitUntilStable(
+            () => subscribeToBasicFunctionalityChange.mock.calls.length,
+          );
           expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
+          expect(getState).toHaveBeenCalledTimes(1);
 
           publishUiOpen(messenger, false);
           publishUiOpen(messenger, true);
-          await flushPromises();
-
-          expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
+          await waitFor(() => {
+            expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(
+              1,
+            );
+          });
         },
       );
     });
@@ -1026,7 +1058,7 @@ describe('AssetsController', () => {
 
           publishUiOpen(messenger, true);
           controller.destroy();
-          await flushPromises();
+          await waitUntilStable(() => getAssetsSpy.mock.calls.length);
 
           expect(getAssetsSpy).not.toHaveBeenCalled();
         },
@@ -1041,7 +1073,7 @@ describe('AssetsController', () => {
           const callSpy = vi.spyOn(messenger, 'call');
 
           publishUiOpen(messenger, true);
-          await flushPromises();
+          await waitUntilStable(() => callSpy.mock.calls.length);
 
           expect(callSpy).not.toHaveBeenCalled();
         },
@@ -1070,7 +1102,7 @@ describe('AssetsController', () => {
           'group-2' as never,
           'group-1' as never,
         );
-        await flushPromises();
+        await waitUntilStable(() => callSpy.mock.calls.length);
 
         expect(callSpy).not.toHaveBeenCalled();
       });
@@ -1082,16 +1114,15 @@ describe('AssetsController', () => {
         async ({ controller, messenger }) => {
           messenger.publish('AccountTreeController:initialized', {} as never);
           messenger.publish('KeyringController:unlock');
-          await flushPromises();
           const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
           publishUiOpen(messenger, true);
-          await flushPromises();
-
-          expect(getAssetsSpy).toHaveBeenCalledWith(
-            [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
-            expect.objectContaining({ forceUpdate: true }),
-          );
+          await waitFor(() => {
+            expect(getAssetsSpy).toHaveBeenCalledWith(
+              [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
+              expect.objectContaining({ forceUpdate: true }),
+            );
+          });
         },
       );
     });
@@ -1109,16 +1140,15 @@ describe('AssetsController', () => {
         async ({ controller, messenger }) => {
           messenger.publish('AccountTreeController:initialized', {} as never);
           messenger.publish('KeyringController:unlock');
-          await flushPromises();
           const getAssetsSpy = vi.spyOn(controller, 'getAssets');
 
           publishUiOpen(messenger, true);
-          await flushPromises();
-
-          expect(getAssetsSpy).toHaveBeenCalledWith(
-            [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
-            expect.objectContaining({ forceUpdate: true }),
-          );
+          await waitFor(() => {
+            expect(getAssetsSpy).toHaveBeenCalledWith(
+              [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
+              expect.objectContaining({ forceUpdate: true }),
+            );
+          });
         },
       );
     });
@@ -1131,12 +1161,12 @@ describe('AssetsController', () => {
 
           messenger.publish('AccountTreeController:initialized', {} as never);
           messenger.publish('KeyringController:unlock');
-          await flushPromises();
-
-          expect(getAssetsSpy).toHaveBeenCalledWith(
-            [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
-            expect.objectContaining({ forceUpdate: true }),
-          );
+          await waitFor(() => {
+            expect(getAssetsSpy).toHaveBeenCalledWith(
+              [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
+              expect.objectContaining({ forceUpdate: true }),
+            );
+          });
         },
       );
     });
@@ -1204,18 +1234,21 @@ describe('AssetsController', () => {
         },
         async ({ controller, messenger }) => {
           messenger.publish('KeyringController:unlock');
-          await flushPromises();
           // The unlock handler defers the cleanups to the bootstrap.
+          await waitUntilStable(
+            () =>
+              controller.state.assetsBalance[MOCK_ACCOUNT_ID]?.[solanaAssetId],
+          );
           expect(
             controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
           ).toStrictEqual({ amount: '2' });
 
           publishUiOpen(messenger, true);
-          await flushPromises();
-
-          expect(
-            controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
-          ).toBeUndefined();
+          await waitFor(() => {
+            expect(
+              controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
+            ).toBeUndefined();
+          });
           expect(
             controller.state.assetsBalance[MOCK_ACCOUNT_ID][
               MOCK_NATIVE_ASSET_ID
@@ -1259,20 +1292,23 @@ describe('AssetsController', () => {
         },
         async ({ controller, messenger }) => {
           publishUiOpen(messenger, true);
-          await flushPromises();
 
           messenger.publish('KeyringController:unlock');
-          await flushPromises();
+          // Cleanups wait for the in-flight supported-networks fetch.
+          await waitUntilStable(
+            () =>
+              controller.state.assetsBalance[MOCK_ACCOUNT_ID]?.[solanaAssetId],
+          );
           expect(
             controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
           ).toStrictEqual({ amount: '2' });
 
           resolveSupportedNetworks({ fullSupport: [1], partialSupport: [] });
-          await flushPromises();
-
-          expect(
-            controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
-          ).toBeUndefined();
+          await waitFor(() => {
+            expect(
+              controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
+            ).toBeUndefined();
+          });
         },
       );
     });
@@ -1293,11 +1329,11 @@ describe('AssetsController', () => {
         },
         async ({ controller, messenger }) => {
           messenger.publish('KeyringController:unlock');
-          await flushPromises();
-
-          expect(
-            controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
-          ).toBeUndefined();
+          await waitFor(() => {
+            expect(
+              controller.state.assetsBalance[MOCK_ACCOUNT_ID][solanaAssetId],
+            ).toBeUndefined();
+          });
         },
       );
     });
@@ -1407,9 +1443,9 @@ describe('AssetsController', () => {
           { skipBootstrap: true },
           async ({ controller }) => {
             controller.setSelectedCurrency('eur');
-            await flushPromises();
-
-            expect(controller.state.selectedCurrency).toBe('eur');
+            await waitFor(() => {
+              expect(controller.state.selectedCurrency).toBe('eur');
+            });
           },
         );
       });

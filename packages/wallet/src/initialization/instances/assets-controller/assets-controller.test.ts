@@ -103,8 +103,7 @@ describe('assetsController', () => {
 
     expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
 
-    openUi(wallet);
-    await flushPromises();
+    await openUiAndWaitForBootstrap(wallet);
     await wallet.destroy();
 
     expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
@@ -290,8 +289,7 @@ describe('assetsController', () => {
     await wallet.init();
     expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
 
-    openUi(wallet);
-    await flushPromises();
+    await openUiAndWaitForBootstrap(wallet);
 
     expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
   });
@@ -341,11 +339,32 @@ function openUi(wallet: Wallet): void {
 }
 
 /**
- * Let pending promises and immediates settle.
+ * Open the UI and wait until `AssetsController` has finished bootstrapping.
+ *
+ * Opening the UI reads `ClientController:getState` once before the
+ * bootstrap's async work, and once more from `#updateActive` after that work
+ * finishes. The controller performs that read on its own messenger, so the
+ * spy has to sit on `Messenger.prototype.call`.
+ *
+ * @param wallet - The wallet whose UI to open.
  */
-async function flushPromises(): Promise<void> {
-  for (let i = 0; i < 10; i++) {
-    await new Promise((resolve) => setImmediate(resolve));
+async function openUiAndWaitForBootstrap(wallet: Wallet): Promise<void> {
+  const callSpy = vi.spyOn(Messenger.prototype, 'call');
+  const readsBeforeOpen = callSpy.mock.calls.filter(
+    (call) => call[0] === 'ClientController:getState',
+  ).length;
+
+  try {
+    openUi(wallet);
+    await vi.waitFor(() => {
+      const readsSinceOpen =
+        callSpy.mock.calls.filter(
+          (call) => call[0] === 'ClientController:getState',
+        ).length - readsBeforeOpen;
+      expect(readsSinceOpen).toBeGreaterThanOrEqual(2);
+    });
+  } finally {
+    callSpy.mockRestore();
   }
 }
 
