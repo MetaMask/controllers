@@ -7,53 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-- chore(deps): update dependency nock to v15 ([#11055](https://github.com/MetaMask/core/pull/11055))
-- test(compliance-controller): make nock tests independent of node-fetch ([#11076](https://github.com/MetaMask/core/pull/11076))
-- test: use import.meta.dirname in Vitest configs ([#11082](https://github.com/MetaMask/core/pull/11082))
-- test: run compliance-controller on Vitest ([#11008](https://github.com/MetaMask/core/pull/11008))
-- chore: opt into Jest types per package instead of in tsconfig.base.json ([#10862](https://github.com/MetaMask/core/pull/10862))
-- chore(dev-deps): bump `oxfmt` from `^0.44.0` to `^0.72.0` ([#10785](https://github.com/MetaMask/core/pull/10785))
-- chore(deps): update dependency typedoc-plugin-missing-exports to v4 ([#10762](https://github.com/MetaMask/core/pull/10762))
-- chore(deps): update dependency typedoc-plugin-missing-exports to ^2.3.0 ([#10710](https://github.com/MetaMask/core/pull/10710))
-- chore(deps): update dependency typedoc to ^0.28.20 ([#10731](https://github.com/MetaMask/core/pull/10731))
-- chore: replace `tsx` with plain Node ([#10564](https://github.com/MetaMask/core/pull/10564))
-- refactor: rewrite `.js` imports in `scripts` folder to `.ts` ([#10537](https://github.com/MetaMask/core/pull/10537))
-- chore(deps): update jestjs-jest to ^30.5.2 ([#10514](https://github.com/MetaMask/core/pull/10514))
-- chore(deps): update dependency ts-jest to ^29.4.14 ([#10509](https://github.com/MetaMask/core/pull/10509))
-- fix(deps): update dependency deepmerge to ^4.3.1 ([#10437](https://github.com/MetaMask/core/pull/10437))
-- chore(deps): update dependency tsx to ^4.23.15 ([#10434](https://github.com/MetaMask/core/pull/10434))
-- chore(deps): update dependency tsx to ^4.23.13 ([#10369](https://github.com/MetaMask/core/pull/10369))
-- chore(deps): update dependency rimraf to v6 ([#10379](https://github.com/MetaMask/core/pull/10379))
-- chore(deps): update dependency @metamask/auto-changelog to ^6.2.1 ([#10364](https://github.com/MetaMask/core/pull/10364))
-- chore(deps): update dependency ts-jest to ^29.4.12 ([#10328](https://github.com/MetaMask/core/pull/10328))
-- chore(deps): update dependency nock to ^13.5.6 ([#10361](https://github.com/MetaMask/core/pull/10361))
-- chore(deps): update dependency rimraf to ^5.0.10 ([#10327](https://github.com/MetaMask/core/pull/10327))
-- Update lint:tsc to run against all packages & remove it from CI ([#10215](https://github.com/MetaMask/core/pull/10215))
-
-### Added
-
-- Add `ComplianceServiceInvalidateQueriesAction`, `ComplianceServiceCacheUpdatedEvent` and `ComplianceServiceGranularCacheUpdatedEvent`, also included in `ComplianceServiceActions` and `ComplianceServiceEvents` ([#10880](https://github.com/MetaMask/core/pull/10880))
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
-### Changed
-
-- **BREAKING:** `ComplianceService` now extends `BaseDataService` from `@metamask/base-data-service` ([#10880](https://github.com/MetaMask/core/pull/10880))
-  - `ComplianceServiceMessenger` now includes the `ComplianceService:invalidateQueries` action and `ComplianceService:cacheUpdated` events. Messengers built from `ComplianceServiceActions` / `ComplianceServiceEvents` pick these up automatically.
-- Concurrent `checkWalletCompliance` / `checkWalletsCompliance` calls with identical arguments now share one request. Sequential calls still always hit the API ([#10880](https://github.com/MetaMask/core/pull/10880))
-- Responses that do not match the expected shape now throw `Query function for "ComplianceService:<method>" returned an unexpected response: …`, instead of `Malformed response received from <api name>` ([#10880](https://github.com/MetaMask/core/pull/10880))
-- Response bodies that are not valid JSON are now retried by the service policy and count toward opening the circuit breaker, instead of failing immediately. Valid JSON with an invalid shape still fails immediately ([#10880](https://github.com/MetaMask/core/pull/10880))
-- Add dependency `@metamask/base-data-service` ([#10880](https://github.com/MetaMask/core/pull/10880))
-- Bump `reselect` from `^5.1.1` to `^5.3.0` ([#10532](https://github.com/MetaMask/core/pull/10532))
-- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-
 ### Removed
 
-- **BREAKING:** Remove `onRetry`, `onBreak` and `onDegraded` from `ComplianceService` ([#10880](https://github.com/MetaMask/core/pull/10880))
 - Remove the unused `@metamask/utils` dependency ([#10185](https://github.com/MetaMask/core/pull/10185))
 
 ## [3.0.0]

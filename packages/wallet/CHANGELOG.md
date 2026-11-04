@@ -7,136 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-
 ### Changed
 
-- Bump `@metamask/gas-fee-controller` from `^27.0.0` to `^27.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
-- Bump `@metamask/subscription-controller` from `^15.1.2` to `^15.2.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
-- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
-
-## [21.0.0]
-
-### Added
-
-- **BREAKING:** Add `NetworkEnablementController` to the default initialization configurations ([#10997](https://github.com/MetaMask/core/pull/10997))
-  - Delegates `MultichainNetworkController:getState`. `Wallet` does not construct `MultichainNetworkController`. Clients must register that action on the wallet messenger before calling `wallet.init()`. `NetworkEnablementController.init()` reads it during `Wallet.init()`, and `enableAllPopularNetworks` and `listPopularMultichainNetworks` read it later.
-  - Also delegates `ConfigRegistryController:getState`, `NetworkController:getState`, `NetworkController:networkAdded`, `NetworkController:networkRemoved`, `NetworkController:stateChange`, and `TransactionController:transactionSubmitted`. `Wallet` constructs those controllers during default initialization.
-
-### Changed
-
-- **BREAKING:** Delegate `SentinelApiService:simulateTransactions` from the wallet root messenger to `TransactionController` ([#9476](https://github.com/MetaMask/core/pull/9476))
-  - `TransactionController` now performs transaction simulation through this action.
-  - The wallet does not construct `SentinelApiService`. Clients must register that action on the Wallet messenger.
-- Add `@metamask/network-enablement-controller` as a dependency ([#10997](https://github.com/MetaMask/core/pull/10997))
-- Bump `@metamask/claims-controller` from `^1.0.4` to `^1.1.0` ([#11092](https://github.com/MetaMask/core/pull/11092))
-- Bump `@metamask/shield-controller` from `^7.0.5` to `^7.1.1` ([#11092](https://github.com/MetaMask/core/pull/11092), [#11203](https://github.com/MetaMask/core/pull/11203))
-- Bump `@metamask/subscription-controller` from `^15.0.0` to `^15.1.2` ([#11092](https://github.com/MetaMask/core/pull/11092), [#11120](https://github.com/MetaMask/core/pull/11120), [#11203](https://github.com/MetaMask/core/pull/11203))
-- Bump `@metamask/transaction-controller` from `^72.2.1` to `^73.0.0` ([#11154](https://github.com/MetaMask/core/pull/11154), [#11203](https://github.com/MetaMask/core/pull/11203))
-- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
-- Bump `@metamask/permission-controller` from `^14.0.0` to `^14.1.0` ([#11157](https://github.com/MetaMask/core/pull/11157))
-- Bump `@metamask/network-enablement-controller` from `^7.0.2` to `^7.1.0` ([#11203](https://github.com/MetaMask/core/pull/11203))
-
-## [20.0.0]
-
-### Added
-
-- **BREAKING:** Add `GeolocationController` and `GeolocationApiService` to the default initialization configurations ([#11058](https://github.com/MetaMask/core/pull/11058))
-  - Optional `instanceOptions.geolocationApiService` accepts `env`, `fetch`, `ttlMs`, and `policyOptions`. Defaults to production and `globalThis.fetch`.
-  - `GeolocationController` delegates `GeolocationApiService:fetchGeolocationData`.
-  - Hosts that already register `GeolocationController` or `GeolocationApiService` on the wallet root messenger must remove them before upgrading, or messenger registration will collide.
-  - Hosts no longer need to register `GeolocationController` when `AnalyticsController` `isGeolocationEnabled` is `true`.
-
-### Changed
-
-- Add `@metamask/geolocation-controller` as a dependency ([#11058](https://github.com/MetaMask/core/pull/11058))
-- Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
-
-## [19.1.0]
-
-### Added
-
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
-### Fixed
-
-- Fall back to `options.analyticsId` when persisted `analyticsId` is null, undefined, or empty ([#11025](https://github.com/MetaMask/core/pull/11025))
-
-## [19.0.0]
-
-### Added
-
-- **BREAKING:** Add `AnalyticsController` to the default initialization configurations ([#10901](https://github.com/MetaMask/core/pull/10901))
-  - Requires `instanceOptions.analyticsController.platformAdapter` and `instanceOptions.analyticsController.analyticsId`.
-  - Accepts optional feature flags `isAnonymousEventsFeatureEnabled`, `isEventQueuePersistenceEnabled`, `isPreConsentQueueEnabled`, `isGeolocationEnabled`, and `isEventFragmentsEnabled`, each defaulting to `false`.
-  - Persisted `AnalyticsController` state overrides the supplied `analyticsId` when present.
-  - `AnalyticsController` delegates `ConfigRegistryController:getState` and `GeolocationController:getGeolocationData`, and subscribes to `ConfigRegistryController:stateChanged`.
-  - Hosts that already register `AnalyticsController` or no-op `AnalyticsController:*` handlers on the wallet root messenger must remove them before upgrading, or messenger registration will collide.
-  - When `isGeolocationEnabled` is `true`, hosts must register `GeolocationController` on the wallet root messenger.
-
-### Changed
-
-- Bump `@metamask/subscription-controller` from `^14.0.1` to `^15.0.0` ([#11000](https://github.com/MetaMask/core/pull/11000))
-- Add `@metamask/analytics-controller` as a dependency ([#10901](https://github.com/MetaMask/core/pull/10901))
-- Bump `@metamask/claims-controller` from `^1.0.3` to `^1.0.4` ([#10925](https://github.com/MetaMask/core/pull/10925))
-- Bump `@metamask/shield-controller` from `^7.0.4` to `^7.0.5` ([#10925](https://github.com/MetaMask/core/pull/10925))
-- Bump `@metamask/network-controller` from `^37.1.0` to `^37.1.1` ([#10982](https://github.com/MetaMask/core/pull/10982))
-
-## [18.0.1]
-
-### Changed
-
-- Bump `@metamask/subscription-controller` from `^14.0.0` to `^14.0.1` ([#10896](https://github.com/MetaMask/core/pull/10896))
-
-## [18.0.0]
-
-### Added
-
-- **BREAKING:** Require a `reference` property on `InitializationConfiguration` for instances that have state ([#10023](https://github.com/MetaMask/core/pull/10023))
-- **BREAKING:** Add `PermissionController` to the default initialization configurations ([#10807](https://github.com/MetaMask/core/pull/10807))
-  - Accepts optional `instanceOptions.permissionController.caveatSpecifications`, `permissionSpecifications` and `unrestrictedMethods`, each defaulting to empty.
-- **BREAKING:** Add `SubjectMetadataController` to the default initialization configurations ([#10807](https://github.com/MetaMask/core/pull/10807))
-- **BREAKING:** Add `SelectedNetworkController` to the default initialization configurations ([#10808](https://github.com/MetaMask/core/pull/10808))
-  - Requires `instanceOptions.selectedNetworkController.domainProxyMap`.
-- **BREAKING:** Add `ClientController` to the default initialization configurations ([#10826](https://github.com/MetaMask/core/pull/10826))
-- **BREAKING:** Add `LoggingController` to the default initialization configurations ([#10828](https://github.com/MetaMask/core/pull/10828))
-
-### Changed
-
-- Add `@metamask/client-controller` as a dependency ([#10826](https://github.com/MetaMask/core/pull/10826))
-- Add `@metamask/logging-controller` as a dependency ([#10828](https://github.com/MetaMask/core/pull/10828))
-- Add `@metamask/permission-controller` as a dependency ([#10807](https://github.com/MetaMask/core/pull/10807))
-- Add `@metamask/selected-network-controller` as a dependency ([#10808](https://github.com/MetaMask/core/pull/10808))
-- Bump `@metamask/transaction-controller` from `^72.2.0` to `^72.2.1` ([#10817](https://github.com/MetaMask/core/pull/10817))
-- Bump `@metamask/accounts-controller` from `^40.0.0` to `^40.1.0` ([#10851](https://github.com/MetaMask/core/pull/10851))
-- Bump `@metamask/keyring-controller` from `^28.1.0` to `^28.2.0` ([#10851](https://github.com/MetaMask/core/pull/10851))
-- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-- Bump `@metamask/network-controller` from `^37.0.1` to `^37.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-
-## [17.1.0]
-
-### Changed
-
-- Delegate `SubscriptionController:isUserEligibleForTrial` to `SubscriptionDelegationService` so Money Account Plus checkout uses the controller trial rule ([#10795](https://github.com/MetaMask/core/pull/10795))
-- Bump `@metamask/transaction-controller` from `^72.1.0` to `^72.2.0` ([#10772](https://github.com/MetaMask/core/pull/10772))
-- Bump `@metamask/subscription-controller` from `^13.0.0` to `^14.0.0` ([#10810](https://github.com/MetaMask/core/pull/10810))
-
-## [17.0.0]
-
-### Changed
-
-- **BREAKING:** Delegate `AnalyticsController:trackEvent` and `KeyringController:exportSeedPhrase` from the wallet root messenger to `SeedlessOnboardingController`. ([#10568](https://github.com/MetaMask/core/pull/10568))
 - **BREAKING:** Grant `SubscriptionController` access to `GeolocationController:getGeolocationData` ([#10674](https://github.com/MetaMask/core/pull/10674))
   - The wallet does not construct `GeolocationController`. Clients must register that action on the Wallet messenger.
 - Stop delegating `ApprovalController:addRequest` to `SubscriptionDelegationService`. Client that supply their own root messenger no longer need to allow that action for the delegation service. ([#10666](https://github.com/MetaMask/core/pull/10666))
 - Bump `@metamask/claims-controller` from `^1.0.2` to `^1.0.3` ([#10662](https://github.com/MetaMask/core/pull/10662))
 - Bump `@metamask/shield-controller` from `^7.0.3` to `^7.0.4` ([#10662](https://github.com/MetaMask/core/pull/10662))
 - Bump `@metamask/subscription-controller` from `^12.0.0` to `^12.0.1` ([#10662](https://github.com/MetaMask/core/pull/10662))
-- Bump `@metamask/seedless-onboarding-controller` from `^11.0.1` to `^12.0.0` ([#10756](https://github.com/MetaMask/core/pull/10756))
 
 ## [16.0.1]
 
@@ -458,15 +336,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#8838](https://github.com/MetaMask/core/pull/8838))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/wallet@21.0.0...HEAD
-[21.0.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@20.0.0...@metamask/wallet@21.0.0
-[20.0.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@19.1.0...@metamask/wallet@20.0.0
-[19.1.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@19.0.0...@metamask/wallet@19.1.0
-[19.0.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@18.0.1...@metamask/wallet@19.0.0
-[18.0.1]: https://github.com/MetaMask/core/compare/@metamask/wallet@18.0.0...@metamask/wallet@18.0.1
-[18.0.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@17.1.0...@metamask/wallet@18.0.0
-[17.1.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@17.0.0...@metamask/wallet@17.1.0
-[17.0.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@16.0.1...@metamask/wallet@17.0.0
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/wallet@16.0.1...HEAD
 [16.0.1]: https://github.com/MetaMask/core/compare/@metamask/wallet@16.0.0...@metamask/wallet@16.0.1
 [16.0.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@15.1.0...@metamask/wallet@16.0.0
 [15.1.0]: https://github.com/MetaMask/core/compare/@metamask/wallet@15.0.1...@metamask/wallet@15.1.0
