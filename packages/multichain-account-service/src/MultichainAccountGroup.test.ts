@@ -28,6 +28,7 @@ import type { MultichainAccountServiceMessenger } from './types.js';
 
 function setup({
   groupIndex = 0,
+  initialize = true,
   messenger = getRootMessenger(),
   accounts = [
     [MOCK_WALLET_1_EVM_ACCOUNT],
@@ -40,6 +41,7 @@ function setup({
   ],
 }: {
   groupIndex?: number;
+  initialize?: boolean;
   messenger?: RootMessenger;
   accounts?: InternalAccount[][];
 } = {}): {
@@ -80,7 +82,9 @@ function setup({
     return state;
   }, {});
 
-  group.init(groupState);
+  if (initialize) {
+    group.init(groupState);
+  }
 
   return { wallet, group, providers, messenger: serviceMessenger };
 }
@@ -270,6 +274,41 @@ describe('MultichainAccountGroup', () => {
       expect(statusDuringInner[0]).toBe('in-progress:create-accounts');
       // After both finally blocks fire, status is 'misaligned'.
       expect(group.status).toBe('misaligned');
+    });
+
+    it('updates accounts before initialization without changing status or publishing events', () => {
+      const { group, messenger } = setup({
+        initialize: false,
+        accounts: [[MOCK_WALLET_1_EVM_ACCOUNT]],
+      });
+      const publishSpy = vi.spyOn(messenger, 'publish');
+
+      group.update({ 'Provider 1': [MOCK_WALLET_1_EVM_ACCOUNT.id] });
+
+      expect(group.getAccountIds()).toStrictEqual([
+        MOCK_WALLET_1_EVM_ACCOUNT.id,
+      ]);
+      expect(group.status).toBe('uninitialized');
+      expect(publishSpy).not.toHaveBeenCalled();
+    });
+
+    it('publishes misaligned status when an update leaves a provider unaligned', () => {
+      const { group, providers, messenger } = setup({
+        accounts: [[MOCK_WALLET_1_EVM_ACCOUNT], [MOCK_WALLET_1_SOL_ACCOUNT]],
+      });
+      const publishSpy = vi.spyOn(messenger, 'publish');
+      expect(group.status).toBe('aligned');
+      providers[1].isAligned.mockReturnValue(false);
+
+      group.update({ 'Provider 2': [] });
+
+      expect(group.status).toBe('misaligned');
+      expect(group.getAccountIds(providers[1])).toStrictEqual([]);
+      expect(publishSpy).toHaveBeenCalledWith(
+        'MultichainAccountService:groupStatusChange',
+        group.id,
+        'misaligned',
+      );
     });
 
     it('auto-corrects status on update() when not in an in-progress state', () => {
