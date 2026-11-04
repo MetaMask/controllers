@@ -18,7 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** `TransakService` now extends `BaseDataService` ([#11216](https://github.com/MetaMask/core/pull/11216))
   - This is breaking because `TransakServiceMessenger` has new required actions and events, writes are no longer retried, and `verifyUserOtp` now shares the circuit breaker with every other request (see below).
   - `TransakServiceActions` now includes `TransakService:invalidateQueries`, and `TransakServiceEvents` now includes the `TransakService:cacheUpdated` events. A host messenger built from `MessengerActions<TransakServiceMessenger>` and `MessengerEvents<TransakServiceMessenger>` picks these up automatically.
-  - The constructor options are unchanged.
 - **BREAKING:** `RampsService` now extends `BaseDataService` from `@metamask/base-data-service` ([#11214](https://github.com/MetaMask/core/pull/11214))
   - This is breaking because `RampsService` no longer has public `onRetry`, `onBreak` and `onDegraded` methods (see Removed), and `RampsServiceMessenger` has new required actions and events. Pass `policyOptions` to the constructor to configure retries and the circuit breaker.
   - `RampsServiceMessenger` now includes the `RampsService:invalidateQueries` action and the `RampsService:cacheUpdated` events. Messengers built from `RampsServiceActions` and `RampsServiceEvents` pick these up automatically.
