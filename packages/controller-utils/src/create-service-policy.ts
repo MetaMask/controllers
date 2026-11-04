@@ -450,11 +450,11 @@ export function createServicePolicy(
       );
     }
   });
-  // The data that the retry policy gives to `onSuccess` listeners has no
-  // information about which execution it is for, and the listeners are called
-  // a few microtasks after the service finishes, so concurrent executions may
-  // finish in between. Instead of using that event, we handle success once the
-  // execution that succeeded has finished.
+  // Success is handled here, once the execution that succeeded has finished,
+  // and not through the retry policy's `onSuccess` event. That event does not
+  // say which execution it is for, and its listeners are called a few
+  // microtasks after the service finishes, by which time other executions may
+  // have finished too.
   const handleSuccess = (
     duration: number,
     context: ExecuteContext | undefined,
