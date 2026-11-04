@@ -822,7 +822,7 @@ describe('NetworkController', () => {
 
       await withController(
         {
-          remoteRpcFailoverMode: 'disabled',
+          rpcFailoverMode: 'disabled',
           state: {
             selectedNetworkClientId: 'AAAA-AAAA-AAAA-AAAA',
             networkConfigurationsByChainId: {
@@ -891,7 +891,7 @@ describe('NetworkController', () => {
 
       await withController(
         {
-          remoteRpcFailoverMode: 'forced',
+          rpcFailoverMode: 'forced',
           state: {
             selectedNetworkClientId: 'AAAA-AAAA-AAAA-AAAA',
             networkConfigurationsByChainId: {
@@ -965,7 +965,7 @@ describe('NetworkController', () => {
 
       await withController(
         {
-          remoteRpcFailoverMode: 'forced',
+          rpcFailoverMode: 'forced',
           state: {
             selectedNetworkClientId: 'AAAA-AAAA-AAAA-AAAA',
             networkConfigurationsByChainId: {
@@ -1039,7 +1039,7 @@ describe('NetworkController', () => {
 
       await withController(
         {
-          remoteRpcFailoverMode: 'forced',
+          rpcFailoverMode: 'forced',
           state: {
             selectedNetworkClientId: 'AAAA-AAAA-AAAA-AAAA',
             networkConfigurationsByChainId: {
@@ -1097,7 +1097,7 @@ describe('NetworkController', () => {
 
       await withController(
         {
-          remoteRpcFailoverMode: DEFAULT_RPC_FAILOVER_MODE,
+          rpcFailoverMode: DEFAULT_RPC_FAILOVER_MODE,
           state: {
             selectedNetworkClientId: 'AAAA-AAAA-AAAA-AAAA',
             networkConfigurationsByChainId: {
@@ -1155,7 +1155,7 @@ describe('NetworkController', () => {
 
       await withController(
         {
-          remoteRpcFailoverMode: undefined,
+          rpcFailoverMode: undefined,
           state: {
             selectedNetworkClientId: 'AAAA-AAAA-AAAA-AAAA',
             networkConfigurationsByChainId: {
@@ -4805,7 +4805,7 @@ describe('NetworkController', () => {
               infuraProjectId,
               getRpcServiceOptions,
               getBlockTrackerOptions,
-              remoteRpcFailoverMode: 'enabled',
+              rpcFailoverMode: 'enabled',
             },
             ({ controller, networkControllerMessenger }) => {
               const defaultRpcEndpoint: InfuraRpcEndpoint = {
@@ -4958,7 +4958,7 @@ describe('NetworkController', () => {
               failoverUrls: {
                 [infuraChainId]: ['https://chain.failover'],
               },
-              remoteRpcFailoverMode: 'enabled',
+              rpcFailoverMode: 'enabled',
             },
             ({ controller }) => {
               const defaultRpcEndpoint: InfuraRpcEndpoint = {
@@ -6243,7 +6243,7 @@ describe('NetworkController', () => {
                 infuraProjectId,
                 getRpcServiceOptions,
                 getBlockTrackerOptions,
-                remoteRpcFailoverMode: 'enabled',
+                rpcFailoverMode: 'enabled',
               },
               async ({ controller, networkControllerMessenger }) => {
                 const infuraRpcEndpoint: InfuraRpcEndpoint = {
@@ -6336,7 +6336,7 @@ describe('NetworkController', () => {
                 failoverUrls: {
                   [infuraChainId]: ['https://chain.failover'],
                 },
-                remoteRpcFailoverMode: 'enabled',
+                rpcFailoverMode: 'enabled',
               },
               async ({ controller }) => {
                 const infuraRpcEndpoint: InfuraRpcEndpoint = {
@@ -6557,7 +6557,7 @@ describe('NetworkController', () => {
                 infuraProjectId: 'some-infura-project-id',
                 getRpcServiceOptions,
                 getBlockTrackerOptions,
-                remoteRpcFailoverMode: 'enabled',
+                rpcFailoverMode: 'enabled',
               },
               async ({ controller, networkControllerMessenger }) => {
                 const [rpcEndpoint1, rpcEndpoint2] = [
@@ -7556,7 +7556,7 @@ describe('NetworkController', () => {
                 },
                 getRpcServiceOptions,
                 getBlockTrackerOptions,
-                remoteRpcFailoverMode: 'enabled',
+                rpcFailoverMode: 'enabled',
               },
               async ({ controller, networkControllerMessenger }) => {
                 createNetworkClientMock.mockReturnValue(buildFakeClient());
@@ -8426,7 +8426,7 @@ describe('NetworkController', () => {
               },
               getRpcServiceOptions,
               getBlockTrackerOptions,
-              remoteRpcFailoverMode: 'enabled',
+              rpcFailoverMode: 'enabled',
             },
             async ({ controller, networkControllerMessenger }) => {
               await controller.updateNetwork('0x1337', {
@@ -9425,7 +9425,7 @@ describe('NetworkController', () => {
               },
               getRpcServiceOptions,
               getBlockTrackerOptions,
-              remoteRpcFailoverMode: 'enabled',
+              rpcFailoverMode: 'enabled',
             },
             async ({ controller, networkControllerMessenger }) => {
               createNetworkClientMock.mockImplementation(
@@ -10585,7 +10585,7 @@ describe('NetworkController', () => {
                 },
                 getRpcServiceOptions,
                 getBlockTrackerOptions,
-                remoteRpcFailoverMode: 'enabled',
+                rpcFailoverMode: 'enabled',
               },
               async ({ controller, networkControllerMessenger }) => {
                 createNetworkClientMock.mockImplementation(
@@ -11258,7 +11258,7 @@ describe('NetworkController', () => {
                 },
                 getRpcServiceOptions,
                 getBlockTrackerOptions,
-                remoteRpcFailoverMode: 'enabled',
+                rpcFailoverMode: 'enabled',
               },
               async ({ controller, networkControllerMessenger }) => {
                 createNetworkClientMock.mockImplementation(
@@ -11950,7 +11950,7 @@ describe('NetworkController', () => {
                 infuraProjectId: 'some-infura-project-id',
                 getRpcServiceOptions,
                 getBlockTrackerOptions,
-                remoteRpcFailoverMode: 'enabled',
+                rpcFailoverMode: 'enabled',
               },
               async ({ controller, networkControllerMessenger }) => {
                 createNetworkClientMock.mockImplementation(
@@ -12659,7 +12659,7 @@ describe('NetworkController', () => {
             },
             getRpcServiceOptions,
             getBlockTrackerOptions,
-            remoteRpcFailoverMode: 'enabled',
+            rpcFailoverMode: 'enabled',
           },
           async ({ controller, networkControllerMessenger }) => {
             createNetworkClientMock.mockImplementation(({ configuration }) => {
