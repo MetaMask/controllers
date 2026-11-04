@@ -7,33 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-
-## [7.1.0]
-
-### Added
-
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
-### Changed
-
-- Bump `reselect` from `^5.1.1` to `^5.3.0` ([#10532](https://github.com/MetaMask/core/pull/10532))
-- Bump `@metamask/slip44` from `^4.3.0` to `^4.5.0` ([#10736](https://github.com/MetaMask/core/pull/10736))
-- Bump `@metamask/transaction-controller` from `^72.1.0` to `^73.0.0` ([#10772](https://github.com/MetaMask/core/pull/10772), [#10817](https://github.com/MetaMask/core/pull/10817), [#11154](https://github.com/MetaMask/core/pull/11154), [#11203](https://github.com/MetaMask/core/pull/11203))
-- Bump `@metamask/keyring-api` from `^24.0.0` to `^24.3.0` ([#10717](https://github.com/MetaMask/core/pull/10717), [#10792](https://github.com/MetaMask/core/pull/10792), [#10844](https://github.com/MetaMask/core/pull/10844))
-- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-- Bump `@metamask/network-controller` from `^37.0.1` to `^37.1.1` ([#10864](https://github.com/MetaMask/core/pull/10864), [#10982](https://github.com/MetaMask/core/pull/10982))
-- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
-
-### Fixed
-
-- Import `@metamask/slip44` with a JSON import attribute so Node.js ESM consumers do not throw `ERR_IMPORT_ATTRIBUTE_MISSING` when importing `NetworkEnablementController` ([#10997](https://github.com/MetaMask/core/pull/10997))
-- Preserve existing network enablement when an auto-enabled network from the config registry is added ([#10763](https://github.com/MetaMask/core/pull/10763))
-
 ## [7.0.2]
 
 ### Changed
@@ -472,8 +445,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#6028](https://github.com/MetaMask/core/pull/6028))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/network-enablement-controller@7.1.0...HEAD
-[7.1.0]: https://github.com/MetaMask/core/compare/@metamask/network-enablement-controller@7.0.2...@metamask/network-enablement-controller@7.1.0
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/network-enablement-controller@7.0.2...HEAD
 [7.0.2]: https://github.com/MetaMask/core/compare/@metamask/network-enablement-controller@7.0.1...@metamask/network-enablement-controller@7.0.2
 [7.0.1]: https://github.com/MetaMask/core/compare/@metamask/network-enablement-controller@7.0.0...@metamask/network-enablement-controller@7.0.1
 [7.0.0]: https://github.com/MetaMask/core/compare/@metamask/network-enablement-controller@6.0.5...@metamask/network-enablement-controller@7.0.0

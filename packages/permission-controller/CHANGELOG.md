@@ -7,34 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- fix(permission-controller): move nanoid bump changelog entry to Unreleased ([#11263](https://github.com/MetaMask/core/pull/11263))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-
 ### Changed
 
-- Bump `nanoid` from `^3.3.19` to `^6.0.2` ([#10602](https://github.com/MetaMask/core/pull/10602))
-
-## [14.1.0]
-
-### Added
-
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
-### Changed
-
-- Bump `@metamask/utils` from `^11.12.0` to `^12.0.1` ([#10192](https://github.com/MetaMask/core/pull/10192), [#11107](https://github.com/MetaMask/core/pull/11107))
+- Bump `@metamask/utils` from `^11.12.0` to `^12.0.0` ([#10192](https://github.com/MetaMask/core/pull/10192))
 - Bump `immer` from `^9.0.6` to `^11.1.18` ([#10331](https://github.com/MetaMask/core/pull/10331), [#10382](https://github.com/MetaMask/core/pull/10382))
 - Bump `nanoid` from `^3.3.8` to `^3.3.19` ([#10439](https://github.com/MetaMask/core/pull/10439))
-- Bump `@metamask/rpc-errors` from `^7.0.2` to `^7.0.3` ([#10718](https://github.com/MetaMask/core/pull/10718))
-- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-
-### Fixed
-
-- Skip updating `SubjectMetadataController` in `addSubjectMetadata` when the new metadata is identical to existing state ([#11156](https://github.com/MetaMask/core/pull/11156))
 
 ## [14.0.0]
 
@@ -539,8 +516,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
     All changes listed after this point were applied to this package following the monorepo conversion.
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/permission-controller@14.1.0...HEAD
-[14.1.0]: https://github.com/MetaMask/core/compare/@metamask/permission-controller@14.0.0...@metamask/permission-controller@14.1.0
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/permission-controller@14.0.0...HEAD
 [14.0.0]: https://github.com/MetaMask/core/compare/@metamask/permission-controller@13.1.1...@metamask/permission-controller@14.0.0
 [13.1.1]: https://github.com/MetaMask/core/compare/@metamask/permission-controller@13.1.0...@metamask/permission-controller@13.1.1
 [13.1.0]: https://github.com/MetaMask/core/compare/@metamask/permission-controller@13.0.0...@metamask/permission-controller@13.1.0

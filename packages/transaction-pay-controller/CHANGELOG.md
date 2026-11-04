@@ -7,139 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Quote Across perps deposits in the 6 decimals Across uses for HyperCore USDC-PERPS, instead of requesting 100 times the deposit amount ([#11270](https://github.com/MetaMask/core/pull/11270))
-  - Reject Across perps deposit quotes whose USDC-PERPS decimals differ from those used to scale the request, so the next strategy is tried instead of showing a mispriced quote.
-
-## [30.4.1]
-
-### Added
-
-- Support fiat payments for `membershipSubscription` transactions ([#11256](https://github.com/MetaMask/core/pull/11256))
-  - Add `membershipSubscription` to the default fiat-enabled transaction types and fiat asset map.
-  - Treat `membershipSubscription` as a Money Account deposit, so it uses the direct mUSD on-ramp when `directMoneyMusdEnabled` is set, and CHOMP vault recovery on the second leg.
-
-## [30.4.0]
-
-### Added
-
-- Add optional `clientId` constructor option to `TransactionPayController`, sent as the `X-Client-Id` header on all intents API requests so the server can distinguish Mobile from Extension traffic ([#11259](https://github.com/MetaMask/core/pull/11259))
-  - Add `TransactionPayClientId` enum with `Extension` and `Mobile` members.
-  - Add `TransactionPayController:getClientId` messenger action and the corresponding `TransactionPayControllerGetClientIdAction` type.
-  - The header is omitted when `clientId` is not provided, so existing consumers are unaffected.
-
-### Changed
-
-- Bump `@metamask/assets-controller` from `^20.1.0` to `^20.2.0` ([#11255](https://github.com/MetaMask/core/pull/11255))
-
-## [30.3.3]
-
-### Changed
-
-- Bump `@metamask/ramps-controller` from `^28.1.0` to `^29.0.0` ([#11248](https://github.com/MetaMask/core/pull/11248))
-
-## [30.3.2]
-
-### Changed
-
-- Bump `@metamask/transaction-controller` from `^72.2.1` to `^73.0.0` ([#11154](https://github.com/MetaMask/core/pull/11154), [#11203](https://github.com/MetaMask/core/pull/11203))
-- Bump `@metamask/assets-controller` from `^20.0.0` to `^20.1.0` ([#11157](https://github.com/MetaMask/core/pull/11157), [#11196](https://github.com/MetaMask/core/pull/11196), [#11203](https://github.com/MetaMask/core/pull/11203))
-- Bump `@metamask/ramps-controller` from `^28.0.0` to `^28.1.0` ([#11175](https://github.com/MetaMask/core/pull/11175))
-- Use shared recipient resolution for Relay and Server quotes ([#10887](https://github.com/MetaMask/core/pull/10887))
-- Use shared Hyperliquid perps logic in all strategies, detecting deposits from calldata rather than transaction type ([#11026](https://github.com/MetaMask/core/pull/11026))
-
-### Fixed
-
-- Fix Hyperliquid perps deposit detection and withdrawal decimals in `ServerStrategy` ([#11026](https://github.com/MetaMask/core/pull/11026))
-
-## [30.3.1]
-
-### Changed
-
-- Bump `@metamask/ramps-controller` from `^27.2.0` to `^28.0.0` ([#11141](https://github.com/MetaMask/core/pull/11141))
-
-## [30.3.0]
-
-### Added
-
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
-### Changed
-
-- Read `mode` from the `TransactionController:estimateGasBatch` result to detect a combined EIP-7702 gas limit, instead of inferring it from the number of gas limits, falling back to the number of gas limits if `mode` is missing ([#10790](https://github.com/MetaMask/core/pull/10790))
-- Bump `@metamask/ramps-controller` from `^27.1.0` to `^27.2.0` ([#11092](https://github.com/MetaMask/core/pull/11092))
-- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
-- Bump `@metamask/assets-controller` from `^19.1.0` to `^20.0.0` ([#11115](https://github.com/MetaMask/core/pull/11115))
-
-### Fixed
-
-- Stop copying the outer EIP-7702 gas limit into the `gas` of each nested transaction when submitting a Server quote as an EIP-7702 batch, as nested gas is not supported in EIP-7702 batches ([#10790](https://github.com/MetaMask/core/pull/10790))
-
-## [30.2.0]
-
-### Added
-
-- Support Predict withdraw in `ServerStrategy` ([#10702](https://github.com/MetaMask/core/pull/10702))
-  - Polymarket deposit wallet withdrawals unwrap directly to a provider deposit address, then sweep any leftover or refunded USDC.e back into the deposit wallet.
-  - Polymarket deposit wallet withdrawals have no source network fee, as the Polymarket relayer pays origin gas.
-  - Non-atomic post-quote payment overrides, such as withdrawing to a Money Account, settle on the override recipient and run the override calls as a second leg.
-  - Post-quote quotes honour `refundTo`, include the original transaction in gas estimation, and reserve the gas fee token cost from the source amount.
-
-### Changed
-
-- Stop publishing the `tests/messenger-mock` test helper, which was never reachable through the package's `exports` field ([#10916](https://github.com/MetaMask/core/pull/10916))
-- Bump `@metamask/transaction-controller` from `^72.2.0` to `^72.2.1` ([#10817](https://github.com/MetaMask/core/pull/10817))
-- Bump `@metamask/accounts-controller` from `^40.0.0` to `^40.1.0` ([#10851](https://github.com/MetaMask/core/pull/10851))
-- Bump `@metamask/keyring-controller` from `^28.1.0` to `^28.2.0` ([#10851](https://github.com/MetaMask/core/pull/10851))
-- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-- Bump `@metamask/network-controller` from `^37.0.1` to `^37.1.1` ([#10864](https://github.com/MetaMask/core/pull/10864), [#10982](https://github.com/MetaMask/core/pull/10982))
-- Bump `@metamask/assets-controller` from `^19.0.0` to `^19.1.0` ([#10876](https://github.com/MetaMask/core/pull/10876))
-- Bump `@metamask/ramps-controller` from `^27.0.1` to `^27.1.0` ([#10925](https://github.com/MetaMask/core/pull/10925), [#10985](https://github.com/MetaMask/core/pull/10985))
-
-### Fixed
-
-- Prefer the checksummed `AssetsController` asset ID over a lowercase duplicate when resolving token metadata, balances, and prices ([#10967](https://github.com/MetaMask/core/pull/10967))
-  - A stale lowercase `assetsInfo` entry without price data previously shadowed the checksummed entry for lowercase token addresses, dropping the token from required tokens so no quote was requested.
-  - Lowercase-only matches are no longer cached, so the checksummed entry is picked up once indexed.
-
-## [30.1.0]
-
-### Added
-
-- Support submitting target calls as a separate second leg when the quote provider cannot execute them ([#10501](https://github.com/MetaMask/core/pull/10501))
-  - Add `requiresSecondLeg` to `TransactionPayQuote`.
-  - `ServerStrategy` now supports non-atomic requests.
-  - Non-atomic quotes settle funds on the account that executes the calls.
-
-### Changed
-
-- Bump `@metamask/transaction-controller` from `^72.1.0` to `^72.2.0` ([#10772](https://github.com/MetaMask/core/pull/10772))
-- Fail fiat and second-leg submissions when the settled amount cannot be read from an on-chain transaction, rather than falling back to `order.cryptoAmount` or the quote minimum ([#10501](https://github.com/MetaMask/core/pull/10501))
-- Bump `@metamask/assets-controller` from `^18.0.1` to `^19.0.0` ([#10788](https://github.com/MetaMask/core/pull/10788))
-
-### Fixed
-
-- Zero source network fees for Relay quotes on Polymarket deposit-wallet Predict withdraws, as the Polymarket relayer pays origin gas ([#10501](https://github.com/MetaMask/core/pull/10501))
-- Set `isIntentComplete` on the parent transaction only after the non-atomic second leg of a Relay quote is submitted, so a failed second leg no longer leaves a failed transaction flagged as complete ([#10501](https://github.com/MetaMask/core/pull/10501))
-
-## [30.0.3]
-
-### Changed
-
-- Bump `@metamask/ramps-controller` from `^27.0.0` to `^27.0.1` ([#10767](https://github.com/MetaMask/core/pull/10767))
-
-## [30.0.2]
-
 ### Changed
 
 - Bump `@metamask/transaction-controller` from `^72.0.1` to `^72.1.0` ([#10652](https://github.com/MetaMask/core/pull/10652))
 - Bump `@metamask/assets-controller` from `^18.0.0` to `^18.0.1` ([#10658](https://github.com/MetaMask/core/pull/10658))
 - Bump `@metamask/network-controller` from `^37.0.0` to `^37.0.1` ([#10658](https://github.com/MetaMask/core/pull/10658))
-- Bump `@metamask/ramps-controller` from `^26.3.0` to `^27.0.0` ([#10759](https://github.com/MetaMask/core/pull/10759))
-- Bump `@metamask/ramps-controller` from `^26.2.0` to `^26.3.0` ([#10741](https://github.com/MetaMask/core/pull/10741))
 - Bump `@metamask/ramps-controller` from `^26.1.0` to `^26.2.0` ([#10662](https://github.com/MetaMask/core/pull/10662))
-- Bump `@metamask/sentinel-api-service` from `^2.0.0` to `^2.1.0` ([#10746](https://github.com/MetaMask/core/pull/10746))
 
 ### Fixed
 
@@ -1800,17 +1673,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#6820](https://github.com/MetaMask/core/pull/6820))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.1...HEAD
-[30.4.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.0...@metamask/transaction-pay-controller@30.4.1
-[30.4.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.3...@metamask/transaction-pay-controller@30.4.0
-[30.3.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.2...@metamask/transaction-pay-controller@30.3.3
-[30.3.2]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.1...@metamask/transaction-pay-controller@30.3.2
-[30.3.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.0...@metamask/transaction-pay-controller@30.3.1
-[30.3.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.2.0...@metamask/transaction-pay-controller@30.3.0
-[30.2.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.1.0...@metamask/transaction-pay-controller@30.2.0
-[30.1.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.0.3...@metamask/transaction-pay-controller@30.1.0
-[30.0.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.0.2...@metamask/transaction-pay-controller@30.0.3
-[30.0.2]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.0.1...@metamask/transaction-pay-controller@30.0.2
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.0.1...HEAD
 [30.0.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.0.0...@metamask/transaction-pay-controller@30.0.1
 [30.0.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@29.2.3...@metamask/transaction-pay-controller@30.0.0
 [29.2.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@29.2.2...@metamask/transaction-pay-controller@29.2.3

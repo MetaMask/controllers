@@ -7,42 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-- chore(deps): update dependency nock to v15 ([#11055](https://github.com/MetaMask/core/pull/11055))
-- test: use import.meta.dirname in Vitest configs ([#11082](https://github.com/MetaMask/core/pull/11082))
-- test: run web3auth packages on Vitest ([#10957](https://github.com/MetaMask/core/pull/10957))
-- chore: opt into Jest types per package instead of in tsconfig.base.json ([#10862](https://github.com/MetaMask/core/pull/10862))
-- chore(deps): update dependency typedoc-plugin-missing-exports to v4 ([#10762](https://github.com/MetaMask/core/pull/10762))
-- chore(deps): update dependency typedoc-plugin-missing-exports to ^2.3.0 ([#10710](https://github.com/MetaMask/core/pull/10710))
-
-### Added
-
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
-### Changed
-
-- Replace JS AES implementation with `@metamask/cryptography` ([#10659](https://github.com/MetaMask/core/pull/10659))
-- Bump `@metamask/keyring-controller` from `^28.1.0` to `^28.2.0` ([#10851](https://github.com/MetaMask/core/pull/10851))
-- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-- Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
-- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
-
-## [12.0.0]
-
-### Added
-
-- Expose `SeedlessOnboardingController:identifyIncompleteMetadataBackup` so clients can identify incomplete primary SRP metadata backups after unlocking ([#10568](https://github.com/MetaMask/core/pull/10568))
-
-### Changed
-
-- **BREAKING:** Grant `SeedlessOnboardingController` access to `AnalyticsController:trackEvent` and `KeyringController:exportSeedPhrase` ([#10568](https://github.com/MetaMask/core/pull/10568))
-  - The `SeedlessOnboardingControllerMessenger` must allow and delegate these actions.
-- Bump `@noble/curves` from `^1.9.2` to `^1.9.7` ([#10720](https://github.com/MetaMask/core/pull/10720))
-
 ## [11.0.1]
 
 ### Changed
@@ -485,8 +449,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `checkIsPasswordOutdated`: Check if the password is current device is outdated, i.e. user changed password in another device.
     - `clearState`: Reset the state of the controller to the defaults.
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/seedless-onboarding-controller@12.0.0...HEAD
-[12.0.0]: https://github.com/MetaMask/core/compare/@metamask/seedless-onboarding-controller@11.0.1...@metamask/seedless-onboarding-controller@12.0.0
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/seedless-onboarding-controller@11.0.1...HEAD
 [11.0.1]: https://github.com/MetaMask/core/compare/@metamask/seedless-onboarding-controller@11.0.0...@metamask/seedless-onboarding-controller@11.0.1
 [11.0.0]: https://github.com/MetaMask/core/compare/@metamask/seedless-onboarding-controller@10.1.1...@metamask/seedless-onboarding-controller@11.0.0
 [10.1.1]: https://github.com/MetaMask/core/compare/@metamask/seedless-onboarding-controller@10.1.0...@metamask/seedless-onboarding-controller@10.1.1

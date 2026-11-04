@@ -7,42 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-- chore: remove pre-migration changelog entries ([#11237](https://github.com/MetaMask/core/pull/11237))
-- test: use import.meta.dirname in Vitest configs ([#11082](https://github.com/MetaMask/core/pull/11082))
-- test: run network-controller on Vitest ([#10873](https://github.com/MetaMask/core/pull/10873))
-- test: run core-platform-rpc packages on Vitest ([#10975](https://github.com/MetaMask/core/pull/10975))
-- chore: remove redundant target overrides from package tsconfigs ([#10863](https://github.com/MetaMask/core/pull/10863))
-- chore: opt into Jest types per package instead of in tsconfig.base.json ([#10862](https://github.com/MetaMask/core/pull/10862))
-- chore(deps): update dependency typedoc-plugin-missing-exports to v4 ([#10762](https://github.com/MetaMask/core/pull/10762))
-- chore(deps): update dependency typedoc-plugin-missing-exports to ^2.3.0 ([#10710](https://github.com/MetaMask/core/pull/10710))
-- chore(deps): update dependency typedoc to ^0.28.20 ([#10731](https://github.com/MetaMask/core/pull/10731))
-- chore: replace `tsx` with plain Node ([#10564](https://github.com/MetaMask/core/pull/10564))
-- refactor: rewrite `.js` imports in `scripts` folder to `.ts` ([#10537](https://github.com/MetaMask/core/pull/10537))
-- chore(deps): update jestjs-jest to ^30.5.2 ([#10514](https://github.com/MetaMask/core/pull/10514))
-- chore(deps): update dependency ts-jest to ^29.4.14 ([#10509](https://github.com/MetaMask/core/pull/10509))
-- chore(lint): apply automatic lint fixes ([#10346](https://github.com/MetaMask/core/pull/10346))
-- fix(deps): update dependency deepmerge to ^4.3.1 ([#10437](https://github.com/MetaMask/core/pull/10437))
-- chore(deps): update dependency tsx to ^4.23.15 ([#10434](https://github.com/MetaMask/core/pull/10434))
-- chore(deps): update dependency tsx to ^4.23.13 ([#10369](https://github.com/MetaMask/core/pull/10369))
-- chore(deps): update dependency rimraf to v6 ([#10379](https://github.com/MetaMask/core/pull/10379))
-- chore(deps): update dependency @metamask/auto-changelog to ^6.2.1 ([#10364](https://github.com/MetaMask/core/pull/10364))
-- chore(deps): update dependency ts-jest to ^29.4.12 ([#10328](https://github.com/MetaMask/core/pull/10328))
-- chore(deps): update dependency rimraf to ^5.0.10 ([#10327](https://github.com/MetaMask/core/pull/10327))
-- Update lint:tsc to run against all packages & remove it from CI ([#10215](https://github.com/MetaMask/core/pull/10215))
-- chore: integrate `@metamask/utils` into `packages/` ([#10185](https://github.com/MetaMask/core/pull/10185))
-
-### Added
-
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
 ### Changed
 
-- Bump `@metamask/utils` from `^11.12.0` to `^12.0.1` ([#10192](https://github.com/MetaMask/core/pull/10192), [#11107](https://github.com/MetaMask/core/pull/11107))
+- Bump `@metamask/utils` from `^11.12.0` to `^12.0.0` ([#10192](https://github.com/MetaMask/core/pull/10192))
 
 ## [9.0.0]
 
@@ -178,16 +145,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- This package was migrated from `MetaMask/json-rpc-middleware-stream` to the
-  `MetaMask/core` monorepo ([#1762](https://github.com/MetaMask/core/pull/1762))
-  - See [`MetaMask/json-rpc-middleware-stream`](https://github.com/MetaMask/json-rpc-middleware-stream/blob/main/CHANGELOG.md)
-    for the original changelog.
+- Migrate `@metamask/json-rpc-engine` into the core monorepo ([#1762](https://github.com/MetaMask/core/pull/1762))
 
 ## Changed
 
 - **BREAKING**: Rename package from `json-rpc-middleware-stream` to `@metamask/json-rpc-middleware-stream` ([#1762](https://github.com/MetaMask/core/pull/1762))
 - Bump `@metamask/json-rpc-engine` from `^7.1.0` to `^7.2.0` ([#1762](https://github.com/MetaMask/core/pull/1762))
 - Bump `@metamask/utils` from `^8.1.0` to `^8.2.0` ([#1762](https://github.com/MetaMask/core/pull/1762))
+
+## [5.0.1]
+
+### Changed
+
+- Upgrade typescript version to 4.8.4 ([#68](https://github.com/MetaMask/json-rpc-middleware-stream/pull/68))
+
+## [5.0.0]
+
+### Changed
+
+- **BREAKING**: Increase minimum Node.js version to 16 ([#59](https://github.com/MetaMask/json-rpc-middleware-stream/pull/59))
+- **BREAKING**: Update `readable-stream` from `^2.3.3` to `^3.6.2` ([#55](https://github.com/MetaMask/json-rpc-middleware-stream/pull/55))
+- **BREAKING**: Switch from legacy `json-rpc-engine`@`^6.1.0` to `@metamask/json-rpc-engine`@`^7.1.1` ([#54](https://github.com/MetaMask/json-rpc-middleware-stream/pull/54))
+- Add dependency `@metamask/utils` ([#54](https://github.com/MetaMask/json-rpc-middleware-stream/pull/54))
+
+## [4.2.3]
+
+### Fixed
+
+- Moved json-rpc-engine from devDependencies to dependencies ([#56](https://github.com/MetaMask/json-rpc-middleware-stream/pull/56))
+
+## [4.2.2]
+
+### Changed
+
+- Bump @metamask/safe-event-emitter from 2.0.0 to 3.0.0 ([#44](https://github.com/MetaMask/json-rpc-middleware-stream/pull/44))
+
+### Fixed
+
+- Fix race condition in `createStreamMiddleware` ([#47](https://github.com/MetaMask/json-rpc-middleware-stream/pull/47))
+  - Previously this middleware would fail to process synchronous responses on initialized streams
+
+## [4.2.1]
+
+### Fixed
+
+- Add early return in createStreamMiddleware.processsResponse method if JSON RPC request is not found ([#35](https://github.com/MetaMask/json-rpc-middleware-stream/pull/35))
+
+## [4.2.0]
+
+### Changed
+
+- Change error throw when response is seen for unknown request into warning displayed in console ([#32](https://github.com/MetaMask/json-rpc-middleware-stream/pull/32))
+
+## [4.1.0]
+
+### Changed
+
+- Added retry limit of 3 to requests ([#30](https://github.com/MetaMask/json-rpc-middleware-stream/pull/30))
+
+## [4.0.0] - 2022-10-03
+
+### Changed
+
+- BREAKING: Add Node 12 as minimum required version [#15](https://github.com/MetaMask/json-rpc-middleware-stream/pull/15)
+- Retry pending requests when notification to reconnect is received ([#27](https://github.com/MetaMask/json-rpc-middleware-stream/pull/27))
+
+### Security
+
+- Add `@lavamoat/allow-scripts` to make dependency install scripts opt-in ([#25](https://github.com/MetaMask/json-rpc-middleware-stream/pull/25))
+
+## [3.0.0] - 2020-12-08
+
+### Added
+
+- TypeScript typings ([#11](https://github.com/MetaMask/json-rpc-middleware-stream/pull/11))
 
 [Unreleased]: https://github.com/MetaMask/core/compare/@metamask/json-rpc-middleware-stream@9.0.0...HEAD
 [9.0.0]: https://github.com/MetaMask/core/compare/@metamask/json-rpc-middleware-stream@8.0.8...@metamask/json-rpc-middleware-stream@9.0.0
@@ -205,4 +236,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [7.0.0]: https://github.com/MetaMask/core/compare/@metamask/json-rpc-middleware-stream@6.0.2...@metamask/json-rpc-middleware-stream@7.0.0
 [6.0.2]: https://github.com/MetaMask/core/compare/@metamask/json-rpc-middleware-stream@6.0.1...@metamask/json-rpc-middleware-stream@6.0.2
 [6.0.1]: https://github.com/MetaMask/core/compare/@metamask/json-rpc-middleware-stream@6.0.0...@metamask/json-rpc-middleware-stream@6.0.1
-[6.0.0]: https://github.com/MetaMask/core/releases/tag/@metamask/json-rpc-middleware-stream@6.0.0
+[6.0.0]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@5.0.1...@metamask/json-rpc-middleware-stream@6.0.0
+[5.0.1]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@5.0.0...json-rpc-middleware-stream@5.0.1
+[5.0.0]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@4.2.3...json-rpc-middleware-stream@5.0.0
+[4.2.3]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@4.2.2...json-rpc-middleware-stream@4.2.3
+[4.2.2]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@4.2.1...json-rpc-middleware-stream@4.2.2
+[4.2.1]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@4.2.0...json-rpc-middleware-stream@4.2.1
+[4.2.0]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@4.1.0...json-rpc-middleware-stream@4.2.0
+[4.1.0]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@4.0.0...json-rpc-middleware-stream@4.1.0
+[4.0.0]: https://github.com/MetaMask/core/compare/json-rpc-middleware-stream@3.0.0...json-rpc-middleware-stream@4.0.0
+[3.0.0]: https://github.com/MetaMask/core/releases/tag/json-rpc-middleware-stream@3.0.0

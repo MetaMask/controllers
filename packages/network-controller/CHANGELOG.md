@@ -7,49 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- ci: validate all changelogs in a single run ([#11199](https://github.com/MetaMask/core/pull/11199))
-- test(network-controller): make the concurrent onDegraded test independent of Node.js timing ([#11186](https://github.com/MetaMask/core/pull/11186))
-- test: remove the nock 13 compatibility code from the nock test helpers ([#11172](https://github.com/MetaMask/core/pull/11172))
-- test: assert only the native fetch error messages on nock 15 ([#11171](https://github.com/MetaMask/core/pull/11171))
-- chore(deps): update dependency nock to v15 ([#11055](https://github.com/MetaMask/core/pull/11055))
-- test: make nock tests independent of node-fetch in network, assets and transaction controllers ([#11132](https://github.com/MetaMask/core/pull/11132))
-- test: use the nock default export instead of named imports ([#11138](https://github.com/MetaMask/core/pull/11138))
-- test: use import.meta.dirname in Vitest configs ([#11082](https://github.com/MetaMask/core/pull/11082))
-- test: run network-controller on Vitest ([#10873](https://github.com/MetaMask/core/pull/10873))
-
-### Added
-
-- Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
-
-### Changed
-
-- Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.1.0` ([#11072](https://github.com/MetaMask/core/pull/11072))
-- Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
-- Bump `uuid` from `^11.1.1` to `^14.0.1` ([#10941](https://github.com/MetaMask/core/pull/10941), [#11179](https://github.com/MetaMask/core/pull/11179))
-
-## [37.1.1]
-
-### Changed
-
-- Bump `@metamask/eth-json-rpc-middleware` from `^25.0.0` to `^26.0.0` ([#10982](https://github.com/MetaMask/core/pull/10982))
-
-## [37.1.0]
-
-### Added
-
-- Add a static `struct` that describes the controller state ([#10023](https://github.com/MetaMask/core/pull/10023))
-
-### Changed
-
-- Bump `reselect` from `^5.1.1` to `^5.3.0` ([#10532](https://github.com/MetaMask/core/pull/10532))
-- Bump `loglevel` from `^1.8.1` to `^1.9.2` ([#10724](https://github.com/MetaMask/core/pull/10724))
-- Bump `@metamask/rpc-errors` from `^7.0.2` to `^7.0.3` ([#10718](https://github.com/MetaMask/core/pull/10718))
-- Bump `@metamask/base-controller` from `^10.0.0` to `^10.1.0` ([#10864](https://github.com/MetaMask/core/pull/10864))
-
 ## [37.0.1]
 
 ### Changed
@@ -1357,9 +1314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
     All changes listed after this point were applied to this package following the monorepo conversion.
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/network-controller@37.1.1...HEAD
-[37.1.1]: https://github.com/MetaMask/core/compare/@metamask/network-controller@37.1.0...@metamask/network-controller@37.1.1
-[37.1.0]: https://github.com/MetaMask/core/compare/@metamask/network-controller@37.0.1...@metamask/network-controller@37.1.0
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/network-controller@37.0.1...HEAD
 [37.0.1]: https://github.com/MetaMask/core/compare/@metamask/network-controller@37.0.0...@metamask/network-controller@37.0.1
 [37.0.0]: https://github.com/MetaMask/core/compare/@metamask/network-controller@36.0.0...@metamask/network-controller@37.0.0
 [36.0.0]: https://github.com/MetaMask/core/compare/@metamask/network-controller@35.0.1...@metamask/network-controller@36.0.0
