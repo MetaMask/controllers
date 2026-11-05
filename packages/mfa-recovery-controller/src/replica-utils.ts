@@ -14,6 +14,8 @@ type RepairPlan = {
 };
 
 /**
+ * Ensures every escrow is at the same version before a read or mutation.
+ *
  * @param replicas - Escrow reads.
  * @throws `replica_lagging` when the escrows are at different versions.
  */
@@ -77,7 +79,10 @@ export async function planRepair(
     replicas.map(async ({ identifiers }) => await hash(identifiers)),
   );
   if (new Set(hashes.filter((_, index) => !lagging[index])).size > 1) {
-    throw new MfaRecoveryError('Replica corruption', 'replica_corruption');
+    throw new MfaRecoveryError(
+      'Escrows at the highest version have different identifiers',
+      'replica_corruption',
+    );
   }
   const leader = replicas[lagging.indexOf(false)];
   return {
