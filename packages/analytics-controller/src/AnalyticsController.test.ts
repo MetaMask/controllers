@@ -6311,6 +6311,11 @@ describe('AnalyticsController', () => {
 
     async function setupTrackingController(
       state: Partial<AnalyticsControllerState> = {},
+      {
+        isPreConsentQueueEnabled = false,
+      }: {
+        isPreConsentQueueEnabled?: boolean;
+      } = {},
     ): Promise<
       SetupControllerReturn & {
         platformAdapter: MockAnalyticsPlatformAdapter;
@@ -6326,6 +6331,7 @@ describe('AnalyticsController', () => {
         },
         platformAdapter,
         isGeolocationEnabled: false,
+        isPreConsentQueueEnabled,
       });
 
       return { ...setup, platformAdapter };
@@ -6777,6 +6783,48 @@ describe('AnalyticsController', () => {
 
         expect(platformAdapter.track).toHaveBeenCalledTimes(1);
         expectErrorOccurred(platformAdapter, 'boom');
+      });
+
+      it('queues Error Occurred while consent is undecided and delivers it on opt-in', async () => {
+        const { controller, platformAdapter } = await setupTrackingController(
+          {
+            optedIn: false,
+            consentDecisionMade: false,
+          },
+          { isPreConsentQueueEnabled: true },
+        );
+
+        controller.trackErrorAsAnalytics(new Error('boom'), { source });
+
+        expect(platformAdapter.track).not.toHaveBeenCalled();
+        const { preConsentEventQueue } = controller.state;
+        expect(preConsentEventQueue).toBeDefined();
+        const queuedEvents = Object.values(
+          preConsentEventQueue as NonNullable<typeof preConsentEventQueue>,
+        );
+        expect(queuedEvents).toHaveLength(1);
+        expect(queuedEvents[0]).toMatchObject({
+          type: 'track',
+          eventName: ERROR_OCCURRED_EVENT_NAME,
+          properties: {
+            source,
+            error_message: 'boom',
+          },
+        });
+
+        await controller.optIn();
+
+        expect(controller.state.preConsentEventQueue).toStrictEqual({});
+        expect(platformAdapter.track).toHaveBeenCalledTimes(1);
+        expect(platformAdapter.track).toHaveBeenCalledWith(
+          ERROR_OCCURRED_EVENT_NAME,
+          {
+            source,
+            error_message: 'boom',
+          },
+          withPurposeConsent({ product: true, marketing: false }),
+          expect.objectContaining({ messageId: expect.any(String) }),
+        );
       });
     });
 
