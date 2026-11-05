@@ -319,6 +319,7 @@ describe('MoneyAccountLifecycleController', () => {
         });
 
         expect(await controller.startMigration()).toBeUndefined();
+        expect(mocks.startFundsTransfer).not.toHaveBeenCalled();
         expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
       });
     });
@@ -331,6 +332,40 @@ describe('MoneyAccountLifecycleController', () => {
           .mockResolvedValueOnce({ identities: [MIGRATING_IDENTITY] });
         const error = new Error('PREMIUM_ELIGIBILITY_NOT_TRANSFERRED');
         mocks.registerMigrationIntents.mockRejectedValueOnce(error);
+
+        await expect(controller.startMigration()).rejects.toThrow(error);
+        expect(mocks.startFundsTransfer).not.toHaveBeenCalled();
+        expect(getLifecycle(controller)).toStrictEqual({
+          type: 'migrating',
+          identity: MIGRATING_IDENTITY,
+        });
+      });
+    });
+
+    it('starts the funds transfer of the money account once the migration intents are registered', async () => {
+      await withController(async ({ controller, mocks }) => {
+        await controller.startMigration();
+
+        expect(mocks.startFundsTransfer).toHaveBeenCalledTimes(1);
+        expect(mocks.startFundsTransfer).toHaveBeenCalledWith(
+          MONEY_ACCOUNT_ADDRESS,
+        );
+        expect(
+          mocks.startFundsTransfer.mock.invocationCallOrder[0],
+        ).toBeGreaterThan(
+          mocks.registerMigrationIntents.mock.invocationCallOrder[0],
+        );
+      });
+    });
+
+    it('records the migrating lifecycle before throwing when starting the funds transfer fails', async () => {
+      await withController(async ({ controller, mocks }) => {
+        mocks.getDerivedIdentities
+          .mockResolvedValueOnce({ identities: [SFA_IDENTITY] })
+          .mockResolvedValueOnce({ identities: [SFA_IDENTITY] })
+          .mockResolvedValueOnce({ identities: [MIGRATING_IDENTITY] });
+        const error = new Error('MIGRATION_STEPS_INCOMPLETE');
+        mocks.startFundsTransfer.mockRejectedValueOnce(error);
 
         await expect(controller.startMigration()).rejects.toThrow(error);
         expect(getLifecycle(controller)).toStrictEqual({
@@ -547,6 +582,7 @@ describe('MoneyAccountLifecycleController', () => {
 
           await expect(controller.startMigration()).rejects.toThrow(error);
           expect(mocks.registerMigrationIntents).not.toHaveBeenCalled();
+          expect(mocks.startFundsTransfer).not.toHaveBeenCalled();
           expect(getLifecycle(controller)).toStrictEqual({
             type: 'migrating',
             identity: MIGRATING_IDENTITY,

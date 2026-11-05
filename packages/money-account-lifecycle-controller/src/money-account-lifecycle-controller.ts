@@ -6,6 +6,7 @@ import type {
 import { BaseController } from '@metamask/base-controller';
 import type {
   ChompApiServiceGetDerivedIdentitiesAction,
+  ChompApiServiceStartFundsTransferAction,
   DerivedIdentitiesResponse,
   DerivedIdentity,
   DerivedIdentityMigration,
@@ -127,6 +128,7 @@ export type MoneyAccountLifecycleControllerActions =
 
 type AllowedActions =
   | ChompApiServiceGetDerivedIdentitiesAction
+  | ChompApiServiceStartFundsTransferAction
   | KeyringControllerGetStateAction
   | MoneyAccountControllerCreateMoneyAccountAction
   | MoneyAccountControllerGetMoneyAccountAction
@@ -441,8 +443,7 @@ export class MoneyAccountLifecycleController extends BaseController<
    * the successor of the Money Account and upgrades it, which starts the
    * migration on CHOMP and freezes the Money Account until it completes, and
    * registers the intents the Money Account signs for the migration. Both
-   * only do the work CHOMP reports missing. CHOMP moves the funds once every
-   * step is complete.
+   * only do the work CHOMP reports missing.
    *
    * Before registering those intents, an active Money Account Plus
    * subscription paid by the Money Account is moved to the MFA address,
@@ -451,13 +452,17 @@ export class MoneyAccountLifecycleController extends BaseController<
    * subscription delegation, which also registers its subscription intent,
    * and becomes the payer of the subscription.
    *
+   * Finally, asks CHOMP to start moving the funds of the Money Account to the
+   * MFA address. From then on, the migration can no longer be cancelled.
+   * CHOMP refuses while a step is missing, for example while the MFA address
+   * is not yet monitored, and calling this again starts the transfer then.
+   *
    * Identities are then refetched, so the recorded lifecycle becomes
-   * `migrating`, even when moving the subscription or registering the intents
-   * fails.
+   * `migrating`, even when any of these steps fails.
    *
    * @throws If a migration or Money Account upgrade is already in flight, the
-   * checks fail, or linking the successor, moving the subscription or
-   * registering the intents fails.
+   * checks fail, or linking the successor, moving the subscription,
+   * registering the intents or starting the funds transfer fails.
    */
   async startMigration(): Promise<void> {
     if (this.#isMigrationInFlight) {
@@ -515,6 +520,13 @@ export class MoneyAccountLifecycleController extends BaseController<
       }
       await this.messenger.call(
         'MoneyAccountUpgradeController:registerMigrationIntents',
+        moneyAccountAddress,
+      );
+      if (!this.#isReady()) {
+        return;
+      }
+      await this.messenger.call(
+        'ChompApiService:startFundsTransfer',
         moneyAccountAddress,
       );
     } finally {
