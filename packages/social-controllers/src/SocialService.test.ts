@@ -98,14 +98,28 @@ function getRootMessenger(): RootMessenger {
   return new Messenger({ namespace: MOCK_ANY_NAMESPACE });
 }
 
+/**
+ * A JWT-shaped token whose payload carries `sub`, as the signed-in user's bearer
+ * token does. The signature is not checked by the service.
+ *
+ * @param sub - The subject to put in the token.
+ * @returns The token.
+ */
+function jwtWithSub(sub: string): string {
+  const encode = (value: object): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none' })}.${encode({ sub })}.signature`;
+}
+
 function createMessenger(
   rootMessenger?: RootMessenger,
+  token: string = MOCK_TOKEN,
 ): SocialServiceMessenger {
   const root = rootMessenger ?? getRootMessenger();
 
   root.registerActionHandler(
     'AuthenticationController:getBearerToken',
-    async () => MOCK_TOKEN,
+    async () => token,
   );
 
   const serviceMessenger: SocialServiceMessenger = new Messenger({
@@ -122,9 +136,10 @@ function createMessenger(
 }
 
 function createService(
-  options: { messenger?: SocialServiceMessenger } = {},
+  options: { messenger?: SocialServiceMessenger; token?: string } = {},
 ): SocialService {
-  const messenger = options.messenger ?? createMessenger();
+  const messenger =
+    options.messenger ?? createMessenger(undefined, options.token);
   return new SocialService({ messenger, baseUrl: BASE_URL });
 }
 
@@ -1290,6 +1305,570 @@ describe('SocialService', () => {
       await service.fetchTraderFollowing({ addressOrId: '0x1234' });
 
       expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('viewer-aware trader methods', () => {
+    const OWNER_SUB = '550e8400-e29b-41d4-a716-446655440000';
+    const OTHER_SUB = '11111111-2222-4333-8444-555555555555';
+    const ownerToken = jwtWithSub(OWNER_SUB);
+    const otherToken = jwtWithSub(OTHER_SUB);
+    const ownerAuth = { headers: { Authorization: `Bearer ${ownerToken}` } };
+    const otherAuth = { headers: { Authorization: `Bearer ${otherToken}` } };
+
+    const mockOwnProfile = {
+      profile: {
+        profileId: OWNER_SUB,
+        address: '',
+        allAddresses: [],
+        name: 'TraderAlice',
+      },
+      stats: {},
+      perChainBreakdown: {
+        perChainPnl: {},
+        perChainRoi: {},
+        perChainVolume: {},
+      },
+      socialHandles: mockSocialHandles,
+      followerCount: 3,
+      followingCount: 1,
+      copytradedAllTime: { count: 0, volumeUSD: 0, distinctActors: 0 },
+      tradingPrivacy: 'private',
+    };
+    const mockOtherProfile = {
+      ...mockOwnProfile,
+      profile: { ...mockOwnProfile.profile, profileId: OTHER_SUB },
+      tradingPrivacy: 'public',
+    };
+
+    describe('fetchTraderProfile for the signed-in viewer', () => {
+      it('fetches the signed-in trader profile from the owner endpoint for their own profile', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockOwnProfile),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchTraderProfile({ addressOrId: OWNER_SUB });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/profile`,
+          ownerAuth,
+        );
+      });
+
+      it('matches the signed-in profile ID regardless of case', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockOwnProfile),
+        });
+
+        const service = createService({
+          token: jwtWithSub(OWNER_SUB.toUpperCase()),
+        });
+        await service.fetchTraderProfile({ addressOrId: OWNER_SUB });
+
+        expect(mockFetch).toHaveBeenCalledWith(`${V1_URL}/traders/me/profile`, {
+          headers: {
+            Authorization: `Bearer ${jwtWithSub(OWNER_SUB.toUpperCase())}`,
+          },
+        });
+      });
+
+      it('fetches the public profile of someone else', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockOwnProfile),
+        });
+
+        const service = createService({ token: otherToken });
+        await service.fetchTraderProfile({ addressOrId: OWNER_SUB });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/${OWNER_SUB}/profile`,
+          otherAuth,
+        );
+      });
+
+      it('fetches the public profile when the token carries no subject', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockOwnProfile),
+        });
+
+        const service = createService();
+        await service.fetchTraderProfile({ addressOrId: OWNER_SUB });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/${OWNER_SUB}/profile`,
+          { headers: { Authorization: `Bearer ${MOCK_TOKEN}` } },
+        );
+      });
+
+      it.each([
+        ['an opaque token with no segments', 'opaque-token'],
+        [
+          'a payload that is not JSON',
+          `header.${Buffer.from('not json').toString('base64url')}.sig`,
+        ],
+        [
+          'a payload that is a string',
+          `header.${Buffer.from('"text"').toString('base64url')}.sig`,
+        ],
+        [
+          'a payload that is null',
+          `header.${Buffer.from('null').toString('base64url')}.sig`,
+        ],
+        [
+          'a payload with no subject',
+          `header.${Buffer.from('{"iss":"x"}').toString('base64url')}.sig`,
+        ],
+        [
+          'a payload whose subject is not a string',
+          `header.${Buffer.from('{"sub":42}').toString('base64url')}.sig`,
+        ],
+      ])('falls back to the public route for %s', async (_label, token) => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockOwnProfile),
+        });
+
+        const service = createService({ token });
+        await service.fetchTraderProfile({ addressOrId: OWNER_SUB });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/${OWNER_SUB}/profile`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+      });
+
+      it('keeps the tradingPrivacy the profile reports', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockOwnProfile),
+        });
+
+        const service = createService({ token: ownerToken });
+        const result = await service.fetchTraderProfile({
+          addressOrId: OWNER_SUB,
+        });
+
+        expect(result.tradingPrivacy).toBe('private');
+      });
+
+      it('rejects a response for a different profile than the one requested', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockOtherProfile),
+        });
+
+        const service = createService({ token: ownerToken });
+
+        await expect(
+          service.fetchTraderProfile({ addressOrId: OWNER_SUB }),
+        ).rejects.toThrow(
+          SocialServiceErrorMessage.FETCH_TRADER_PROFILE_MISMATCH,
+        );
+      });
+
+      it('throws on a non-ok owner profile response', async () => {
+        mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+        const service = createService({ token: ownerToken });
+
+        await expect(
+          service.fetchTraderProfile({ addressOrId: OWNER_SUB }),
+        ).rejects.toThrow(
+          `${SocialServiceErrorMessage.FETCH_TRADER_PROFILE_FAILED}: 404`,
+        );
+      });
+
+      it('throws when the owner profile schema is invalid', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ profile: 'not-an-object' }),
+        });
+
+        const service = createService({ token: ownerToken });
+
+        await expect(
+          service.fetchTraderProfile({ addressOrId: OWNER_SUB }),
+        ).rejects.toThrow(
+          SocialServiceErrorMessage.FETCH_TRADER_PROFILE_INVALID_RESPONSE,
+        );
+      });
+    });
+
+    describe('fetchOpenPositions for the signed-in viewer', () => {
+      it('fetches the signed-in trader open positions from the v2 owner endpoint', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ positions: [], pagination: { hasMore: false } }),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchOpenPositions({
+          addressOrId: OWNER_SUB,
+          chain: 'base',
+          limit: 20,
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V2_URL}/traders/me/positions/open?chain=base&limit=20`,
+          ownerAuth,
+        );
+      });
+
+      it('fetches the open positions of someone else from the public v2 endpoint', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ positions: [], pagination: { hasMore: false } }),
+        });
+
+        const service = createService({ token: otherToken });
+        await service.fetchOpenPositions({
+          addressOrId: OWNER_SUB,
+          limit: 20,
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V2_URL}/traders/${OWNER_SUB}/positions/open?limit=20`,
+          otherAuth,
+        );
+      });
+
+      it('throws when the owner open positions schema is invalid', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ positions: 'not-a-list' }),
+        });
+
+        const service = createService({ token: ownerToken });
+
+        await expect(
+          service.fetchOpenPositions({ addressOrId: OWNER_SUB }),
+        ).rejects.toThrow(
+          SocialServiceErrorMessage.FETCH_OPEN_POSITIONS_INVALID_RESPONSE,
+        );
+      });
+    });
+
+    describe('fetchClosedPositions for the signed-in viewer', () => {
+      it('fetches the signed-in trader closed positions from the v1 owner endpoint with no options', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ positions: [], pagination: { hasMore: false } }),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchClosedPositions({ addressOrId: OWNER_SUB });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/positions/closed`,
+          ownerAuth,
+        );
+      });
+
+      it('fetches the signed-in trader closed positions with a chain and limit', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ positions: [], pagination: { hasMore: false } }),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchClosedPositions({
+          addressOrId: OWNER_SUB,
+          chain: 'base',
+          limit: 5,
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/positions/closed?chain=base&limit=5`,
+          ownerAuth,
+        );
+      });
+
+      it('fetches the signed-in trader closed positions from the v1 owner endpoint', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ positions: [], pagination: { hasMore: false } }),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchClosedPositions({
+          addressOrId: OWNER_SUB,
+          sort: 'latest',
+          page: 2,
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/positions/closed?sort=latest&page=2`,
+          ownerAuth,
+        );
+      });
+
+      it('fetches the closed positions of someone else from the public v1 endpoint', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ positions: [], pagination: { hasMore: false } }),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchClosedPositions({
+          addressOrId: OTHER_SUB,
+          sort: 'latest',
+          page: 2,
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/${OTHER_SUB}/positions/closed?sort=latest&page=2`,
+          ownerAuth,
+        );
+      });
+    });
+
+    describe('fetchTraderFeed for the signed-in viewer', () => {
+      const feedBody = {
+        items: [],
+        pagination: {
+          olderCursor: 'older-cursor',
+          newerCursor: 'newer-cursor',
+        },
+      };
+
+      it('fetches the signed-in trader feed from the owner endpoint with no options', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(feedBody),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchTraderFeed({ addressOrId: OWNER_SUB });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/feed`,
+          ownerAuth,
+        );
+      });
+
+      it('fetches the signed-in trader feed from the owner endpoint with its cursors', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(feedBody),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchTraderFeed({
+          addressOrId: OWNER_SUB,
+          commentedOnly: true,
+          limit: 10,
+          olderThan: 'older-cursor',
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/feed?commentedOnly=true&limit=10&olderThan=older-cursor`,
+          ownerAuth,
+        );
+      });
+
+      it('fetches the signed-in trader feed from the owner endpoint with a newer cursor', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(feedBody),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchTraderFeed({
+          addressOrId: OWNER_SUB,
+          newerThan: 'newer-cursor',
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/feed?newerThan=newer-cursor`,
+          ownerAuth,
+        );
+      });
+
+      it('fetches the feed of someone else from the public endpoint', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(feedBody),
+        });
+
+        const service = createService({ token: otherToken });
+        await service.fetchTraderFeed({
+          addressOrId: OWNER_SUB,
+          newerThan: 'newer-cursor',
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/${OWNER_SUB}/feed?newerThan=newer-cursor`,
+          otherAuth,
+        );
+      });
+    });
+
+    describe('fetchPositionById for the signed-in viewer', () => {
+      it('fetches one of the signed-in trader positions from the owner endpoint', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockPosition),
+        });
+
+        const service = createService({ token: ownerToken });
+        const result = await service.fetchPositionById({
+          profileId: OWNER_SUB,
+          positionId: 'position-1',
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/position/position-1`,
+          ownerAuth,
+        );
+        expect(result).toStrictEqual(mockPosition);
+      });
+
+      it('fetches a position of someone else from the public endpoint', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockPosition),
+        });
+
+        const service = createService({ token: otherToken });
+        await service.fetchPositionById({
+          profileId: OWNER_SUB,
+          positionId: 'position-1',
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/position/position-1`,
+          otherAuth,
+        );
+      });
+
+      it('fetches the position from the owner route without a profile when the position is theirs', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockPosition),
+        });
+
+        const service = createService({ token: ownerToken });
+        await service.fetchPositionById({ positionId: 'position-1' });
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/position/position-1`,
+          ownerAuth,
+        );
+      });
+
+      it('falls back to the public route without a profile when the owner route does not find the position', async () => {
+        const responsesByUrl: Record<string, unknown> = {
+          [`${V1_URL}/traders/me/position/position-1`]: {
+            ok: false,
+            status: 404,
+          },
+          [`${V1_URL}/traders/position/position-1`]: {
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(mockPosition),
+          },
+        };
+        mockFetch.mockImplementation(
+          async (url: string): Promise<unknown> => responsesByUrl[url],
+        );
+
+        const service = createService({ token: otherToken });
+        const result = await service.fetchPositionById({
+          positionId: 'position-1',
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/me/position/position-1`,
+          otherAuth,
+        );
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/position/position-1`,
+          otherAuth,
+        );
+        expect(result).toStrictEqual(mockPosition);
+      });
+
+      it('goes straight to the public route without a profile when the token carries no subject', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(mockPosition),
+        });
+
+        const service = createService();
+        await service.fetchPositionById({ positionId: 'position-1' });
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(mockFetch).toHaveBeenCalledWith(
+          `${V1_URL}/traders/position/position-1`,
+          { headers: { Authorization: `Bearer ${MOCK_TOKEN}` } },
+        );
+      });
+
+      it('throws when the owner route fails for a reason other than not found', async () => {
+        mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+        const service = createService({ token: ownerToken });
+
+        await expect(
+          service.fetchPositionById({ positionId: 'position-1' }),
+        ).rejects.toThrow(
+          `${SocialServiceErrorMessage.FETCH_POSITION_BY_ID_FAILED}: 500`,
+        );
+      });
+
+      it('throws when the owner position schema is invalid', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ positionId: 42 }),
+        });
+
+        const service = createService({ token: ownerToken });
+
+        await expect(
+          service.fetchPositionById({
+            profileId: OWNER_SUB,
+            positionId: 'position-1',
+          }),
+        ).rejects.toThrow(
+          SocialServiceErrorMessage.FETCH_POSITION_BY_ID_INVALID_RESPONSE,
+        );
+      });
     });
   });
 

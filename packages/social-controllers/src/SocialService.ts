@@ -25,6 +25,8 @@ import type {
   FetchBlockedListOptions,
   FetchFeedOptions,
   FetchFollowersOptions,
+  FetchMyPositionsOptions,
+  FetchMyTraderFeedOptions,
   FetchTraderFollowingOptions,
   FetchLeaderboardOptions,
   FetchPositionByIdOptions,
@@ -76,6 +78,53 @@ import {
 // ---------------------------------------------------------------------------
 // Messenger types
 // ---------------------------------------------------------------------------
+
+/**
+ * The `sub` claim of a bearer token, or undefined when the token has none.
+ *
+ * Used only to choose a route. The token is not verified here, and the server
+ * verifies it on every request, so a wrong answer can only pick a route that
+ * returns less data, never more.
+ *
+ * @param token - The bearer token.
+ * @returns The subject, or undefined when the token is not a JWT with one.
+ */
+function readJwtSubject(token: string): string | undefined {
+  const payload = token.split('.')[1];
+  if (!payload) {
+    return undefined;
+  }
+  try {
+    const base64 = payload.replace(/-/gu, '+').replace(/_/gu, '/');
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      '=',
+    );
+    const claims: unknown = JSON.parse(atob(padded));
+    if (
+      typeof claims === 'object' &&
+      claims !== null &&
+      'sub' in claims &&
+      typeof claims.sub === 'string'
+    ) {
+      return claims.sub;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Compares two profile IDs. Profile IDs are UUIDs, which are case-insensitive.
+ *
+ * @param left - One profile ID.
+ * @param right - The other profile ID.
+ * @returns True when both are the same profile ID.
+ */
+function isSameProfileId(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
 
 const MESSENGER_EXPOSED_METHODS = [
   'fetchLeaderboard',
@@ -246,18 +295,41 @@ export class SocialService extends BaseDataService<
   }
 
   /**
-   * Fetches a trader's profile by address or profile ID.
+   * Fetches a trader's profile by address or profile ID, as the signed-in user
+   * may see it. The signed-in user's own profile comes from their own route,
+   * which includes private trading. Anyone else gets the public view, which
+   * withholds private trading. Pass the profile ID to get your own profile: a
+   * wallet address never matches the signed-in user.
+   *
+   * @param options - Options bag.
+   * @param options.addressOrId - Profile ID, or wallet address.
+   * @returns The trader profile response.
+   */
+  async fetchTraderProfile(
+    options: FetchTraderProfileOptions,
+  ): Promise<TraderProfileResponse> {
+    const { addressOrId } = options;
+    if (!(await this.#isOwnProfile(addressOrId))) {
+      return this.#fetchPublicTraderProfile(options);
+    }
+    const profile = await this.#fetchMyTraderProfile();
+    if (!isSameProfileId(profile.profile.profileId, addressOrId)) {
+      throw new Error(SocialServiceErrorMessage.FETCH_TRADER_PROFILE_MISMATCH);
+    }
+    return profile;
+  }
+
+  /**
+   * Fetches a trader's profile from the public route, without the signed-in
+   * user's own route.
    *
    * Calls `GET ${baseUrl}/traders/${addressOrId}/profile`.
-   *
-   * `profile.createdAt` is optional. When present it is an ISO-8601 timestamp
-   * for when the social-api profile row was inserted.
    *
    * @param options - Options bag.
    * @param options.addressOrId - Wallet address or Clicker profile ID.
    * @returns The trader profile response.
    */
-  async fetchTraderProfile(
+  async #fetchPublicTraderProfile(
     options: FetchTraderProfileOptions,
   ): Promise<TraderProfileResponse> {
     const { addressOrId } = options;
@@ -301,6 +373,13 @@ export class SocialService extends BaseDataService<
   async fetchOpenPositions(
     options: FetchPositionsOptions,
   ): Promise<PositionsResponse> {
+    if (await this.#isOwnProfile(options.addressOrId)) {
+      return this.#fetchMyOpenPositions({
+        chain: options.chain,
+        limit: options.limit,
+        page: options.page,
+      });
+    }
     return this.#fetchPositions('open', options);
   }
 
@@ -320,6 +399,14 @@ export class SocialService extends BaseDataService<
   async fetchClosedPositions(
     options: FetchPositionsOptions,
   ): Promise<PositionsResponse> {
+    if (await this.#isOwnProfile(options.addressOrId)) {
+      return this.#fetchMyClosedPositions({
+        chain: options.chain,
+        sort: options.sort,
+        limit: options.limit,
+        page: options.page,
+      });
+    }
     return this.#fetchPositions('closed', options);
   }
 
@@ -413,7 +500,258 @@ export class SocialService extends BaseDataService<
   }
 
   /**
-   * Fetches a single position by its unique ID.
+   * Fetches the signed-in trader's own profile, whether or not their trading is
+   * private.
+   *
+   * Calls `GET ${baseUrl}/traders/me/profile`. Requires a bearer token; the
+   * trader is identified by the token's subject. The response is never cached
+   * across requests, so one signed-in user's data is not served to another.
+   *
+   * @returns The trader profile response.
+   */
+  async #fetchMyTraderProfile(): Promise<TraderProfileResponse> {
+    const traderProfileResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:fetchMyTraderProfile`],
+      staleTime: 0,
+      queryFn: async () => {
+        const url = `${this.#v1Url}/traders/me/profile`;
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(url, { headers: authHeaders });
+        SocialService.#throwIfNotOk(
+          response,
+          SocialServiceErrorMessage.FETCH_TRADER_PROFILE_FAILED,
+        );
+        const traderProfileData = (await response.json()) as unknown;
+        if (!is(traderProfileData, TraderProfileResponseStruct)) {
+          throw new Error(
+            SocialServiceErrorMessage.FETCH_TRADER_PROFILE_INVALID_RESPONSE,
+          );
+        }
+        return traderProfileData;
+      },
+    });
+
+    return traderProfileResponse;
+  }
+
+  /**
+   * Fetches the signed-in trader's own open positions, whether or not their
+   * trading is private.
+   *
+   * Calls `GET ${baseUrl}/traders/me/positions/open` on the v2 base. Requires a
+   * bearer token.
+   *
+   * @param options - Options bag. All fields are optional.
+   * @param options.chain - Filter by chain.
+   * @param options.limit - Number of results per page.
+   * @param options.page - Page number (1-based).
+   * @returns The positions response.
+   */
+  async #fetchMyOpenPositions(
+    options: FetchMyPositionsOptions = {},
+  ): Promise<PositionsResponse> {
+    const { chain, limit, page } = options;
+    return this.#requestPositions('open', {
+      path: 'traders/me/positions/open',
+      queryKey: [
+        `${this.name}:fetchMyOpenPositions`,
+        chain ?? null,
+        limit ?? null,
+        page ?? null,
+      ],
+      query: { chain, limit, page },
+      staleTime: 0,
+    });
+  }
+
+  /**
+   * Fetches the signed-in trader's own closed positions, whether or not their
+   * trading is private.
+   *
+   * Calls `GET ${baseUrl}/traders/me/positions/closed`. Requires a bearer token.
+   *
+   * @param options - Options bag. All fields are optional.
+   * @param options.chain - Filter by chain.
+   * @param options.sort - Sort by 'value' or 'latest'.
+   * @param options.limit - Number of results per page.
+   * @param options.page - Page number (1-based).
+   * @returns The positions response.
+   */
+  async #fetchMyClosedPositions(
+    options: FetchMyPositionsOptions = {},
+  ): Promise<PositionsResponse> {
+    const { chain, sort, limit, page } = options;
+    return this.#requestPositions('closed', {
+      path: 'traders/me/positions/closed',
+      queryKey: [
+        `${this.name}:fetchMyClosedPositions`,
+        chain ?? null,
+        sort ?? null,
+        limit ?? null,
+        page ?? null,
+      ],
+      query: { chain, sort, limit, page },
+      staleTime: 0,
+    });
+  }
+
+  /**
+   * Fetches a page of the signed-in trader's own activity as feed items,
+   * whether or not their trading is private.
+   *
+   * Calls `GET ${baseUrl}/traders/me/feed`. Requires a bearer token. Cursor
+   * pagination works as for {@link fetchTraderFeed}.
+   *
+   * @param options - Options bag. All fields are optional.
+   * @param options.commentedOnly - When true, only positions with an author comment.
+   * @param options.limit - Number of results to return.
+   * @param options.olderThan - Cursor for older items.
+   * @param options.newerThan - Cursor for newer items.
+   * @returns The feed response with items and pagination cursors.
+   */
+  async #fetchMyTraderFeed(
+    options: FetchMyTraderFeedOptions = {},
+  ): Promise<FeedResponse> {
+    const traderFeedResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:fetchMyTraderFeed`, options],
+      staleTime: 0,
+      queryFn: async () => {
+        const { commentedOnly, limit, olderThan, newerThan } = options;
+        const url = new URL(`${this.#v1Url}/traders/me/feed`);
+        if (commentedOnly === true) {
+          url.searchParams.append('commentedOnly', 'true');
+        }
+        if (limit !== undefined) {
+          url.searchParams.append('limit', String(limit));
+        }
+        if (olderThan) {
+          url.searchParams.append('olderThan', olderThan);
+        }
+        if (newerThan) {
+          url.searchParams.append('newerThan', newerThan);
+        }
+
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(url.toString(), {
+          headers: authHeaders,
+        });
+        SocialService.#throwIfNotOk(
+          response,
+          SocialServiceErrorMessage.FETCH_TRADER_FEED_FAILED,
+        );
+        const feedData = (await response.json()) as unknown;
+        return parseFeedResponse(
+          feedData,
+          SocialServiceErrorMessage.FETCH_TRADER_FEED_INVALID_RESPONSE,
+        );
+      },
+    });
+
+    return traderFeedResponse;
+  }
+
+  /**
+   * Fetches one of the signed-in trader's own positions by its unique ID,
+   * whether or not their trading is private. A position that is not theirs is
+   * not found.
+   *
+   * Calls `GET ${baseUrl}/traders/me/position/${positionId}`. Requires a bearer
+   * token.
+   *
+   * @param options - Options bag.
+   * @param options.positionId - Unique position ID (UUID).
+   * @returns The position.
+   */
+  async #fetchMyPositionById(
+    options: FetchPositionByIdOptions,
+  ): Promise<Position> {
+    const { positionId } = options;
+
+    const positionResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:fetchMyPositionById`, positionId],
+      staleTime: 0,
+      queryFn: async () => {
+        const url = `${this.#v1Url}/traders/me/position/${encodeURIComponent(positionId)}`;
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(url, { headers: authHeaders });
+        SocialService.#throwIfNotOk(
+          response,
+          SocialServiceErrorMessage.FETCH_POSITION_BY_ID_FAILED,
+        );
+        const positionData = (await response.json()) as unknown;
+        if (!is(positionData, PositionStruct)) {
+          throw new Error(
+            SocialServiceErrorMessage.FETCH_POSITION_BY_ID_INVALID_RESPONSE,
+          );
+        }
+        return positionData;
+      },
+    });
+
+    return positionResponse;
+  }
+
+  /**
+   * The signed-in user's subject, read from their bearer token, or undefined
+   * when the token carries none.
+   *
+   * @returns The viewer's subject.
+   */
+  async #getViewerSub(): Promise<string | undefined> {
+    const token = await this.messenger.call(
+      'AuthenticationController:getBearerToken',
+    );
+    return readJwtSubject(token);
+  }
+
+  /**
+   * Whether `profileId` is the signed-in user's own profile.
+   *
+   * @param profileId - The profile ID to check.
+   * @returns True when the signed-in user owns the profile.
+   */
+  async #isOwnProfile(profileId: string): Promise<boolean> {
+    const viewerSub = await this.#getViewerSub();
+    return viewerSub !== undefined && isSameProfileId(viewerSub, profileId);
+  }
+
+  /**
+   * Fetches a single position by its unique ID, as the signed-in user may see
+   * it. A position the signed-in trader holds comes from their own route, which
+   * includes private trading. Pass `profileId`, the position's trader, to route
+   * directly. Without it, the signed-in user's own route is tried first, and the
+   * public route is used when that does not find the position.
+   *
+   * @param options - Options bag.
+   * @param options.positionId - Unique position ID (UUID).
+   * @param options.profileId - Profile ID of the position's trader, if known.
+   * @returns The position.
+   */
+  async fetchPositionById(
+    options: FetchPositionByIdOptions,
+  ): Promise<Position> {
+    const { positionId, profileId } = options;
+    if (profileId !== undefined) {
+      return (await this.#isOwnProfile(profileId))
+        ? this.#fetchMyPositionById({ positionId })
+        : this.#fetchPublicPositionById({ positionId });
+    }
+    const viewerSub = await this.#getViewerSub();
+    if (viewerSub === undefined) {
+      return this.#fetchPublicPositionById({ positionId });
+    }
+    try {
+      return await this.#fetchMyPositionById({ positionId });
+    } catch (error) {
+      if (error instanceof HttpError && error.httpStatus === 404) {
+        return this.#fetchPublicPositionById({ positionId });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches a single position from the public route, by its unique ID.
    *
    * Calls `GET ${baseUrl}/traders/position/${positionId}`.
    *
@@ -421,7 +759,7 @@ export class SocialService extends BaseDataService<
    * @param options.positionId - Unique position ID (UUID).
    * @returns The position.
    */
-  async fetchPositionById(
+  async #fetchPublicPositionById(
     options: FetchPositionByIdOptions,
   ): Promise<Position> {
     const { positionId } = options;
@@ -538,7 +876,26 @@ export class SocialService extends BaseDataService<
   }
 
   /**
-   * Fetches a page of one trader's activity as feed items.
+   * Fetches a page of one trader's activity as feed items, as the signed-in user
+   * may see it. The signed-in trader's own feed comes from their own route, which
+   * includes private trading. Anyone else gets the public view.
+   *
+   * @param options - Options bag.
+   * @param options.addressOrId - Profile ID, or wallet address.
+   * @returns The feed response with items and pagination cursors.
+   */
+  async fetchTraderFeed(
+    options: FetchTraderFeedOptions,
+  ): Promise<FeedResponse> {
+    const { addressOrId, ...feedOptions } = options;
+    if (await this.#isOwnProfile(addressOrId)) {
+      return this.#fetchMyTraderFeed(feedOptions);
+    }
+    return this.#fetchPublicTraderFeed(options);
+  }
+
+  /**
+   * Fetches a page of one trader's activity as feed items from the public route.
    *
    * Calls `GET ${baseUrl}/traders/${addressOrId}/feed`. Unlike {@link fetchFeed},
    * this is scoped to a single profile (open and closed positions in the feed)
@@ -561,7 +918,7 @@ export class SocialService extends BaseDataService<
    * @param options.newerThan - Cursor for newer items (refresh).
    * @returns The feed response with items and pagination cursors.
    */
-  async fetchTraderFeed(
+  async #fetchPublicTraderFeed(
     options: FetchTraderFeedOptions,
   ): Promise<FeedResponse> {
     const traderFeedResponse = await this.fetchQuery({
@@ -1422,16 +1779,8 @@ export class SocialService extends BaseDataService<
   ): Promise<PositionsResponse> {
     const { addressOrId, chain, sort, limit, page } = options;
 
-    const failedMessage =
-      status === 'open'
-        ? SocialServiceErrorMessage.FETCH_OPEN_POSITIONS_FAILED
-        : SocialServiceErrorMessage.FETCH_CLOSED_POSITIONS_FAILED;
-    const invalidMessage =
-      status === 'open'
-        ? SocialServiceErrorMessage.FETCH_OPEN_POSITIONS_INVALID_RESPONSE
-        : SocialServiceErrorMessage.FETCH_CLOSED_POSITIONS_INVALID_RESPONSE;
-
-    const positionsResponse = await this.fetchQuery({
+    return this.#requestPositions(status, {
+      path: `traders/${encodeURIComponent(addressOrId)}/positions/${status}`,
       queryKey: [
         `${this.name}:fetch${status === 'open' ? 'Open' : 'Closed'}Positions`,
         addressOrId,
@@ -1442,11 +1791,54 @@ export class SocialService extends BaseDataService<
         limit ?? null,
         page ?? null,
       ],
+      query: { chain, sort, limit, page },
+    });
+  }
+
+  /**
+   * Requests one page of positions. Open positions use the v2 base and closed
+   * positions the v1 base. `path` is relative to that base.
+   *
+   * @param status - Whether to request open or closed positions.
+   * @param request - The request to make.
+   * @param request.path - The path under the version base, e.g. `traders/me/positions/open`.
+   * @param request.queryKey - The cache key for the request.
+   * @param request.query - Filters and pagination for the request.
+   * @param request.staleTime - Overrides the cache freshness, for responses that are per-user.
+   * @returns The positions response.
+   */
+  async #requestPositions(
+    status: 'open' | 'closed',
+    request: {
+      path: string;
+      queryKey: [string, ...(string | number | null)[]];
+      query: {
+        chain?: string;
+        sort?: 'value' | 'latest';
+        limit?: number;
+        page?: number;
+      };
+      staleTime?: number;
+    },
+  ): Promise<PositionsResponse> {
+    const { path, queryKey, query, staleTime } = request;
+    const { chain, sort, limit, page } = query;
+
+    const failedMessage =
+      status === 'open'
+        ? SocialServiceErrorMessage.FETCH_OPEN_POSITIONS_FAILED
+        : SocialServiceErrorMessage.FETCH_CLOSED_POSITIONS_FAILED;
+    const invalidMessage =
+      status === 'open'
+        ? SocialServiceErrorMessage.FETCH_OPEN_POSITIONS_INVALID_RESPONSE
+        : SocialServiceErrorMessage.FETCH_CLOSED_POSITIONS_INVALID_RESPONSE;
+
+    const positionsResponse = await this.fetchQuery({
+      queryKey,
+      ...(staleTime === undefined ? {} : { staleTime }),
       queryFn: async () => {
         const baseUrl = status === 'open' ? this.#v2Url : this.#v1Url;
-        const url = new URL(
-          `${baseUrl}/traders/${encodeURIComponent(addressOrId)}/positions/${status}`,
-        );
+        const url = new URL(`${baseUrl}/${path}`);
         if (chain) {
           url.searchParams.append('chain', chain);
         }
