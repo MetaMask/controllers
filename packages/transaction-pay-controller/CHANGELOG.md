@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [30.4.3]
+
 ### Changed
 
 - Bump `@metamask/assets-controller` from `^20.2.1` to `^20.2.2` ([#11300](https://github.com/MetaMask/core/pull/11300))
@@ -1825,7 +1827,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#6820](https://github.com/MetaMask/core/pull/6820))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.2...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.3...HEAD
+[30.4.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.2...@metamask/transaction-pay-controller@30.4.3
 [30.4.2]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.1...@metamask/transaction-pay-controller@30.4.2
 [30.4.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.0...@metamask/transaction-pay-controller@30.4.1
 [30.4.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.3...@metamask/transaction-pay-controller@30.4.0
