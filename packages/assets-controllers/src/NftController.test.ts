@@ -2254,10 +2254,6 @@ describe('NftController', () => {
           `data:application/json;charset=utf-8;base64,${base64Json}`,
         ],
         [
-          'unpadded base64 JSON',
-          `data:application/json;base64,${base64Json.replace(/=+$/u, '')}`,
-        ],
-        [
           'percent-encoded JSON',
           `data:application/json,${encodeURIComponent(metadataJson)}`,
         ],

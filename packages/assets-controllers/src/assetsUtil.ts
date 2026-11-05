@@ -280,151 +280,79 @@ export function addUrlProtocolPrefix(urlString: string): string {
 }
 
 /**
- * Checks whether a URI is a `data:` URL (RFC 2397).
+ * Matches a `data:` URL, capturing its header (media type and parameters) and
+ * its payload.
+ */
+const DATA_URI_REGEX = /^\s*data:([^,]*),(.*)$/isu;
+
+/**
+ * Media types that on-chain NFT metadata is served as. `text/plain` is the
+ * default when the media type is omitted.
+ */
+const JSON_DATA_URI_MEDIA_TYPES = ['application/json', 'text/plain', ''];
+
+/**
+ * Maximum length of a `data:` URL that is decoded inline. Token URIs come
+ * from arbitrary contracts, so this bounds the decoding work.
+ */
+export const MAX_JSON_DATA_URI_LENGTH = 1024 * 1024;
+
+/**
+ * Checks whether a URI is a `data:` URL.
  *
  * @param uri - The URI to check.
  * @returns True if the URI uses the `data:` scheme.
  */
 export function isDataUri(uri: string): boolean {
-  return /^data:/iu.test(normalizeUri(uri));
+  return /^\s*data:/iu.test(uri);
 }
 
 /**
- * Normalizes a URI the way the WHATWG URL parser (and therefore `fetch`) does
- * before reading its scheme: leading/trailing C0 control characters and spaces
- * are trimmed, and ASCII tabs and newlines are removed everywhere.
- *
- * @param uri - The URI to normalize.
- * @returns The normalized URI.
- */
-function normalizeUri(uri: string): string {
-  return (
-    uri
-      // eslint-disable-next-line no-control-regex
-      .replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, '')
-      .replace(/[\t\n\r]/gu, '')
-  );
-}
-
-/**
- * Maximum length of a JSON `data:` URL that is decoded inline. Token URIs come
- * from arbitrary contracts; this bounds the synchronous decode/parse work.
- * Larger payloads fall back to empty metadata.
- */
-export const MAX_JSON_DATA_URI_LENGTH = 1024 * 1024;
-
-/**
- * Whether a `data:` URL media type may carry JSON NFT metadata. Besides
- * `application/json` (and `+json` suffixes), some contracts emit JSON as
- * `text/plain` or with no media type (which defaults to `text/plain`).
- *
- * @param mediaType - The lower-cased media type of a `data:` URL.
- * @returns True if the payload should be parsed as JSON.
- */
-function isJsonCandidateMediaType(mediaType: string): boolean {
-  return (
-    mediaType === '' ||
-    mediaType === 'application/json' ||
-    mediaType === 'text/plain' ||
-    mediaType.endsWith('+json')
-  );
-}
-
-/**
- * Parses a string as a JSON object.
- *
- * @param json - The string to parse.
- * @returns The parsed object, or `null` if it is not valid JSON or not an
- * object.
- */
-function parseJsonObject(json: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(json);
-    return isObject(parsed) && !Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Decodes a base64 (standard or URL-safe, padded or not, optionally
- * percent-encoded) `data:` URL payload as a UTF-8 string.
- *
- * @param payload - The base64 payload.
- * @returns The decoded string, or `null` if it is not valid base64.
- */
-function decodeBase64Payload(payload: string): string | null {
-  try {
-    const base64 = decodeURIComponent(payload)
-      .replace(/\s/gu, '')
-      .replace(/-/gu, '+')
-      .replace(/_/gu, '/');
-    return bytesToString(
-      base64ToBytes(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')),
-    );
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Decodes and parses a JSON `data:` URL (e.g. an on-chain NFT `tokenURI` such
- * as `data:application/json;base64,eyJuYW1lIjoiLi4uIn0=`) without using
- * `fetch`.
- *
- * Accepted input:
- * - Media type `application/json`, any `+json` type, `text/plain`, or none
- * (case-insensitive), with optional parameters such as `;charset=utf-8`.
- * - `;base64` payloads: standard or URL-safe alphabet, padded or not, and
- * optionally percent-encoded. They are decoded as UTF-8.
- * - Other payloads: parsed as raw JSON first, because many contracts embed
- * unescaped JSON that may contain a literal `%`. If that fails, the payload is
- * percent-decoded (RFC 2397) and parsed again.
- * - URIs longer than {@link MAX_JSON_DATA_URI_LENGTH} are rejected.
+ * Decodes JSON NFT metadata embedded in a `data:` URL, such as
+ * `data:application/json;base64,eyJuYW1lIjoiLi4uIn0=` or
+ * `data:application/json;charset=utf-8,%7B%22name%22%3A%22...%22%7D`.
  *
  * @param uri - The `data:` URL to decode.
- * @returns The parsed JSON object, or `null` if the URL is not a JSON `data:`
- * URL or cannot be decoded/parsed into an object.
+ * @returns The decoded JSON object, or `null` if the URL is not a JSON `data:`
+ * URL or cannot be decoded.
  */
 export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
-  if (uri.length > MAX_JSON_DATA_URI_LENGTH) {
-    return null;
-  }
-  const dataUri = normalizeUri(uri);
-  if (!isDataUri(dataUri)) {
+  const match = DATA_URI_REGEX.exec(uri);
+  if (!match || uri.length > MAX_JSON_DATA_URI_LENGTH) {
     return null;
   }
 
-  const commaIndex = dataUri.indexOf(',');
-  if (commaIndex === -1) {
-    return null;
-  }
-
-  const [mediaType, ...params] = dataUri
-    .slice(dataUri.indexOf(':') + 1, commaIndex)
+  const [, header, payload] = match;
+  const [mediaType, ...params] = header
     .split(';')
     .map((part) => part.trim().toLowerCase());
-  if (!isJsonCandidateMediaType(mediaType)) {
+  if (!JSON_DATA_URI_MEDIA_TYPES.includes(mediaType)) {
     return null;
   }
 
-  const payload = dataUri.slice(commaIndex + 1);
-
-  if (params.includes('base64')) {
-    const json = decodeBase64Payload(payload);
-    return json === null ? null : parseJsonObject(json);
-  }
-
-  // Many contracts embed raw (not percent-encoded) JSON, which may contain
-  // literal `%` characters, so try the raw payload before percent-decoding.
-  const rawObject = parseJsonObject(payload);
-  if (rawObject) {
-    return rawObject;
-  }
   try {
-    return parseJsonObject(decodeURIComponent(payload));
+    const json = params.includes('base64')
+      ? bytesToString(base64ToBytes(decodeURIComponent(payload)))
+      : safelyDecodeURIComponent(payload);
+    const metadata: unknown = JSON.parse(json);
+    return isObject(metadata) ? metadata : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Percent-decodes a string, returning it unchanged if it is not validly
+ * percent-encoded (e.g. raw JSON containing a literal `%`).
+ *
+ * @param value - The string to decode.
+ * @returns The decoded string.
+ */
+function safelyDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
 }
 
@@ -445,7 +373,7 @@ export async function getTokenUriJson(
   }
   const response = await timeoutFetch(tokenURI);
   const json: unknown = await response.json();
-  return isObject(json) && !Array.isArray(json) ? json : null;
+  return isObject(json) ? json : null;
 }
 
 /**
