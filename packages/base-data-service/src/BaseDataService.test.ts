@@ -907,6 +907,19 @@ describe('BaseDataService', () => {
         });
       }
 
+      async failWith(
+        error: unknown,
+        onQueryStateChange?: QueryStateChangeHandler,
+      ): Promise<unknown> {
+        return this.fetchQuery({
+          queryKey: [`${this.name}:failWith`],
+          onQueryStateChange,
+          queryFn: async () => {
+            throw error;
+          },
+        });
+      }
+
       async forceGetAssets(): Promise<unknown> {
         return this.fetchQuery({
           queryKey: [`${this.name}:getAssets`, MOCK_ASSETS],
@@ -1027,6 +1040,242 @@ describe('BaseDataService', () => {
       });
 
       service.destroy();
+    });
+
+    describe('error serialization', () => {
+      /**
+       * Make a query fail with the given value and return the last reported
+       * state after a JSON round trip.
+       *
+       * @param error - The value thrown by the query.
+       * @returns The last reported state, round tripped through JSON.
+       */
+      async function failAndGetState(
+        error: unknown,
+      ): Promise<DataServiceQueryState> {
+        const messenger = createServiceMessenger();
+        const service = new StatusService(messenger);
+        const { handler, states } = recordStates();
+
+        await expect(service.failWith(error, handler)).rejects.toBe(error);
+
+        service.destroy();
+        return JSON.parse(
+          JSON.stringify(states.at(-1)),
+        ) as DataServiceQueryState;
+      }
+
+      it('keeps the own JSON safe properties of an error', async () => {
+        const error = Object.assign(new Error('Request failed'), {
+          httpStatus: 403,
+          code: 'GEO_BLOCKED',
+          retryable: false,
+          responseBody: { reason: 'blocked', regions: ['US', null] },
+          responseHeaders: { 'content-type': 'application/json' },
+        });
+
+        const state = await failAndGetState(error);
+
+        const expected = {
+          name: 'Error',
+          message: 'Request failed',
+          httpStatus: 403,
+          code: 'GEO_BLOCKED',
+          retryable: false,
+          responseBody: { reason: 'blocked', regions: ['US', null] },
+          responseHeaders: { 'content-type': 'application/json' },
+        };
+        expect(state.error).toStrictEqual(expected);
+        expect(state.fetchFailureReason).toStrictEqual(expected);
+      });
+
+      it('keeps the name of an error subclass', async () => {
+        class PredictError extends Error {
+          code = 'PREDICT_GEO_BLOCKED';
+
+          constructor(message: string) {
+            super(message);
+            this.name = 'PredictError';
+          }
+        }
+
+        const state = await failAndGetState(new PredictError('blocked'));
+
+        expect(state.error).toStrictEqual({
+          name: 'PredictError',
+          message: 'blocked',
+          code: 'PREDICT_GEO_BLOCKED',
+        });
+      });
+
+      it('serializes the cause chain recursively', async () => {
+        const root = Object.assign(new TypeError('socket hang up'), {
+          code: 'ECONNRESET',
+        });
+        const middle = new Error('fetch failed', { cause: root });
+        const error = new Error('Request failed', { cause: middle });
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Request failed',
+          cause: {
+            name: 'Error',
+            message: 'fetch failed',
+            cause: {
+              name: 'TypeError',
+              message: 'socket hang up',
+              code: 'ECONNRESET',
+            },
+          },
+        });
+      });
+
+      it('keeps a JSON safe non Error cause', async () => {
+        const error = new Error('Request failed', {
+          cause: { status: 500 },
+        });
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Request failed',
+          cause: { status: 500 },
+        });
+      });
+
+      it('drops circular references without throwing', async () => {
+        const error = Object.assign(new Error('Circular'), {
+          details: { label: 'details' },
+        });
+        const details: Record<string, unknown> = error.details;
+        details.self = details;
+        details.owner = error;
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Circular',
+          details: { label: 'details' },
+        });
+      });
+
+      it('drops values that are not JSON safe', async () => {
+        class Point {
+          coordinate = 1;
+        }
+        const error = Object.assign(new Error('Unsafe'), {
+          fn: (): void => undefined,
+          big: BigInt(1),
+          missing: undefined,
+          symbol: Symbol('symbol'),
+          infinite: Infinity,
+          notANumber: NaN,
+          date: new Date(0),
+          point: new Point(),
+          list: [1, undefined, (): void => undefined, 'two'],
+          nested: { keep: 'yes', drop: undefined },
+          [Symbol('key')]: 'symbol keyed',
+        });
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Unsafe',
+          list: [1, null, null, 'two'],
+          nested: { keep: 'yes' },
+        });
+      });
+
+      it('keeps nested errors in properties as serialized errors', async () => {
+        const error = Object.assign(new Error('Aggregate'), {
+          errors: [new RangeError('first')],
+        });
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Aggregate',
+          errors: [{ name: 'RangeError', message: 'first' }],
+        });
+      });
+
+      it('excludes the stack even when it is enumerable', async () => {
+        const error = new Error('With stack');
+        Object.defineProperty(error, 'stack', {
+          value: 'Error: With stack\n    at somewhere',
+          enumerable: true,
+        });
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'With stack',
+        });
+      });
+
+      it('drops values nested deeper than the depth limit', async () => {
+        const error = Object.assign(new Error('Deep'), {
+          level1: { level2: { level3: { level4: { level5: { level6: 1 } } } } },
+        });
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Deep',
+          level1: { level2: { level3: { level4: { level5: {} } } } },
+        });
+      });
+
+      it('falls back to the name and message when reading a property throws', async () => {
+        const error = new Error('Hostile');
+        Object.defineProperty(error, 'hostile', {
+          enumerable: true,
+          get(): never {
+            throw new Error('nope');
+          },
+        });
+
+        const state = await failAndGetState(error);
+
+        expect(state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Hostile',
+        });
+      });
+
+      it('carries the extra fields in `:cacheUpdated` payloads', async () => {
+        const messenger = createServiceMessenger();
+        const publishSpy = vi.spyOn(messenger, 'publish');
+        const service = new StatusService(messenger);
+        const error = Object.assign(new Error('Request failed'), {
+          httpStatus: 451,
+        });
+
+        await expect(service.failWith(error)).rejects.toBe(error);
+
+        const hash = hashKey(['ExampleDataService:failWith']);
+        const last = publishSpy.mock.calls
+          .filter(
+            ([event]) => event === `ExampleDataService:cacheUpdated:${hash}`,
+          )
+          .map(([, payload]) => roundTrip(payload))
+          .at(-1);
+        expect(last?.state.queries[0].state.error).toStrictEqual({
+          name: 'Error',
+          message: 'Request failed',
+          httpStatus: 451,
+        });
+
+        service.destroy();
+      });
     });
 
     it('shares one fetch between concurrent callers', async () => {

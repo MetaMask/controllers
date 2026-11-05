@@ -85,8 +85,18 @@ export type BaseMessenger<Namespace extends string> = Messenger<
 
 /**
  * A JSON safe representation of an error thrown by a query.
+ *
+ * Besides `name` and `message`, it carries the error's own enumerable
+ * properties that are JSON safe (for example `code` or `httpStatus`) and its
+ * `cause`, which is itself serialized the same way when it is an `Error`.
+ * The `stack` is never included.
  */
-export type SerializedQueryError = { name: string; message: string };
+export type SerializedQueryError = {
+  name: string;
+  message: string;
+  cause?: SerializedQueryError | Json;
+  [key: string]: SerializedQueryError | Json | undefined;
+};
 
 /**
  * The dehydrated state published in `:cacheUpdated` payloads, where query
@@ -117,7 +127,122 @@ export type DataServiceQueryState = Omit<
 export type QueryStateChangeHandler = (state: DataServiceQueryState) => void;
 
 /**
+ * How deep error properties are followed when serializing. Values nested
+ * deeper than this are dropped.
+ */
+const MAX_SERIALIZED_ERROR_DEPTH = 5;
+
+/**
+ * Error properties that are never copied from the error's own properties.
+ * `name` and `message` are always set explicitly, `cause` is handled
+ * separately because it is usually not enumerable, and `stack` is excluded.
+ */
+const RESERVED_ERROR_KEYS = new Set(['name', 'message', 'stack', 'cause']);
+
+/**
+ * Convert a value into a JSON safe value, or `undefined` if it cannot be
+ * represented safely.
+ *
+ * @param value - The value to convert.
+ * @param depth - How deep the value is nested inside the top level error.
+ * @param ancestors - The objects currently being serialized, to detect cycles.
+ * @returns The JSON safe value, or `undefined` if the value should be dropped.
+ */
+function toJsonSafe(
+  value: unknown,
+  depth: number,
+  ancestors: WeakSet<object>,
+): SerializedQueryError | Json | undefined {
+  if (depth > MAX_SERIALIZED_ERROR_DEPTH) {
+    return undefined;
+  }
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value !== 'object' || ancestors.has(value)) {
+    return undefined;
+  }
+  if (value instanceof Error) {
+    return serializeErrorObject(value, depth, ancestors);
+  }
+
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map(
+        (item) => (toJsonSafe(item, depth + 1, ancestors) ?? null) as Json,
+      );
+    }
+    const prototype: unknown = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return undefined;
+    }
+    const result: Record<string, Json> = {};
+    for (const [key, item] of Object.entries(value)) {
+      const safe = toJsonSafe(item, depth + 1, ancestors);
+      if (safe !== undefined) {
+        result[key] = safe as Json;
+      }
+    }
+    return result;
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+/**
+ * Serialize an `Error` with its own JSON safe properties and its `cause`.
+ *
+ * @param error - The error to serialize.
+ * @param depth - How deep the error is nested inside the top level error.
+ * @param ancestors - The objects currently being serialized, to detect cycles.
+ * @returns The serialized error.
+ */
+function serializeErrorObject(
+  error: Error,
+  depth: number,
+  ancestors: WeakSet<object>,
+): SerializedQueryError {
+  ancestors.add(error);
+  try {
+    const result: SerializedQueryError = {
+      name: error.name,
+      message: getErrorMessage(error),
+    };
+    for (const key of Object.keys(error)) {
+      if (!RESERVED_ERROR_KEYS.has(key)) {
+        const safe = toJsonSafe(
+          (error as unknown as Record<string, unknown>)[key],
+          depth + 1,
+          ancestors,
+        );
+        if (safe !== undefined) {
+          result[key] = safe;
+        }
+      }
+    }
+    const cause = toJsonSafe(error.cause, depth + 1, ancestors);
+    if (cause !== undefined) {
+      result.cause = cause;
+    }
+    return result;
+  } finally {
+    ancestors.delete(error);
+  }
+}
+
+/**
  * Convert a thrown value into a JSON safe error.
+ *
+ * For an `Error`, this keeps its `name`, `message`, own JSON safe properties
+ * and `cause`. Any other thrown value is reported with the name `Error`.
  *
  * @param error - The raw error stored on a query, if any.
  * @returns The serialized error, or null if there is no error.
@@ -126,10 +251,14 @@ function serializeQueryError(error: unknown): SerializedQueryError | null {
   if (error === null) {
     return null;
   }
-  return {
-    name: error instanceof Error ? error.name : 'Error',
-    message: getErrorMessage(error),
-  };
+  if (!(error instanceof Error)) {
+    return { name: 'Error', message: getErrorMessage(error) };
+  }
+  try {
+    return serializeErrorObject(error, 0, new WeakSet());
+  } catch {
+    return { name: error.name, message: getErrorMessage(error) };
+  }
 }
 
 /**

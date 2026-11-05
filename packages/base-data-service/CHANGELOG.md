@@ -18,9 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **BREAKING:** Serialize query errors in `:cacheUpdated` and `:cacheUpdated:${hash}` event payloads as `{ name, message }` objects instead of the thrown value ([#11162](https://github.com/MetaMask/core/pull/11162))
+- **BREAKING:** Serialize query errors in `:cacheUpdated` and `:cacheUpdated:${hash}` event payloads as `{ name, message }` plus the error's own JSON safe properties and its `cause` instead of the thrown value ([#11162](https://github.com/MetaMask/core/pull/11162))
   - This applies to both `error` and `fetchFailureReason` on each query state.
-  - Consumers that read properties other than `name` and `message` from these errors, or that relied on `instanceof Error`, must adapt.
+  - Own properties such as `code` or `httpStatus` are kept when they are JSON safe, and an `Error` cause is serialized the same way. The `stack`, non JSON values, circular references and values nested more than 5 levels deep are dropped.
+  - Non `Error` thrown values are serialized with the name `Error`.
+  - Consumers that read non JSON properties or the `stack` from these errors, or that relied on `instanceof Error`, must adapt.
 - Queries in `:cacheUpdated` and `:cacheUpdated:${hash}` event payloads no longer include the non serializable `promise` field of an in flight fetch, so payloads stay JSON safe ([#11162](https://github.com/MetaMask/core/pull/11162))
 - Bump `@tanstack/query-core` from `^5.89.0` to `^5.103.2` ([#10511](https://github.com/MetaMask/core/pull/10511))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
