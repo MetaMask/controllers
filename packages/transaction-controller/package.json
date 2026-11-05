@@ -1,6 +1,6 @@
 {
   "name": "@metamask/transaction-controller",
-  "version": "73.0.0",
+  "version": "73.1.1",
   "description": "Stores transactions alongside their periodically updated statuses and manages interactions such as approval and cancellation",
   "keywords": [
     "Ethereum",
@@ -62,8 +62,8 @@
     "@metamask/approval-controller": "^10.0.0",
     "@metamask/base-controller": "^10.1.0",
     "@metamask/controller-utils": "^13.0.0",
-    "@metamask/core-backend": "^13.0.0",
-    "@metamask/gas-fee-controller": "^27.0.0",
+    "@metamask/core-backend": "^14.0.0",
+    "@metamask/gas-fee-controller": "^27.1.0",
     "@metamask/messenger": "^3.0.0",
     "@metamask/metamask-eth-abis": "^3.1.1",
     "@metamask/network-controller": "^37.1.1",
@@ -79,7 +79,7 @@
     "ethereum-cryptography": "^3.2.0",
     "fast-json-patch": "^3.1.1",
     "lodash-es": "^4.18.1",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@babel/runtime": "^7.29.7",

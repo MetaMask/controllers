@@ -489,6 +489,11 @@ export type TransactionPaySourceAmount = {
  * and `detail` on {@link QuoteErrorInfo}.
  */
 export type QuoteErrorReason =
+  /**
+   * @deprecated No longer emitted. An unreadable live balance is treated as
+   * unknown rather than insufficient, so it no longer blocks the quote. Kept
+   * so existing consumers and historical analytics still type-check.
+   */
   | 'balance-unavailable'
   | 'insufficient-source-balance'
   | 'insufficient-transfer-balance'
@@ -789,6 +794,9 @@ export type PayStrategyGetRefreshIntervalRequest = {
 
   /** Controller messenger. */
   messenger: TransactionPayControllerMessenger;
+
+  /** ID of the transaction whose refresh interval is being resolved. */
+  transactionId: string;
 };
 
 /** Strategy used to obtain required tokens for a transaction. */

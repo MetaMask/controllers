@@ -72,6 +72,7 @@ export const PositionStruct = structType({
   tokenImageUrl: optional(nullable(string())),
   currentValueUSD: optional(nullable(number())),
   pnlValueUsd: optional(nullable(number())),
+  positionValueUSD: optional(nullable(number())),
   pnlPercent: optional(nullable(number())),
   copyCount: optional(number()),
   perpPositionType: optional(nullable(enums(['long', 'short']))),
@@ -339,4 +340,15 @@ export const ModerationStatusResponseStruct = structType({
   banned: boolean(),
   bannedAt: nullable(number()),
   reason: nullable(string()),
+});
+
+/**
+ * Loose check for a GIF provider page.
+ *
+ * `type()` allows unknown keys, and callers return the parsed JSON rather
+ * than a masked copy, so provider fields are not stripped.
+ */
+export const GifPageResponseStruct = structType({
+  result: boolean(),
+  data: structType({}),
 });

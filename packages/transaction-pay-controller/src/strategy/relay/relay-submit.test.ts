@@ -25,7 +25,7 @@ import {
 import * as polymarketWithdraw from '../../utils/polymarket/withdraw.js';
 import { submitSecondLeg } from '../../utils/second-leg.js';
 import {
-  getLiveTokenBalance,
+  getLiveTokenBalanceOrUndefined,
   normalizeTokenAddress,
 } from '../../utils/token.js';
 import {
@@ -149,7 +149,7 @@ describe('Relay Submit Utils', () => {
   const getTransactionMock = vi.mocked(getTransaction);
   const collectTransactionIdsMock = vi.mocked(collectTransactionIds);
   const getFeatureFlagsMock = vi.mocked(getFeatureFlags);
-  const getLiveTokenBalanceMock = vi.mocked(getLiveTokenBalance);
+  const getLiveTokenBalanceMock = vi.mocked(getLiveTokenBalanceOrUndefined);
   const normalizeTokenAddressMock = vi.mocked(normalizeTokenAddress);
   const getRelayPollingIntervalMock = vi.mocked(getRelayPollingInterval);
   const getRelayPollingTimeoutMock = vi.mocked(getRelayPollingTimeout);
@@ -1754,12 +1754,14 @@ describe('Relay Submit Utils', () => {
       expect(addTransactionMock).toHaveBeenCalledTimes(1);
     });
 
-    it('throws descriptive error if balance check fails', async () => {
-      getLiveTokenBalanceMock.mockRejectedValue(new Error('RPC timeout'));
+    it('submits anyway if the live balance is unavailable', async () => {
+      // An unreadable balance is unknown, not insufficient, so submission
+      // proceeds and the Relay and the chain reject if truly underfunded.
+      getLiveTokenBalanceMock.mockResolvedValue(undefined);
 
-      await expect(submitRelayQuotes(request)).rejects.toThrow(
-        'Relay: Cannot validate payment token balance - RPC timeout',
-      );
+      await submitRelayQuotes(request);
+
+      expect(addTransactionMock).toHaveBeenCalledTimes(1);
     });
 
     describe('HyperLiquid source', () => {

@@ -10,6 +10,7 @@ import type {
   QuoteRequest,
   QuoteErrorInfo,
   TransactionData,
+  GetBalanceCallback,
   TransactionPayControllerMessenger,
   TransactionPayQuote,
   TransactionPayRequiredToken,
@@ -20,6 +21,7 @@ import type {
 } from '../types.js';
 import { accountSupports7702 } from './7702.js';
 import { buildNoOpQuote } from './no-op-quote.js';
+import { updateSourceAmounts } from './source-amounts.js';
 import {
   checkStrategyQuoteSupport,
   checkStrategySupport,
@@ -323,16 +325,18 @@ function syncTransaction({
 }
 
 /**
- * Refresh quotes for all transactions if expired.
+ * Refresh source amounts and quotes for all transactions if expired.
  *
  * @param messenger - Messenger instance.
  * @param updateTransactionData - Callback to update transaction data.
  * @param getStrategies - Callback to get ordered strategy names for a transaction.
+ * @param getBalance - Optional callback to override the source balance used for max-amount calculation.
  */
 export async function refreshQuotes(
   messenger: TransactionPayControllerMessenger,
   updateTransactionData: UpdateTransactionDataCallback,
   getStrategies: (transaction: TransactionMeta) => TransactionPayStrategy[],
+  getBalance?: GetBalanceCallback,
 ): Promise<void> {
   const state = messenger.call('TransactionPayController:getState');
   const transactionIds = Object.keys(state.transactionData);
@@ -360,6 +364,7 @@ export async function refreshQuotes(
       (await strategy.getRefreshInterval?.({
         chainId: quotes[0].request.sourceChainId,
         messenger,
+        transactionId,
       })) ?? DEFAULT_REFRESH_INTERVAL;
 
     const isExpired = Date.now() - (quotesLastUpdated ?? 0) > refreshInterval;
@@ -368,10 +373,25 @@ export async function refreshQuotes(
       continue;
     }
 
+    updateTransactionData(transactionId, (data) =>
+      updateSourceAmounts(
+        transactionId,
+        /* oxlint-disable typescript/no-unnecessary-type-assertion */
+        data as never,
+        /* oxlint-enable typescript/no-unnecessary-type-assertion */
+        messenger,
+        getBalance,
+      ),
+    );
+
+    const latestTransactionData = messenger.call(
+      'TransactionPayController:getState',
+    ).transactionData[transactionId];
+
     const isUpdated = await updateQuotes({
       getStrategies,
       messenger,
-      transactionData,
+      transactionData: latestTransactionData,
       transactionId,
       updateTransactionData,
     });
