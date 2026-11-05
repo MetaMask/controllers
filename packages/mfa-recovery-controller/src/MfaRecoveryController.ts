@@ -31,6 +31,7 @@ import {
 import {
   authorizeEscrowsWithToken,
   countDistinctIdentifiers,
+  findNewSiweIdentifiers,
   getIdentifierAuthMode,
   getSiweNamespace,
   MIN_IDENTIFIERS,
@@ -1160,25 +1161,4 @@ function unanimousMutationRejection(
     rejection ??= result.reason;
   }
   return rejection;
-}
-
-/**
- * @param writing - Writing pending mutation.
- * @param replicas - Reads of the escrows to write.
- * @returns The payload's SIWE identifiers some escrow has not enrolled.
- */
-function findNewSiweIdentifiers(
-  writing: WritingPendingOperation,
-  replicas: GetIdentifiersResponse[],
-): Identifier[] {
-  const { mutation, payload } = writing;
-  const siweIdentifiers = pendingPayloadHasIdentifiers(payload)
-    ? payload.identifiers.filter(({ type }) => type === 'siwe')
-    : [];
-  if (mutation.operation === 'register') {
-    return siweIdentifiers;
-  }
-  return siweIdentifiers.filter(
-    (identifier) => !isEnrolledInEvery(replicas, identifier),
-  );
 }
