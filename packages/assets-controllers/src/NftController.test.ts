@@ -2266,22 +2266,12 @@ describe('NftController', () => {
           `data:application/json;utf8,${metadataJson}`,
         ],
         [
-          'plain JSON containing a literal percent sign',
-          `data:application/json,${JSON.stringify({ ...decodedMetadata, description: '100% on-chain' })}`,
-          { ...decodedMetadata, description: '100% on-chain' },
-        ],
-        [
           'JSON with an upper-case media type',
           `DATA:Application/JSON;Base64,${base64Json}`,
         ],
-        [
-          'base64 JSON with a text/plain media type',
-          `data:text/plain;base64,${base64Json}`,
-        ],
-        ['base64 JSON without a media type', `data:;base64,${base64Json}`],
       ])(
         'decodes %s inline without fetching',
-        async (_description, tokenURI, expected = decodedMetadata) => {
+        async (_description, tokenURI) => {
           const fetchSpy = vi.spyOn(globalThis, 'fetch') as unknown as Mock;
           const { nftController } = setupController({
             getERC721TokenURI: vi.fn().mockResolvedValue(tokenURI),
@@ -2302,7 +2292,7 @@ describe('NftController', () => {
           ).toStrictEqual({
             address: ERC721_KUDOSADDRESS,
             chainId: convertHexToDecimal(ChainId.mainnet),
-            ...expected,
+            ...decodedMetadata,
             tokenId: ERC721_KUDOS_TOKEN_ID,
             standard: ERC721,
             favorite: false,

@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Stop passing `data:` NFT token URIs to `fetch`, which crashed clients whose `fetch` cannot decode `data:` URLs (e.g. MetaMask Mobile) ([#11308](https://github.com/MetaMask/core/pull/11308))
-  - `NftController` now decodes JSON `data:` token URIs (`application/json`, `text/plain` or no media type; base64 or percent-encoded; with optional parameters such as `;charset=utf-8`) inline when adding or refreshing NFTs, and falls back to empty metadata for malformed, oversized (over 1 MiB) or non-JSON `data:` token URIs
+  - `NftController` now decodes JSON `data:` token URIs (`data:application/json`, base64 or percent-encoded, with optional parameters such as `;charset=utf-8`) inline when adding or refreshing NFTs, and falls back to empty metadata for malformed, oversized (over 1 MiB) or non-JSON `data:` token URIs
   - `ERC721Standard.getDetails` and `ERC1155Standard.getDetails` decode JSON `data:` token URIs inline instead of fetching them
 
 ## [113.1.1]

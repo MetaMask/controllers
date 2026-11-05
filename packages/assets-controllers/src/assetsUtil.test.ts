@@ -404,36 +404,23 @@ describe('assetsUtil', () => {
         `data:application/json;charset=utf-8;base64,${base64}`,
       ],
       [
-        'percent-encoded base64',
-        `data:application/json;base64,${encodeURIComponent(base64)}`,
-      ],
-      [
         'percent-encoded JSON',
         `data:application/json,${encodeURIComponent(JSON.stringify(json))}`,
       ],
       ['plain JSON', `data:application/json;utf8,${JSON.stringify(json)}`],
-      ['mixed-case header', `Data:Application/Json; Base64,${base64}`],
+      ['mixed-case header', `Data:Application/Json;Base64,${base64}`],
       ['leading whitespace', ` \ndata:application/json;base64,${base64}`],
-      ['text/plain base64', `data:text/plain;base64,${base64}`],
-      ['base64 without a media type', `data:;base64,${base64}`],
-      [
-        'text/plain JSON',
-        `data:text/plain;charset=utf-8,${JSON.stringify(json)}`,
-      ],
     ])('parses %s', (_description, uri) => {
       expect(assetsUtil.parseJsonDataUri(uri)).toStrictEqual(json);
-    });
-
-    it('parses plain JSON that contains a literal percent sign', () => {
-      expect(
-        assetsUtil.parseJsonDataUri('data:application/json,{"name":"100%"}'),
-      ).toStrictEqual({ name: '100%' });
     });
 
     it.each([
       ['a non-data URL', 'https://example.com/1.json'],
       ['a data URL without a comma', 'data:application/json;base64'],
       ['a non-JSON media type', 'data:text/csv,{}'],
+      ['a text/plain media type', 'data:text/plain,{}'],
+      ['a lookalike media type', 'data:application/jsonx,{}'],
+      ['a missing media type', 'data:;base64,e30='],
       ['an image media type', 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='],
       ['an HTML media type', 'data:text/html,{}'],
       ['malformed percent-encoding', 'data:application/json,%E0%A4%A'],

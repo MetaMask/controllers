@@ -280,18 +280,6 @@ export function addUrlProtocolPrefix(urlString: string): string {
 }
 
 /**
- * Matches a `data:` URL, capturing its header (media type and parameters) and
- * its payload.
- */
-const DATA_URI_REGEX = /^\s*data:([^,]*),(.*)$/isu;
-
-/**
- * Media types that on-chain NFT metadata is served as. `text/plain` is the
- * default when the media type is omitted.
- */
-const JSON_DATA_URI_MEDIA_TYPES = ['application/json', 'text/plain', ''];
-
-/**
  * Maximum length of a `data:` URL that is decoded inline. Token URIs come
  * from arbitrary contracts, so this bounds the decoding work.
  */
@@ -313,46 +301,30 @@ export function isDataUri(uri: string): boolean {
  * `data:application/json;charset=utf-8,%7B%22name%22%3A%22...%22%7D`.
  *
  * @param uri - The `data:` URL to decode.
- * @returns The decoded JSON object, or `null` if the URL is not a JSON `data:`
- * URL or cannot be decoded.
+ * @returns The decoded JSON object, or `null` if the URL does not contain a
+ * JSON object.
  */
 export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
-  const match = DATA_URI_REGEX.exec(uri);
-  if (!match || uri.length > MAX_JSON_DATA_URI_LENGTH) {
+  if (uri.length > MAX_JSON_DATA_URI_LENGTH) {
     return null;
   }
 
-  const [, header, payload] = match;
-  const [mediaType, ...params] = header
-    .split(';')
-    .map((part) => part.trim().toLowerCase());
-  if (!JSON_DATA_URI_MEDIA_TYPES.includes(mediaType)) {
+  // Split `data:application/json[;charset=utf-8][;base64],<payload>`.
+  const commaIndex = uri.indexOf(',');
+  const header = uri.slice(0, commaIndex);
+  const payload = uri.slice(commaIndex + 1);
+  if (commaIndex === -1 || !/^\s*data:application\/json(;|$)/iu.test(header)) {
     return null;
   }
 
   try {
-    const json = params.includes('base64')
-      ? bytesToString(base64ToBytes(decodeURIComponent(payload)))
-      : safelyDecodeURIComponent(payload);
+    const json = /;base64$/iu.test(header)
+      ? bytesToString(base64ToBytes(payload))
+      : decodeURIComponent(payload);
     const metadata: unknown = JSON.parse(json);
     return isObject(metadata) ? metadata : null;
   } catch {
     return null;
-  }
-}
-
-/**
- * Percent-decodes a string, returning it unchanged if it is not validly
- * percent-encoded (e.g. raw JSON containing a literal `%`).
- *
- * @param value - The string to decode.
- * @returns The decoded string.
- */
-function safelyDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
   }
 }
 
