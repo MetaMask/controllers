@@ -19,6 +19,7 @@ import { BrokenCircuitError } from 'cockatiel';
 import nock from 'nock';
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -67,6 +68,11 @@ describe('BaseDataService', () => {
 
   afterAll(() => {
     vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    onlineManager.setOnline(true);
+    vi.restoreAllMocks();
   });
 
   beforeEach(() => {
@@ -533,21 +539,17 @@ describe('BaseDataService', () => {
     const service = new ExampleDataService(messenger);
 
     onlineManager.setOnline(false);
-    try {
-      let settled = false;
-      const promise = service.getAssets(MOCK_ASSETS).finally(() => {
-        settled = true;
-      });
-      await vi.runAllTimersAsync();
-      expect(settled).toBe(false);
+    let settled = false;
+    const promise = service.getAssets(MOCK_ASSETS).finally(() => {
+      settled = true;
+    });
+    await vi.runAllTimersAsync();
+    expect(settled).toBe(false);
 
-      onlineManager.setOnline(true);
+    onlineManager.setOnline(true);
 
-      expect(await promise).toHaveLength(3);
-    } finally {
-      onlineManager.setOnline(true);
-      service.destroy();
-    }
+    expect(await promise).toHaveLength(3);
+    service.destroy();
   });
 
   it('stops listening for online events when destroyed', () => {
@@ -558,7 +560,6 @@ describe('BaseDataService', () => {
     const messenger = createServiceMessenger();
     const service = new ExampleDataService(messenger);
     expect(subscribeSpy).toHaveBeenCalledTimes(1);
-    subscribeSpy.mockRestore();
 
     service.destroy();
 

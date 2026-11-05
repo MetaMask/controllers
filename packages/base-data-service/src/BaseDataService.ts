@@ -255,6 +255,8 @@ export class BaseDataService<
     // `focusManager`. Without it, a query that starts while `onlineManager`
     // reports offline is paused and never resumed when connectivity returns,
     // and every later call for the same key dedupes onto that paused promise.
+    // Online/focus events only resume paused work here: they cannot trigger
+    // refetches because this client's queries have no observers.
     this.#queryClient.mount();
 
     this.#persistenceConfig = persistenceConfig;
@@ -576,6 +578,7 @@ export class BaseDataService<
    * by any subclasses to clean up any additional connections or events.
    */
   destroy(): void {
+    this.#queryClient.unmount();
     this.#debouncedPersist?.cancel();
     this.#queryCacheUnsubscribe();
     this.#mutationCacheUnsubscribe();
@@ -587,7 +590,6 @@ export class BaseDataService<
       mutation.destroy();
     }
     this.#queryClient.clear();
-    this.#queryClient.unmount();
     this.messenger.clearSubscriptions();
     this.messenger.clearActions();
   }
