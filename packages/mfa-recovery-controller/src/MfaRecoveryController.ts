@@ -42,6 +42,11 @@ import {
   pendingPayloadHasIdentifiers,
   pendingPayloadHasRecoverySecret,
 } from './pending-operation-validation.js';
+import {
+  assertSameVersion,
+  isEnrolledInEvery,
+  planRepair,
+} from './replica-utils.js';
 import { assertAbortAllowed, getRecoveryPhase } from './state-machine.js';
 import type {
   GetIdentifiersResponse,
@@ -778,49 +783,26 @@ export class MfaRecoveryController extends BaseController<
   async #repairReplicas(identifier: Identifier): Promise<void> {
     this.#assertValidIdentifiers([identifier]);
     await this.#assertEscrowsAvailable(this.#escrows);
-    const replicas = await this.#readReplicas(this.#escrows);
-    const epoch = Math.max(...replicas.map(({ version }) => version));
-    if (replicas.some(({ version }) => version < epoch - 1)) {
-      throw new MfaRecoveryError(
-        'Escrows are more than one version apart',
-        'replica_corruption',
-      );
-    }
-    const laggingEscrows = this.#escrows.filter(
-      (_, index) => replicas[index].version < epoch,
-    );
-    if (laggingEscrows.length === 0) {
+    const plan = await planRepair(await this.#readReplicas(this.#escrows));
+    if (!plan) {
       return;
     }
-    await this.#mutate(
-      await this.#getRepairParams(identifier, replicas, epoch),
-      laggingEscrows,
+    // Lagging escrows are at `epoch - 1`: replay the write they missed.
+    const { epoch, identifiers, identifiersOnly } = plan;
+    const laggingEscrows = this.#escrows.filter(
+      (_, index) => plan.lagging[index],
     );
-  }
-
-  // Lagging escrows are at `epoch - 1`: replay the write they missed.
-  async #getRepairParams(
-    identifier: Identifier,
-    replicas: GetIdentifiersResponse[],
-    epoch: number,
-  ): Promise<MutateParams> {
-    const [leader] = replicas.filter(({ version }) => version === epoch);
-    const identifierHashes = await Promise.all(
-      replicas.map(async ({ identifiers }) => await hash(identifiers)),
-    );
-    const leaderHashes = identifierHashes.filter(
-      (_, index) => replicas[index].version === epoch,
-    );
-    if (new Set(leaderHashes).size > 1) {
-      throw new MfaRecoveryError('Replica corruption', 'replica_corruption');
-    }
-    if (epoch > 1 && new Set(identifierHashes).size > 1) {
-      return {
-        operation: 'updateIdentifiers',
-        payload: { identifiers: leader.identifiers },
-        identifier,
-        epoch: epoch - 1,
-      };
+    if (identifiersOnly) {
+      await this.#mutate(
+        {
+          operation: 'updateIdentifiers',
+          payload: { identifiers },
+          identifier,
+          epoch: epoch - 1,
+        },
+        laggingEscrows,
+      );
+      return;
     }
 
     const secret = await this.getRecoverySecret(
@@ -833,20 +815,22 @@ export class MfaRecoveryController extends BaseController<
       );
     }
     const recoverySecret = bytesToHex(secret.recoverySecret);
-    if (epoch === 1) {
-      return {
-        operation: 'register',
-        payload: { identifiers: leader.identifiers, recoverySecret },
-        identifier: null,
-        epoch: 0,
-      };
-    }
-    return {
-      operation: 'updateRecoverySecret',
-      payload: { recoverySecret },
-      identifier,
-      epoch: epoch - 1,
-    };
+    await this.#mutate(
+      epoch === 1
+        ? {
+            operation: 'register',
+            payload: { identifiers, recoverySecret },
+            identifier: null,
+            epoch: 0,
+          }
+        : {
+            operation: 'updateRecoverySecret',
+            payload: { recoverySecret },
+            identifier,
+            epoch: epoch - 1,
+          },
+      laggingEscrows,
+    );
   }
 
   // Every escrow must answer; a missing record reads as version 0.
@@ -1179,19 +1163,6 @@ function unanimousMutationRejection(
 }
 
 /**
- * @param replicas - Escrow reads.
- * @throws `replica_lagging` when the escrows are at different versions.
- */
-function assertSameVersion(replicas: GetIdentifiersResponse[]): void {
-  if (new Set(replicas.map(({ version }) => version)).size > 1) {
-    throw new MfaRecoveryError(
-      'Escrows are at different versions; call resume with an identifier',
-      'replica_lagging',
-    );
-  }
-}
-
-/**
  * @param writing - Writing pending mutation.
  * @param replicas - Reads of the escrows to write.
  * @returns The payload's SIWE identifiers some escrow has not enrolled.
@@ -1209,29 +1180,5 @@ function findNewSiweIdentifiers(
   }
   return siweIdentifiers.filter(
     (identifier) => !isEnrolledInEvery(replicas, identifier),
-  );
-}
-
-/**
- * Escrows compare SIWE addresses case-insensitively.
- *
- * @param replicas - Escrow reads.
- * @param identifier - Identifier to find.
- * @returns Whether every escrow has enrolled `identifier`.
- */
-function isEnrolledInEvery(
-  replicas: GetIdentifiersResponse[],
-  identifier: Identifier,
-): boolean {
-  const { type, namespace, value } = identifier;
-  const normalize = (raw: string): string =>
-    type === 'siwe' ? raw.toLowerCase() : raw;
-  return replicas.every(({ identifiers }) =>
-    identifiers.some(
-      (other) =>
-        other.type === type &&
-        other.namespace === namespace &&
-        normalize(other.value) === normalize(value),
-    ),
   );
 }
