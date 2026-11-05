@@ -379,18 +379,27 @@ export type SeedlessOnboardingControllerRecoverWithRecoverySecretAction = {
 
 /**
  * Set a new global password on an envelope-managed vault without the old
- * one, for example after {@link recoverWithRecoverySecret}.
+ * one, after {@link recoverWithRecoverySecret}.
+ *
+ * Only allowed while the local password is not yet synced with the global
+ * password, which is the state {@link recoverWithRecoverySecret} leaves the
+ * vault in, and with a valid aal2 session from
+ * {@link authenticateForRecovery}. Once the reset or a sync succeeds, use
+ * {@link changePassword} instead.
  *
  * The password OPRF key swap is signed with the auth key stored in the
- * vault's control record, so only the unlocked vault and the social login
- * are needed. The vault keys and the backend vault stay as they are, and
- * the local vault is re-encrypted under the new password.
+ * vault's control record, so the old password is not needed. The vault
+ * keys and the backend vault stay as they are, and the local vault is
+ * re-encrypted under the new password.
  *
  * @param params - The function parameters.
  * @param params.newPassword - The new global password.
  * @returns A promise that resolves once the new password is global.
- * @throws `EnvelopeControlRecordNotFound` if the vault is not
- * envelope-managed or no control record matches the live password OPRF key.
+ * @throws `PasswordResetRequiresRecovery` if the vault is not
+ * envelope-managed or its local password is already synced,
+ * `Aal2Required` without a valid aal2 session, or
+ * `EnvelopeControlRecordNotFound` if no control record matches the live
+ * password OPRF key.
  */
 export type SeedlessOnboardingControllerResetPasswordWithVaultKeysAction = {
   type: `SeedlessOnboardingController:resetPasswordWithVaultKeys`;

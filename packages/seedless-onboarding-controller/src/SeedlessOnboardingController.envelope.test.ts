@@ -2214,9 +2214,29 @@ describe('SeedlessOnboardingController', () => {
         });
       });
 
-      it('throws EnvelopeControlRecordNotFound on a vault that is not envelope-managed', async () => {
-        await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
+      it('throws PasswordResetRequiresRecovery on a vault that is not envelope-managed', async () => {
+        await withUnlockedController(async (args) => {
+          const network = mockNetwork(args.toprfClient);
+          await authenticateAal2(args, { hasRecoveryShare: true });
+
+          await expect(
+            args.baseMessenger.call(
+              'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+              { newPassword: NEW_PASSWORD },
+            ),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.PasswordResetRequiresRecovery,
+          );
+          expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
+        });
+      });
+
+      it('throws PasswordResetRequiresRecovery when the local password is synced, even with a recovery session', async () => {
+        await withUnlockedController(async (args) => {
+          const { controller, toprfClient, baseMessenger } = args;
           const network = mockNetwork(toprfClient);
+          await migrate(args, network);
+          expect(controller.state.recoverySession).toBeDefined();
 
           await expect(
             baseMessenger.call(
@@ -2224,31 +2244,99 @@ describe('SeedlessOnboardingController', () => {
               { newPassword: NEW_PASSWORD },
             ),
           ).rejects.toThrow(
-            SeedlessOnboardingControllerErrorMessage.EnvelopeControlRecordNotFound,
+            SeedlessOnboardingControllerErrorMessage.PasswordResetRequiresRecovery,
+          );
+          expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
+          expect(
+            await controller.verifyVaultPassword(MOCK_PASSWORD),
+          ).toBeUndefined();
+        });
+      });
+
+      it('throws PasswordResetRequiresRecovery on a second reset', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { toprfClient, baseMessenger } = args;
+          const network = mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
+          await baseMessenger.call(
+            'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+            { newPassword: 'reset-password' },
+          );
+          network.spies.persistLocalKey.mockClear();
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+              { newPassword: 'another-password' },
+            ),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.PasswordResetRequiresRecovery,
           );
           expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
         });
       });
 
-      it('throws EnvelopeControlRecordNotFound when no control record matches the password OPRF key', async () => {
-        await withUnlockedController(async (args) => {
+      it('throws Aal2Required and clears the session when the recovery session has expired', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
           const { controller, toprfClient, baseMessenger } = args;
-          const network = mockNetwork(toprfClient);
-          await migrate(args, network);
+          const network = mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
+          const now = Date.now();
+          vi.spyOn(Date, 'now').mockReturnValue(now + 2 * 60 * 60 * 1000);
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+              { newPassword: 'reset-password' },
+            ),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.Aal2Required,
+          );
+          expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
+          expect(controller.state.recoverySession).toBeUndefined();
+          expect(
+            await controller.verifyVaultPassword(RECOVERED_PASSWORD),
+          ).toBeUndefined();
+        });
+      });
+
+      it('throws EnvelopeControlRecordNotFound when no control record matches the password OPRF key', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient, baseMessenger } = args;
+          const network = mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
           // a legacy password change elsewhere left no control record behind
           network.setGlobalPassword('other-password');
 
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:resetPasswordWithVaultKeys',
-              { newPassword: NEW_PASSWORD },
+              { newPassword: 'reset-password' },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.EnvelopeControlRecordNotFound,
           );
           expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
           expect(
-            await controller.verifyVaultPassword(MOCK_PASSWORD),
+            await controller.verifyVaultPassword(RECOVERED_PASSWORD),
           ).toBeUndefined();
         });
       });
