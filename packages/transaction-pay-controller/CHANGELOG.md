@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [31.0.0]
+
 ### Changed
 
 - **BREAKING:** Request and submit post-quote quotes from the transaction's own `from`, so `accountOverride` only receives the output and never signs ([#10992](https://github.com/MetaMask/core/pull/10992))
@@ -1833,7 +1835,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#6820](https://github.com/MetaMask/core/pull/6820))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.3...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@31.0.0...HEAD
+[31.0.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.3...@metamask/transaction-pay-controller@31.0.0
 [30.4.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.2...@metamask/transaction-pay-controller@30.4.3
 [30.4.2]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.1...@metamask/transaction-pay-controller@30.4.2
 [30.4.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.0...@metamask/transaction-pay-controller@30.4.1
