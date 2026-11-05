@@ -1,12 +1,12 @@
 import { decodeAuthControllerToken } from './auth-controller-token.js';
 import { hash } from './crypto.js';
 import { MfaRecoveryError } from './errors.js';
-import { isMutationReceipt } from './escrow-utils.js';
 import {
   countDistinctIdentifiers,
   getIdentifierAuthMode,
   MIN_IDENTIFIERS,
 } from './identifier-auth.js';
+import { isMutationReceipt } from './receipt-utils.js';
 import { assertConfiguredAudienceIds } from './state-machine.js';
 import type {
   Identifier,

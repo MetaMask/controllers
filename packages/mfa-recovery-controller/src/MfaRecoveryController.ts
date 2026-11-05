@@ -24,12 +24,6 @@ import {
   mutationSupersededError,
 } from './errors.js';
 import {
-  isFulfilledResult,
-  isMutationReceipt,
-  selectHighestConsistentVersion,
-  verifyMutationReceipt,
-} from './escrow-utils.js';
-import {
   authorizeEscrowsWithToken,
   countDistinctIdentifiers,
   findNewSiweIdentifiers,
@@ -44,11 +38,14 @@ import {
   pendingPayloadHasIdentifiers,
   pendingPayloadHasRecoverySecret,
 } from './pending-operation-validation.js';
+import { getMutationReceipts, verifyMutationReceipt } from './receipt-utils.js';
 import {
   assertSameVersion,
   assertEnrolledInEvery,
+  isFulfilledResult,
   planRepair,
   getEscrowIdentifiers,
+  selectHighestConsistentVersion,
 } from './replica-utils.js';
 import { assertAbortAllowed, getRecoveryPhase } from './state-machine.js';
 import type {
@@ -710,9 +707,15 @@ export class MfaRecoveryController extends BaseController<
       (_, index) => records[index].version !== mutation.expectedVersion,
     );
     if (moved.length > 0) {
-      await this.#replicateMutation(
-        await this.#confirmMovedEscrows(pending, moved, approval),
-      );
+      const receipts = await getMutationReceipts(moved, approval, mutation);
+      if (!receipts) {
+        await this.#clearPending();
+        throw mutationSupersededError();
+      }
+      await this.#replicateMutation({
+        ...pending,
+        receipts: [...pending.receipts, ...receipts],
+      });
       return;
     }
 
@@ -859,36 +862,6 @@ export class MfaRecoveryController extends BaseController<
     };
   }
 
-  // An escrow no longer at `expectedVersion` was written by this mutation or by
-  // another one. Its receipt at `newVersion` tells which.
-  async #confirmMovedEscrows(
-    pending: WritingPendingOperation,
-    moved: RecoveryEscrowProvider[],
-    approval: AuthControllerToken,
-  ): Promise<WritingPendingOperation> {
-    const { mutation } = pending;
-    const receipts = await Promise.all(
-      moved.map(async (escrow) => {
-        const receipt = await escrow.getMutationReceipt(
-          approval,
-          mutation.newVersion,
-        );
-        return receipt &&
-          (await verifyMutationReceipt(receipt, mutation, escrow))
-          ? receipt
-          : null;
-      }),
-    );
-    const ours = receipts.filter(
-      (receipt): receipt is MutationReceipt => receipt !== null,
-    );
-    if (ours.length !== moved.length) {
-      await this.#clearPending();
-      throw mutationSupersededError();
-    }
-    return { ...pending, receipts: [...pending.receipts, ...ours] };
-  }
-
   #getTargetEscrows(mutation: Mutation): RecoveryEscrowProvider[] {
     return this.#escrows.filter(({ id }) => mutation.audiences.includes(id));
   }
@@ -951,10 +924,7 @@ export class MfaRecoveryController extends BaseController<
         continue;
       }
       const escrow = escrows[index];
-      if (
-        !isMutationReceipt(result.value) ||
-        !(await verifyMutationReceipt(result.value, mutation, escrow))
-      ) {
+      if (!(await verifyMutationReceipt(result.value, mutation, escrow))) {
         hasInvalidReceipt = true;
         continue;
       }

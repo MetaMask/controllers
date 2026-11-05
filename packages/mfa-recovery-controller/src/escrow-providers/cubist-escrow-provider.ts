@@ -25,7 +25,7 @@ import {
   verifySignature,
 } from '../crypto.js';
 import { MfaRecoveryError, MutationRejectedError } from '../errors.js';
-import { isMutationReceipt } from '../escrow-utils.js';
+import { isMutationReceipt } from '../receipt-utils.js';
 import type {
   AuthControllerToken,
   GetIdentifiersResponse,

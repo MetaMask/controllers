@@ -2,8 +2,7 @@ import { isObject } from '@metamask/utils';
 
 import { generateSigningKey, hash, sign } from './crypto.js';
 import { MfaRecoveryError } from './errors.js';
-import { isFulfilledResult } from './escrow-utils.js';
-import { isEnrolledInEvery } from './replica-utils.js';
+import { isEnrolledInEvery, isFulfilledResult } from './replica-utils.js';
 import type {
   AuthControllerToken,
   GetIdentifiersResponse,

@@ -1,3 +1,5 @@
+import { areUint8ArraysEqual } from '@metamask/utils';
+
 import { hash } from './crypto.js';
 import { MfaRecoveryError } from './errors.js';
 import type {
@@ -6,6 +8,12 @@ import type {
   Identifier,
   RecoveryEscrowProvider,
 } from './types.js';
+
+export type RecoverySecretResult = {
+  escrowId: string;
+  recoverySecret: Uint8Array;
+  version: number;
+};
 
 type RepairPlan = {
   /** Highest escrow version. */
@@ -17,6 +25,18 @@ type RepairPlan = {
   /** Whether copying the identifiers alone repairs the lagging escrows. */
   identifiersOnly: boolean;
 };
+
+/**
+ * Identifies a fulfilled promise result for TypeScript narrowing.
+ *
+ * @param result - Settled promise result.
+ * @returns Whether the result is fulfilled.
+ */
+export function isFulfilledResult<Result>(
+  result: PromiseSettledResult<Result>,
+): result is PromiseFulfilledResult<Result> {
+  return result.status === 'fulfilled';
+}
 
 /**
  * Reads every escrow's identifiers and version. Every escrow must answer; a
@@ -93,6 +113,44 @@ export function assertEnrolledInEvery(
       'identifier_not_enrolled',
     );
   }
+}
+
+/**
+ * Selects the highest consistent successful recovery-secret response. Repaired
+ * replicas hold the same secret under a different mutation, so only the secret
+ * is compared.
+ *
+ * @param results - Settled escrow read results.
+ * @returns The selected recovery-secret response.
+ * @throws If no response succeeds or matching highest versions disagree.
+ */
+export function selectHighestConsistentVersion(
+  results: PromiseSettledResult<RecoverySecretResult>[],
+): Omit<RecoverySecretResult, 'escrowId'> {
+  const responses = results
+    .filter(isFulfilledResult)
+    .map((result) => result.value);
+  if (responses.length === 0) {
+    throw new MfaRecoveryError(
+      'No escrow returned a recovery secret',
+      'read_failed',
+    );
+  }
+  const highestVersion = Math.max(
+    ...responses.map((response) => response.version),
+  );
+  const highest = responses.filter(
+    (response) => response.version === highestVersion,
+  );
+  const selected = highest[0];
+  if (
+    !highest.every((response) =>
+      areUint8ArraysEqual(response.recoverySecret, selected.recoverySecret),
+    )
+  ) {
+    throw new MfaRecoveryError('Replica corruption', 'replica_corruption');
+  }
+  return selected;
 }
 
 /**
