@@ -41,17 +41,16 @@ import {
   Web3AuthNetwork,
 } from './constants.js';
 import {
-  appendControlRecord,
   deriveControlKeys,
   deriveEnvelopeKeys,
   getPasswordNamespaceAuthKeyPair,
+  nextControlSeq,
   openEnvelope,
   pubKeysEqual,
   sealEnvelope,
   selectControlRecord,
 } from './envelope/envelope-keys.js';
 import type {
-  ControlItem,
   ControlRecord,
   Envelope,
   EnvelopeKeys,
@@ -806,14 +805,14 @@ export class SeedlessOnboardingController<
         );
         // another device may have migrated the vault, so the control record
         // decides, not local state (I6)
-        const controlItem = await this.#envelopeStore.fetchControlItem(
+        const controlRecords = await this.#envelopeStore.fetchControlRecords(
           deriveControlKeys(vaultKeySet),
         );
 
-        if (controlItem) {
+        if (controlRecords.length > 0) {
           const newPasswordAuthPubKey = await this.#changePasswordEnveloped({
             vaultKeySet,
-            controlItem,
+            controlRecords,
             globalAuthPubKey,
             latestKeyIndex,
             newPassword,
@@ -886,7 +885,7 @@ export class SeedlessOnboardingController<
    *
    * @param params - The function parameters.
    * @param params.vaultKeySet - The vault key set `K_v`.
-   * @param params.controlItem - The vault's control item.
+   * @param params.controlRecords - The vault's control records.
    * @param params.globalAuthPubKey - The live password OPRF auth public key.
    * @param params.latestKeyIndex - The live password OPRF key index.
    * @param params.newPassword - The new password.
@@ -894,18 +893,18 @@ export class SeedlessOnboardingController<
    */
   async #changePasswordEnveloped({
     vaultKeySet,
-    controlItem,
+    controlRecords,
     globalAuthPubKey,
     latestKeyIndex,
     newPassword,
   }: {
     vaultKeySet: VaultKeySet;
-    controlItem: ControlItem;
+    controlRecords: ControlRecord[];
     globalAuthPubKey: SEC1EncodedPublicKey;
     latestKeyIndex: number;
     newPassword: string;
   }): Promise<SEC1EncodedPublicKey> {
-    const currentRecord = selectControlRecord(controlItem, globalAuthPubKey);
+    const currentRecord = selectControlRecord(controlRecords, globalAuthPubKey);
     if (!currentRecord) {
       throw new SeedlessOnboardingError(
         SeedlessOnboardingControllerErrorMessage.EnvelopeControlRecordNotFound,
@@ -917,23 +916,23 @@ export class SeedlessOnboardingController<
     const keys = deriveEnvelopeKeys(seed);
     seed.fill(0);
     const sealed = await sealFor(keys, 'password', vaultKeySet);
-    const nextControlItem = appendControlRecord(controlItem, {
+    const nextControlRecord: ControlRecord = {
       ...currentRecord,
-      seq: Math.max(...controlItem.records.map(({ seq }) => seq)) + 1,
+      seq: nextControlSeq(controlRecords),
       passwordNamespace: {
         ...currentRecord.passwordNamespace,
         authSk: bigIntToHex(authKeyPair.sk),
         keyIndex: latestKeyIndex + 1,
         enabled: true,
       },
-    });
+    };
 
     await this.#withMetadataLock(vaultKeySet.authKeyPair, async () => {
       await this.#assertGlobalAuthPubKeyUnchanged(globalAuthPubKey);
       await this.#writeAndVerifyEnvelope(sealed, vaultKeySet);
-      await this.#envelopeStore.writeControlItem(
+      await this.#envelopeStore.writeControlRecord(
         deriveControlKeys(vaultKeySet),
-        nextControlItem,
+        nextControlRecord,
       );
 
       this.#assertIsAuthenticatedUser(this.state);
@@ -2705,7 +2704,7 @@ export class SeedlessOnboardingController<
             vaultKeySet,
           ),
         },
-        control: appendControlRecord(undefined, record),
+        control: record,
       };
     } finally {
       recoverySeed.fill(0);
@@ -2797,13 +2796,13 @@ export class SeedlessOnboardingController<
       );
 
       const controlKeys = deriveControlKeys(vaultKeySet);
-      await this.#envelopeStore.writeControlItem(controlKeys, pending.control);
-      const controlItem =
-        await this.#envelopeStore.fetchControlItem(controlKeys);
-      if (
-        !controlItem ||
-        !selectControlRecord(controlItem, passwordAuthPubKey)
-      ) {
+      await this.#envelopeStore.writeControlRecord(
+        controlKeys,
+        pending.control,
+      );
+      const controlRecords =
+        await this.#envelopeStore.fetchControlRecords(controlKeys);
+      if (!selectControlRecord(controlRecords, passwordAuthPubKey)) {
         throw new SeedlessOnboardingError(
           SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
         );
@@ -2830,22 +2829,36 @@ export class SeedlessOnboardingController<
   }
 
   /**
-   * Open the password envelope `pbek` of a password seed.
+   * Open the password envelope `pbek` of a password seed: the newest one in
+   * the partition that opens.
    *
    * @param seed - The password seed `S_pw`.
    * @returns The vault key set, or undefined when the password has no
    * envelope (legacy layout).
-   * @throws If the envelope cannot be fetched or does not open. A fetch error
-   * is never treated as "absent" (I6).
+   * @throws If the envelopes cannot be fetched, or `InvalidEnvelope` if none
+   * opens. A fetch error is never treated as "absent" (I6).
    */
   async #openPasswordEnvelope(
     seed: Uint8Array,
   ): Promise<VaultKeySet | undefined> {
     const keys = deriveEnvelopeKeys(seed);
-    const envelope = await this.#envelopeStore.fetchEnvelope(keys, 'password');
-    return envelope
-      ? await openEnvelope(envelope, keys.wrapKey, 'password')
-      : undefined;
+    const envelopes = await this.#envelopeStore.fetchEnvelopes(
+      keys,
+      'password',
+    );
+    if (envelopes.length === 0) {
+      return undefined;
+    }
+    for (const envelope of envelopes) {
+      try {
+        return await openEnvelope(envelope, keys.wrapKey, 'password');
+      } catch (error) {
+        log('Ignoring password envelope that does not open', error);
+      }
+    }
+    throw new SeedlessOnboardingError(
+      SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
+    );
   }
 
   /**
@@ -2862,7 +2875,9 @@ export class SeedlessOnboardingController<
   ): Promise<void> {
     const { keys, envelope } = sealed;
     await this.#envelopeStore.writeEnvelope(keys, envelope);
-    const stored = await this.#envelopeStore.fetchEnvelope(keys, envelope.path);
+    const stored = (
+      await this.#envelopeStore.fetchEnvelopes(keys, envelope.path)
+    ).find(({ ct }) => ct === envelope.ct);
     if (!stored) {
       throw new SeedlessOnboardingError(
         SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,

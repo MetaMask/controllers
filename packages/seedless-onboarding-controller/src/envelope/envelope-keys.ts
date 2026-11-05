@@ -28,13 +28,6 @@ const CTRL_AUTH = 'mm-envelope-v1/control-auth';
 const CTRL_ENC = 'mm-envelope-v1/control-enc';
 
 /**
- * The number of control records kept in the control item. The metadata store
- * overwrites the item in place, so older records are kept inside it for the
- * case where a key change wrote its record but never reached the nodes.
- */
-export const MAX_CONTROL_RECORDS = 3;
-
-/**
  * The vault key set `K_v`. It addresses and encrypts the backend vault and
  * does not change on password change.
  */
@@ -89,12 +82,6 @@ export type ControlRecord = {
   migratedAt: number;
 };
 
-export type ControlItem = {
-  v: 1;
-  /** Newest last, at most {@link MAX_CONTROL_RECORDS}. */
-  records: ControlRecord[];
-};
-
 type SerializedVaultKeySet = {
   authSk: string;
   encKey: string;
@@ -102,7 +89,7 @@ type SerializedVaultKeySet = {
 };
 
 /**
- * @returns The error thrown for any malformed envelope or control item.
+ * @returns The error thrown for any malformed envelope or control record.
  */
 function createInvalidEnvelopeError(): SeedlessOnboardingError {
   return new SeedlessOnboardingError(
@@ -326,11 +313,11 @@ export function parseEnvelope(data: Uint8Array): Envelope {
 }
 
 /**
- * @param item - The control item.
- * @returns The control item as item data.
+ * @param record - The control record.
+ * @returns The control record as item data.
  */
-export function serializeControlItem(item: ControlItem): Uint8Array {
-  return stringToBytes(JSON.stringify(item));
+export function serializeControlRecord(record: ControlRecord): Uint8Array {
+  return stringToBytes(JSON.stringify(record));
 }
 
 /**
@@ -358,36 +345,30 @@ function isControlRecord(value: unknown): value is ControlRecord {
 
 /**
  * @param data - The item data.
- * @returns The control item.
- * @throws `InvalidEnvelope` if the data is not a control item.
+ * @returns The control record.
+ * @throws `InvalidEnvelope` if the data is not a control record.
  */
-export function parseControlItem(data: Uint8Array): ControlItem {
+export function parseControlRecord(data: Uint8Array): ControlRecord {
   const value = parseJsonBytes(data);
-  if (
-    !isObject(value) ||
-    value.v !== 1 ||
-    !Array.isArray(value.records) ||
-    value.records.length === 0 ||
-    !value.records.every(isControlRecord)
-  ) {
+  if (!isControlRecord(value)) {
     throw createInvalidEnvelopeError();
   }
-  return { v: 1, records: value.records };
+  return value;
 }
 
 /**
  * Select the control record of the live password OPRF key: the one whose auth
  * key matches the nodes' `pub_key`, highest `seq` first.
  *
- * @param item - The control item.
+ * @param records - The control records of the vault.
  * @param passwordAuthPubKey - The auth public key the nodes return.
  * @returns The matching record, or undefined when none matches.
  */
 export function selectControlRecord(
-  item: ControlItem,
+  records: ControlRecord[],
   passwordAuthPubKey: SEC1EncodedPublicKey,
 ): ControlRecord | undefined {
-  return [...item.records]
+  return [...records]
     .sort((a, b) => b.seq - a.seq)
     .find((record) =>
       pubKeysEqual(
@@ -398,18 +379,11 @@ export function selectControlRecord(
 }
 
 /**
- * Append a control record, keeping the newest {@link MAX_CONTROL_RECORDS}.
- *
- * @param item - The current control item, if any.
- * @param record - The record to append.
- * @returns The new control item.
+ * @param records - The control records of the vault.
+ * @returns The `seq` of the next control record.
  */
-export function appendControlRecord(
-  item: ControlItem | undefined,
-  record: ControlRecord,
-): ControlItem {
-  const records = [...(item?.records ?? []), record];
-  return { v: 1, records: records.slice(-MAX_CONTROL_RECORDS) };
+export function nextControlSeq(records: ControlRecord[]): number {
+  return Math.max(0, ...records.map(({ seq }) => seq)) + 1;
 }
 
 /**

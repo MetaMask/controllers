@@ -11,7 +11,7 @@ import {
 
 import { derivePubKey } from './envelope-keys.js';
 import type {
-  ControlItem,
+  ControlRecord,
   Envelope,
   EnvelopeKeys,
   EnvelopePath,
@@ -35,7 +35,7 @@ export type PendingEnvelopeMigration = {
   /** base64 auth public key of the password OPRF key at seal time. */
   passwordAuthPubKey: string;
   envelopes: Record<EnvelopePath, SealedEnvelope>;
-  control: ControlItem;
+  control: ControlRecord;
 };
 
 type SerializedSealedEnvelope = {
