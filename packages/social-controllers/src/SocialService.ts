@@ -692,6 +692,50 @@ export class SocialService extends BaseDataService<
   }
 
   /**
+   * Probes the signed-in trader's own route for a position. A 404 resolves to
+   * `null` instead of throwing, so the service retry policy does not retry the
+   * miss. Any other failure still throws.
+   *
+   * Calls `GET ${baseUrl}/traders/me/position/${positionId}`. Requires a bearer
+   * token.
+   *
+   * @param options - Options bag.
+   * @param options.positionId - Unique position ID (UUID).
+   * @returns The position, or null when the route does not find it.
+   */
+  async #probeMyPositionById(
+    options: FetchPositionByIdOptions,
+  ): Promise<Position | null> {
+    const { positionId } = options;
+
+    const positionResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:probeMyPositionById`, positionId],
+      staleTime: 0,
+      queryFn: async () => {
+        const url = `${this.#v1Url}/traders/me/position/${encodeURIComponent(positionId)}`;
+        const authHeaders = await this.#getAuthHeaders();
+        const response = await fetch(url, { headers: authHeaders });
+        if (response.status === 404) {
+          return null;
+        }
+        SocialService.#throwIfNotOk(
+          response,
+          SocialServiceErrorMessage.FETCH_POSITION_BY_ID_FAILED,
+        );
+        const positionData = (await response.json()) as unknown;
+        if (!is(positionData, PositionStruct)) {
+          throw new Error(
+            SocialServiceErrorMessage.FETCH_POSITION_BY_ID_INVALID_RESPONSE,
+          );
+        }
+        return positionData;
+      },
+    });
+
+    return positionResponse;
+  }
+
+  /**
    * The signed-in user's subject, read from their bearer token, or undefined
    * when the token carries none.
    *
@@ -740,14 +784,8 @@ export class SocialService extends BaseDataService<
     if (viewerSub === undefined) {
       return this.#fetchPublicPositionById({ positionId });
     }
-    try {
-      return await this.#fetchMyPositionById({ positionId });
-    } catch (error) {
-      if (error instanceof HttpError && error.httpStatus === 404) {
-        return this.#fetchPublicPositionById({ positionId });
-      }
-      throw error;
-    }
+    const ownPosition = await this.#probeMyPositionById({ positionId });
+    return ownPosition ?? this.#fetchPublicPositionById({ positionId });
   }
 
   /**

@@ -1769,6 +1769,7 @@ describe('SocialService', () => {
           positionId: 'position-1',
         });
 
+        expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(mockFetch).toHaveBeenCalledWith(
           `${V1_URL}/traders/position/position-1`,
           otherAuth,
@@ -1792,7 +1793,7 @@ describe('SocialService', () => {
         );
       });
 
-      it('falls back to the public route without a profile when the owner route does not find the position', async () => {
+      it('makes one owner route request and then the public request without a profile when the position is not theirs', async () => {
         const responsesByUrl: Record<string, unknown> = {
           [`${V1_URL}/traders/me/position/position-1`]: {
             ok: false,
@@ -1813,11 +1814,14 @@ describe('SocialService', () => {
           positionId: 'position-1',
         });
 
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(mockFetch).toHaveBeenNthCalledWith(
+          1,
           `${V1_URL}/traders/me/position/position-1`,
           otherAuth,
         );
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockFetch).toHaveBeenNthCalledWith(
+          2,
           `${V1_URL}/traders/position/position-1`,
           otherAuth,
         );
@@ -1841,7 +1845,7 @@ describe('SocialService', () => {
         );
       });
 
-      it('throws when the owner route fails for a reason other than not found', async () => {
+      it('rethrows a server error from the owner route without falling back to the public route', async () => {
         mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
         const service = createService({ token: ownerToken });
@@ -1850,6 +1854,10 @@ describe('SocialService', () => {
           service.fetchPositionById({ positionId: 'position-1' }),
         ).rejects.toThrow(
           `${SocialServiceErrorMessage.FETCH_POSITION_BY_ID_FAILED}: 500`,
+        );
+        expect(mockFetch).not.toHaveBeenCalledWith(
+          `${V1_URL}/traders/position/position-1`,
+          ownerAuth,
         );
       });
 
@@ -1867,6 +1875,22 @@ describe('SocialService', () => {
             profileId: OWNER_SUB,
             positionId: 'position-1',
           }),
+        ).rejects.toThrow(
+          SocialServiceErrorMessage.FETCH_POSITION_BY_ID_INVALID_RESPONSE,
+        );
+      });
+
+      it('throws when the owner route returns an invalid position without a profile', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ positionId: 42 }),
+        });
+
+        const service = createService({ token: ownerToken });
+
+        await expect(
+          service.fetchPositionById({ positionId: 'position-1' }),
         ).rejects.toThrow(
           SocialServiceErrorMessage.FETCH_POSITION_BY_ID_INVALID_RESPONSE,
         );
