@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.18.0]
+
 ### Added
 
 - Add optional `positionValueUSD` (`number | null`) to the `Position` type and `PositionStruct`, so it is typed on feed items and on position, positions, and holders responses ([#11311](https://github.com/MetaMask/core/pull/11311))
@@ -387,7 +389,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `unfollowTrader` — unfollows traders and removes addresses from state
     - `updateFollowing` — fetches following list and replaces addresses in state
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.17.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.18.0...HEAD
+[3.18.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.17.0...@metamask/social-controllers@3.18.0
 [3.17.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.16.0...@metamask/social-controllers@3.17.0
 [3.16.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.15.0...@metamask/social-controllers@3.16.0
 [3.15.0]: https://github.com/MetaMask/core/compare/@metamask/social-controllers@3.14.2...@metamask/social-controllers@3.15.0
