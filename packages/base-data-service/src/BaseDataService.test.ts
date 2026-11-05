@@ -9,7 +9,12 @@ import {
   StorageServiceRemoveItemAction,
   StorageServiceSetItemAction,
 } from '@metamask/storage-service';
-import { CancelledError, hashKey, QueryClient } from '@tanstack/query-core';
+import {
+  CancelledError,
+  hashKey,
+  onlineManager,
+  QueryClient,
+} from '@tanstack/query-core';
 import { BrokenCircuitError } from 'cockatiel';
 import nock from 'nock';
 import {
@@ -521,6 +526,43 @@ describe('BaseDataService', () => {
     await service.addFollower('1');
 
     expect(publishSpy).toHaveBeenCalledTimes(0);
+  });
+
+  it('resumes queries that started while offline once back online', async () => {
+    const messenger = createServiceMessenger();
+    const service = new ExampleDataService(messenger);
+
+    onlineManager.setOnline(false);
+    try {
+      let settled = false;
+      const promise = service.getAssets(MOCK_ASSETS).finally(() => {
+        settled = true;
+      });
+      await vi.runAllTimersAsync();
+      expect(settled).toBe(false);
+
+      onlineManager.setOnline(true);
+
+      expect(await promise).toHaveLength(3);
+    } finally {
+      onlineManager.setOnline(true);
+      service.destroy();
+    }
+  });
+
+  it('stops listening for online events when destroyed', () => {
+    const unsubscribe = vi.fn();
+    const subscribeSpy = vi
+      .spyOn(onlineManager, 'subscribe')
+      .mockReturnValue(unsubscribe);
+    const messenger = createServiceMessenger();
+    const service = new ExampleDataService(messenger);
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+    subscribeSpy.mockRestore();
+
+    service.destroy();
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it('clears pending mutation garbage-collection timers when destroyed', async () => {

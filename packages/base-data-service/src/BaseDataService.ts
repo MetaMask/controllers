@@ -251,6 +251,12 @@ export class BaseDataService<
       },
     });
 
+    // Mounting subscribes the client to TanStack's `onlineManager` and
+    // `focusManager`. Without it, a query that starts while `onlineManager`
+    // reports offline is paused and never resumed when connectivity returns,
+    // and every later call for the same key dedupes onto that paused promise.
+    this.#queryClient.mount();
+
     this.#persistenceConfig = persistenceConfig;
 
     this.#policy = createServicePolicy(policyOptions);
@@ -581,6 +587,7 @@ export class BaseDataService<
       mutation.destroy();
     }
     this.#queryClient.clear();
+    this.#queryClient.unmount();
     this.messenger.clearSubscriptions();
     this.messenger.clearActions();
   }

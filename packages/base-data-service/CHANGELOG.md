@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
 - Bump `uuid` from `^11.1.1` to `^14.0.2` ([#10941](https://github.com/MetaMask/core/pull/10941), [#11179](https://github.com/MetaMask/core/pull/11179), [#11305](https://github.com/MetaMask/core/pull/11305))
 
+### Fixed
+
+- Resume queries that were paused because `onlineManager` reported offline once connectivity returns, instead of leaving them (and every later call for the same key) pending forever ([#XXXXX](https://github.com/MetaMask/core/pull/XXXXX))
+  - `BaseDataService` now mounts its internal `QueryClient` on construction, subscribing it to TanStack's `onlineManager` and `focusManager`, and unmounts it in `destroy`
+
 ## [2.1.0]
 
 ### Added
