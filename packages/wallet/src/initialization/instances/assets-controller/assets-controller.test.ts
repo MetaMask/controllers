@@ -1,0 +1,477 @@
+import {
+  AssetsController,
+  getDefaultAssetsControllerState,
+} from '@metamask/assets-controller';
+import type { AssetsControllerGetStateAction } from '@metamask/assets-controller';
+import { ConfigRegistryApiEnv } from '@metamask/config-registry-controller';
+import { Messenger } from '@metamask/messenger';
+import { InMemoryStorageAdapter } from '@metamask/storage-service';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { WalletOptions } from '../../../types.js';
+import { Wallet } from '../../../Wallet.js';
+import { defaultConfigurations } from '../../defaults.js';
+import type {
+  DefaultActions,
+  DefaultEvents,
+  RootMessenger,
+} from '../../defaults.js';
+import { AlwaysOnlineAdapter } from '../connectivity-controller/always-online-adapter.js';
+import { assetsController } from './assets-controller.js';
+import type { AssetsControllerInstanceOptions } from './types.js';
+
+const controllers: AssetsController[] = [];
+const wallets: Wallet[] = [];
+
+const REMOTE_FEATURE_FLAG_OPTIONS = {
+  clientConfigApiService: {
+    fetchRemoteFeatureFlags: async (): Promise<{
+      remoteFeatureFlags: Record<string, boolean>;
+      cacheTimestamp: number;
+    }> => ({ remoteFeatureFlags: {}, cacheTimestamp: Date.now() }),
+  },
+};
+
+const NETWORK_ENABLEMENT_STATE = {
+  enabledNetworkMap: { eip155: { '0x1': true } },
+  nativeAssetIdentifiers: { 'eip155:1': 'eip155:1/slip44:60' },
+};
+
+type ActionHandler = (...args: unknown[]) => unknown;
+
+type AnyMessenger = Messenger<string>;
+
+describe('assetsController', () => {
+  afterEach(async () => {
+    for (const controller of controllers.splice(0)) {
+      controller.destroy();
+    }
+
+    await Promise.all(wallets.splice(0).map((wallet) => wallet.destroy()));
+  });
+
+  it('is part of the default initialization configurations', () => {
+    expect(Object.values(defaultConfigurations)).toContain(assetsController);
+  });
+
+  it('initializes an AssetsController with default state', () => {
+    const rootMessenger = getRootMessenger();
+    const messenger = assetsController.getMessenger(rootMessenger);
+
+    const instance = assetsController.init({
+      state: undefined,
+      messenger,
+      options: { queryApiClient: createMockQueryApiClient() },
+    });
+    controllers.push(instance);
+
+    expect(instance).toBeInstanceOf(AssetsController);
+    expect(instance.state).toStrictEqual(getDefaultAssetsControllerState());
+  });
+
+  it('forwards the provided state to the controller', () => {
+    const rootMessenger = getRootMessenger();
+    const messenger = assetsController.getMessenger(rootMessenger);
+
+    const instance = assetsController.init({
+      state: {
+        ...getDefaultAssetsControllerState(),
+        selectedCurrency: 'eur',
+      },
+      messenger,
+      options: { queryApiClient: createMockQueryApiClient() },
+    });
+    controllers.push(instance);
+
+    expect(instance.state.selectedCurrency).toBe('eur');
+  });
+
+  it('forwards the instance options to the controller', async () => {
+    const unsubscribe = vi.fn();
+    const subscribeToBasicFunctionalityChange = vi
+      .fn()
+      .mockReturnValue(unsubscribe);
+    const wallet = new Wallet({
+      instanceOptions: {
+        ...getInstanceOptions(),
+        assetsController: {
+          queryApiClient: createMockQueryApiClient(),
+          subscribeToBasicFunctionalityChange,
+        },
+      },
+    });
+
+    expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
+
+    await openUiAndWaitForBootstrap(wallet);
+    await wallet.destroy();
+
+    expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes AssetsController actions over the root messenger', () => {
+    const rootMessenger = getRootMessenger();
+    const messenger = assetsController.getMessenger(rootMessenger);
+
+    const instance = assetsController.init({
+      state: undefined,
+      messenger,
+      options: { queryApiClient: createMockQueryApiClient() },
+    });
+    controllers.push(instance);
+
+    expect(
+      (
+        rootMessenger as unknown as Messenger<
+          'Root',
+          AssetsControllerGetStateAction
+        >
+      ).call('AssetsController:getState'),
+    ).toStrictEqual(getDefaultAssetsControllerState());
+  });
+
+  it.each([
+    'AccountsController:getSelectedAccount',
+    'AccountTreeController:getAccountsFromSelectedAccountGroup',
+    'AccountTreeController:isInitialized',
+    'ClientController:getState',
+    'ConfigRegistryController:getNetworkConfigByCaip2ChainId',
+    'KeyringController:isUnlocked',
+    'NetworkController:getNetworkClientById',
+    'NetworkController:getState',
+    'NetworkEnablementController:getState',
+    'PermissionController:getPermissions',
+    'PhishingController:bulkScanTokens',
+    'RemoteFeatureFlagController:getState',
+    'SnapController:getRunnableSnaps',
+    'SnapController:handleRequest',
+  ])('delegates the %s action', (actionType) => {
+    const rootMessenger = new Messenger<'Root', DefaultActions, DefaultEvents>({
+      namespace: 'Root',
+    });
+    const handler = vi.fn().mockReturnValue('result');
+    registerActionHandler(rootMessenger, actionType, handler);
+    const messenger = assetsController.getMessenger(rootMessenger);
+
+    const result = (
+      messenger as unknown as { call(type: string): unknown }
+    ).call(actionType);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(result).toBe('result');
+  });
+
+  it.each([
+    'AccountActivityService:balanceUpdated',
+    'AccountActivityService:statusChanged',
+    'AccountsController:accountBalancesUpdated',
+    'AccountTreeController:initialized',
+    'AccountTreeController:selectedAccountGroupChange',
+    'AccountTreeController:uninitialized',
+    'ClientController:stateChange',
+    'KeyringController:lock',
+    'KeyringController:unlock',
+    'MultichainTransactionsController:transactionConfirmed',
+    'NetworkController:networkAdded',
+    'NetworkController:networkDidChange',
+    'NetworkController:networkRemoved',
+    'NetworkController:stateChange',
+    'NetworkEnablementController:stateChange',
+    'PermissionController:stateChange',
+    'PreferencesController:stateChange',
+    'RemoteFeatureFlagController:stateChange',
+    'SnapController:snapInstalled',
+    'TransactionController:transactionConfirmed',
+    'TransactionController:unapprovedTransactionAdded',
+  ])('delegates the %s event', (eventType) => {
+    const rootMessenger = new Messenger<'Root', DefaultActions, DefaultEvents>({
+      namespace: 'Root',
+    });
+    const messenger = assetsController.getMessenger(rootMessenger);
+    const listener = vi.fn();
+    (
+      messenger as unknown as {
+        subscribe(type: string, handler: ActionHandler): void;
+      }
+    ).subscribe(eventType, listener);
+
+    publishEvent(rootMessenger, eventType, 'payload');
+
+    expect(listener).toHaveBeenCalledWith('payload');
+  });
+
+  it('is constructed and initialized by default while AccountTreeController and SnapController are absent', async () => {
+    const accountId = 'account-1';
+    const nativeAssetId = 'eip155:1/slip44:60';
+    const wallet = new Wallet({
+      state: {
+        AssetsController: {
+          assetsBalance: {
+            [accountId]: {
+              [nativeAssetId]: { amount: '1' },
+            },
+          },
+          assetsInfo: {
+            [nativeAssetId]: {
+              type: 'native',
+              symbol: 'ETH',
+              name: 'Ether',
+              decimals: 18,
+            },
+          },
+        },
+      },
+      instanceOptions: getInstanceOptions(),
+    });
+    wallets.push(wallet);
+
+    const instance = wallet.getInstance('AssetsController');
+    expect(instance).toBeInstanceOf(AssetsController);
+
+    expect(() =>
+      (
+        wallet.messenger as unknown as {
+          call(action: string): unknown;
+        }
+      ).call('AccountTreeController:isInitialized'),
+    ).toThrow(/AccountTreeController:isInitialized has not been/u);
+    expect(() =>
+      (
+        wallet.messenger as unknown as {
+          call(action: string): unknown;
+        }
+      ).call('SnapController:getRunnableSnaps'),
+    ).toThrow(/SnapController:getRunnableSnaps has not been/u);
+
+    await wallet.init();
+
+    // Before the UI opens, a forced fetch reads what is already in state.
+    const assets = await instance.getAssets(
+      [
+        { id: accountId } as Parameters<
+          AssetsController['getAssets']
+        >[0][number],
+      ],
+      { chainIds: ['eip155:1'], forceUpdate: true },
+    );
+
+    expect(Object.keys(assets[accountId])).toStrictEqual([nativeAssetId]);
+  });
+
+  it('does not expose an AssetsController:start action', () => {
+    const wallet = new Wallet({
+      instanceOptions: getInstanceOptions(),
+    });
+    wallets.push(wallet);
+
+    expect(() =>
+      (
+        wallet.messenger as unknown as {
+          call(action: string): unknown;
+        }
+      ).call('AssetsController:start'),
+    ).toThrow(/AssetsController:start has not been/u);
+  });
+
+  it('bootstraps when the client opens the UI, while AccountTreeController and SnapController are absent', async () => {
+    const subscribeToBasicFunctionalityChange = vi.fn();
+    const wallet = new Wallet({
+      instanceOptions: {
+        ...getInstanceOptions(),
+        assetsController: {
+          queryApiClient: createMockQueryApiClient(),
+          subscribeToBasicFunctionalityChange,
+        },
+      },
+    });
+    wallets.push(wallet);
+    await wallet.init();
+    expect(subscribeToBasicFunctionalityChange).not.toHaveBeenCalled();
+
+    await openUiAndWaitForBootstrap(wallet);
+
+    expect(subscribeToBasicFunctionalityChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes AssetsController state on the wallet messenger by default', () => {
+    const wallet = new Wallet({
+      instanceOptions: getInstanceOptions(),
+    });
+    wallets.push(wallet);
+
+    expect(wallet.getInstance('AssetsController')).toBeInstanceOf(
+      AssetsController,
+    );
+    expect(
+      (
+        wallet.messenger as unknown as Messenger<
+          'Root',
+          AssetsControllerGetStateAction
+        >
+      ).call('AssetsController:getState'),
+    ).toStrictEqual(getDefaultAssetsControllerState());
+  });
+
+  it('is destroyed with the Wallet', async () => {
+    const wallet = new Wallet({
+      instanceOptions: getInstanceOptions(),
+    });
+    const destroy = vi.spyOn(wallet.getInstance('AssetsController'), 'destroy');
+
+    await wallet.destroy();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Open the UI the way a client does, through `ClientController:setUiOpen`.
+ *
+ * @param wallet - The wallet whose `ClientController` to update.
+ */
+function openUi(wallet: Wallet): void {
+  (
+    wallet.messenger as unknown as {
+      call(action: 'ClientController:setUiOpen', open: boolean): void;
+    }
+  ).call('ClientController:setUiOpen', true);
+}
+
+/**
+ * Open the UI and wait until `AssetsController` has finished bootstrapping.
+ *
+ * Opening the UI reads `ClientController:getState` once before the
+ * bootstrap's async work, and once more from `#updateActive` after that work
+ * finishes. The controller performs that read on its own messenger, so the
+ * spy has to sit on `Messenger.prototype.call`.
+ *
+ * @param wallet - The wallet whose UI to open.
+ */
+async function openUiAndWaitForBootstrap(wallet: Wallet): Promise<void> {
+  const callSpy = vi.spyOn(Messenger.prototype, 'call');
+  const readsBeforeOpen = callSpy.mock.calls.filter(
+    (call) => call[0] === 'ClientController:getState',
+  ).length;
+
+  try {
+    openUi(wallet);
+    await vi.waitFor(() => {
+      const readsSinceOpen =
+        callSpy.mock.calls.filter(
+          (call) => call[0] === 'ClientController:getState',
+        ).length - readsBeforeOpen;
+      expect(readsSinceOpen).toBeGreaterThanOrEqual(2);
+    });
+  } finally {
+    callSpy.mockRestore();
+  }
+}
+
+/**
+ * Builds a minimal `queryApiClient` that serves the controller's native asset
+ * query from its own `queryFn`, so no API request is made.
+ *
+ * @returns The mock client.
+ */
+function createMockQueryApiClient(): AssetsControllerInstanceOptions['queryApiClient'] {
+  const cache = new Map<string, unknown>();
+  return {
+    getCachedData: vi.fn((key: string[]) => cache.get(JSON.stringify(key))),
+    setCachedData: vi.fn((key: string[], data: unknown) =>
+      cache.set(JSON.stringify(key), data),
+    ),
+    queryClient: {
+      fetchQuery: vi.fn(
+        async (opts: {
+          queryKey: string[];
+          queryFn: () => Promise<unknown>;
+        }) => {
+          const data = await opts.queryFn();
+          cache.set(JSON.stringify(opts.queryKey), data);
+          return data;
+        },
+      ),
+    },
+  } as unknown as AssetsControllerInstanceOptions['queryApiClient'];
+}
+
+function getRootMessenger(): RootMessenger<DefaultActions, DefaultEvents> {
+  const rootMessenger = new Messenger<'Root', DefaultActions, DefaultEvents>({
+    namespace: 'Root',
+  });
+
+  registerActionHandler(
+    rootMessenger,
+    'NetworkEnablementController:getState',
+    () => NETWORK_ENABLEMENT_STATE,
+  );
+
+  return rootMessenger;
+}
+
+function getInstanceOptions(): WalletOptions['instanceOptions'] {
+  return {
+    assetsController: { queryApiClient: createMockQueryApiClient() },
+    analyticsController: {
+      platformAdapter: {
+        track: vi.fn(),
+        identify: vi.fn(),
+        view: vi.fn(),
+        onSetupCompleted: vi.fn(),
+      },
+      analyticsId: '11111111-1111-4111-8111-111111111111',
+    },
+    configRegistryApiService: { env: ConfigRegistryApiEnv.PRD },
+    connectivityController: {
+      connectivityAdapter: new AlwaysOnlineAdapter(),
+    },
+    gasFeeController: {
+      clientId: 'test',
+    },
+    networkController: {
+      infuraProjectId: 'test-infura-project-id',
+    },
+    selectedNetworkController: {
+      domainProxyMap: new Map(),
+    },
+    storageService: {
+      storage: new InMemoryStorageAdapter(),
+    },
+    remoteFeatureFlagController: REMOTE_FEATURE_FLAG_OPTIONS,
+  };
+}
+
+function registerActionHandler(
+  parent: RootMessenger<DefaultActions, DefaultEvents>,
+  actionType: string,
+  handler: ActionHandler,
+): void {
+  const messenger = new Messenger({
+    namespace: actionType.split(':')[0],
+    parent: parent as unknown as AnyMessenger,
+  });
+
+  (
+    messenger as unknown as {
+      registerActionHandler(type: string, handler: ActionHandler): void;
+    }
+  ).registerActionHandler(actionType, handler);
+}
+
+function publishEvent(
+  parent: RootMessenger<DefaultActions, DefaultEvents>,
+  eventType: string,
+  ...payload: unknown[]
+): void {
+  const messenger = new Messenger({
+    namespace: eventType.split(':')[0],
+    parent: parent as unknown as AnyMessenger,
+  });
+
+  (
+    messenger as unknown as {
+      publish(type: string, ...payload: unknown[]): void;
+    }
+  ).publish(eventType, ...payload);
+}

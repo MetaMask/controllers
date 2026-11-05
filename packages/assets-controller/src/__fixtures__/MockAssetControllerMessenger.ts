@@ -22,6 +22,10 @@ import {
   getDefaultAssetsControllerState,
 } from '../AssetsController.js';
 import { STAKING_INTERFACE } from '../data-sources/evm-rpc-services/services/StakedBalanceFetcher.js';
+import {
+  countClientStateReads,
+  waitForBootstrapToSettle,
+} from './test-utils.js';
 
 // Test escape hatch for mocking areas that do not need explicit types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -496,4 +500,36 @@ export function registerAssetsControllerActions(
     'ConfigRegistryController:getNetworkConfigByCaip2ChainId',
     () => undefined,
   );
+}
+
+/**
+ * Bootstrap an `AssetsController` the way a client does: publish
+ * `ClientController:stateChange` with the UI open, which makes the controller
+ * create its data sources, then wait for the bootstrap to settle. When the UI
+ * was closed beforehand, publish it closed again so the controller is left in
+ * the lifecycle state the test set up.
+ *
+ * @param messenger - The root messenger the controller's messenger delegates
+ * from. `ClientController:getState` must be registered on it.
+ */
+export async function bootstrapAssetsController(
+  messenger: MockRootMessenger,
+): Promise<void> {
+  const { isUiOpen: wasUiOpen } = messenger.call('ClientController:getState');
+  // The controller calls `getState` on its child messenger, which invokes the
+  // root handler directly. Spying on the prototype sees that read; spying on
+  // the root messenger's own `call` does not.
+  const callSpy = vi.spyOn(Messenger.prototype, 'call');
+  const readsBeforeOpen = countClientStateReads(callSpy.mock.calls);
+  messenger.publish('ClientController:stateChange', { isUiOpen: true }, []);
+  try {
+    await waitForBootstrapToSettle(callSpy.mock.calls, readsBeforeOpen);
+  } finally {
+    callSpy.mockRestore();
+  }
+  if (!wasUiOpen) {
+    // Bootstrap has finished, so this close is handled synchronously and
+    // leaves the controller in the lifecycle state the test set up.
+    messenger.publish('ClientController:stateChange', { isUiOpen: false }, []);
+  }
 }

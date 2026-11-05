@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **BREAKING:** Add `AssetsController` to the default initialization configurations ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - Requires `instanceOptions.assetsController.queryApiClient`.
+  - `AssetsController` creates its data sources and starts tracking assets the first time the client opens the UI (`ClientController:setUiOpen(true)`); no start call is needed. Register and initialize the controllers `AssetsController` depends on that `Wallet` does not construct, such as `AccountTreeController` and `SnapController`, before opening the UI.
+  - Delegates `AccountTreeController` and `SnapController` actions and events, which the client registers.
+  - Also delegates the other external `AssetsControllerMessenger` actions and events (accounts, client, keyring, network, network enablement, permission, phishing, remote feature flags, preferences, and transactions). `Wallet` constructs the ones it already initializes by default.
+  - Hosts that already register `AssetsController` on the wallet root messenger must remove that registration before upgrading, or messenger registration will collide.
+
 ### Changed
 
+- Add `@metamask/assets-controller` `^20.2.2` as a dependency ([#10885](https://github.com/MetaMask/core/pull/10885))
 - Bump `@metamask/gas-fee-controller` from `^27.0.0` to `^27.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 - Bump `@metamask/subscription-controller` from `^15.1.2` to `^15.2.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
 - Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.1` ([#11289](https://github.com/MetaMask/core/pull/11289), [#11300](https://github.com/MetaMask/core/pull/11300))

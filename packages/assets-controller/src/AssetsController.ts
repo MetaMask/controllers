@@ -691,12 +691,42 @@ function effectiveAccountBalancesV6(
  *    Stops when either the UI closes or the keyring locks. See client-controller
  *    README for the combined pattern.
  *
+ * 5. **Construction order independence**: The constructor only subscribes to
+ *    messenger events; it never calls another controller. The data sources are
+ *    created the first time the UI opens (`ClientController:stateChange`), when
+ *    every controller this one depends on is registered.
+ *
  * ## Architecture
  *
  * - Data sources declare their supported chains (async, can change over time)
  * - Data sources are responsible for their own update mechanisms (WebSocket, polling, events)
  * - The controller does NOT manage polling - it simply receives pushed updates
  */
+/**
+ * Constructor options kept until the data sources are created.
+ */
+type AssetsControllerSourceOptions = Pick<
+  AssetsControllerOptions,
+  | 'queryApiClient'
+  | 'accountsApiDataSourceConfig'
+  | 'priceDataSourceConfig'
+  | 'stakedBalanceDataSourceConfig'
+  | 'isOnboarded'
+  | 'subscribeToBasicFunctionalityChange'
+> & {
+  rpcDataSourceConfig: RpcDataSourceConfig;
+};
+
+/**
+ * Patches published with `NetworkEnablementController:stateChange`.
+ * The new enabled map is the source of truth; these patches say which
+ * entries changed, so added and removed chains do not need a cached set.
+ */
+type NetworkEnablementStateChangePatches = ControllerStateChangeEvent<
+  'NetworkEnablementController',
+  NetworkEnablementControllerState
+>['payload'][1];
+
 export class AssetsController extends BaseController<
   typeof CONTROLLER_NAME,
   AssetsControllerState,
@@ -795,10 +825,10 @@ export class AssetsController extends BaseController<
   readonly #activeSubscriptions: Map<string, SubscriptionResponse> = new Map();
 
   /**
-   * Guards against `#start()` re-entrancy. `#activeSubscriptions` only
+   * Guards against `#startTracking()` re-entrancy. `#activeSubscriptions` only
    * becomes non-empty once `#runStartupRefresh()`'s forced `getAssets()`
    * call resolves, which can take many seconds for accounts with many
-   * chains/snaps. `#start()` is invoked by `#updateActive()`, which is
+   * chains/snaps. `#startTracking()` is invoked by `#updateActive()`, which is
    * wired to several independent events (e.g. keyring unlock, account tree
    * init, client state change). If a second such event fires before the
    * first `getAssets()` call resolves, the `#activeSubscriptions.size > 0`
@@ -806,9 +836,6 @@ export class AssetsController extends BaseController<
    * its forced `getAssets()` call) runs a second time for the same accounts.
    */
   #startInFlight = false;
-
-  /** Currently enabled chains from NetworkEnablementController */
-  #enabledChains: Set<ChainId> = new Set();
 
   /**
    * Get the currently selected accounts from AccountTreeController.
@@ -862,15 +889,23 @@ export class AssetsController extends BaseController<
     return this.messenger.call('KeyringController:isUnlocked');
   }
 
-  readonly #accountActivityDataSource: AccountActivityDataSource;
+  /**
+   * Data sources and middlewares. Assigned in `#createSources` the first time
+   * the UI opens, not by the constructor: their constructors read other
+   * controllers (network, snaps, feature flags), which may not be registered
+   * yet. Not `readonly` because that assignment happens outside the
+   * constructor. Definite assignment (`!`) keeps call sites unchanged;
+   * `#hasSources` is the guard for paths that can run before the UI opens.
+   */
+  #accountActivityDataSource!: AccountActivityDataSource;
 
-  readonly #accountsApiDataSource: AccountsApiDataSource;
+  #accountsApiDataSource!: AccountsApiDataSource;
 
-  readonly #snapDataSource: SnapDataSource;
+  #snapDataSource!: SnapDataSource;
 
-  readonly #rpcDataSource: RpcDataSource;
+  #rpcDataSource!: RpcDataSource;
 
-  readonly #stakedBalanceDataSource: StakedBalanceDataSource;
+  #stakedBalanceDataSource!: StakedBalanceDataSource;
 
   /**
    * All balance data sources in priority order for chain-claiming and cleanup.
@@ -893,13 +928,31 @@ export class AssetsController extends BaseController<
     ];
   }
 
-  readonly #priceDataSource: PriceDataSource;
+  #priceDataSource!: PriceDataSource;
 
-  readonly #customAssetGraduationMiddleware: CustomAssetGraduationMiddleware;
+  #customAssetGraduationMiddleware!: CustomAssetGraduationMiddleware;
 
-  readonly #rpcFallbackMiddleware: RpcFallbackMiddleware;
+  #rpcFallbackMiddleware!: RpcFallbackMiddleware;
 
-  readonly #tokenDataSource: TokenDataSource;
+  #tokenDataSource!: TokenDataSource;
+
+  /**
+   * Whether `#createSources` has assigned the data sources. Entry points that
+   * can run before the UI first opens check this and return.
+   */
+  #hasSources = false;
+
+  /** Options forwarded to the data sources when they are created. */
+  readonly #sourceOptions: AssetsControllerSourceOptions;
+
+  /** The pending or settled bootstrap, so it runs at most once. */
+  #bootstrapPromise: Promise<void> | undefined;
+
+  /** Whether the bootstrap has finished. */
+  #isBootstrapped = false;
+
+  /** Whether `destroy()` has been called. */
+  #isDestroyed = false;
 
   #unsubscribeBasicFunctionality: (() => void) | null = null;
 
@@ -975,17 +1028,148 @@ export class AssetsController extends BaseController<
       }
     };
 
-    this.#accountActivityDataSource = new AccountActivityDataSource({
-      messenger: this.messenger,
-      onActiveChainsUpdated: this.#onActiveChainsUpdated,
-      onAssetsUpdate: (response, request): Promise<void> =>
-        this.handleAssetsUpdate(
-          response,
-          this.#accountActivityDataSource.getName(),
-          request,
-        ),
+    this.#sourceOptions = {
+      queryApiClient,
+      rpcDataSourceConfig: rpcConfig,
+      accountsApiDataSourceConfig,
+      priceDataSourceConfig,
+      stakedBalanceDataSourceConfig,
+      isOnboarded,
+      subscribeToBasicFunctionalityChange,
+    };
+
+    log('Initializing AssetsController', {
+      defaultUpdateInterval: this.#defaultUpdateInterval,
     });
-    this.#accountsApiDataSource = new AccountsApiDataSource({
+
+    // The constructor only registers action handlers and subscribes to
+    // events; it never calls another controller, so it does not depend on the
+    // order in which controllers are constructed. Reading other controllers
+    // and creating the data sources happen the first time the UI opens.
+    this.#registerActionHandlers();
+    this.#subscribeToEvents();
+  }
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
+  /**
+   * Bootstrap the controller the first time the UI is seen open, then start
+   * or stop asset tracking. Runs at most once; later calls share the same
+   * promise.
+   *
+   * @returns A promise that resolves once the controller is bootstrapped.
+   */
+  async #ensureBootstrapped(): Promise<void> {
+    this.#bootstrapPromise ??= this.#bootstrap().catch((error: unknown) => {
+      // Allow a later lifecycle event to retry when a data source constructor
+      // throws before the data sources are assigned.
+      if (!this.#hasSources) {
+        this.#bootstrapPromise = undefined;
+      }
+      throw error;
+    });
+    return this.#bootstrapPromise;
+  }
+
+  /**
+   * Create the data sources, subscribe to basic-functionality changes, wait
+   * for the Accounts API supported networks and run the unlock cleanups when
+   * the keyring is already unlocked. Then start asset tracking if the keyring
+   * is unlocked and the account tree is initialized.
+   *
+   * Enabled chains are read from NetworkEnablementController when a fetch or
+   * subscription needs them. By the time the UI opens, the client has
+   * registered every controller this one depends on, so reading them here is
+   * safe.
+   */
+  async #bootstrap(): Promise<void> {
+    if (this.#isDestroyed) {
+      return;
+    }
+
+    log('Bootstrapping AssetsController');
+
+    this.#createSources();
+    this.#subscribeToBasicFunctionality();
+
+    await Promise.all([
+      // AccountsApiDataSource fetches its supported networks asynchronously
+      // from its constructor. Wait for them so the first forced fetch can use
+      // the Accounts API instead of routing every chain to the slow lane.
+      // `fetchQuery` shares the in-flight request, so this does not issue a
+      // second one. Failures are logged by the data source and do not reject.
+      this.#accountsApiDataSource.refreshActiveChains(),
+      this.#runUnlockCleanupsIfUnlocked(),
+    ]);
+
+    if (this.#isDestroyed) {
+      return;
+    }
+    // Chain updates reported while bootstrapping are ignored; `#updateActive`
+    // subscribes with every source's current chains.
+    this.#isBootstrapped = true;
+    this.#updateActive();
+  }
+
+  /**
+   * Run the unlock cleanups when the keyring is already unlocked. The
+   * `KeyringController:unlock` handler skips them before the bootstrap, so an
+   * unlock that happened earlier is handled here.
+   */
+  async #runUnlockCleanupsIfUnlocked(): Promise<void> {
+    if (!this.#isKeyringUnlocked()) {
+      return;
+    }
+    await this.#runUnlockCleanups();
+  }
+
+  /**
+   * Run the cleanups that happen on unlock: drop balances outside the
+   * selected accounts' scopes, then remove spam tokens.
+   */
+  async #runUnlockCleanups(): Promise<void> {
+    try {
+      this.#runOutOfScopeBalanceCleanup();
+    } catch {
+      /* Do nothing */
+    }
+    await this.#runSpamCleanup().catch(() => {
+      /* Do nothing */
+    });
+  }
+
+  /**
+   * Create every data source and middleware.
+   *
+   * Data source constructors read other controllers and may report active
+   * chains synchronously. `#handleActiveChainsUpdate` ignores those reports
+   * until the bootstrap finishes, and `#updateActive` subscribes afterwards
+   * with every source's chains.
+   */
+  #createSources(): void {
+    const {
+      queryApiClient,
+      rpcDataSourceConfig,
+      accountsApiDataSourceConfig,
+      priceDataSourceConfig,
+      stakedBalanceDataSourceConfig,
+      isOnboarded,
+    } = this.#sourceOptions;
+
+    const accountActivityDataSource: AccountActivityDataSource =
+      new AccountActivityDataSource({
+        messenger: this.messenger,
+        onActiveChainsUpdated: this.#onActiveChainsUpdated,
+        onAssetsUpdate: (response, request): Promise<void> =>
+          this.handleAssetsUpdate(
+            response,
+            accountActivityDataSource.getName(),
+            request,
+          ),
+      });
+    const accountsApiDataSource = new AccountsApiDataSource({
       messenger: this.messenger,
       queryApiClient,
       onActiveChainsUpdated: this.#onActiveChainsUpdated,
@@ -994,7 +1178,7 @@ export class AssetsController extends BaseController<
       getAssetsState: (): AssetsControllerState => this.state,
       getAssetVisibility: this.#getAssetVisibility.bind(this),
     });
-    this.#snapDataSource = new SnapDataSource({
+    const snapDataSource = new SnapDataSource({
       messenger: this.messenger,
       onActiveChainsUpdated: this.#onActiveChainsUpdated,
       onAssetsUpdate: (response): Promise<void> =>
@@ -1003,7 +1187,7 @@ export class AssetsController extends BaseController<
       getAssetVisibility: this.#getAssetVisibility.bind(this),
       getAssetsState: (): AssetsControllerState => this.state,
     });
-    this.#rpcDataSource = new RpcDataSource({
+    const rpcDataSource = new RpcDataSource({
       messenger: this.messenger,
       getAssetsState: (): AssetsControllerState => this.state,
       isBalanceV6Enabled: (): boolean => this.#isBalanceV6Enabled(),
@@ -1012,17 +1196,17 @@ export class AssetsController extends BaseController<
       getNativeAssetForChain: (chainId: ChainId): Caip19AssetId | undefined =>
         this.#getNativeAssetForChain(chainId),
       queryApiClient,
-      ...rpcConfig,
-      isOnboarded: rpcConfig.isOnboarded ?? isOnboarded,
+      ...rpcDataSourceConfig,
+      isOnboarded: rpcDataSourceConfig.isOnboarded ?? isOnboarded,
       getAssetType: (assetId: Caip19AssetId): 'native' | 'erc20' | 'spl' =>
         this.#getAssetType(assetId),
     });
-    this.#stakedBalanceDataSource = new StakedBalanceDataSource({
+    const stakedBalanceDataSource = new StakedBalanceDataSource({
       messenger: this.messenger,
       onActiveChainsUpdated: this.#onActiveChainsUpdated,
       ...stakedBalanceDataSourceConfig,
     });
-    this.#tokenDataSource = new TokenDataSource(this.messenger, {
+    const tokenDataSource = new TokenDataSource(this.messenger, {
       queryApiClient,
       getNativeAssetIds: (): Caip19AssetId[] => {
         return this.#getNativeAssetIdsForEnabledChains();
@@ -1031,13 +1215,13 @@ export class AssetsController extends BaseController<
         this.#getAssetType(assetId),
       getAssetsState: (): AssetsControllerState => this.state,
     });
-    this.#priceDataSource = new PriceDataSource({
+    const priceDataSource = new PriceDataSource({
       queryApiClient,
       getSelectedCurrency: (): SupportedCurrency => this.state.selectedCurrency,
       getAssetsState: (): AssetsControllerState => this.state,
       ...priceDataSourceConfig,
     });
-    this.#customAssetGraduationMiddleware = new CustomAssetGraduationMiddleware(
+    const customAssetGraduationMiddleware = new CustomAssetGraduationMiddleware(
       {
         getSelectedAccountId: (): AccountId | undefined => {
           try {
@@ -1051,36 +1235,44 @@ export class AssetsController extends BaseController<
         getAssetsState: (): AssetsControllerState => this.state,
       },
     );
-    this.#rpcFallbackMiddleware = new RpcFallbackMiddleware({
-      rpcDataSource: this.#rpcDataSource,
+    const rpcFallbackMiddleware = new RpcFallbackMiddleware({
+      rpcDataSource,
       isBalanceV6Enabled: (): boolean => this.#isBalanceV6Enabled(),
       getAssetsState: (): AssetsControllerState => this.state,
     });
 
-    log('Initializing AssetsController', {
-      defaultUpdateInterval: this.#defaultUpdateInterval,
-    });
-
-    this.#initializeState();
-    this.#subscribeToEvents();
-    this.#registerActionHandlers();
-    // Subscriptions start only when both UI is open and keyring unlocked -> #updateActive().
-
-    // Subscribe to basic-functionality changes after construction so a synchronous
-    // onChange during subscribe cannot run before data sources are initialized.
-    if (subscribeToBasicFunctionalityChange) {
-      const unsubscribe = subscribeToBasicFunctionalityChange((isBasic) =>
-        this.handleBasicFunctionalityChange(isBasic),
-      );
-      if (typeof unsubscribe === 'function') {
-        this.#unsubscribeBasicFunctionality = unsubscribe;
-      }
-    }
+    // Assign only after every constructor has succeeded, so a throw leaves
+    // `#hasSources` false and a later lifecycle event can retry.
+    this.#accountActivityDataSource = accountActivityDataSource;
+    this.#accountsApiDataSource = accountsApiDataSource;
+    this.#snapDataSource = snapDataSource;
+    this.#rpcDataSource = rpcDataSource;
+    this.#stakedBalanceDataSource = stakedBalanceDataSource;
+    this.#tokenDataSource = tokenDataSource;
+    this.#priceDataSource = priceDataSource;
+    this.#customAssetGraduationMiddleware = customAssetGraduationMiddleware;
+    this.#rpcFallbackMiddleware = rpcFallbackMiddleware;
+    this.#hasSources = true;
   }
 
-  // ============================================================================
-  // INITIALIZATION
-  // ============================================================================
+  /**
+   * Subscribe to the host's basic-functionality setting, if the host provided
+   * a way to. Runs during the bootstrap, after the data sources exist and
+   * before `#isBootstrapped` is set. A synchronous `onChange` is ignored
+   * until the bootstrap finishes; `#updateActive` subscribes afterwards.
+   */
+  #subscribeToBasicFunctionality(): void {
+    const { subscribeToBasicFunctionalityChange } = this.#sourceOptions;
+    if (!subscribeToBasicFunctionalityChange) {
+      return;
+    }
+    const unsubscribe = subscribeToBasicFunctionalityChange((isBasic) =>
+      this.handleBasicFunctionalityChange(isBasic),
+    );
+    if (typeof unsubscribe === 'function') {
+      this.#unsubscribeBasicFunctionality = unsubscribe;
+    }
+  }
 
   #initializeNativeAssetsMap(queryApiClient: ApiPlatformClient): void {
     queryApiClient.queryClient
@@ -1110,16 +1302,49 @@ export class AssetsController extends BaseController<
     );
   }
 
-  #initializeState(): void {
-    const { enabledNetworkMap } = this.messenger.call(
-      'NetworkEnablementController:getState',
-    );
-    this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
+  /**
+   * Read the currently enabled chains from NetworkEnablementController.
+   *
+   * Returns `undefined` when that action is not registered yet. Callers that
+   * filter assets must not treat "not readable" as "every network is disabled".
+   *
+   * @returns The enabled chain set, or `undefined` when enablement state cannot be read.
+   */
+  #readEnabledChains(): Set<ChainId> | undefined {
+    try {
+      const { enabledNetworkMap } = this.messenger.call(
+        'NetworkEnablementController:getState',
+      );
+      return this.#extractEnabledChains(enabledNetworkMap);
+    } catch (error) {
+      if (this.#isMissingMessengerHandler(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
 
-    log('Initialized state', {
-      enabledNetworkMap,
-      enabledChains: this.#enabledChains,
-    });
+  /**
+   * Enabled chains, or an empty set when enablement state cannot be read yet.
+   *
+   * @returns The enabled chain set.
+   */
+  #getEnabledChains(): Set<ChainId> {
+    return this.#readEnabledChains() ?? new Set();
+  }
+
+  /**
+   * Whether a messenger call failed because the action has no handler.
+   *
+   * @param error - The error thrown by `messenger.call`.
+   * @returns True when the action is not registered or not delegated.
+   */
+  #isMissingMessengerHandler(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      (error.message.includes('has not been registered') ||
+        error.message.includes('has not been delegated'))
+    );
   }
 
   /**
@@ -1140,22 +1365,188 @@ export class AssetsController extends BaseController<
     for (const [namespace, networks] of Object.entries(enabledNetworkMap)) {
       for (const [reference, isEnabled] of Object.entries(networks)) {
         if (isEnabled) {
-          // Check if reference is already a full CAIP-2 chain ID (contains colon)
-          if (reference.includes(':')) {
-            // Already a full chain ID, use as-is
-            chains.add(reference as ChainId);
-          } else {
-            // Normalize EIP155 chain references from hex to decimal (CAIP-2 standard)
-            const normalizedReference = this.#normalizeChainReference(
-              namespace,
-              reference,
-            );
-            chains.add(`${namespace}:${normalizedReference}`);
-          }
+          chains.add(this.#toEnabledChainId(namespace, reference));
         }
       }
     }
     return chains;
+  }
+
+  /**
+   * Build the CAIP-2 chain id stored for one enabled-network entry.
+   *
+   * A reference that already contains `:` is a full chain id. EIP-155 hex
+   * references are normalized to decimal.
+   *
+   * @param namespace - The CAIP namespace.
+   * @param reference - The network reference from `enabledNetworkMap`.
+   * @returns The CAIP-2 chain id.
+   */
+  #toEnabledChainId(namespace: string, reference: string): ChainId {
+    if (reference.includes(':')) {
+      return reference as ChainId;
+    }
+    return `${namespace}:${this.#normalizeChainReference(namespace, reference)}`;
+  }
+
+  /**
+   * Chains whose enablement changed in a NetworkEnablementController update.
+   *
+   * The published state is already the new map. Patches describe the edit, so
+   * a cached previous set is not required. Boolean replaces and adds are
+   * exact: immer only emits them when the value changed. A removed key does
+   * not include its previous value, so it is reported as removed.
+   *
+   * @param patches - Patches from `NetworkEnablementController:stateChange`.
+   * @returns Chains that became enabled and chains that stopped being enabled.
+   */
+  #diffEnabledChains(patches: NetworkEnablementStateChangePatches): {
+    addedChains: ChainId[];
+    removedChains: ChainId[];
+  } {
+    const addedChains: ChainId[] = [];
+    const removedChains: ChainId[] = [];
+
+    for (const patch of patches) {
+      if (String(patch.path[0]) !== 'enabledNetworkMap') {
+        continue;
+      }
+
+      const namespace = patch.path[1];
+      const reference = patch.path[2];
+      if (namespace === undefined) {
+        this.#collectEnabledChainsFromMapPatch(patch, addedChains);
+        continue;
+      }
+      if (reference === undefined) {
+        this.#collectEnabledChainsFromNamespacePatch(
+          String(namespace),
+          patch,
+          addedChains,
+        );
+        continue;
+      }
+      this.#collectEnabledChainFromEntryPatch(
+        String(namespace),
+        String(reference),
+        patch,
+        addedChains,
+        removedChains,
+      );
+    }
+
+    return {
+      addedChains: [...new Set(addedChains)],
+      removedChains: [...new Set(removedChains)],
+    };
+  }
+
+  /**
+   * Treat every currently enabled chain in a whole-map add or replace as added.
+   * NetworkEnablementController edits keys in place, so this shape is unused
+   * by that controller; it covers a replacement of `enabledNetworkMap`.
+   *
+   * @param patch - A patch whose path is `['enabledNetworkMap']`.
+   * @param addedChains - Chains to append newly enabled ids to.
+   */
+  #collectEnabledChainsFromMapPatch(
+    patch: NetworkEnablementStateChangePatches[number],
+    addedChains: ChainId[],
+  ): void {
+    if (patch.op === 'remove' || !this.#isNetworkRecord(patch.value)) {
+      return;
+    }
+    for (const [namespace, networks] of Object.entries(patch.value)) {
+      this.#pushEnabledChainIds(addedChains, namespace, networks);
+    }
+  }
+
+  /**
+   * Treat every enabled chain in an added or replaced namespace object as added.
+   * Creating a namespace and enabling a chain in one update is one `add` of
+   * that object.
+   *
+   * @param namespace - The CAIP namespace the patch targets.
+   * @param patch - A patch whose path is `['enabledNetworkMap', namespace]`.
+   * @param addedChains - Chains to append newly enabled ids to.
+   */
+  #collectEnabledChainsFromNamespacePatch(
+    namespace: string,
+    patch: NetworkEnablementStateChangePatches[number],
+    addedChains: ChainId[],
+  ): void {
+    if (patch.op === 'remove') {
+      return;
+    }
+    this.#pushEnabledChainIds(addedChains, namespace, patch.value);
+  }
+
+  /**
+   * Record one network entry that was enabled, disabled, or removed.
+   *
+   * @param namespace - The CAIP namespace.
+   * @param reference - The network reference.
+   * @param patch - A patch whose path is `['enabledNetworkMap', namespace, reference]`.
+   * @param addedChains - Chains to append newly enabled ids to.
+   * @param removedChains - Chains to append ids that are no longer enabled to.
+   */
+  #collectEnabledChainFromEntryPatch(
+    namespace: string,
+    reference: string,
+    patch: NetworkEnablementStateChangePatches[number],
+    addedChains: ChainId[],
+    removedChains: ChainId[],
+  ): void {
+    const chainId = this.#toEnabledChainId(namespace, reference);
+    switch (patch.op) {
+      case 'add':
+      case 'replace':
+        if (patch.value === true) {
+          addedChains.push(chainId);
+        } else if (patch.value === false) {
+          removedChains.push(chainId);
+        }
+        return;
+      case 'remove':
+        removedChains.push(chainId);
+        return;
+      default: {
+        const unexpected: never = patch.op;
+        log('Ignoring unknown enabled-network patch', { op: unexpected });
+      }
+    }
+  }
+
+  /**
+   * Append enabled chain ids from one namespace's network map.
+   *
+   * @param target - Chain ids to append to.
+   * @param namespace - The CAIP namespace.
+   * @param networks - The namespace's reference-to-enabled map, if it is one.
+   */
+  #pushEnabledChainIds(
+    target: ChainId[],
+    namespace: string,
+    networks: unknown,
+  ): void {
+    if (!this.#isNetworkRecord(networks)) {
+      return;
+    }
+    for (const [reference, isEnabled] of Object.entries(networks)) {
+      if (isEnabled === true) {
+        target.push(this.#toEnabledChainId(namespace, reference));
+      }
+    }
+  }
+
+  /**
+   * Whether a patch value is a string-keyed record.
+   *
+   * @param value - The patch value.
+   * @returns True when `value` is a non-null object.
+   */
+  #isNetworkRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   /**
@@ -1174,10 +1565,23 @@ export class AssetsController extends BaseController<
     return reference;
   }
 
+  /**
+   * Subscribe to every external event. Runs from the constructor: subscribing
+   * does not need the publishing controller to exist yet, so this does not
+   * depend on construction order.
+   *
+   * Lifecycle events (client, keyring, account tree) drive `#updateActive`,
+   * which bootstraps the controller the first time the UI is seen open.
+   * Every other event needs the data sources, so it is ignored until they
+   * exist.
+   */
   #subscribeToEvents(): void {
     this.messenger.subscribe(
       'AccountTreeController:selectedAccountGroupChange',
       (groupId, previousGroupId) => {
+        if (!this.#hasSources) {
+          return;
+        }
         this.#handleAccountGroupChanged(groupId, previousGroupId).catch(
           console.error,
         );
@@ -1194,8 +1598,11 @@ export class AssetsController extends BaseController<
     // Subscribe to network enablement changes (only enabledNetworkMap)
     this.messenger.subscribe(
       'NetworkEnablementController:stateChange',
-      ({ enabledNetworkMap }) => {
-        this.#handleEnabledNetworksChanged(enabledNetworkMap).catch(
+      ({ enabledNetworkMap }, patches) => {
+        if (!this.#hasSources) {
+          return;
+        }
+        this.#handleEnabledNetworksChanged(enabledNetworkMap, patches).catch(
           console.error,
         );
       },
@@ -1210,6 +1617,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkAdded',
       (networkConfiguration) => {
+        if (!this.#hasSources) {
+          return;
+        }
         this.#handleNetworkAdded(networkConfiguration.chainId);
         this.#refreshAssetsAfterNetworkAdded(
           networkConfiguration.chainId,
@@ -1220,6 +1630,9 @@ export class AssetsController extends BaseController<
     );
 
     this.messenger.subscribe('NetworkController:networkRemoved', () => {
+      if (!this.#hasSources) {
+        return;
+      }
       this.#refreshAssetsAfterNetworkChange();
     });
 
@@ -1228,11 +1641,15 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkDidChange',
       (networkState) => {
+        if (!this.#hasSources) {
+          return;
+        }
         this.#handleNetworkDidChange(networkState).catch(console.error);
       },
     );
 
-    // Client + Keyring lifecycle: only run when UI is open AND keyring is unlocked
+    // Client + Keyring lifecycle: only run when UI is open AND keyring is
+    // unlocked. The first time the UI opens, this bootstraps the controller.
     this.messenger.subscribe(
       'ClientController:stateChange',
       () => {
@@ -1243,14 +1660,17 @@ export class AssetsController extends BaseController<
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.messenger.subscribe('KeyringController:unlock', async () => {
-      try {
-        this.#runOutOfScopeBalanceCleanup();
-      } catch {
-        /* Do nothing */
+      // Wait for an in-flight bootstrap: it may have checked the keyring
+      // before this unlock and skipped the cleanups. Once bootstrapped, the
+      // cleanups start synchronously, as before.
+      if (!this.#isBootstrapped && this.#bootstrapPromise) {
+        await this.#bootstrapPromise.catch(() => undefined);
       }
-      await this.#runSpamCleanup().catch(() => {
-        /* Do nothing */
-      });
+      if (this.#isBootstrapped) {
+        await this.#runUnlockCleanups();
+      }
+      // Before the bootstrap, this bootstraps the controller if the UI is
+      // open, and the bootstrap runs the cleanups.
       this.#updateActive();
     });
     this.messenger.subscribe('KeyringController:lock', () => {
@@ -1263,6 +1683,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:unapprovedTransactionAdded',
       (transactionMeta: TransactionMeta) => {
+        if (!this.#hasSources) {
+          return;
+        }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
       },
     );
@@ -1274,6 +1697,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:transactionConfirmed',
       (transactionMeta: TransactionMeta) => {
+        if (!this.#hasSources) {
+          return;
+        }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
       },
     );
@@ -1285,6 +1711,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'MultichainTransactionsController:transactionConfirmed',
       (transaction: KeyringTransaction) => {
+        if (!this.#hasSources) {
+          return;
+        }
         this.#refreshAssetsForNonEvmTransaction(transaction);
       },
     );
@@ -1446,16 +1875,33 @@ export class AssetsController extends BaseController<
    * Start or stop asset tracking based on client (UI) open state, keyring
    * unlock state, and account-tree readiness. Only runs when the UI is open,
    * the keyring is unlocked, and the account tree has finished `init()`.
+   *
+   * Before the bootstrap, this only bootstraps the controller when the UI is
+   * open. It reads other controllers only when one of their events fires, by
+   * which point they are registered.
    */
   #updateActive(): void {
+    if (this.#isDestroyed) {
+      return;
+    }
+    if (!this.#isBootstrapped) {
+      // Bootstrap the first time the UI is seen open. The bootstrap calls
+      // back into `#updateActive` once it finishes.
+      if (this.#isUiOpen()) {
+        this.#ensureBootstrapped().catch((error: unknown) => {
+          log('Failed to bootstrap AssetsController', { error });
+        });
+      }
+      return;
+    }
     const shouldRun =
       this.#isUiOpen() &&
       this.#isKeyringUnlocked() &&
       this.#isAccountTreeInitialized();
     if (shouldRun) {
-      this.#start();
+      this.#startTracking();
     } else {
-      this.#stop();
+      this.#stopTracking();
     }
   }
 
@@ -1468,7 +1914,7 @@ export class AssetsController extends BaseController<
     const releaseLock = await this.#accountRefreshMutex.acquire();
     try {
       await this.getAssets(accounts, {
-        chainIds: [...this.#enabledChains],
+        chainIds: [...this.#getEnabledChains()],
         forceUpdate: true,
       });
       // Seed before subscribe so the price poll / update fetch sees natives
@@ -1516,6 +1962,13 @@ export class AssetsController extends BaseController<
     activeChains: ChainId[],
     previousChains: ChainId[],
   ): void {
+    // Data sources report their chains while the bootstrap is still running.
+    // The bootstrap subscribes afterwards with every source's chains.
+    // Subscribing here first would make `#startTracking` skip the startup
+    // refresh.
+    if (!this.#isBootstrapped) {
+      return;
+    }
     if (!this.#isUiOpen() || !this.#isKeyringUnlocked() || !this.#isEnabled()) {
       return;
     }
@@ -1591,7 +2044,25 @@ export class AssetsController extends BaseController<
   // PUBLIC API: QUERY METHODS
   // ============================================================================
 
-  @trackAssetsLoading
+  /**
+   * Get assets for the given accounts, optionally force-fetching them first.
+   *
+   * Before the UI first opens there are no data sources, so a forced fetch is
+   * skipped and the assets already in state are returned. An omitted
+   * `chainIds` uses the networks enabled in NetworkEnablementController when
+   * that state can be read, and does not filter by chain when it cannot. The
+   * loading status of the accounts is left untouched, so the first fetch
+   * afterwards still reports them as loading.
+   *
+   * @param accounts - Accounts to get assets for.
+   * @param options - Fetch options.
+   * @param options.chainIds - Chains to include. Defaults to the enabled chains.
+   * @param options.assetTypes - Asset types to include. Defaults to fungible.
+   * @param options.forceUpdate - Fetch from the data sources before reading state.
+   * @param options.bypassServerCache - Also bypass server-side HTTP caches.
+   * @param options.dataTypes - Data types to fetch.
+   * @returns Assets keyed by account ID and asset ID.
+   */
   async getAssets(
     accounts: InternalAccount[],
     options?: {
@@ -1608,15 +2079,49 @@ export class AssetsController extends BaseController<
       dataTypes?: DataType[];
     },
   ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
-    const chainIds = options?.chainIds ?? [...this.#enabledChains];
+    if (options?.forceUpdate && !this.#hasSources) {
+      log('Skipping forced asset fetch: data sources have not been created');
+      return this.#getAssetsTracked(accounts, {
+        ...options,
+        forceUpdate: false,
+      });
+    }
+    return this.#getAssetsTracked(accounts, options);
+  }
+
+  @trackAssetsLoading
+  async #getAssetsTracked(
+    accounts: InternalAccount[],
+    options?: {
+      chainIds?: ChainId[];
+      assetTypes?: AssetType[];
+      forceUpdate?: boolean;
+      /**
+       * Also bypass server-side HTTP caches (e.g. the Accounts API's 60s
+       * cache, via a random `bypassServerCache` query param). Only meaningful
+       * together with `forceUpdate`. Use sparingly — e.g. right after a
+       * transaction confirms, when the API's cached snapshot is known stale.
+       */
+      bypassServerCache?: boolean;
+      dataTypes?: DataType[];
+    },
+  ): Promise<Record<AccountId, Record<Caip19AssetId, Asset>>> {
+    // An omitted list uses the enabled networks. When that state cannot be
+    // read yet, `undefined` means "do not filter by chain" rather than
+    // treating a missing read as every network being disabled.
+    const enabledChains =
+      options?.chainIds === undefined ? this.#readEnabledChains() : undefined;
+    const chainIds =
+      options?.chainIds ??
+      (enabledChains === undefined ? undefined : [...enabledChains]);
     const assetTypes = options?.assetTypes ?? ['fungible'];
     const dataTypes = options?.dataTypes ?? ['balance', 'metadata', 'price'];
 
-    if (accounts.length === 0 || chainIds.length === 0) {
+    if (accounts.length === 0 || chainIds?.length === 0) {
       return this.#getAssetsFromState(accounts, chainIds, assetTypes);
     }
 
-    if (options?.forceUpdate) {
+    if (options?.forceUpdate && chainIds) {
       await this.#forceUpdateAssets({
         accounts,
         chainIds,
@@ -1647,7 +2152,11 @@ export class AssetsController extends BaseController<
    * @param assetIds - CAIP-19 asset IDs to sync.
    */
   async syncAssetsPrices(assetIds: Caip19AssetId[]): Promise<void> {
-    if (!this.#isBasicFunctionality() || assetIds.length === 0) {
+    if (
+      !this.#hasSources ||
+      !this.#isBasicFunctionality() ||
+      assetIds.length === 0
+    ) {
       return;
     }
 
@@ -2552,7 +3061,7 @@ export class AssetsController extends BaseController<
       selectedCurrency,
     });
 
-    if (!this.#isBasicFunctionality()) {
+    if (!this.#hasSources || !this.#isBasicFunctionality()) {
       return;
     }
 
@@ -2580,7 +3089,7 @@ export class AssetsController extends BaseController<
    * @param chainIds - Chain IDs to filter prices for.
    */
   subscribeAssetsPrice(accounts: InternalAccount[], chainIds: ChainId[]): void {
-    if (!this.#isBasicFunctionality()) {
+    if (!this.#hasSources || !this.#isBasicFunctionality()) {
       return;
     }
     const subscriptionKey = 'ds:PriceDataSource';
@@ -2802,7 +3311,7 @@ export class AssetsController extends BaseController<
    * @returns Array of native asset IDs, one per enabled chain that has a registered identifier.
    */
   #getNativeAssetIdsForEnabledChains(): Caip19AssetId[] {
-    return this.#resolveNativeAssetIds(this.#enabledChains);
+    return this.#resolveNativeAssetIds(this.#getEnabledChains());
   }
 
   /**
@@ -2922,7 +3431,7 @@ export class AssetsController extends BaseController<
     // why mUSD appears on mainnet/Linea immediately (those are normally
     // enabled at startup) but only appears on Monad once the user
     // turns the Monad network on.
-    const candidateChains = chainsToSeed ?? [...this.#enabledChains];
+    const candidateChains = chainsToSeed ?? [...this.#getEnabledChains()];
     const targetChains = candidateChains.filter((chainId) =>
       CHAINS_WITH_DEFAULT_TRACKED_ASSETS.has(chainId),
     );
@@ -3287,17 +3796,27 @@ export class AssetsController extends BaseController<
     }
   }
 
+  /**
+   * Read combined assets from state.
+   *
+   * @param accounts - Accounts to read.
+   * @param chainIds - Chains to include. `undefined` includes every chain.
+   * @param assetTypes - Asset types to include.
+   * @returns Assets keyed by account ID and asset ID.
+   */
   #getAssetsFromState(
     accounts: Pick<InternalAccount, 'id'>[],
-    chainIds: ChainId[],
+    chainIds: ChainId[] | undefined,
     assetTypes: AssetType[],
   ): Record<AccountId, Record<Caip19AssetId, Asset>> {
     const result = Object.create(null) as Record<
       AccountId,
       Record<Caip19AssetId, Asset>
     >;
-    // Convert to Sets for O(1) lookups
-    const chainIdSet = new Set(chainIds);
+    // Convert to Sets for O(1) lookups. An undefined list is not a filter:
+    // `new Set(undefined)` is empty and would hide every asset.
+    const chainIdSet =
+      chainIds === undefined ? undefined : new Set<ChainId>(chainIds);
     const assetTypeSet = new Set(assetTypes);
 
     for (const account of accounts) {
@@ -3452,9 +3971,9 @@ export class AssetsController extends BaseController<
    * Idempotent — returns early if accounts/chains are not yet available or
    * subscriptions are already active.
    */
-  #start(): void {
+  #startTracking(): void {
     const accounts = this.#getSelectedAccounts();
-    const chainIds = [...this.#enabledChains];
+    const chainIds = [...this.#getEnabledChains()];
 
     if (accounts.length === 0 || chainIds.length === 0) {
       return;
@@ -3483,7 +4002,7 @@ export class AssetsController extends BaseController<
    * Stop asset tracking: unsubscribe from all updates.
    * Called when app closes or keyring locks.
    */
-  #stop(): void {
+  #stopTracking(): void {
     log('Stopping asset tracking', {
       activeSubscriptionCount: this.#activeSubscriptions.size,
       hasPriceSubscription: this.#activeSubscriptions.has('ds:PriceDataSource'),
@@ -3491,6 +4010,10 @@ export class AssetsController extends BaseController<
 
     this.#firstInitFetchReported = false;
     this.#stateSizeReported = false;
+
+    if (!this.#hasSources) {
+      return;
+    }
 
     // Stop price subscription first (uses direct messenger call)
     this.unsubscribeAssetsPrice();
@@ -3527,7 +4050,15 @@ export class AssetsController extends BaseController<
    * @param _isBasic - The new value (for call-site clarity; the getter is the source of truth).
    */
   handleBasicFunctionalityChange(_isBasic: boolean): void {
-    this.#stop();
+    // Data sources exist before `#isBootstrapped` is set. A synchronous
+    // `onChange` from the host subscribe callback lands in that window.
+    // Subscribing here would fill `#activeSubscriptions` and make
+    // `#startTracking` skip the startup refresh. `#updateActive` subscribes
+    // afterwards with the current basic-functionality setting.
+    if (!this.#hasSources || !this.#isBootstrapped) {
+      return;
+    }
+    this.#stopTracking();
     this.#subscribeAssets();
   }
 
@@ -3537,10 +4068,16 @@ export class AssetsController extends BaseController<
    * @param options - Subscription options.
    * @param options.skipInitialFetch - When true, AccountsApi skips its
    * one-shot subscribe poll (use after a force `getAssets` for the same scope).
+   * @param options.chainIds - Chains to subscribe. Defaults to the enabled
+   * chains from NetworkEnablementController. The enablement-change handler
+   * passes the chains from that event.
    */
-  #subscribeAssets(options?: { skipInitialFetch?: boolean }): void {
+  #subscribeAssets(options?: {
+    skipInitialFetch?: boolean;
+    chainIds?: ChainId[];
+  }): void {
     const accounts = this.#getSelectedAccounts();
-    const enabledChains = [...this.#enabledChains];
+    const enabledChains = options?.chainIds ?? [...this.#getEnabledChains()];
     if (accounts.length === 0 || enabledChains.length === 0) {
       return;
     }
@@ -3923,7 +4460,7 @@ export class AssetsController extends BaseController<
       // Wildcard scope (e.g., "eip155:0" means all enabled chains in that namespace)
       if (reference === '0') {
         // Add enabled chains
-        for (const chain of this.#enabledChains) {
+        for (const chain of this.#getEnabledChains()) {
           if (isCaipChainId(chain)) {
             const chainParsed = parseCaipChainId(chain);
             if (chainParsed.namespace === namespace) {
@@ -3963,7 +4500,7 @@ export class AssetsController extends BaseController<
       return;
     }
 
-    // First start is owned by `AccountTreeController:initialized` / `#start`.
+    // First start is owned by `AccountTreeController:initialized` / `#startTracking`.
     // ATC also re-publishes `selectedAccountGroupChange` on every `init()`
     // (including when the group did not change) so late subscribers can catch
     // up — ignore those until we are already tracking.
@@ -3989,7 +4526,7 @@ export class AssetsController extends BaseController<
       this.#ensureDefaultTrackedAssetsSeeded();
       if (accounts.length > 0) {
         await this.getAssets(accounts, {
-          chainIds: [...this.#enabledChains],
+          chainIds: [...this.#getEnabledChains()],
           forceUpdate: true,
         });
       }
@@ -4002,29 +4539,13 @@ export class AssetsController extends BaseController<
 
   async #handleEnabledNetworksChanged(
     enabledNetworkMap: NetworkEnablementControllerState['enabledNetworkMap'],
+    patches: NetworkEnablementStateChangePatches,
   ): Promise<void> {
-    const previousChains = this.#enabledChains;
-    this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
-
-    // Find newly enabled chains (in new set but not in previous)
-    const addedChains: ChainId[] = [];
-    for (const chain of this.#enabledChains) {
-      if (!previousChains.has(chain)) {
-        addedChains.push(chain);
-      }
-    }
-
-    // Find disabled chains to clean up (in previous but not in new)
-    const removedChains: ChainId[] = [];
-    for (const chain of previousChains) {
-      if (!this.#enabledChains.has(chain)) {
-        removedChains.push(chain);
-      }
-    }
+    const enabledChains = this.#extractEnabledChains(enabledNetworkMap);
+    const { addedChains, removedChains } = this.#diffEnabledChains(patches);
 
     log('Enabled networks changed', {
-      previousCount: previousChains.size,
-      newCount: this.#enabledChains.size,
+      newCount: enabledChains.size,
       addedChains,
       removedChains,
     });
@@ -4039,8 +4560,9 @@ export class AssetsController extends BaseController<
       this.#ensureDefaultTrackedAssetsSeeded(addedChains);
     }
 
-    // Refresh subscriptions for new chain set
-    this.#subscribeAssets();
+    // Refresh subscriptions for the chain set from this event. Later reads use
+    // NetworkEnablementController state, which is already this map in production.
+    this.#subscribeAssets({ chainIds: [...enabledChains] });
 
     // One-time fetch for newly enabled chains. v6 `full` replace is scoped to
     // those chains; existing balances on other chains are left untouched.
@@ -4223,6 +4745,13 @@ export class AssetsController extends BaseController<
       assetsBalance: response.assetsBalance,
       assetsPrice: response.assetsPrice,
     });
+
+    if (!this.#hasSources) {
+      log('Ignoring assets update: data sources have not been created', {
+        sourceId,
+      });
+      return;
+    }
 
     if (this.#isBalanceV6Enabled()) {
       await this.#handleAssetsUpdateV6(response, sourceId, request);
@@ -4429,19 +4958,23 @@ export class AssetsController extends BaseController<
 
   destroy(): void {
     log('Destroying AssetsController', {
-      dataSourceCount: this.#allBalanceDataSources.length,
+      isBootstrapped: this.#isBootstrapped,
       subscriptionCount: this.#activeSubscriptions.size,
     });
 
-    // Destroy instantiated data sources
-    this.#accountActivityDataSource?.destroy?.();
-    this.#accountsApiDataSource?.destroy?.();
-    this.#snapDataSource?.destroy?.();
-    this.#rpcDataSource?.destroy?.();
-    this.#stakedBalanceDataSource?.destroy?.();
+    this.#isDestroyed = true;
+
+    // Destroy instantiated data sources (none exist before the UI first opens)
+    if (this.#hasSources) {
+      this.#accountActivityDataSource.destroy();
+      this.#accountsApiDataSource.destroy();
+      this.#snapDataSource.destroy();
+      this.#rpcDataSource.destroy();
+      this.#stakedBalanceDataSource.destroy();
+    }
 
     // Stop all active subscriptions
-    this.#stop();
+    this.#stopTracking();
 
     if (this.#unsubscribeBasicFunctionality) {
       this.#unsubscribeBasicFunctionality();

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING:** The `AssetsController` constructor no longer calls messenger actions or creates data sources; they are created the first time the UI opens ([#10885](https://github.com/MetaMask/core/pull/10885))
+  - The constructor only registers action handlers and subscribes to messenger events, so it no longer depends on the order in which controllers are constructed.
+  - The first `ClientController:stateChange` with the UI open (or a later `KeyringController:unlock`, `KeyringController:lock` or `AccountTreeController` event while the UI is open) creates the data sources, invokes `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks and runs the unlock cleanups when the keyring is already unlocked. Enabled chains are read from `NetworkEnablementController:getState` when a fetch or subscription needs them, rather than cached on the controller. Register the controllers `AssetsController` reads, such as `AccountTreeController` and `SnapController`, before opening the UI.
+  - Until then, `getAssets` (and the methods built on it) with `forceUpdate: true` return what is already in state without fetching and without changing `assetsLoadingStatus`; `handleAssetsUpdate`, `syncAssetsPrices`, `subscribeAssetsPrice` and `handleBasicFunctionalityChange` do nothing; `setSelectedCurrency` updates state without refreshing prices; network, transaction and account group events are ignored.
+
+### Fixed
+
+- Keep the first forced asset fetch when `subscribeToBasicFunctionalityChange` calls its listener synchronously during bootstrap ([#10885](https://github.com/MetaMask/core/pull/10885))
+- Return persisted balances from `getAssets` before the UI opens when `chainIds` is omitted ([#10885](https://github.com/MetaMask/core/pull/10885))
+
 ## [20.2.2]
 
 ### Changed

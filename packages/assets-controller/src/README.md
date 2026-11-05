@@ -39,9 +39,14 @@ The `AssetsController` is a unified asset management system that provides real-t
 
 ### 1. Initialization
 
-When the `AssetsController` constructor is called, it performs the following steps **synchronously**:
+Initialization has two phases, so that construction does not depend on the order in which controllers are constructed:
 
-#### 1.1 Base Controller Setup
+- **Constructor**: sets up state, stores options, registers action handlers and subscribes to external events (step 1.3). It never calls messenger actions or creates data sources, so it does not need the controllers it depends on to exist yet.
+- **Bootstrap, the first time the UI opens**: triggered by `ClientController:stateChange` when `selectIsUiOpen` becomes true (or by a later keyring / account tree event if the UI was already open). It creates the data sources (step 1.5), subscribes to `subscribeToBasicFunctionalityChange`, waits for the Accounts API supported networks, runs the unlock cleanups if the keyring is already unlocked, and starts tracking (section 2) when the keyring is unlocked and the account tree is initialized. Enabled chains are read from `NetworkEnablementController` when a fetch or subscription needs them (step 1.2). It runs once; the client must register the controllers `AssetsController` reads (for example `AccountTreeController` and `SnapController`) before it opens the UI.
+
+Before the bootstrap, forced fetches return what is already in state, and pushed updates and non-lifecycle events are ignored.
+
+#### 1.1 Base Controller Setup (constructor)
 
 ```typescript
 super({
@@ -52,19 +57,17 @@ super({
 });
 ```
 
-#### 1.2 Initialize Internal State
+#### 1.2 Enabled chains (read when needed)
+
+Enabled chains are not cached. A fetch or subscription reads `NetworkEnablementController:getState` and extracts the enabled CAIP-2 chain ids. `NetworkEnablementController:stateChange` includes the new map and the patches that say which chains were enabled or disabled.
 
 ```typescript
-initializeState()
-├── enabledChains = extractEnabledChains(NetworkEnablementController.getState())
-└── assetsPrice = {}  // In-memory price cache
-
-// Note: selectedAccounts is a getter that calls AccountTreeController
-get selectedAccounts(): InternalAccount[]
-└── return messenger.call('AccountTreeController:getAccountsFromSelectedAccountGroup')
+// Selected accounts are read from AccountTreeController when needed
+getSelectedAccounts()
+└── messenger.call('AccountTreeController:getAccountsFromSelectedAccountGroup')
 ```
 
-#### 1.3 Subscribe to External Events
+#### 1.3 Subscribe to External Events (constructor)
 
 | Event                                              | Handler                          | Purpose                                |
 | -------------------------------------------------- | -------------------------------- | -------------------------------------- |
@@ -72,10 +75,11 @@ get selectedAccounts(): InternalAccount[]
 | `AccountTreeController:initialized`                | `updateActive()`                 | Start tracking once the tree is built  |
 | `AccountTreeController:uninitialized`              | `updateActive()`                 | Stop tracking when the tree is cleared |
 | `NetworkEnablementController:stateChange`          | `handleEnabledNetworksChanged()` | Track enabled chains                   |
-| `KeyringController:unlock`                         | `start()`                        | Start subscriptions                    |
-| `KeyringController:lock`                           | `stop()`                         | Stop subscriptions                     |
+| `ClientController:stateChange` (`selectIsUiOpen`)  | `updateActive()`                 | Bootstrap on first open, start / stop  |
+| `KeyringController:unlock`                         | `startTracking()`                | Start subscriptions                    |
+| `KeyringController:lock`                           | `stopTracking()`                 | Stop subscriptions                     |
 
-#### 1.4 Register Action Handlers
+#### 1.4 Register Action Handlers (constructor)
 
 ```typescript
 registerActionHandlers()
@@ -87,7 +91,7 @@ registerActionHandlers()
 └── AssetsController:assetsUpdate         // Data sources push asset updates
 ```
 
-#### 1.5 Balance data source priority
+#### 1.5 Balance data source priority (data sources created by the bootstrap)
 
 Built-in balance data sources are fixed and processed in priority order: AccountActivityDataSource, AccountsApiDataSource, SnapDataSource, RpcDataSource. Earlier sources get first pick for chain assignment; later sources act as fallbacks. Data sources report active chains via the `onActiveChainsUpdated` callback passed at construction.
 
@@ -125,7 +129,7 @@ executeMiddlewares([
 When the keyring unlocks:
 
 ```
-start()  // Called by KeyringController:unlock
+startTracking()  // Called by KeyringController:unlock
 │
 ├── subscribeAssets()
 │   │
@@ -239,7 +243,7 @@ Result: Earlier registered sources get first pick; later sources act as fallback
 When the keyring locks:
 
 ```
-stop()  // Called by KeyringController:lock
+stopTracking()  // Called by KeyringController:lock
 │
 ├── For each activeSubscription:
 │   └── subscription.unsubscribe()
@@ -265,7 +269,7 @@ destroy()
 │   └── dataSources.clear()
 │
 ├── Stop all active subscriptions
-│   └── stop()
+│   └── stopTracking()
 │
 └── Unregister action handlers
     ├── AssetsController:getAssets
@@ -890,6 +894,11 @@ const assetsController = new AssetsController({
   state: existingState, // Optional: restore persisted state
   defaultUpdateInterval: 30_000, // Optional: polling hint (30s default)
 });
+
+// No start call is needed: the controller bootstraps the first time the
+// client opens the UI. Register AccountTreeController, SnapController, etc.
+// before that.
+messenger.call('ClientController:setUiOpen', true);
 ```
 
 ### Basic Usage (Controllers)

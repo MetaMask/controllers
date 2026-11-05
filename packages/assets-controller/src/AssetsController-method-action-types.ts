@@ -5,6 +5,25 @@
 
 import type { AssetsController } from './AssetsController.js';
 
+/**
+ * Get assets for the given accounts, optionally force-fetching them first.
+ *
+ * Before the UI first opens there are no data sources, so a forced fetch is
+ * skipped and the assets already in state are returned. An omitted
+ * `chainIds` uses the networks enabled in NetworkEnablementController when
+ * that state can be read, and does not filter by chain when it cannot. The
+ * loading status of the accounts is left untouched, so the first fetch
+ * afterwards still reports them as loading.
+ *
+ * @param accounts - Accounts to get assets for.
+ * @param options - Fetch options.
+ * @param options.chainIds - Chains to include. Defaults to the enabled chains.
+ * @param options.assetTypes - Asset types to include. Defaults to fungible.
+ * @param options.forceUpdate - Fetch from the data sources before reading state.
+ * @param options.bypassServerCache - Also bypass server-side HTTP caches.
+ * @param options.dataTypes - Data types to fetch.
+ * @returns Assets keyed by account ID and asset ID.
+ */
 export type AssetsControllerGetAssetsAction = {
   type: `AssetsController:getAssets`;
   handler: AssetsController['getAssets'];

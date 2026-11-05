@@ -128,3 +128,51 @@ export const waitUntilStable = async (
     { intervalMs, timeoutMs },
   );
 };
+
+const CLIENT_CONTROLLER_GET_STATE = 'ClientController:getState';
+
+/**
+ * Count `ClientController:getState` reads on a messenger `call` spy.
+ *
+ * AssetsController reads that action from `#isUiOpen`. Opening the UI reads
+ * it once before bootstrap's async work, and `#updateActive` reads it again
+ * after that work finishes and the controller is bootstrapped.
+ *
+ * @param calls - The live `mock.calls` array from a spy on `messenger.call`
+ * or `Messenger.prototype.call`.
+ * @returns How many of those calls read client state.
+ */
+export function countClientStateReads(
+  calls: readonly (readonly unknown[])[],
+): number {
+  return calls.filter((call) => call[0] === CLIENT_CONTROLLER_GET_STATE).length;
+}
+
+/**
+ * Wait until an AssetsController bootstrap started by opening the UI has
+ * finished.
+ *
+ * @param calls - The live `mock.calls` array captured before the UI was
+ * opened. The array must keep receiving later calls.
+ * @param readsBeforeOpen - {@link countClientStateReads} measured before the
+ * open event.
+ * @returns Resolves once client state has been read at least twice since the
+ * UI opened.
+ */
+export async function waitForBootstrapToSettle(
+  calls: readonly (readonly unknown[])[],
+  readsBeforeOpen: number,
+): Promise<void> {
+  await waitFor(
+    () => {
+      const readsSinceOpen = countClientStateReads(calls) - readsBeforeOpen;
+      if (readsSinceOpen < 2) {
+        throw new Error(
+          `AssetsController bootstrap has not finished (${readsSinceOpen} ClientController:getState read(s) since the UI opened)`,
+        );
+      }
+    },
+    // Yield once per turn so the bootstrap's microtasks can run, then recheck.
+    { intervalMs: 0 },
+  );
+}
