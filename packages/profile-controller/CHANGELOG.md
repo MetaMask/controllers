@@ -9,10 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `checkDisplayNameValidity` to `ProfileService` for checking display name validity via `GET profiles/display-name/validity`
-- Add `checkBioValidity` to `ProfileService` for checking bio validity via `GET profiles/bio/validity`
-- Add `checkEarlyAccess` to `ProfileService` for checking early access status via `GET early-access`
-- Export `FieldValidityResponse`, `EarlyAccessResponse`, `ProfileServiceCheckDisplayNameValidityAction`, `ProfileServiceCheckBioValidityAction`, and `ProfileServiceCheckEarlyAccessAction` types
+- Add `checkDisplayNameValidity` to `ProfileService` for checking display name validity via `GET profiles/display-name/validity` ([#11339](https://github.com/MetaMask/core/pull/11339))
+- Add `checkBioValidity` to `ProfileService` for checking bio validity via `GET profiles/bio/validity` ([#11339](https://github.com/MetaMask/core/pull/11339))
+- Add `checkEarlyAccess` to `ProfileService` for checking early access status via `GET early-access` ([#11339](https://github.com/MetaMask/core/pull/11339))
 
 ### Changed
 
