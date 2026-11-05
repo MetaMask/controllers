@@ -109,7 +109,8 @@ export type MfaRecoveryControllerGetIdentifiersAction = {
 /**
  * Completes a persisted pending mutation. With none pending and an
  * `identifier`, copies the highest escrow record to escrows one version
- * behind it; pass one when a mutation fails with `replica_lagging`.
+ * behind it; pass an identifier when a mutation fails with
+ * `replica_lagging`.
  *
  * @param identifier - Enrolled identifier that authorizes the repair, or
  * replaces the one authorizing a pending update (e.g. if it was lost).
