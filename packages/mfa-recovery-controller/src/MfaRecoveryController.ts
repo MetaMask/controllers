@@ -47,6 +47,7 @@ import {
   assertSameVersion,
   isEnrolledInEvery,
   planRepair,
+  getEscrowIdentifiers,
 } from './replica-utils.js';
 import { assertAbortAllowed, getRecoveryPhase } from './state-machine.js';
 import type {
@@ -519,15 +520,8 @@ export class MfaRecoveryController extends BaseController<
   async getIdentifiers(): Promise<RecoveryIdentifiers> {
     return await this.#withLock(async () => {
       await this.#assertEscrowsAvailable(this.#escrows);
-      const { approval, identifiers: authIdentifiers } =
-        await this.#authProvider.authorizeRecoveryRequest({
-          requestHash: await hash({ operation: 'getIdentifiers' }),
-          audiences: this.#escrows.map((escrow) => escrow.authAudience),
-        });
-      const responses = await Promise.all(
-        this.#escrows.map(
-          async (escrow) => await escrow.getIdentifiers(approval),
-        ),
+      const { replicas: responses, authIdentifiers } = await this.#readReplicas(
+        this.#escrows,
       );
       assertSameVersion(responses);
       const hashes = await Promise.all(
@@ -600,7 +594,7 @@ export class MfaRecoveryController extends BaseController<
       }
 
       await this.#assertEscrowsAvailable(escrows);
-      const replicas = await this.#readReplicas(escrows);
+      const { replicas } = await this.#readReplicas(escrows);
       assertSameVersion(replicas);
       if (identifier && !isEnrolledInEvery(replicas, identifier)) {
         throw new MfaRecoveryError(
@@ -786,7 +780,8 @@ export class MfaRecoveryController extends BaseController<
   async #repairReplicas(identifier: Identifier): Promise<void> {
     this.#assertValidIdentifiers([identifier]);
     await this.#assertEscrowsAvailable(this.#escrows);
-    const plan = await planRepair(await this.#readReplicas(this.#escrows));
+    const { replicas } = await this.#readReplicas(this.#escrows);
+    const plan = await planRepair(replicas);
     if (!plan) {
       return;
     }
@@ -836,23 +831,29 @@ export class MfaRecoveryController extends BaseController<
     );
   }
 
-  // Every escrow must answer; a missing record reads as version 0.
-  async #readReplicas(
-    escrows: RecoveryEscrowProvider[],
-  ): Promise<GetIdentifiersResponse[]> {
-    const { approval } = await this.#authProvider.authorizeRecoveryRequest({
-      requestHash: await hash({ operation: 'getIdentifiers' }),
-      audiences: escrows.map((escrow) => escrow.authAudience),
-    });
-    return await Promise.all(
-      escrows.map(async (escrow) => await escrow.getIdentifiers(approval)),
-    );
+  // Reads the escrows with a read-only approval, which also returns Auth's
+  // identifiers.
+  async #readReplicas(escrows: RecoveryEscrowProvider[]): Promise<{
+    replicas: GetIdentifiersResponse[];
+    authIdentifiers: Identifier[];
+  }> {
+    const { approval, identifiers } =
+      await this.#authProvider.authorizeRecoveryRequest({
+        requestHash: await hash({ operation: 'getIdentifiers' }),
+        audiences: escrows.map((escrow) => escrow.authAudience),
+      });
+    return {
+      replicas: await getEscrowIdentifiers(escrows, approval),
+      authIdentifiers: identifiers,
+    };
   }
 
-  // Escrows off `expectedVersion` are probed alone: a version read cannot tell
-  // whether this mutation moved them, but they replay its receipt or reject,
-  // never forking the rest. Escrows fail, rather than reject, an unenrolled
-  // identifier. `replicas` are the reads of `remainingEscrows`.
+  // An escrow whose version is no longer `expectedVersion` was already written
+  // to. Only those escrows get this mutation, without proofs: each returns our
+  // receipt or rejects. If no escrow was written to, we write to all of them.
+  // First we check that every escrow knows the identifier. Escrows return an
+  // error for an unknown one, so checking here keeps the write from getting
+  // stuck.
   async #getEscrowsToWrite(
     writing: WritingPendingOperation,
     remainingEscrows: RecoveryEscrowProvider[],
@@ -862,11 +863,9 @@ export class MfaRecoveryController extends BaseController<
     replicas: GetIdentifiersResponse[];
   }> {
     const { mutation, identifier } = writing;
-    const replicas = await Promise.all(
-      remainingEscrows.map(
-        async (escrow) =>
-          await escrow.getIdentifiers(writing.authControllerToken),
-      ),
+    const replicas = await getEscrowIdentifiers(
+      remainingEscrows,
+      writing.authControllerToken,
     );
     const moved = remainingEscrows.filter(
       (_, index) => replicas[index].version !== mutation.expectedVersion,

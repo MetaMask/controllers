@@ -1,6 +1,11 @@
 import { hash } from './crypto.js';
 import { MfaRecoveryError } from './errors.js';
-import type { GetIdentifiersResponse, Identifier } from './types.js';
+import type {
+  AuthControllerToken,
+  GetIdentifiersResponse,
+  Identifier,
+  RecoveryEscrowProvider,
+} from './types.js';
 
 type RepairPlan = {
   /** Highest escrow version. */
@@ -12,6 +17,23 @@ type RepairPlan = {
   /** Whether copying the identifiers alone repairs the lagging escrows. */
   identifiersOnly: boolean;
 };
+
+/**
+ * Reads every escrow's identifiers and version. Every escrow must answer; a
+ * missing record reads as version 0.
+ *
+ * @param escrows - Escrows to read.
+ * @param token - AuthController token for the read.
+ * @returns Each escrow's read, in `escrows` order.
+ */
+export async function getEscrowIdentifiers(
+  escrows: RecoveryEscrowProvider[],
+  token: AuthControllerToken,
+): Promise<GetIdentifiersResponse[]> {
+  return await Promise.all(
+    escrows.map(async (escrow) => await escrow.getIdentifiers(token)),
+  );
+}
 
 /**
  * Ensures every escrow is at the same version before a read or mutation.
