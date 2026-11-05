@@ -1,7 +1,6 @@
 {
-  "extends": "../../tsconfig.packages.build.json",
+  "extends": ["./tsconfig.json", "../../tsconfig.packages.build.json"],
   "compilerOptions": {
-    "resolveJsonModule": true,
     "outDir": "./dist",
     "rootDir": "./src"
   },

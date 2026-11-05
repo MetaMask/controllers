@@ -1,9 +1,5 @@
 {
-  "extends": "../../tsconfig.packages.build.json",
-  "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src"
-  },
+  "extends": ["./tsconfig.json", "../../tsconfig.packages.build.json"],
   "references": [
     {
       "path": "../account-tree-controller/tsconfig.build.json"
