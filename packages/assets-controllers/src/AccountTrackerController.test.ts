@@ -203,7 +203,9 @@ describe('AccountTrackerController', () => {
       rootMessenger.registerActionHandler(
         'NetworkController:getNetworkClientById',
         () =>
-          ({ configuration: { chainId: initialChainId } }) as ReturnType<
+          ({
+            configuration: { chainId: initialChainId },
+          }) as unknown as ReturnType<
             NetworkControllerGetNetworkClientByIdAction['handler']
           >,
       );

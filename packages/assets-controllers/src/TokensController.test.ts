@@ -3447,7 +3447,7 @@ describe('TokensController', () => {
         () =>
           ({
             configuration: { chainId: ChainId.mainnet },
-          }) as ReturnType<
+          }) as unknown as ReturnType<
             NetworkControllerGetNetworkClientByIdAction['handler']
           >,
       );
