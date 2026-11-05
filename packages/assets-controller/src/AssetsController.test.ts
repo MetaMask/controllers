@@ -1,3 +1,4 @@
+import { deriveStateFromMetadata } from '@metamask/base-controller';
 import { clientControllerSelectors } from '@metamask/client-controller';
 import type { TraceCallback, TraceRequest } from '@metamask/controller-utils';
 import type { ApiPlatformClient } from '@metamask/core-backend';
@@ -477,6 +478,46 @@ describe('AssetsController', () => {
       for (const id of erc20Ids) {
         expect(id).toBe(normalizeAssetId(id as Caip19AssetId));
       }
+    });
+  });
+
+  describe('metadata', () => {
+    it('includes expected state in state logs', async () => {
+      await withController(({ controller }) => {
+        expect(
+          deriveStateFromMetadata(
+            controller.state,
+            controller.metadata,
+            'includeInStateLogs',
+          ),
+        ).toStrictEqual({
+          assetsInfo: buildDefaultAssetsInfo(),
+          assetsBalance: {},
+          assetsPrice: {},
+          customAssets: {},
+          assetPreferences: {},
+          selectedCurrency: 'usd',
+        });
+      });
+    });
+
+    it('includes all asset state fields in state logs', async () => {
+      await withController(({ controller }) => {
+        const stateLogFields = Object.entries(controller.metadata)
+          .filter(([, metadata]) => metadata.includeInStateLogs)
+          .map(([key]) => key)
+          .sort();
+
+        expect(stateLogFields).toStrictEqual([
+          'assetPreferences',
+          'assetsBalance',
+          'assetsInfo',
+          'assetsLoadingStatus',
+          'assetsPrice',
+          'customAssets',
+          'selectedCurrency',
+        ]);
+      });
     });
   });
 
