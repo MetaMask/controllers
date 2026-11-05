@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING:** Remove `ProfileServiceMock`, `buildMockProfileService`, `MockProfileServiceHandlers`, `MOCK_PROFILE_API_RESPONSE`, `MOCK_X_CONNECT_RESPONSE`, and `MOCK_X_AUTH_URL_RESPONSE` exports
+  - These were test utilities that leaked into the public package surface. Consumers that relied on them should build their own mocks against the `ProfileService` interface.
+
 ### Changed
 
 - Preserve the Profile API's error message in the `HttpError` ([#11330](https://github.com/MetaMask/core/pull/11330))
