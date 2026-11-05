@@ -163,10 +163,6 @@ const InfuraRpcEndpointUrlStruct =
 
 const InfuraRpcEndpointStruct = superstructObject({
   /**
-   * Alternate RPC endpoints to use when this endpoint is down.
-   */
-  failoverUrls: optional(array(string())),
-  /**
    * The optional user-facing nickname of the endpoint.
    */
   name: optional(string()),
@@ -204,10 +200,6 @@ const InfuraRpcEndpointStruct = superstructObject({
 export type InfuraRpcEndpoint = Infer<typeof InfuraRpcEndpointStruct>;
 
 const CustomRpcEndpointStruct = superstructObject({
-  /**
-   * Alternate RPC endpoints to use when this endpoint is down.
-   */
-  failoverUrls: optional(array(string())),
   /**
    * The optional user-facing nickname of the endpoint.
    */
@@ -913,7 +905,6 @@ function getDefaultInfuraNetworkConfigurationsByChainId(): Record<
         nativeCurrency: NetworksTicker[infuraNetworkType],
         rpcEndpoints: [
           {
-            failoverUrls: [],
             networkClientId: infuraNetworkType,
             type: RpcEndpointType.Infura,
             url: rpcEndpointUrl,
@@ -970,7 +961,6 @@ function getCustomNetworkConfiguration(
     nativeCurrency: ticker,
     rpcEndpoints: [
       {
-        failoverUrls: [],
         networkClientId: customNetworkType,
         type: RpcEndpointType.Custom,
         url: rpcEndpointUrl,
@@ -2915,7 +2905,7 @@ export class NetworkController extends BaseController<
           ),
       );
 
-    const defaultFailoverUrls = this.#failoverUrls?.[networkFields.chainId];
+    const failoverUrls = this.#failoverUrls?.[networkFields.chainId] ?? [];
     for (const addedRpcEndpoint of addedRpcEndpoints) {
       if (addedRpcEndpoint.type === RpcEndpointType.Infura) {
         autoManagedNetworkClientRegistry[NetworkClientType.Infura][
@@ -2926,8 +2916,7 @@ export class NetworkController extends BaseController<
             type: NetworkClientType.Infura,
             chainId: networkFields.chainId,
             network: addedRpcEndpoint.networkClientId,
-            failoverRpcUrls:
-              defaultFailoverUrls ?? addedRpcEndpoint.failoverUrls,
+            failoverRpcUrls: failoverUrls,
             infuraProjectId: this.#infuraProjectId,
             ticker: networkFields.nativeCurrency,
           },
@@ -2945,8 +2934,7 @@ export class NetworkController extends BaseController<
           networkClientConfiguration: {
             type: NetworkClientType.Custom,
             chainId: networkFields.chainId,
-            failoverRpcUrls:
-              defaultFailoverUrls ?? addedRpcEndpoint.failoverUrls,
+            failoverRpcUrls: failoverUrls,
             rpcUrl: addedRpcEndpoint.url,
             ticker: networkFields.nativeCurrency,
           },
@@ -3097,7 +3085,7 @@ export class NetworkController extends BaseController<
     const networkClientsWithIds = chainIds.flatMap((chainId) => {
       const networkConfiguration =
         this.state.networkConfigurationsByChainId[chainId];
-      const defaultFailoverUrls = this.#failoverUrls?.[chainId];
+      const failoverUrls = this.#failoverUrls?.[chainId] ?? [];
       return networkConfiguration.rpcEndpoints.map((rpcEndpoint) => {
         if (rpcEndpoint.type === RpcEndpointType.Infura) {
           const infuraNetworkName = deriveInfuraNetworkNameFromRpcEndpointUrl(
@@ -3110,8 +3098,7 @@ export class NetworkController extends BaseController<
               networkClientConfiguration: {
                 type: NetworkClientType.Infura,
                 network: infuraNetworkName,
-                failoverRpcUrls:
-                  defaultFailoverUrls ?? rpcEndpoint.failoverUrls,
+                failoverRpcUrls: failoverUrls,
                 infuraProjectId: this.#infuraProjectId,
                 chainId: networkConfiguration.chainId,
                 ticker: networkConfiguration.nativeCurrency,
@@ -3131,7 +3118,7 @@ export class NetworkController extends BaseController<
             networkClientConfiguration: {
               type: NetworkClientType.Custom,
               chainId: networkConfiguration.chainId,
-              failoverRpcUrls: defaultFailoverUrls ?? rpcEndpoint.failoverUrls,
+              failoverRpcUrls: failoverUrls,
               rpcUrl: rpcEndpoint.url,
               ticker: networkConfiguration.nativeCurrency,
             },

@@ -1,6 +1,6 @@
 {
   "name": "@metamask/core-backend",
-  "version": "13.0.0",
+  "version": "14.0.0",
   "description": "Core backend services for MetaMask",
   "keywords": [
     "Ethereum",
@@ -32,6 +32,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
+    "allow-scripts": "yarn workspace @metamask/core-monorepo run allow-scripts",
     "build": "tsc --project tsconfig.build.json",
     "build:all": "tsc --build tsconfig.build.json --verbose",
     "build:clean": "yarn build:only-clean && yarn build",
@@ -61,7 +62,7 @@
     "@tanstack/query-core": "^5.103.2",
     "async-mutex": "^0.5.0",
     "cockatiel": "^3.2.1",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@metamask/auto-changelog": "^7.1.0",

@@ -84,6 +84,7 @@ const mockPerpPosition = {
   perpPositionType: 'long',
   perpLeverage: 10,
   positionAmountWithLeverage: 25,
+  positionValueUSD: 1_125_000,
 };
 
 const MOCK_TOKEN = 'mock-bearer-token';
@@ -794,6 +795,7 @@ describe('SocialService', () => {
       expect(result.positions[0].perpPositionType).toBe('long');
       expect(result.positions[0].perpLeverage).toBe(10);
       expect(result.positions[0].positionAmountWithLeverage).toBe(25);
+      expect(result.positions[0].positionValueUSD).toBe(1_125_000);
       expect(result.positions[0].trades[0].classification).toBe('perp');
       expect(result.positions[0].trades[0].perpPositionType).toBe('long');
       expect(result.positions[0].trades[0].perpLeverage).toBe(10);
@@ -891,7 +893,12 @@ describe('SocialService', () => {
             positions: [
               {
                 ...mockPosition,
-                flags: ['insider', 'developer', 'future-flag'],
+                flags: [
+                  'insider',
+                  'developer',
+                  'unsupported-token',
+                  'future-flag',
+                ],
               },
             ],
             pagination: { hasMore: false },
@@ -906,6 +913,7 @@ describe('SocialService', () => {
       expect(result.positions[0].flags).toStrictEqual([
         'insider',
         'developer',
+        'unsupported-token',
         'future-flag',
       ]);
     });
@@ -1817,6 +1825,30 @@ describe('SocialService', () => {
       const result = await service.fetchFeed();
 
       expect(result.items).toStrictEqual([flagged]);
+    });
+
+    it('passes positionValueUSD through and drops an item with a non-numeric value', async () => {
+      const valued = { ...mockFeedItem, positionValueUSD: 1500 };
+      const closed = { ...mockFeedItem, positionValueUSD: 0 };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            items: [
+              valued,
+              closed,
+              mockFeedItem,
+              { ...mockFeedItem, positionValueUSD: '1500' },
+            ],
+            pagination: { olderCursor: null, newerCursor: null },
+          }),
+      });
+
+      const service = createService();
+      const result = await service.fetchFeed();
+
+      expect(result.items).toStrictEqual([valued, closed, mockFeedItem]);
     });
 
     // An open position has no final hold; the anchor is what the client
