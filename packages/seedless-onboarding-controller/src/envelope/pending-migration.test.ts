@@ -23,29 +23,18 @@ const vaultKeySet: VaultKeySet = {
  * @returns A pending migration checkpoint.
  */
 async function createPending(): Promise<PendingEnvelopeMigration> {
-  const passwordKeys = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
   const recoveryKeys = deriveEnvelopeKeys(new Uint8Array(32).fill(5));
   return {
-    v: 1,
+    v: 2,
     recoverySecret: '0x07',
     passwordAuthPubKey: 'pub',
-    envelopes: {
-      password: {
-        keys: passwordKeys,
-        envelope: await sealEnvelope(
-          passwordKeys.wrapKey,
-          'password',
-          vaultKeySet,
-        ),
-      },
-      'recovery-secret': {
-        keys: recoveryKeys,
-        envelope: await sealEnvelope(
-          recoveryKeys.wrapKey,
-          'recovery-secret',
-          vaultKeySet,
-        ),
-      },
+    recoveryEnvelope: {
+      keys: recoveryKeys,
+      envelope: await sealEnvelope(
+        recoveryKeys.wrapKey,
+        'recovery-secret',
+        vaultKeySet,
+      ),
     },
     control: {
       v: 1,
@@ -89,7 +78,7 @@ describe('pending envelope migration', () => {
 
   it('returns undefined for an unknown version', async () => {
     const encrypted = await encryptPendingMigration(
-      { ...(await createPending()), v: 2 as unknown as 1 },
+      { ...(await createPending()), v: 1 as unknown as 2 },
       vaultKeySet.localWrapKey,
     );
 

@@ -10,12 +10,7 @@ import {
 } from '@metamask/utils';
 
 import { derivePubKey } from './envelope-keys.js';
-import type {
-  ControlRecord,
-  Envelope,
-  EnvelopeKeys,
-  EnvelopePath,
-} from './envelope-keys.js';
+import type { ControlRecord, Envelope, EnvelopeKeys } from './envelope-keys.js';
 
 /** An envelope and the keys of the partition it is written to. */
 export type SealedEnvelope = {
@@ -24,17 +19,18 @@ export type SealedEnvelope = {
 };
 
 /**
- * The checkpoint of an envelope migration whose envelopes are sealed but not
- * yet confirmed at the Metadata Service. It is persisted before the first
- * remote write, so a retry writes the same bytes.
+ * The checkpoint of an envelope migration whose Recovery Secret envelope and
+ * control record are sealed but not yet confirmed at the Metadata Service.
+ * It is persisted before the first remote write, so a retry writes the same
+ * bytes.
  */
 export type PendingEnvelopeMigration = {
-  v: 1;
+  v: 2;
   /** Hex encoded Recovery Secret the `rbek` was sealed for. */
   recoverySecret: string;
   /** base64 auth public key of the password OPRF key at seal time. */
   passwordAuthPubKey: string;
-  envelopes: Record<EnvelopePath, SealedEnvelope>;
+  recoveryEnvelope: SealedEnvelope;
   control: ControlRecord;
 };
 
@@ -46,9 +42,9 @@ type SerializedSealedEnvelope = {
 
 type SerializedPendingEnvelopeMigration = Omit<
   PendingEnvelopeMigration,
-  'envelopes'
+  'recoveryEnvelope'
 > & {
-  envelopes: Record<EnvelopePath, SerializedSealedEnvelope>;
+  recoveryEnvelope: SerializedSealedEnvelope;
 };
 
 /**
@@ -93,12 +89,7 @@ export async function encryptPendingMigration(
 ): Promise<string> {
   const body: SerializedPendingEnvelopeMigration = {
     ...pending,
-    envelopes: {
-      password: serializeSealedEnvelope(pending.envelopes.password),
-      'recovery-secret': serializeSealedEnvelope(
-        pending.envelopes['recovery-secret'],
-      ),
-    },
+    recoveryEnvelope: serializeSealedEnvelope(pending.recoveryEnvelope),
   };
   const { iv, ciphertext } = await encrypt(
     localWrapKey as Uint8Array<ArrayBuffer>,
@@ -129,17 +120,12 @@ export async function decryptPendingMigration(
     const body = JSON.parse(
       bytesToString(plaintext),
     ) as SerializedPendingEnvelopeMigration;
-    if (body.v !== 1) {
+    if (body.v !== 2) {
       return undefined;
     }
     return {
       ...body,
-      envelopes: {
-        password: parseSealedEnvelope(body.envelopes.password),
-        'recovery-secret': parseSealedEnvelope(
-          body.envelopes['recovery-secret'],
-        ),
-      },
+      recoveryEnvelope: parseSealedEnvelope(body.recoveryEnvelope),
     };
   } catch {
     return undefined;

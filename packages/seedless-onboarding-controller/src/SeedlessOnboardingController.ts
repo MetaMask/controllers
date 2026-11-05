@@ -731,6 +731,19 @@ export class SeedlessOnboardingController<
             encKey = recoverEncKeyResult.encKey;
             pwEncKey = recoverEncKeyResult.pwEncKey;
             authKeyPair = recoverEncKeyResult.authKeyPair;
+            const passwordKeySet: VaultKeySet = {
+              authKeyPair,
+              encKey,
+              localWrapKey: pwEncKey,
+            };
+            // a migrated vault has no pbek until its first envelope password
+            // change, so the password may derive K_v directly
+            if (await this.#hasControlRecords(passwordKeySet)) {
+              envelope = {
+                vaultKeySet: passwordKeySet,
+                passwordAuthPubKey: authKeyPair.pk,
+              };
+            }
           }
         } else {
           this.#assertIsUnlocked();
@@ -1144,6 +1157,15 @@ export class SeedlessOnboardingController<
           });
           this.#setEnvelopeState(vaultKeySet, authKeyPair.pk);
         } else {
+          const passwordKeySet: VaultKeySet = {
+            authKeyPair,
+            encKey,
+            localWrapKey: pwEncKey,
+          };
+          // a migrated vault has no pbek until its first envelope password
+          // change, so the password may derive K_v directly
+          const isEnvelopeManaged =
+            await this.#hasControlRecords(passwordKeySet);
           // update and encrypt the vault with new password
           await this.#createNewVaultWithAuthData({
             password: globalPassword,
@@ -1151,10 +1173,11 @@ export class SeedlessOnboardingController<
             rawToprfPwEncryptionKey: pwEncKey as Uint8Array<ArrayBuffer>,
             rawToprfAuthKeyPair: authKeyPair,
           });
-          // the vault now follows the legacy layout of the new password
-          this.update((state) => {
-            delete state.envelope;
-          });
+          this.#updateEnvelopeState(
+            isEnvelopeManaged,
+            passwordKeySet,
+            authKeyPair.pk,
+          );
         }
 
         this.#resetPasswordOutdatedCache();
@@ -2570,25 +2593,27 @@ export class SeedlessOnboardingController<
    * Migrate the vault to envelope encryption, adopting its current key set
    * as the vault key set `K_v`.
    *
-   * Writes `rbek` (sealed for the Recovery Secret), `pbek` (sealed for the
-   * password) and the control record into their own partitions. No secret
-   * data item is moved. The sealed envelopes are checkpointed before the
-   * first remote write, so a failed call can be retried with the same
-   * arguments. Does nothing if the vault is already envelope-managed.
+   * Writes `rbek` (sealed for the Recovery Secret) and the control record
+   * into their own partitions. No secret data item is moved, and no password
+   * is needed: the current password still derives `K_v` directly, so the
+   * first `pbek` is written by the first password change. The sealed
+   * envelope is checkpointed before the first remote write, so a failed call
+   * can be retried with the same arguments. Does nothing if the vault is
+   * already envelope-managed.
    *
-   * Register the Recovery Secret at the escrows first, then call
+   * The vault must be unlocked and in sync with the global password. Register
+   * the Recovery Secret at the escrows first, then call
    * {@link authenticateForRecovery}.
    *
    * @param params - The function parameters.
-   * @param params.password - The current password.
    * @param params.recoverySecret - The 32-byte Recovery Secret held in escrow.
    * @returns A promise that resolves once the vault is envelope-managed.
+   * @throws `OutdatedPassword` if the vault is not in sync with the global
+   * password.
    */
   async migrateToEnvelope({
-    password,
     recoverySecret,
   }: {
-    password: string;
     recoverySecret: Uint8Array;
   }): Promise<void> {
     return await this.#withControllerLock(async () =>
@@ -2608,12 +2633,16 @@ export class SeedlessOnboardingController<
         const vaultKeySet = toVaultKeySet(
           await this.#unlockVaultAndGetVaultData(),
         );
+        // another device holding the same K_v may have migrated already
+        if (await this.#hasControlRecords(vaultKeySet)) {
+          this.#setEnvelopeState(vaultKeySet, vaultKeySet.authKeyPair.pk);
+          return;
+        }
         const recoverySecretHex = bytesToHex(recoverySecret);
 
         let pending = await this.#loadPendingEnvelopeMigration(vaultKeySet);
         if (pending?.recoverySecret !== recoverySecretHex) {
           pending = await this.#sealEnvelopeMigration({
-            password,
             recoverySecretHex,
             vaultKeySet,
           });
@@ -2761,48 +2790,33 @@ export class SeedlessOnboardingController<
   }
 
   /**
-   * Seal the envelopes and the first control record of an envelope
-   * migration (steps 3 and 4).
+   * Seal the Recovery Secret envelope and the first control record of an
+   * envelope migration (steps 3 and 4).
+   *
+   * The password OPRF key is still the one the vault keys derive from, so
+   * the vault is in sync when the nodes' auth public key equals the vault's.
    *
    * @param params - The function parameters.
-   * @param params.password - The current password.
    * @param params.recoverySecretHex - The hex encoded Recovery Secret.
    * @param params.vaultKeySet - The vault key set to adopt as `K_v`.
    * @returns The migration checkpoint.
-   * @throws `EnvelopeVaultKeyMismatch` if the password does not derive the
-   * vault keys.
+   * @throws `OutdatedPassword` if the vault is not in sync with the global
+   * password.
    */
   async #sealEnvelopeMigration({
-    password,
     recoverySecretHex,
     vaultKeySet,
   }: {
-    password: string;
     recoverySecretHex: string;
     vaultKeySet: VaultKeySet;
   }): Promise<PendingEnvelopeMigration> {
-    await this.verifyVaultPassword(password, { skipLock: true });
-    await this.#assertPasswordInSync({ skipCache: true, skipLock: true });
+    const { latestKeyIndex } = await this.#assertPasswordInSync({
+      skipCache: true,
+      skipLock: true,
+    });
 
     const recoverySeed = await this.#evalRecoverySecretSeed(recoverySecretHex);
-    let passwordSeed: Uint8Array | undefined;
     try {
-      const {
-        seed,
-        authKeyPair: passwordAuthKeyPair,
-        encKey,
-        keyShareIndex,
-      } = await this.#recoverEncKey(password);
-      passwordSeed = seed;
-      if (
-        !pubKeysEqual(passwordAuthKeyPair.pk, vaultKeySet.authKeyPair.pk) ||
-        bytesToHex(encKey) !== bytesToHex(vaultKeySet.encKey)
-      ) {
-        throw new SeedlessOnboardingError(
-          SeedlessOnboardingControllerErrorMessage.EnvelopeVaultKeyMismatch,
-        );
-      }
-
       this.#assertIsAuthenticatedUser(this.state);
       const { authConnectionId, groupedAuthConnectionId, userId } = this.state;
       const record: ControlRecord = {
@@ -2812,33 +2826,25 @@ export class SeedlessOnboardingController<
           verifier: groupedAuthConnectionId ?? authConnectionId,
           verifierId: userId,
           authSk: bigIntToHex(vaultKeySet.authKeyPair.sk),
-          keyIndex: keyShareIndex,
+          keyIndex: latestKeyIndex,
           enabled: true,
         },
         migratedAt: Date.now(),
       };
 
       return {
-        v: 1,
+        v: 2,
         recoverySecret: recoverySecretHex,
         passwordAuthPubKey: bytesToBase64(vaultKeySet.authKeyPair.pk),
-        envelopes: {
-          password: await sealFor(
-            deriveEnvelopeKeys(passwordSeed),
-            'password',
-            vaultKeySet,
-          ),
-          'recovery-secret': await sealFor(
-            deriveEnvelopeKeys(recoverySeed),
-            'recovery-secret',
-            vaultKeySet,
-          ),
-        },
+        recoveryEnvelope: await sealFor(
+          deriveEnvelopeKeys(recoverySeed),
+          'recovery-secret',
+          vaultKeySet,
+        ),
         control: record,
       };
     } finally {
       recoverySeed.fill(0);
-      passwordSeed?.fill(0);
     }
   }
 
@@ -2908,8 +2914,8 @@ export class SeedlessOnboardingController<
   }
 
   /**
-   * Write the checkpointed envelopes and control record under the vault's
-   * metadata lock, and read each back (step 5).
+   * Write the checkpointed Recovery Secret envelope and control record under
+   * the vault's metadata lock, and read each back (step 5).
    *
    * @param pending - The migration checkpoint.
    * @param vaultKeySet - The vault key set `K_v`.
@@ -2931,8 +2937,7 @@ export class SeedlessOnboardingController<
         throw error;
       }
 
-      await this.#writeAndVerifyEnvelope(pending.envelopes['recovery-secret']);
-      await this.#writeAndVerifyEnvelope(pending.envelopes.password);
+      await this.#writeAndVerifyEnvelope(pending.recoveryEnvelope);
 
       const controlKeys = deriveControlKeys(vaultKeySet);
       await this.#envelopeStore.writeControlRecord(
@@ -3095,6 +3100,43 @@ export class SeedlessOnboardingController<
           passwordAuthPubKey: bytesToBase64(passwordAuthPubKey),
         }),
       };
+    });
+  }
+
+  /**
+   * Until the first envelope password change, a migrated vault has no
+   * `pbek`, so its control records are what mark it envelope-managed.
+   *
+   * @param vaultKeySet - The vault key set.
+   * @returns Whether the vault key set has control records.
+   * @throws If the control records cannot be fetched.
+   */
+  async #hasControlRecords(vaultKeySet: VaultKeySet): Promise<boolean> {
+    const controlRecords = await this.#envelopeStore.fetchControlRecords(
+      deriveControlKeys(vaultKeySet),
+    );
+    return controlRecords.length > 0;
+  }
+
+  /**
+   * Mark the vault as envelope-managed, or clear the envelope state.
+   *
+   * @param isEnvelopeManaged - Whether the vault is envelope-managed.
+   * @param vaultKeySet - The vault key set `K_v`.
+   * @param passwordAuthPubKey - The password OPRF auth public key the local
+   * password is synced with.
+   */
+  #updateEnvelopeState(
+    isEnvelopeManaged: boolean,
+    vaultKeySet: VaultKeySet,
+    passwordAuthPubKey: SEC1EncodedPublicKey,
+  ): void {
+    if (isEnvelopeManaged) {
+      this.#setEnvelopeState(vaultKeySet, passwordAuthPubKey);
+      return;
+    }
+    this.update((state) => {
+      delete state.envelope;
     });
   }
 

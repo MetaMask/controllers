@@ -356,7 +356,7 @@ describe('SeedlessOnboardingController', () => {
       await authenticateAal2(args, { hasRecoveryShare: false });
       await args.baseMessenger.call(
         'SeedlessOnboardingController:migrateToEnvelope',
-        { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+        { recoverySecret: RECOVERY_SECRET },
       );
       vi.clearAllMocks();
       expect(args.controller.state.envelope).toBeDefined();
@@ -734,7 +734,7 @@ describe('SeedlessOnboardingController', () => {
     });
 
     describe('migrateToEnvelope', () => {
-      it('registers the Recovery Secret, writes both envelopes and the control record, and adopts the vault keys', async () => {
+      it('registers the Recovery Secret, writes its envelope and the control record, and adopts the vault keys', async () => {
         await withUnlockedController(async (args) => {
           const { controller, toprfClient, baseMessenger } = args;
           const network = mockNetwork(toprfClient);
@@ -742,7 +742,7 @@ describe('SeedlessOnboardingController', () => {
 
           await baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           const vaultKeySet = vaultKeySetFor();
@@ -758,9 +758,10 @@ describe('SeedlessOnboardingController', () => {
             }),
           );
           expect(controller.state.recoverySession?.hasRecoveryShare).toBe(true);
+          expect(network.spies.recoverEncKey).not.toHaveBeenCalled();
           expect(
             await openStoredEnvelope(network, MOCK_PASSWORD, 'password'),
-          ).toStrictEqual(vaultKeySet);
+          ).toBeUndefined();
           expect(
             await openStoredEnvelope(
               network,
@@ -807,7 +808,7 @@ describe('SeedlessOnboardingController', () => {
 
           await baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           expect(
@@ -818,7 +819,6 @@ describe('SeedlessOnboardingController', () => {
               ([{ dataType }]) => dataType,
             ),
           ).toStrictEqual([
-            EncAccountDataType.KeyEnvelope,
             EncAccountDataType.KeyEnvelope,
             EncAccountDataType.EnvelopeControl,
           ]);
@@ -837,11 +837,12 @@ describe('SeedlessOnboardingController', () => {
 
           await baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           expect(network.spies.createLocalKey).not.toHaveBeenCalled();
           expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
+          expect(network.spies.recoverEncKey).toHaveBeenCalledTimes(1);
           expect(network.spies.recoverEncKey).toHaveBeenCalledWith(
             expect.objectContaining({
               nodeAuthTokens: AAL2_NODE_AUTH_TOKENS,
@@ -871,7 +872,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.RecoveryKeyShareConflict,
@@ -897,7 +898,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow('nodes unavailable');
           expect(network.spies.addSecretDataItem).not.toHaveBeenCalled();
@@ -918,7 +919,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.Aal2Required,
@@ -942,7 +943,7 @@ describe('SeedlessOnboardingController', () => {
 
           await baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           expect(controller.state.envelope).toBeDefined();
@@ -960,7 +961,7 @@ describe('SeedlessOnboardingController', () => {
 
           await baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           expect(controller.state.envelope).toBeDefined();
@@ -976,7 +977,7 @@ describe('SeedlessOnboardingController', () => {
 
             await baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             );
 
             expect(
@@ -1013,7 +1014,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
@@ -1029,54 +1030,12 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.Aal2Required,
           );
           expect(network.spies.addSecretDataItem).not.toHaveBeenCalled();
-        });
-      });
-
-      it('throws EnvelopeVaultKeyMismatch when the password does not derive the vault keys', async () => {
-        await withUnlockedController(async (args) => {
-          const { controller, toprfClient, baseMessenger } = args;
-          const network = mockNetwork(toprfClient);
-          network.spies.recoverEncKey.mockImplementationOnce(async () => ({
-            ...keysFor('other-password'),
-            keyShareIndex: 1,
-            rateLimitResetResult: Promise.resolve(),
-          }));
-          await authenticateAal2(args, { hasRecoveryShare: false });
-
-          await expect(
-            baseMessenger.call(
-              'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
-            ),
-          ).rejects.toThrow(
-            SeedlessOnboardingControllerErrorMessage.EnvelopeVaultKeyMismatch,
-          );
-
-          expect(network.spies.addSecretDataItem).not.toHaveBeenCalled();
-          expect(controller.state.envelope).toBeUndefined();
-          expect(controller.state.pendingEnvelopeMigration).toBeUndefined();
-        });
-      });
-
-      it('throws for a wrong password before touching the recovery verifier', async () => {
-        await withUnlockedController(async (args) => {
-          const { toprfClient, baseMessenger } = args;
-          const network = mockNetwork(toprfClient);
-          await authenticateAal2(args, { hasRecoveryShare: false });
-
-          await expect(
-            baseMessenger.call(
-              'SeedlessOnboardingController:migrateToEnvelope',
-              { password: 'wrong-password', recoverySecret: RECOVERY_SECRET },
-            ),
-          ).rejects.toThrow(expect.any(Error));
-          expect(network.spies.createLocalKey).not.toHaveBeenCalled();
         });
       });
 
@@ -1091,11 +1050,12 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.OutdatedPassword,
           );
+          expect(network.spies.createLocalKey).not.toHaveBeenCalled();
           expect(network.spies.addSecretDataItem).not.toHaveBeenCalled();
           expect(controller.state.envelope).toBeUndefined();
         });
@@ -1114,7 +1074,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.OutdatedPassword,
@@ -1142,7 +1102,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow('network');
           expect(controller.state.pendingEnvelopeMigration).toStrictEqual(
@@ -1154,7 +1114,7 @@ describe('SeedlessOnboardingController', () => {
 
           await baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           expect(network.spies.recoverEncKey).toHaveBeenCalledTimes(
@@ -1163,7 +1123,11 @@ describe('SeedlessOnboardingController', () => {
           expect(network.spies.createLocalKey).toHaveBeenCalledTimes(1);
           expect(network.spies.persistLocalKey).toHaveBeenCalledTimes(1);
           expect(
-            await openStoredEnvelope(network, MOCK_PASSWORD, 'password'),
+            await openStoredEnvelope(
+              network,
+              RECOVERY_SECRET_HEX,
+              'recovery-secret',
+            ),
           ).toStrictEqual(vaultKeySetFor());
           expect(controller.state.pendingEnvelopeMigration).toBeUndefined();
           expect(controller.state.envelope).toBeDefined();
@@ -1182,7 +1146,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: otherSecret },
+              { recoverySecret: otherSecret },
             ),
           ).rejects.toThrow('network');
           // the escrow registration was redone with another Recovery Secret
@@ -1190,7 +1154,7 @@ describe('SeedlessOnboardingController', () => {
 
           await baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           expect(
@@ -1214,7 +1178,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
@@ -1235,7 +1199,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
@@ -1251,11 +1215,56 @@ describe('SeedlessOnboardingController', () => {
 
           await args.baseMessenger.call(
             'SeedlessOnboardingController:migrateToEnvelope',
-            { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+            { recoverySecret: RECOVERY_SECRET },
           );
 
           expect(network.spies.fetchAuthPubKey).not.toHaveBeenCalled();
           expect(network.spies.addSecretDataItem).not.toHaveBeenCalled();
+        });
+      });
+
+      it('adopts the envelope state when another device migrated the same vault', async () => {
+        const store: MetadataStore = new Map();
+        await withUnlockedController(async (args) => {
+          await migrate(args, mockNetwork(args.toprfClient, { store }));
+        });
+
+        await withUnlockedController(async ({ controller, toprfClient }) => {
+          const network = mockNetwork(toprfClient, { store });
+          expect(controller.state.envelope).toBeUndefined();
+
+          await controller.migrateToEnvelope({
+            recoverySecret: RECOVERY_SECRET,
+          });
+
+          expect(network.spies.createLocalKey).not.toHaveBeenCalled();
+          expect(network.spies.addSecretDataItem).not.toHaveBeenCalled();
+          expect(await fetchControlRecords(network)).toHaveLength(1);
+          expect(controller.state.envelope).toStrictEqual({
+            v: 1,
+            vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+            passwordAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+          });
+        });
+      });
+
+      it('leaves the password path on the vault keys until the first password change', async () => {
+        await withUnlockedController(async (args) => {
+          const network = mockNetwork(args.toprfClient);
+          await migrate(args, network);
+          expect(
+            await openStoredEnvelope(network, MOCK_PASSWORD, 'password'),
+          ).toBeUndefined();
+
+          await args.baseMessenger.call(
+            'SeedlessOnboardingController:changePassword',
+            NEW_PASSWORD,
+            MOCK_PASSWORD,
+          );
+
+          expect(
+            await openStoredEnvelope(network, NEW_PASSWORD, 'password'),
+          ).toStrictEqual(vaultKeySetFor());
         });
       });
 
@@ -1270,7 +1279,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             args.baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.EnvelopeMigrationRequiresDataTypes,
@@ -1286,7 +1295,7 @@ describe('SeedlessOnboardingController', () => {
           await expect(
             baseMessenger.call(
               'SeedlessOnboardingController:migrateToEnvelope',
-              { password: MOCK_PASSWORD, recoverySecret: RECOVERY_SECRET },
+              { recoverySecret: RECOVERY_SECRET },
             ),
           ).rejects.toThrow(
             SeedlessOnboardingControllerErrorMessage.ControllerLocked,
@@ -1813,6 +1822,30 @@ describe('SeedlessOnboardingController', () => {
         });
       });
 
+      it('restores a migrated vault with the password keys before any envelope password change', async () => {
+        const store: MetadataStore = new Map();
+        await withUnlockedController(async (args) => {
+          await migrate(args, mockNetwork(args.toprfClient, { store }));
+        });
+        storeSeedPhrase(store, vaultKeySetFor());
+
+        await withNewDeviceController(async ({ controller, toprfClient }) => {
+          mockNetwork(toprfClient, { store });
+
+          const secrets = await controller.fetchAllSecretData(MOCK_PASSWORD);
+
+          expect(secrets.map(({ data }) => data)).toStrictEqual([
+            MOCK_SEED_PHRASE,
+          ]);
+          expect(controller.state.authPubKey).toBe(authPubKeyOf(MOCK_PASSWORD));
+          expect(controller.state.envelope).toStrictEqual({
+            v: 1,
+            vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+            passwordAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+          });
+        });
+      });
+
       it('restores with the password keys when the password has no envelope', async () => {
         const store: MetadataStore = new Map();
         storeSeedPhrase(store, vaultKeySetFor());
@@ -1936,6 +1969,37 @@ describe('SeedlessOnboardingController', () => {
             v: 1,
             vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
             passwordAuthPubKey: authPubKeyOf(NEW_PASSWORD),
+          });
+          expect(
+            await controller.checkIsPasswordOutdated({ skipCache: true }),
+          ).toBe(false);
+        });
+      });
+
+      it('keeps the envelope state when syncing with an unchanged password', async () => {
+        const store: MetadataStore = new Map();
+        await withUnlockedController(async (args) => {
+          await migrate(args, mockNetwork(args.toprfClient, { store }));
+        });
+        storeSeedPhrase(store, vaultKeySetFor());
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient } = args;
+          mockNetwork(toprfClient, {
+            store,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
+
+          await controller.syncLatestGlobalPassword({
+            globalPassword: MOCK_PASSWORD,
+          });
+
+          expect(controller.state.authPubKey).toBe(authPubKeyOf(MOCK_PASSWORD));
+          expect(controller.state.envelope).toStrictEqual({
+            v: 1,
+            vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+            passwordAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
           });
           expect(
             await controller.checkIsPasswordOutdated({ skipCache: true }),

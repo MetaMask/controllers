@@ -328,19 +328,23 @@ export type SeedlessOnboardingControllerAuthenticateForRecoveryAction = {
  * Migrate the vault to envelope encryption, adopting its current key set
  * as the vault key set `K_v`.
  *
- * Writes `rbek` (sealed for the Recovery Secret), `pbek` (sealed for the
- * password) and the control record into their own partitions. No secret
- * data item is moved. The sealed envelopes are checkpointed before the
- * first remote write, so a failed call can be retried with the same
- * arguments. Does nothing if the vault is already envelope-managed.
+ * Writes `rbek` (sealed for the Recovery Secret) and the control record
+ * into their own partitions. No secret data item is moved, and no password
+ * is needed: the current password still derives `K_v` directly, so the
+ * first `pbek` is written by the first password change. The sealed
+ * envelope is checkpointed before the first remote write, so a failed call
+ * can be retried with the same arguments. Does nothing if the vault is
+ * already envelope-managed.
  *
- * Register the Recovery Secret at the escrows first, then call
+ * The vault must be unlocked and in sync with the global password. Register
+ * the Recovery Secret at the escrows first, then call
  * {@link authenticateForRecovery}.
  *
  * @param params - The function parameters.
- * @param params.password - The current password.
  * @param params.recoverySecret - The 32-byte Recovery Secret held in escrow.
  * @returns A promise that resolves once the vault is envelope-managed.
+ * @throws `OutdatedPassword` if the vault is not in sync with the global
+ * password.
  */
 export type SeedlessOnboardingControllerMigrateToEnvelopeAction = {
   type: `SeedlessOnboardingController:migrateToEnvelope`;
