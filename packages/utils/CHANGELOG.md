@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Build declaration files with `exactOptionalPropertyTypes` so `JsonRpcRequestStruct` and `JsonRpcNotificationStruct` match `JsonRpcRequest` and `JsonRpcNotification` in consumers that enable it ([#11337](https://github.com/MetaMask/core/pull/11337))
+
 ## [12.0.1]
 
 ### Added
