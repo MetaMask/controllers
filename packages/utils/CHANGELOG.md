@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Build declaration files with `exactOptionalPropertyTypes` so `JsonRpcRequestStruct` and `JsonRpcNotificationStruct` match `JsonRpcRequest` and `JsonRpcNotification` in consumers that enable it ([#11337](https://github.com/MetaMask/core/pull/11337))
+- Build declaration files with `exactOptionalPropertyTypes` ([#11337](https://github.com/MetaMask/core/pull/11337))
+  - `JsonRpcRequestStruct` and `JsonRpcNotificationStruct` now match `JsonRpcRequest` and `JsonRpcNotification` in consumers that enable the option.
+  - The optional `params`, `data` and `stack` fields in the JSON-RPC structs and their inferred types no longer gain `| undefined`.
 
 ## [12.0.1]
 
