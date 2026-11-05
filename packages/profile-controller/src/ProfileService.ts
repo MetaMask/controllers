@@ -41,6 +41,11 @@ export const ProfileServiceErrorMessage = {
   DELETE_PROFILE_FAILED: 'ProfileService: failed to delete profile',
   CHECK_USERNAME_AVAILABILITY_FAILED:
     'ProfileService: failed to check username availability',
+  CHECK_DISPLAY_NAME_VALIDITY_FAILED:
+    'ProfileService: failed to check display name validity',
+  CHECK_BIO_VALIDITY_FAILED: 'ProfileService: failed to check bio validity',
+  CHECK_EARLY_ACCESS_FAILED:
+    'ProfileService: failed to check early access status',
   GET_X_AUTH_URL_FAILED: 'ProfileService: failed to get X authentication URL',
   CONNECT_X_FAILED: 'ProfileService: failed to connect X account',
   GET_X_ACCOUNT_FAILED: 'ProfileService: failed to get X account',
@@ -74,6 +79,14 @@ const ProfileApiResponseStruct = structType({
   connected_to_x: boolean(),
   created_at: string(),
   updated_at: string(),
+});
+
+const FieldValidityResponseStruct = structType({
+  valid: boolean(),
+});
+
+const EarlyAccessResponseStruct = structType({
+  hasAccess: boolean(),
 });
 
 const UsernameAvailabilityErrorStruct = structType({
@@ -153,6 +166,9 @@ const MESSENGER_EXPOSED_METHODS = [
   'updateProfile',
   'deleteProfile',
   'checkUsernameAvailability',
+  'checkDisplayNameValidity',
+  'checkBioValidity',
+  'checkEarlyAccess',
   'getXAuthUrl',
   'connectX',
   'getXAccount',
@@ -169,6 +185,12 @@ export type CreateProfileResponse = Infer<typeof CreateProfileResponseStruct>;
 export type UsernameAvailabilityResponse = Infer<
   typeof UsernameAvailabilityResponseStruct
 >;
+
+/** The response shape for display name and bio validity checks. */
+export type FieldValidityResponse = Infer<typeof FieldValidityResponseStruct>;
+
+/** The response shape for the early access check. */
+export type EarlyAccessResponse = Infer<typeof EarlyAccessResponseStruct>;
 
 /** The response shape returned when connecting or fetching an X account. */
 export type ConnectXResponse = Infer<typeof ConnectXResponseStruct>;
@@ -516,6 +538,74 @@ export class ProfileService extends BaseDataService<
             searchParams: { username },
           },
         ),
+    });
+  }
+
+  /**
+   * Checks whether a display name is valid.
+   *
+   * @param displayName - The display name to validate.
+   * @returns An object with a `valid` boolean.
+   * @throws {HttpError} If the API returns a non-2xx response.
+   * @throws {StructError} If the response does not match the expected shape.
+   */
+  async checkDisplayNameValidity(
+    displayName: string,
+  ): Promise<FieldValidityResponse> {
+    return this.fetchQuery({
+      queryKey: [`${this.name}:checkDisplayNameValidity`, displayName],
+      staleTime: 0,
+      responseStruct: FieldValidityResponseStruct,
+      queryFn: async () =>
+        this.#fetch<FieldValidityResponse>(
+          'profiles/display-name/validity',
+          {
+            error:
+              ProfileServiceErrorMessage.CHECK_DISPLAY_NAME_VALIDITY_FAILED,
+            searchParams: { display_name: displayName },
+          },
+        ),
+    });
+  }
+
+  /**
+   * Checks whether a bio is valid.
+   *
+   * @param bio - The bio to validate.
+   * @returns An object with a `valid` boolean.
+   * @throws {HttpError} If the API returns a non-2xx response.
+   * @throws {StructError} If the response does not match the expected shape.
+   */
+  async checkBioValidity(bio: string): Promise<FieldValidityResponse> {
+    return this.fetchQuery({
+      queryKey: [`${this.name}:checkBioValidity`, bio],
+      staleTime: 0,
+      responseStruct: FieldValidityResponseStruct,
+      queryFn: async () =>
+        this.#fetch<FieldValidityResponse>('profiles/bio/validity', {
+          error: ProfileServiceErrorMessage.CHECK_BIO_VALIDITY_FAILED,
+          searchParams: { bio },
+        }),
+    });
+  }
+
+  /**
+   * Checks whether the authenticated profile has early access.
+   * The profile is resolved server-side from the verified bearer token.
+   *
+   * @returns An object with a `hasAccess` boolean.
+   * @throws {HttpError} If the API returns a non-2xx response.
+   * @throws {StructError} If the response does not match the expected shape.
+   */
+  async checkEarlyAccess(): Promise<EarlyAccessResponse> {
+    return this.fetchQuery({
+      queryKey: [`${this.name}:checkEarlyAccess`],
+      staleTime: 0,
+      responseStruct: EarlyAccessResponseStruct,
+      queryFn: async () =>
+        this.#fetch<EarlyAccessResponse>('early-access', {
+          error: ProfileServiceErrorMessage.CHECK_EARLY_ACCESS_FAILED,
+        }),
     });
   }
 

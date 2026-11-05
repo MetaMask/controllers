@@ -36,6 +36,8 @@ export type {
   UpdateProfileParams,
   ConnectXParams,
   UsernameAvailabilityResponse,
+  FieldValidityResponse,
+  EarlyAccessResponse,
   XAuthUrlResponse,
   ConnectXResponse,
   XAccountResponse,
@@ -56,6 +58,9 @@ export {
 } from './ProfileServiceMock.js';
 export type {
   ProfileServiceCheckUsernameAvailabilityAction,
+  ProfileServiceCheckDisplayNameValidityAction,
+  ProfileServiceCheckBioValidityAction,
+  ProfileServiceCheckEarlyAccessAction,
   ProfileServiceConnectXAction,
   ProfileServiceCreateProfileAction,
   ProfileServiceDeleteProfileAction,
