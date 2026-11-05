@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@metamask/assets-controller` from `^20.2.1` to `^20.2.2` ([#11300](https://github.com/MetaMask/core/pull/11300))
 - Bump `@metamask/transaction-controller` from `^73.1.0` to `^73.1.1` ([#11300](https://github.com/MetaMask/core/pull/11300))
 
+### Fixed
+
+- Re-derive source amounts, using the `getBalance` callback if provided, before each periodic requote ([#10911](https://github.com/MetaMask/core/pull/10911))
+- Requote max-amount transactions using a per-transaction-type interval from the `maxBalanceRefreshInterval` feature flag ([#10911](https://github.com/MetaMask/core/pull/10911))
+
 ## [30.4.2]
 
 ### Changed
