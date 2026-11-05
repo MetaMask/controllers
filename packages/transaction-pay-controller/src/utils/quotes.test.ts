@@ -9,11 +9,11 @@ import { getMessengerMock } from '../../tests/messenger-mock.js';
 import { mockModuleExcept } from '../../tests/mock-module-except.js';
 import { TransactionPayStrategy } from '../constants.js';
 import type {
-  PayStrategyGetQuotesRequest,
   TransactionPaySourceAmount,
   TransactionData,
   TransactionPayQuote,
   TransactionPayTotals,
+  PayStrategyGetQuotesRequest,
   TransactionPaymentToken,
   TransactionPayRequiredToken,
 } from '../types.js';
