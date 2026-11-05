@@ -1082,9 +1082,7 @@ describe('NetworkController', () => {
                 InfuraNetworkType.mainnet,
                 {
                   rpcEndpoints: [
-                    buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
-                      failoverUrls: ['https://failover.endpoint/1'],
-                    }),
+                    buildInfuraRpcEndpoint(InfuraNetworkType.mainnet),
                   ],
                 },
               ),
@@ -1131,6 +1129,7 @@ describe('NetworkController', () => {
 
       await withController(
         {
+          failoverUrls: { [ChainId.mainnet]: ['https://failover.endpoint/1'] },
           rpcFailoverMode: undefined,
           state: {
             selectedNetworkClientId: 'AAAA-AAAA-AAAA-AAAA',
@@ -1139,9 +1138,7 @@ describe('NetworkController', () => {
                 InfuraNetworkType.mainnet,
                 {
                   rpcEndpoints: [
-                    buildInfuraRpcEndpoint(InfuraNetworkType.mainnet, {
-                      failoverUrls: ['https://failover.endpoint/1'],
-                    }),
+                    buildInfuraRpcEndpoint(InfuraNetworkType.mainnet),
                   ],
                 },
               ),
@@ -1151,7 +1148,6 @@ describe('NetworkController', () => {
                   buildCustomRpcEndpoint({
                     networkClientId: 'AAAA-AAAA-AAAA-AAAA',
                     url: 'https://test.network/1',
-                    failoverUrls: [],
                   }),
                 ],
               }),
