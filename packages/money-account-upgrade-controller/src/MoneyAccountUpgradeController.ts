@@ -630,9 +630,6 @@ export class MoneyAccountUpgradeController extends BaseController<
       redeemerEnforcer: contracts.RedeemerEnforcer,
       valueLteEnforcer: contracts.ValueLteEnforcer,
       ...(premiumVault && { premiumVault }),
-      ...(chain.vaultMigrationHelperAddress && {
-        vaultMigrationHelperAddress: chain.vaultMigrationHelperAddress,
-      }),
     };
 
     // Keep the armed object when nothing changed: `#runSteps` treats a new
@@ -752,8 +749,11 @@ export class MoneyAccountUpgradeController extends BaseController<
    *
    * The successor and the incomplete steps are read from CHOMP, so only the
    * missing intents are registered and a migration can be resumed by calling
-   * this again. The steps signed by the successor are completed by
-   * {@link upgradeSuccessorAccount}. Nothing is recorded in state.
+   * this again. The vault migration helper of a premium migration is read
+   * from the CHOMP service details when it is needed, so one CHOMP starts
+   * serving after the bootstrap is used. The steps signed by the successor
+   * are completed by {@link upgradeSuccessorAccount}. Nothing is recorded in
+   * state.
    *
    * @param predecessorAddress - The current address of the migrating Money
    * Account.

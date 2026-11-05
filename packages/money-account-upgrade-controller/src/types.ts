@@ -30,11 +30,6 @@ export type UpgradeConfig = {
   redeemerEnforcer: Hex;
   /** Address of the ValueLteEnforcer caveat enforcer. */
   valueLteEnforcer: Hex;
-  /**
-   * The VaultMigrationHelper contract, from the CHOMP service details API
-   * when served. It redeems the premium migration transfer delegation.
-   */
-  vaultMigrationHelperAddress?: Hex;
   /** The premium vault (pvmUSD), from the `moneyAccountPremiumVaultConfig` flag when served. */
   premiumVault?: {
     boringVaultAddress: Hex;

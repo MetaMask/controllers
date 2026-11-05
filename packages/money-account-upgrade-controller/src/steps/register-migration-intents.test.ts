@@ -252,7 +252,19 @@ type Mocks = {
   createDelegation: Mock;
   signPersonalMessage: Mock;
   createIntentsV2: Mock<ChompApiServiceCreateIntentsV2Action['handler']>;
+  getServiceDetails: Mock;
 };
+
+const serviceDetails = (chain: Record<string, unknown> = {}): unknown => ({
+  auth: { message: 'message' },
+  chains: {
+    [CHAIN_ID]: {
+      autoDepositDelegate: DELEGATE,
+      vaultMigrationHelperAddress: HELPER,
+      ...chain,
+    },
+  },
+});
 
 function setup(
   identity: AddressIdentityResponse | null = migratingIdentity(),
@@ -269,6 +281,7 @@ function setup(
     createIntentsV2: vi
       .fn<ChompApiServiceCreateIntentsV2Action['handler']>()
       .mockResolvedValue([]),
+    getServiceDetails: vi.fn().mockResolvedValue(serviceDetails()),
   };
 
   const rootMessenger = new Messenger<MockAnyNamespace, AllActions, AllEvents>({
@@ -298,6 +311,10 @@ function setup(
     'ChompApiService:createIntentsV2',
     mocks.createIntentsV2,
   );
+  rootMessenger.registerActionHandler(
+    'ChompApiService:getServiceDetails',
+    mocks.getServiceDetails,
+  );
 
   const messenger: MoneyAccountUpgradeControllerMessenger = new Messenger({
     namespace: 'MoneyAccountUpgradeController',
@@ -311,6 +328,7 @@ function setup(
       'AuthenticatedUserStorageService:createDelegation',
       'KeyringController:signPersonalMessage',
       'ChompApiService:createIntentsV2',
+      'ChompApiService:getServiceDetails',
     ],
     events: [],
     messenger,
@@ -346,7 +364,6 @@ const PREMIUM_CONTEXT: Partial<StepContext> = {
     boringVaultAddress: PVMUSD,
     vedaVaultAdapterAddress: PREMIUM_VAULT_ADAPTER,
   },
-  vaultMigrationHelperAddress: HELPER,
 };
 
 type SignedDelegationArg = {
@@ -923,18 +940,38 @@ describe('registerMigrationIntentsStep', () => {
       expect(mocks.createIntentsV2.mock.calls[0][0]).toHaveLength(4);
     });
 
-    it.each([
-      ['the premium vault', { vaultMigrationHelperAddress: HELPER }],
-      [
-        'the vault migration helper',
-        { premiumVault: PREMIUM_CONTEXT.premiumVault },
-      ],
+    it('reads the vault migration helper from the CHOMP service details of the chain', async () => {
+      const { messenger, mocks } = setup(premiumIdentity());
+
+      await run(messenger, PREMIUM_CONTEXT);
+
+      expect(mocks.getServiceDetails).toHaveBeenCalledTimes(1);
+      expect(mocks.getServiceDetails).toHaveBeenCalledWith([CHAIN_ID]);
+    });
+
+    it.each<{
+      missing: string;
+      context: Partial<StepContext>;
+      details: unknown;
+    }>([
+      { missing: 'the premium vault', context: {}, details: serviceDetails() },
+      {
+        missing: 'the vault migration helper',
+        context: PREMIUM_CONTEXT,
+        details: serviceDetails({ vaultMigrationHelperAddress: undefined }),
+      },
+      {
+        missing: 'service details for the chain',
+        context: PREMIUM_CONTEXT,
+        details: { auth: { message: 'message' }, chains: {} },
+      },
     ])(
-      'throws before signing anything without %s',
-      async (_missing, context) => {
+      'throws before signing anything without $missing',
+      async ({ context, details }) => {
         const { messenger, mocks } = setup(
           migratingIdentity({ steps: PREMIUM_STEPS }),
         );
+        mocks.getServiceDetails.mockResolvedValue(details);
 
         await expect(run(messenger, context)).rejects.toThrow(
           'A premium Money Account migration requires the premium vault and the vault migration helper',
@@ -944,11 +981,12 @@ describe('registerMigrationIntentsStep', () => {
       },
     );
 
-    it('does not need the premium config for a standard migration', async () => {
+    it('does not need the premium config or the service details for a standard migration', async () => {
       const { messenger, mocks } = setup();
 
       expect(await run(messenger)).toBe('completed');
       expect(mocks.signPersonalMessage).not.toHaveBeenCalled();
+      expect(mocks.getServiceDetails).not.toHaveBeenCalled();
     });
   });
 });

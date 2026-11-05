@@ -2337,10 +2337,10 @@ describe('MoneyAccountUpgradeController', () => {
       );
     });
 
-    it('arms a vault migration helper served by a later bootstrap', async () => {
-      const { controller, mocks, config, bootstrap, triggerFlagChange } = setup(
-        { premiumVaultConfig: PREMIUM_VAULT_CONFIG },
-      );
+    it('uses a vault migration helper that CHOMP starts serving after the bootstrap', async () => {
+      const { controller, mocks, bootstrap } = setup({
+        premiumVaultConfig: PREMIUM_VAULT_CONFIG,
+      });
       mocks.getDerivedIdentityByAddress.mockResolvedValue(premiumIdentity());
       await bootstrap();
       await expect(
@@ -2348,11 +2348,46 @@ describe('MoneyAccountUpgradeController', () => {
       ).rejects.toThrow('register-migration-intents');
 
       mocks.getServiceDetails.mockResolvedValue(withVaultMigrationHelper);
-      config.vaultConfig = CHANGED_VAULT_CONFIG;
-      await triggerFlagChange();
       await controller.registerMigrationIntents(MOCK_PREDECESSOR_ADDRESS);
 
       expect(mocks.createIntentsV2).toHaveBeenCalledTimes(1);
+    });
+
+    it('signs for the vault migration helper CHOMP serves when called, not the one served at bootstrap', async () => {
+      const MOVED_HELPER_ADDRESS =
+        '0x8888888888888888888888888888888888888888' as Hex;
+      const { controller, mocks, bootstrap } = setup({
+        premiumVaultConfig: PREMIUM_VAULT_CONFIG,
+      });
+      mocks.getServiceDetails.mockResolvedValue(withVaultMigrationHelper);
+      mocks.getDerivedIdentityByAddress.mockResolvedValue(premiumIdentity());
+      await bootstrap();
+
+      mocks.getServiceDetails.mockResolvedValue({
+        ...withVaultMigrationHelper,
+        chains: {
+          [MOCK_CHAIN_ID]: {
+            ...withVaultMigrationHelper.chains[MOCK_CHAIN_ID],
+            vaultMigrationHelperAddress: MOVED_HELPER_ADDRESS,
+          },
+        },
+      });
+      await controller.registerMigrationIntents(MOCK_PREDECESSOR_ADDRESS);
+
+      expect(mocks.signDelegation).toHaveBeenCalledWith({
+        delegation: expect.objectContaining({
+          caveats: expect.arrayContaining([
+            {
+              enforcer: MAINNET_CONTRACTS.RedeemerEnforcer,
+              terms: createRedeemerTerms({
+                redeemers: [MOVED_HELPER_ADDRESS],
+              }),
+              args: '0x',
+            },
+          ]),
+        }),
+        chainId: MOCK_CHAIN_ID,
+      });
     });
 
     it('wraps a failure in a step error', async () => {

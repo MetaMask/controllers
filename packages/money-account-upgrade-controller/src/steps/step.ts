@@ -26,7 +26,6 @@ export type StepContext = {
   premiumVault?: UpgradeConfig['premiumVault'];
   redeemerEnforcer: Hex;
   valueLteEnforcer: Hex;
-  vaultMigrationHelperAddress?: Hex;
   vedaVaultAdapterAddress: Hex;
 };
 

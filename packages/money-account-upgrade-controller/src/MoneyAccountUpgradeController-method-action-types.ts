@@ -98,8 +98,11 @@ export type MoneyAccountUpgradeControllerUpgradeSuccessorAccountAction = {
  *
  * The successor and the incomplete steps are read from CHOMP, so only the
  * missing intents are registered and a migration can be resumed by calling
- * this again. The steps signed by the successor are completed by
- * {@link upgradeSuccessorAccount}. Nothing is recorded in state.
+ * this again. The vault migration helper of a premium migration is read
+ * from the CHOMP service details when it is needed, so one CHOMP starts
+ * serving after the bootstrap is used. The steps signed by the successor
+ * are completed by {@link upgradeSuccessorAccount}. Nothing is recorded in
+ * state.
  *
  * @param predecessorAddress - The current address of the migrating Money
  * Account.

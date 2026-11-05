@@ -75,12 +75,15 @@ const transferCalldataTerms = (recipient: Hex): Hex =>
  *
  * @param context - The step context.
  * @param successor - The address the Money Account migrates to.
+ * @param vaultMigrationHelperAddress - The VaultMigrationHelper contract
+ * from the CHOMP service details, when served.
  * @returns The delegations, with the premium transfer only when the premium
  * vault and the vault migration helper are configured.
  */
 function getMigrationDelegations(
   context: StepContext,
   successor: Hex,
+  vaultMigrationHelperAddress: Hex | undefined,
 ): MigrationDelegation[] {
   const {
     allowedCalldataEnforcer,
@@ -91,7 +94,6 @@ function getMigrationDelegations(
     premiumVault,
     redeemerEnforcer,
     valueLteEnforcer,
-    vaultMigrationHelperAddress,
   } = context;
 
   const transfer = (
@@ -174,6 +176,26 @@ function getMigrationDelegations(
         ]
       : []),
   ];
+}
+
+/**
+ * Reads the VaultMigrationHelper contract from the CHOMP service details
+ * when it is needed, rather than from the config armed at bootstrap, so a
+ * helper CHOMP starts serving or moves later is used.
+ *
+ * @param context - The step context.
+ * @param context.messenger - The controller messenger.
+ * @param context.chainId - The chain of the migration.
+ * @returns The helper address, or `undefined` when CHOMP does not serve one.
+ */
+async function getVaultMigrationHelperAddress({
+  messenger,
+  chainId,
+}: StepContext): Promise<Hex | undefined> {
+  const { chains } = await messenger.call('ChompApiService:getServiceDetails', [
+    chainId,
+  ]);
+  return chains[chainId]?.vaultMigrationHelperAddress;
 }
 
 /**
@@ -348,9 +370,16 @@ export const registerMigrationIntentsStep: Step = {
         .filter(({ completed }) => !completed)
         .map(({ step }) => step),
     );
-    const delegations = getMigrationDelegations(context, migration.to).filter(
-      ({ step }) => missingSteps.has(step),
-    );
+    const vaultMigrationHelperAddress = missingSteps.has(
+      'TRANSFER_INTENT_PVMUSD',
+    )
+      ? await getVaultMigrationHelperAddress(context)
+      : undefined;
+    const delegations = getMigrationDelegations(
+      context,
+      migration.to,
+      vaultMigrationHelperAddress,
+    ).filter(({ step }) => missingSteps.has(step));
 
     if (
       missingSteps.has('TRANSFER_INTENT_PVMUSD') &&
