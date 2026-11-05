@@ -7,17 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-
-- **BREAKING:** Remove `ProfileServiceMock`, `buildMockProfileService`, `MockProfileServiceHandlers`, `MOCK_PROFILE_API_RESPONSE`, `MOCK_X_CONNECT_RESPONSE`, and `MOCK_X_AUTH_URL_RESPONSE` exports ([#11340](https://github.com/MetaMask/core/pull/11340))
-  - These were test utilities that were used to mock the profile service before the Profile API was live.
-
 ### Changed
 
 - Preserve the Profile API's error message in the `HttpError` ([#11330](https://github.com/MetaMask/core/pull/11330))
   - Clients can now surface the server-provided reason.
   - When a non-2xx response body contains a `{ code, message }` payload, the error message is now `<operation error>: <status>: <API message>`.
   - Falls back to `<operation error>: <status>` when the body is absent, unreadable, or has no `message`
+
+### Removed
+
+- **BREAKING:** Remove `ProfileServiceMock`, `buildMockProfileService`, `MockProfileServiceHandlers`, `MOCK_PROFILE_API_RESPONSE`, `MOCK_X_CONNECT_RESPONSE`, and `MOCK_X_AUTH_URL_RESPONSE` exports ([#11340](https://github.com/MetaMask/core/pull/11340))
+  - These were test utilities that were used to mock the profile service before the Profile API was live.
 
 ## [1.2.1]
 
