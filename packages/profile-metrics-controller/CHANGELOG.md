@@ -25,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **BREAKING:** Remove `onRetry`, `onBreak` and `onDegraded` from `ProfileMetricsService` ([#11215](https://github.com/MetaMask/core/pull/11215))
-  - No replacement is provided. Callers that listened to these hooks should stop doing so; request failures still reject `fetchNonces` and `submitMetrics`.
 
 ## [5.2.1]
 
