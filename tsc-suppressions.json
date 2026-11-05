@@ -895,14 +895,6 @@
       "count": 1
     }
   },
-  "packages/ramps-controller/src/NeoBankService.test.ts": {
-    "TS2322": {
-      "count": 2
-    },
-    "TS2345": {
-      "count": 2
-    }
-  },
   "packages/ramps-controller/src/NeoBankService.ts": {
     "TS6307": {
       "count": 1
@@ -1158,9 +1150,6 @@
     }
   },
   "packages/transaction-pay-controller/src/strategy/relay/relay-api.test.ts": {
-    "TS2741": {
-      "count": 2
-    },
     "TS2820": {
       "count": 1
     }

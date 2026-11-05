@@ -4,7 +4,7 @@ import type {
   MessengerActions,
   MessengerEvents,
 } from '@metamask/messenger';
-import { base64ToBytes, bytesToBase64 } from '@metamask/utils';
+import { base64ToBytes, bytesToBase64, bytesToString } from '@metamask/utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Mock, MockedFunction } from 'vitest';
 
@@ -15,14 +15,20 @@ import type {
   KycAnalyticsVerificationOutcomePayload,
 } from './analytics.js';
 import { getKycAnalyticsStatus } from './analytics.js';
-import { toBase64Url } from './encoding.js';
+import { base64UrlToBytes, toBase64Url } from './encoding.js';
 import {
   getDefaultKycControllerState,
   KycController,
 } from './KycController.js';
 import type { KycControllerMessenger } from './KycController.js';
 import type { KycSumSubLauncher } from './providers/sumsub.js';
-import type { KycConsentRecord, KycSessionDisclaimers } from './types.js';
+import { KYC_CURRENT_STEPS } from './types.js';
+import type {
+  KycConsentRecord,
+  KycCurrentStep,
+  KycSessionDisclaimers,
+  KycSessionStatus,
+} from './types.js';
 import {
   UKYC_LOCAL_USER_SECRET_PATH,
   UKYC_LOCAL_USER_SECRET_SIZE_BYTES,
@@ -86,6 +92,11 @@ const MOCK_SUMSUB_DISCLAIMERS_ACCEPTED: KycConsentRecord[] =
   }));
 
 const AAL2_TOKEN = 'aal2-token';
+
+const ENCRYPTION_SCHEMA = {
+  serverPublicKey: { kty: 'OKP', crv: 'X25519', x: 'spk-x' },
+  jwtChain: 'jwt.chain.sig',
+};
 
 describe('KycController', () => {
   describe('constructor', () => {
@@ -916,6 +927,7 @@ describe('KycController', () => {
           );
           expect(controller.state.sessionStatus).toMatchInlineSnapshot(`
             {
+              "currentStep": "approved",
               "externalUserId": "ext-1",
               "finalStatus": "approved",
               "id": "sid",
@@ -1620,6 +1632,9 @@ describe('KycController', () => {
           );
           expect(handlers.createJourney).toHaveBeenCalledTimes(2);
           expect(controller.state.sessionStatus?.finalStatus).toBe('pending');
+          expect(controller.state.sessionStatus?.currentStep).toBe(
+            KYC_CURRENT_STEPS.processing,
+          );
           expect(handlers.getSessionStatus).toHaveBeenCalledWith({
             sessionId: 'sid',
           });
@@ -2318,6 +2333,112 @@ describe('KycController', () => {
       });
     });
   });
+
+  describe('deleteEncryptedStorage', () => {
+    it('wraps a delete-scoped token and completes the deletion', async () => {
+      await withController(async ({ controller, handlers }) => {
+        mockWrapEncryptionKey.mockClear();
+        mockAssertAttestedServerPublicKey.mockClear();
+
+        await controller.deleteEncryptedStorage();
+
+        const createParams = handlers.createDeletion.mock.calls[0][0] as {
+          sessionClientPublicKey: string;
+        };
+        expect(typeof createParams.sessionClientPublicKey).toBe('string');
+        expect(createParams.sessionClientPublicKey).not.toHaveLength(0);
+        expect(handlers.fetchIdosEnclaveJwks).not.toHaveBeenCalled();
+        expect(handlers.fetchIdosRelayJwks).toHaveBeenCalledOnce();
+        expect(mockAssertAttestedServerPublicKey).toHaveBeenCalledOnce();
+        expect(mockAssertAttestedServerPublicKey).toHaveBeenCalledWith(
+          [],
+          ENCRYPTION_SCHEMA,
+        );
+
+        const plaintext = bytesToString(mockWrapEncryptionKey.mock.calls[0][2]);
+        const token = JSON.parse(
+          bytesToString(base64UrlToBytes(plaintext)),
+        ) as {
+          payload: {
+            operations: string[];
+            presenter: string;
+            session_id?: string;
+            issued_at: string;
+            expires_at: string;
+          };
+        };
+        expect(token.payload.operations).toStrictEqual(['delete']);
+        expect(token.payload.presenter).toBe('client');
+        expect(token.payload.session_id).toBeUndefined();
+        const tokenLifetimeMs =
+          Date.parse(token.payload.expires_at) -
+          Date.parse(token.payload.issued_at);
+        // Both timestamps drop fractional seconds, so a mint that crosses a
+        // second boundary is one second short of four hours.
+        expect(tokenLifetimeMs).toBeGreaterThanOrEqual(
+          4 * 60 * 60 * 1000 - 1000,
+        );
+        expect(tokenLifetimeMs).toBeLessThanOrEqual(4 * 60 * 60 * 1000);
+        expect(mockWrapEncryptionKey).toHaveBeenCalledWith(
+          expect.any(Uint8Array),
+          ENCRYPTION_SCHEMA.serverPublicKey.x,
+          expect.any(Uint8Array),
+        );
+        expect(handlers.completeDeletion).toHaveBeenCalledWith({
+          deletionId: 'deletion-1',
+          wrappedUkycCapabilityToken: { data: 'enc', nonce: 'nonce' },
+        });
+      });
+    });
+
+    it('does not complete the deletion when preparing it fails', async () => {
+      await withController(async ({ controller, handlers }) => {
+        handlers.createDeletion.mockRejectedValue(new Error('prepare failed'));
+
+        await expect(controller.deleteEncryptedStorage()).rejects.toThrow(
+          'prepare failed',
+        );
+        expect(handlers.completeDeletion).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does not complete the deletion when fetching relay signing keys fails', async () => {
+      const fetchError = new Error(
+        "Fetching 'https://idos.example/.well-known/jwks.json' failed with status '500'",
+      );
+      await withController(async ({ controller, handlers }) => {
+        handlers.fetchIdosRelayJwks.mockRejectedValueOnce(fetchError);
+
+        await expect(controller.deleteEncryptedStorage()).rejects.toMatchObject(
+          {
+            message:
+              'KycController.#verifyCapabilityTokenSchema: Unable to fetch JWKS needed to verify wrapping keys.',
+            cause: fetchError,
+          },
+        );
+        expect(handlers.completeDeletion).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does not complete the deletion when wrapping-key verification fails', async () => {
+      const verificationError = new Error(
+        'UKYC: jwtChain signature verification failed against JWKS.',
+      );
+      mockAssertAttestedServerPublicKey.mockImplementationOnce(() => {
+        throw verificationError;
+      });
+      await withController(async ({ controller, handlers }) => {
+        await expect(controller.deleteEncryptedStorage()).rejects.toMatchObject(
+          {
+            message:
+              'KycController.#verifyCapabilityTokenSchema: Failed to verify the wrapping keys.',
+            cause: verificationError,
+          },
+        );
+        expect(handlers.completeDeletion).not.toHaveBeenCalled();
+      });
+    });
+  });
 });
 
 type RootMessenger = Messenger<
@@ -2342,6 +2463,8 @@ type ServiceHandlers = {
   createUkycSession: Mock;
   resetWrappingKeys: Mock;
   setAuthorizations: Mock;
+  createDeletion: Mock;
+  completeDeletion: Mock;
   createJourney: Mock;
   getSessionStatus: Mock;
   getSessionStatusForVendor: Mock;
@@ -2364,11 +2487,6 @@ type WithControllerCallback<ReturnValue> = (payload: {
 
 type WithControllerOptions = {
   options: Partial<ConstructorParameters<typeof KycController>[0]>;
-};
-
-const ENCRYPTION_SCHEMA = {
-  serverPublicKey: { kty: 'OKP', crv: 'X25519', x: 'spk-x' },
-  jwtChain: 'jwt.chain.sig',
 };
 
 /**
@@ -2437,23 +2555,13 @@ function expectResetWrappingKeys(
  */
 function sessionStatus(
   finalStatus: string,
-  overrides: {
-    id?: string;
-    externalUserId?: string;
-    kycStatus?: string;
-    vendor?: string;
-    vendorStatus?: string;
-    capabilityAuthorizationStatus?: string;
-  } = {},
-): {
-  id: string;
-  finalStatus: string;
-  externalUserId: string;
-  kycStatus: string;
-  vendor: string;
-  vendorStatus: string;
-  capabilityAuthorizationStatus?: string;
-} {
+  overrides: Partial<KycSessionStatus> = {},
+): KycSessionStatus {
+  const currentStep: KycCurrentStep =
+    finalStatus === KYC_CURRENT_STEPS.approved ||
+    finalStatus === KYC_CURRENT_STEPS.rejected
+      ? finalStatus
+      : KYC_CURRENT_STEPS.processing;
   return {
     id: 'sid',
     finalStatus,
@@ -2461,6 +2569,7 @@ function sessionStatus(
     kycStatus: finalStatus,
     vendor: 'sumsub',
     vendorStatus: finalStatus,
+    currentStep,
     ...overrides,
   };
 }
@@ -2530,6 +2639,8 @@ function withController<ReturnValue>(
       'KycService:createUkycSession',
       'KycService:resetWrappingKeys',
       'KycService:setAuthorizations',
+      'KycService:createDeletion',
+      'KycService:completeDeletion',
       'KycService:createJourney',
       'KycService:getSessionStatus',
       'KycService:getSessionStatusForVendor',
@@ -2575,6 +2686,11 @@ function withController<ReturnValue>(
     createUkycSession: vi.fn().mockResolvedValue(ukycSessionResponse()),
     resetWrappingKeys: vi.fn().mockResolvedValue(ukycSessionResponse()),
     setAuthorizations: vi.fn().mockResolvedValue(sessionStatus('approved')),
+    createDeletion: vi.fn().mockResolvedValue({
+      deletionId: 'deletion-1',
+      ukycCapabilityToken: ENCRYPTION_SCHEMA,
+    }),
+    completeDeletion: vi.fn().mockResolvedValue(undefined),
     createJourney: vi
       .fn()
       .mockResolvedValue({ status: 'ok', applicantAccessToken: 'aat' }),
@@ -2636,6 +2752,14 @@ function withController<ReturnValue>(
   rootMessenger.registerActionHandler(
     'KycService:setAuthorizations',
     handlers.setAuthorizations,
+  );
+  rootMessenger.registerActionHandler(
+    'KycService:createDeletion',
+    handlers.createDeletion,
+  );
+  rootMessenger.registerActionHandler(
+    'KycService:completeDeletion',
+    handlers.completeDeletion,
   );
   rootMessenger.registerActionHandler(
     'KycService:createJourney',
