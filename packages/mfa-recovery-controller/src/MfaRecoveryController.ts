@@ -757,9 +757,11 @@ export class MfaRecoveryController extends BaseController<
     const rejection = unanimousMutationRejection(results);
     if (rejection) {
       await this.#clearPending();
+      // Escrows with receipts applied it; the rest were already updated by
+      // another device's repair.
       if (writing.receipts.length > 0) {
         throw new MfaRecoveryError(
-          'Mutation was applied on some escrows; reread state',
+          'Mutation already repaired by another device; reread state',
           'mutation_superseded',
         );
       }
