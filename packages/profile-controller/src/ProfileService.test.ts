@@ -161,6 +161,20 @@ describe('ProfileService', () => {
       );
     });
 
+    it('includes the API error message when the response body has no code', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ message: 'Profile not found' }),
+      });
+
+      const service = createService();
+
+      await expect(service.getProfile('profile-123')).rejects.toThrow(
+        `${ProfileServiceErrorMessage.GET_PROFILE_FAILED}: 404: Profile not found`,
+      );
+    });
+
     it('falls back to the generic message when the error body is not JSON', async () => {
       mockFetch.mockResolvedValue({
         ok: false,
