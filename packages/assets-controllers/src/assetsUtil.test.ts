@@ -433,12 +433,6 @@ describe('assetsUtil', () => {
       ['a JSON string', 'data:application/json,"a"'],
       ['a JSON array', 'data:application/json,[]'],
       ['JSON null', 'data:application/json,null'],
-      [
-        'a payload over the size limit',
-        `data:application/json,{"a":"${'x'.repeat(
-          assetsUtil.MAX_JSON_DATA_URI_LENGTH,
-        )}"}`,
-      ],
     ])('returns null for %s', (_description, uri) => {
       expect(assetsUtil.parseJsonDataUri(uri)).toBeNull();
     });

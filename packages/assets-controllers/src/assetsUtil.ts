@@ -280,19 +280,13 @@ export function addUrlProtocolPrefix(urlString: string): string {
 }
 
 /**
- * Maximum length of a `data:` URL that is decoded inline. Token URIs come
- * from arbitrary contracts, so this bounds the decoding work.
- */
-export const MAX_JSON_DATA_URI_LENGTH = 1024 * 1024;
-
-/**
  * Checks whether a URI is a `data:` URL.
  *
  * @param uri - The URI to check.
  * @returns True if the URI uses the `data:` scheme.
  */
 export function isDataUri(uri: string): boolean {
-  return /^\s*data:/iu.test(uri);
+  return uri.trimStart().toLowerCase().startsWith('data:');
 }
 
 /**
@@ -305,20 +299,23 @@ export function isDataUri(uri: string): boolean {
  * JSON object.
  */
 export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
-  if (uri.length > MAX_JSON_DATA_URI_LENGTH) {
-    return null;
-  }
-
   // Split `data:application/json[;charset=utf-8][;base64],<payload>`.
   const commaIndex = uri.indexOf(',');
-  const header = uri.slice(0, commaIndex);
-  const payload = uri.slice(commaIndex + 1);
-  if (commaIndex === -1 || !/^\s*data:application\/json(;|$)/iu.test(header)) {
+  if (commaIndex === -1) {
     return null;
   }
+  const [mediaType, ...params] = uri
+    .slice(0, commaIndex)
+    .trim()
+    .toLowerCase()
+    .split(';');
+  if (mediaType !== 'data:application/json') {
+    return null;
+  }
+  const payload = uri.slice(commaIndex + 1);
 
   try {
-    const json = /;base64$/iu.test(header)
+    const json = params.includes('base64')
       ? bytesToString(base64ToBytes(payload))
       : decodeURIComponent(payload);
     const metadata: unknown = JSON.parse(json);
