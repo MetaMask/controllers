@@ -72,6 +72,7 @@ export const PositionStruct = structType({
   tokenImageUrl: optional(nullable(string())),
   currentValueUSD: optional(nullable(number())),
   pnlValueUsd: optional(nullable(number())),
+  positionValueUSD: optional(nullable(number())),
   pnlPercent: optional(nullable(number())),
   copyCount: optional(number()),
   perpPositionType: optional(nullable(enums(['long', 'short']))),

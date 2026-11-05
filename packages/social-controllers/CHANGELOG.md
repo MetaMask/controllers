@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add optional `positionValueUSD` (`number | null`) to the `Position` type and `PositionStruct`, so it is typed on feed items and on position, positions, and holders responses ([#11320](https://github.com/MetaMask/core/pull/11320))
+  - For perps it is the leveraged notional (`|positionAmountWithLeverage|` × mark price) that social-api ranks an asset's holders by; for spot it equals `currentValueUSD`; closed positions report `0`.
+  - Responses that omit the field still validate.
+
 ## [3.17.0]
 
 ### Added
