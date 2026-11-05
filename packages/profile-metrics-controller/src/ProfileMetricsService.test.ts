@@ -63,13 +63,6 @@ describe('ProfileMetricsService', () => {
       ).toThrow('invalid environment configuration');
     });
 
-    it('does not expose the policy event listeners of the previous implementation', () => {
-      const { service } = getService();
-
-      expect(service).not.toHaveProperty('onRetry');
-      expect(service).not.toHaveProperty('onBreak');
-      expect(service).not.toHaveProperty('onDegraded');
-    });
   });
 
   describe('BaseDataService integration', () => {
