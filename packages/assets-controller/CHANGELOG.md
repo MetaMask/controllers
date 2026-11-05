@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Include `assetsInfo`, `assetsBalance`, `assetsPrice`, `customAssets`, `assetPreferences` and `selectedCurrency` in state logs (`includeInStateLogs: true`) so support can investigate asset issues ([#11319](https://github.com/MetaMask/core/pull/11319))
+
 ## [20.2.2]
 
 ### Changed
