@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [22.2.0]
+## [22.1.2]
 
 ### Changed
 
@@ -1338,8 +1338,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `@metamask/controller-utils` from `^11.18.0` to `^11.19.0` ([#7995](https://github.com/MetaMask/core/pull/7995))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.2.0...HEAD
-[22.2.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.1...@metamask/perps-controller@22.2.0
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.2...HEAD
+[22.1.2]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.1...@metamask/perps-controller@22.1.2
 [22.1.1]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.0...@metamask/perps-controller@22.1.1
 [22.1.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.0.0...@metamask/perps-controller@22.1.0
 [22.0.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@21.0.0...@metamask/perps-controller@22.0.0
