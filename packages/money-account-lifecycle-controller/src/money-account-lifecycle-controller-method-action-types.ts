@@ -123,8 +123,9 @@ export type MoneyAccountLifecycleControllerUpgradeMoneyAccountAction = {
  * `migrating`, even when any of these steps fails.
  *
  * @throws If a migration or Money Account upgrade is already in flight, the
- * checks fail, or linking the successor, moving the subscription,
- * registering the intents or starting the funds transfer fails.
+ * checks fail, the wallet stops being ready part way, or linking the
+ * successor, moving the subscription, registering the intents or starting
+ * the funds transfer fails.
  */
 export type MoneyAccountLifecycleControllerStartMigrationAction = {
   type: `MoneyAccountLifecycleController:startMigration`;

@@ -285,13 +285,15 @@ describe('MoneyAccountLifecycleController', () => {
       });
     });
 
-    it('does not register the migration intents or refetch identities when the wallet locks while linking the successor', async () => {
+    it('throws without registering the migration intents or refetching identities when the wallet locks while linking the successor', async () => {
       await withController(async ({ controller, gates, mocks }) => {
         mocks.upgradeSuccessorAccount.mockImplementationOnce(async () => {
           gates.isUnlocked = false;
         });
 
-        expect(await controller.startMigration()).toBeUndefined();
+        await expect(controller.startMigration()).rejects.toThrow(
+          'Money Account migration is not available',
+        );
         expect(mocks.registerMigrationIntents).not.toHaveBeenCalled();
         expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
       });
@@ -313,13 +315,15 @@ describe('MoneyAccountLifecycleController', () => {
       });
     });
 
-    it('does not refetch identities when the wallet locks while registering the migration intents', async () => {
+    it('throws without starting the funds transfer or refetching identities when the wallet locks while registering the migration intents', async () => {
       await withController(async ({ controller, gates, mocks }) => {
         mocks.registerMigrationIntents.mockImplementationOnce(async () => {
           gates.isUnlocked = false;
         });
 
-        expect(await controller.startMigration()).toBeUndefined();
+        await expect(controller.startMigration()).rejects.toThrow(
+          'Money Account migration is not available',
+        );
         expect(mocks.startFundsTransfer).not.toHaveBeenCalled();
         expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
       });
@@ -455,7 +459,7 @@ describe('MoneyAccountLifecycleController', () => {
         });
       });
 
-      it('does not retry or refetch identities when the wallet locks while waiting to retry', async () => {
+      it('throws without retrying or refetching identities when the wallet locks while waiting to retry', async () => {
         vi.useFakeTimers();
         await withController(async ({ controller, gates, mocks }) => {
           mocks.startFundsTransfer.mockImplementationOnce(async () => {
@@ -467,10 +471,14 @@ describe('MoneyAccountLifecycleController', () => {
             );
           });
 
-          const migration = controller.startMigration();
+          const migration = controller
+            .startMigration()
+            .catch((error: unknown) => error);
           await vi.advanceTimersByTimeAsync(2000);
 
-          expect(await migration).toBeUndefined();
+          expect(await migration).toStrictEqual(
+            new Error('Money Account migration is not available'),
+          );
           expect(mocks.startFundsTransfer).toHaveBeenCalledTimes(1);
           expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
         });
@@ -692,7 +700,7 @@ describe('MoneyAccountLifecycleController', () => {
         });
       });
 
-      it('does not register the migration intents or refetch identities when the wallet locks while moving the subscription', async () => {
+      it('throws without registering the migration intents or refetching identities when the wallet locks while moving the subscription', async () => {
         await withController(async ({ controller, gates, mocks }) => {
           mocks.getSubscriptions.mockResolvedValue([
             MONEY_ACCOUNT_PLUS_SUBSCRIPTION,
@@ -702,7 +710,9 @@ describe('MoneyAccountLifecycleController', () => {
             return [];
           });
 
-          expect(await controller.startMigration()).toBeUndefined();
+          await expect(controller.startMigration()).rejects.toThrow(
+            'Money Account migration is not available',
+          );
           expect(mocks.registerMigrationIntents).not.toHaveBeenCalled();
           expect(mocks.getDerivedIdentities).toHaveBeenCalledTimes(2);
         });

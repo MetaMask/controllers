@@ -471,8 +471,9 @@ export class MoneyAccountLifecycleController extends BaseController<
    * `migrating`, even when any of these steps fails.
    *
    * @throws If a migration or Money Account upgrade is already in flight, the
-   * checks fail, or linking the successor, moving the subscription,
-   * registering the intents or starting the funds transfer fails.
+   * checks fail, the wallet stops being ready part way, or linking the
+   * successor, moving the subscription, registering the intents or starting
+   * the funds transfer fails.
    */
   async startMigration(): Promise<void> {
     if (this.#isMigrationInFlight) {
@@ -492,9 +493,7 @@ export class MoneyAccountLifecycleController extends BaseController<
   }
 
   async #startMigration(): Promise<void> {
-    if (!this.#isReady()) {
-      throw new Error('Money Account migration is not available');
-    }
+    this.#assertReadyToMigrate();
 
     const moneyAccount = this.messenger.call(
       'MoneyAccountController:getMoneyAccount',
@@ -516,25 +515,19 @@ export class MoneyAccountLifecycleController extends BaseController<
       successorAddress,
       moneyAccountAddress,
     );
-    if (!this.#isReady()) {
-      return;
-    }
+    this.#assertReadyToMigrate();
 
     try {
       await this.#moveSubscriptionToSuccessor(
         moneyAccountAddress,
         successorAddress,
       );
-      if (!this.#isReady()) {
-        return;
-      }
+      this.#assertReadyToMigrate();
       await this.messenger.call(
         'MoneyAccountUpgradeController:registerMigrationIntents',
         moneyAccountAddress,
       );
-      if (!this.#isReady()) {
-        return;
-      }
+      this.#assertReadyToMigrate();
       await this.#startFundsTransfer(moneyAccountAddress);
     } finally {
       if (this.#isReady()) {
@@ -560,13 +553,17 @@ export class MoneyAccountLifecycleController extends BaseController<
       await new Promise((resolve) =>
         setTimeout(resolve, FUNDS_TRANSFER_RETRY_DELAY_MS),
       );
-      if (!this.#isReady()) {
-        return;
-      }
+      this.#assertReadyToMigrate();
       await this.messenger.call(
         'ChompApiService:startFundsTransfer',
         moneyAccountAddress,
       );
+    }
+  }
+
+  #assertReadyToMigrate(): void {
+    if (!this.#isReady()) {
+      throw new Error('Money Account migration is not available');
     }
   }
 
@@ -699,9 +696,7 @@ export class MoneyAccountLifecycleController extends BaseController<
       throw new Error('A Money Account identity is already migrating');
     }
     this.#assertFreshForChomp(mfaAddress, identities);
-    if (!this.#isReady()) {
-      throw new Error('Money Account migration is not available');
-    }
+    this.#assertReadyToMigrate();
     return mfaAddress;
   }
 
