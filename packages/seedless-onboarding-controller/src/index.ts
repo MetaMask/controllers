@@ -39,11 +39,19 @@ export type {
   SeedlessOnboardingControllerCheckMetadataAccessTokenExpiredAction,
   SeedlessOnboardingControllerCheckAccessTokenExpiredAction,
   SeedlessOnboardingControllerRunMigrationsAction,
+  SeedlessOnboardingControllerAuthenticateForRecoveryAction,
+  SeedlessOnboardingControllerGetRecoveryStatusAction,
+  SeedlessOnboardingControllerStoreRecoveryKeysAction,
+  SeedlessOnboardingControllerRecoverWithRecoverySecretAction,
+  SeedlessOnboardingControllerResetPasswordWithRecoveredKeysAction,
 } from './SeedlessOnboardingController-method-action-types.js';
 export type {
+  RecoveryStatus,
+  RecoveryStatusResult,
   AuthenticatedUserDetails,
   SocialBackupsMetadata,
   SeedlessOnboardingControllerState,
+  RecoverySession,
   ToprfKeyDeriver,
   RecoveryErrorData,
   InvalidPrimarySecretDataTypeErrorData,
@@ -55,6 +63,14 @@ export {
   AuthConnection,
   SecretType,
 } from './constants.js';
+export {
+  RECOVERY_KEYS_PREFIX,
+  WRAPPED_KEYS_PREFIX,
+} from './mfa-recovery/recovery-keys.js';
+export type {
+  RecoveryKeys,
+  WrappedKeySet,
+} from './mfa-recovery/recovery-keys.js';
 export { SecretMetadata } from './SecretMetadata.js';
 export {
   InvalidPrimarySecretDataTypeError,

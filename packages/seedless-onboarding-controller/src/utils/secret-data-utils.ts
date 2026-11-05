@@ -21,6 +21,7 @@ export type SecretBackupData = Omit<SocialBackupsMetadata, 'hash'> & {
  *
  * Primary SRP items are ordered first, then remaining items by client
  * timestamp (oldest first). This does not require a primary mnemonic.
+ * WrappedKeys items (MFA recovery items) are not user secrets and are left out.
  *
  * @param secretDataItems - The encrypted metadata items fetched from storage.
  * @returns The parsed secret metadata in sort order.
@@ -28,14 +29,16 @@ export type SecretBackupData = Omit<SocialBackupsMetadata, 'hash'> & {
 export function parseSecretMetadata(
   secretDataItems: FetchedSecretDataItem[],
 ): SecretMetadata[] {
-  const results: SecretMetadata[] = secretDataItems.map((item) =>
-    SecretMetadata.fromRawMetadata(item.data, {
-      itemId: item.itemId,
-      dataType: item.dataType,
-      createdAt: item.createdAt,
-      storageVersion: item.version,
-    }),
-  );
+  const results: SecretMetadata[] = secretDataItems
+    .filter((item) => item.dataType !== EncAccountDataType.WrappedKeys)
+    .map((item) =>
+      SecretMetadata.fromRawMetadata(item.data, {
+        itemId: item.itemId,
+        dataType: item.dataType,
+        createdAt: item.createdAt,
+        storageVersion: item.version,
+      }),
+    );
 
   // Sort: PrimarySrp first, then by client timestamp (oldest first).
   results.sort((a, b) => SecretMetadata.compare(a, b, 'asc'));

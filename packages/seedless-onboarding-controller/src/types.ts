@@ -105,6 +105,25 @@ export type InvalidPrimarySecretDataTypeErrorData = (
   | EncAccountDataType
 )[];
 
+/**
+ * The aal2 token set used for recovery verifier (TOPRF2) calls. It is never
+ * refreshed and is held in memory only.
+ */
+export type RecoverySession = {
+  /** Node auth tokens from the recovery verifier authenticate. */
+  nodeAuthTokens: NodeAuthTokens;
+  /** The aal2 token's `exp` in unix seconds. The session expires at this time. */
+  expiresAt: number;
+  /** The aal2 token's `sub` (profile ID), used as the `userId` of every recovery verifier call. */
+  userId: string;
+  /** The sub-verifier (`authConnectionId`) the aal2 set was authenticated against. */
+  authConnectionId: string;
+  /** The aggregate verifier (`groupedAuthConnectionId`) the aal2 set was authenticated against. */
+  groupedAuthConnectionId: string;
+  /** Whether the nodes held a recovery verifier share when the tokens were issued. */
+  hasRecoveryShare: boolean;
+};
+
 // State
 export type SeedlessOnboardingControllerState =
   Partial<AuthenticatedUserDetails> &
@@ -181,6 +200,12 @@ export type SeedlessOnboardingControllerState =
       metadataAccessToken?: string;
 
       /**
+       * The aal2 token set issued by `authenticateForRecovery`. Only the
+       * recovery verifier (TOPRF2) calls use it.
+       */
+      recoverySession?: RecoverySession;
+
+      /**
        * Whether the user is authenticated with social login and TOPRF service.
        */
       isSeedlessOnboardingUserAuthenticated: boolean;
@@ -191,6 +216,34 @@ export type SeedlessOnboardingControllerState =
        */
       migrationVersion: number;
     };
+
+/**
+ * MFA recovery status of the account, computed from the remote stores.
+ *
+ * - `PasswordOutdated`: the vault's TOPRF1 key is not the live one.
+ * - `NotEnabled`: no genuine recovery-keys item in the TOPRF1 namespace.
+ * - `Enabled`: the wrapped-keys item holds the live TOPRF1 keys.
+ * - `WrapStale`: the item is genuine, but no wrapped key set matches the live key.
+ */
+export type RecoveryStatus =
+  | 'PasswordOutdated'
+  | 'NotEnabled'
+  | 'Enabled'
+  | 'WrapStale';
+
+export type RecoveryStatusResult = {
+  status: RecoveryStatus;
+  /**
+   * Whether the recovery-keys item was checked against the recovery verifier
+   * share. `false` when there was no aal2 set, in which case an `Enabled` or
+   * `WrapStale` item may be planted.
+   */
+  verified: boolean;
+  /**
+   * Whether the nodes hold a recovery verifier share. Only set when `verified`.
+   */
+  hasRecoveryShare?: boolean;
+};
 
 /**
  * Additional key deriver for the TOPRF client.

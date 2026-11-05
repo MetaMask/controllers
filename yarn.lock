@@ -5441,23 +5441,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/auth-network-utils@npm:^0.3.0":
-  version: 0.3.1
-  resolution: "@metamask/auth-network-utils@npm:0.3.1"
-  dependencies:
-    "@noble/curves": "npm:^1.8.1"
-    "@noble/hashes": "npm:^1.7.1"
-    "@toruslabs/bs58": "npm:^1.0.0"
-    "@toruslabs/constants": "npm:^15.0.0"
-    "@toruslabs/eccrypto": "npm:^6.1.0"
-    bn.js: "npm:^5.2.1"
-    elliptic: "npm:^6.6.1"
-    json-stable-stringify-without-jsonify: "npm:^1.0.1"
-    loglevel: "npm:^1.9.2"
-  checksum: 10/6b4f105b03e5231ae3ed448e8423cd6681e49db1be7ebe20232e0b5eee8bce08e3565dbe890837abc9158b417c65d06279b676f226c52ffc81ef5f50f6d87428
-  languageName: node
-  linkType: hard
-
 "@metamask/auth-network-utils@npm:^0.4.0":
   version: 0.4.0
   resolution: "@metamask/auth-network-utils@npm:0.4.0"
@@ -8302,7 +8285,7 @@ __metadata:
     "@lavamoat/allow-scripts": "npm:^5.1.0"
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
     "@metamask/analytics-controller": "npm:^4.1.0"
-    "@metamask/auth-network-utils": "npm:^0.3.0"
+    "@metamask/auth-network-utils": "npm:^0.4.0"
     "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/browser-passworder": "npm:^6.0.0"
@@ -8764,9 +8747,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/toprf-secure-backup@npm:^1.1.0":
-  version: 1.1.0
-  resolution: "@metamask/toprf-secure-backup@npm:1.1.0"
+"@metamask/toprf-secure-backup@portal:../toprf-secure-backup/packages/toprf-secure-backup::locator=%40metamask%2Fcore-monorepo%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "@metamask/toprf-secure-backup@portal:../toprf-secure-backup/packages/toprf-secure-backup::locator=%40metamask%2Fcore-monorepo%40workspace%3A."
   dependencies:
     "@metamask/auth-network-utils": "npm:^0.4.0"
     "@noble/ciphers": "npm:^1.2.1"
@@ -8778,9 +8761,8 @@ __metadata:
     "@toruslabs/fetch-node-details": "npm:^15.0.0"
     "@toruslabs/http-helpers": "npm:^8.1.1"
     bn.js: "npm:^5.2.2"
-  checksum: 10/2714a70eae53a1f46d293980c71a1ed2f59708247019444154e71fc15328e78ec95287ffc2d954a29f903224a1a9fe4d69fb17724e9039bcefd240752f1df26c
   languageName: node
-  linkType: hard
+  linkType: soft
 
 "@metamask/transaction-controller@npm:^73.1.1, @metamask/transaction-controller@workspace:packages/transaction-controller":
   version: 0.0.0-use.local
@@ -11382,7 +11364,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@toruslabs/eccrypto@npm:^6.1.0, @toruslabs/eccrypto@npm:^6.2.0":
+"@toruslabs/eccrypto@npm:^6.2.0":
   version: 6.2.0
   resolution: "@toruslabs/eccrypto@npm:6.2.0"
   dependencies:

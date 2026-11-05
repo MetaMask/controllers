@@ -13,6 +13,26 @@ export {
   parseAndValidateSecretMetadataBackup,
 } from './secret-data-utils.js';
 export {
+  RECOVERY_KEYS_PREFIX,
+  RECOVERY_KEYS_SECRET_TYPE,
+  WRAPPED_KEYS_PREFIX,
+  derivePubKey,
+  findLiveKeySet,
+  isRecoveryKeysItem,
+  parseRecoveryKeys,
+  parseRecoveryKeysItem,
+  parseWrappedKeys,
+  pubKeysEqual,
+  serializeRecoveryKeys,
+  serializeRecoveryKeysItem,
+  serializeWrappedKeys,
+  isWrapCurrent,
+} from '../mfa-recovery/recovery-keys.js';
+export type {
+  RecoveryKeys,
+  WrappedKeySet,
+} from '../mfa-recovery/recovery-keys.js';
+export {
   compareAndGetLatestToken,
   decodeJWTToken,
   decodeNodeAuthToken,
@@ -20,6 +40,7 @@ export {
   getInvalidPrimarySecretDataTypeErrorData,
   getSecretTypeFromDataType,
   isAuthTokenError,
+  isCouldNotDeriveEncryptionKeyError,
   isMaxKeyChainLengthError,
   isTokenNearExpiry,
   parseVaultData,

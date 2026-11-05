@@ -64,4 +64,10 @@ export enum SeedlessOnboardingControllerErrorMessage {
   InvalidPasswordOutdatedCache = `${controllerName} - Invalid password outdated cache provided.`,
   FailedToRefreshJWTTokens = `${controllerName} - Failed to refresh JWT tokens`,
   PrimarySrpCannotBeAddedViaAddNewSecretData = `${controllerName} - PrimarySrp cannot be added via addNewSecretData. Use createToprfKeyAndBackupSeedPhrase instead.`,
+  InvalidRecoveryKeysItem = `${controllerName} - Invalid MFA recovery keys item`,
+  Aal2Required = `${controllerName} - aal2 node auth tokens are missing or expired`,
+  RecoveryKeyShareConflict = `${controllerName} - The recovery secret key share belongs to a different key`,
+  RecoveryNotEnabled = `${controllerName} - MFA recovery is not enabled for this account`,
+  RecoveryWrapStale = `${controllerName} - The MFA recovery wrapped keys do not match the live key`,
+  NoPendingRecovery = `${controllerName} - No recovered keys pending; call recoverWithRecoverySecret first`,
 }

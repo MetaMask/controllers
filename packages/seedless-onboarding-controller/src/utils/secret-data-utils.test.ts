@@ -1,5 +1,8 @@
 import { keccak256AndHexify } from '@metamask/auth-network-utils';
-import { EncAccountDataType } from '@metamask/toprf-secure-backup';
+import {
+  EncAccountDataType,
+  WrappedKeysItemId,
+} from '@metamask/toprf-secure-backup';
 import { stringToBytes } from '@metamask/utils';
 import { describe, expect, it } from 'vitest';
 
@@ -15,6 +18,10 @@ import {
 } from '../../tests/__fixtures__/secret-metadata.js';
 import { SecretType } from '../constants.js';
 import { InvalidPrimarySecretDataTypeError } from '../errors.js';
+import {
+  derivePubKey,
+  serializeRecoveryKeysItem,
+} from '../mfa-recovery/recovery-keys.js';
 import {
   getDataTypeMigrationUpdates,
   getNewSocialBackupsMetadata,
@@ -59,6 +66,28 @@ describe('secret data utilities', () => {
 
       expect(results.map((result) => result.itemId)).toStrictEqual([
         'imported-srp',
+      ]);
+    });
+
+    it('leaves out WrappedKeys (MFA recovery) items', () => {
+      const results = parseSecretMetadata([
+        {
+          itemId: WrappedKeysItemId.WrappedRecoveryKeys,
+          dataType: EncAccountDataType.WrappedKeys,
+          data: serializeRecoveryKeysItem({
+            recoveryEncKey: new Uint8Array(32).fill(1),
+            recoveryAuthKeyPair: { sk: 1n, pk: derivePubKey(1n) },
+          }),
+          version: 'v1',
+        },
+        createFetchedSecretDataItem({
+          ...PrimarySRP2,
+          itemId: 'primary-srp',
+        }),
+      ]);
+
+      expect(results.map((result) => result.itemId)).toStrictEqual([
+        'primary-srp',
       ]);
     });
   });
