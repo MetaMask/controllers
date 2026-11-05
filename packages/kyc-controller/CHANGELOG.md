@@ -7,15 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `deleteEncryptedStorage`, `createDeletion`, and `completeDeletion` take an `aal2Token` and send it as the Authorization bearer value. The KYC API requires `ext.aal` of at least 2 on both deletion routes ([#11338](https://github.com/MetaMask/core/pull/11338))
+
 ## [0.15.0]
 
 ### Added
 
 - Add `KycController.deleteEncryptedStorage`, which deletes the caller's encrypted KYC blobs ([#11262](https://github.com/MetaMask/core/pull/11262))
-  - `KycService.createDeletion` posts `POST /deletions` with a fresh client public key and returns `deletionId` plus the `ukycCapabilityToken` wrapping key ([#11338](https://github.com/MetaMask/core/pull/11338))
+  - `KycService.createDeletion` posts `POST /deletions` with a fresh client public key and returns `deletionId` plus the `ukycCapabilityToken` wrapping key
   - The controller mints a client-presented `delete`-scoped uKYC capability token with a 4 hour lifetime, wraps it with that key, and `KycService.completeDeletion` sends it to `DELETE /deletions/{deletionId}`
   - Both service methods are exposed as the `KycService:createDeletion` and `KycService:completeDeletion` messenger actions, and the controller method as `KycController:deleteEncryptedStorage`
-  - `deleteEncryptedStorage`, `createDeletion`, and `completeDeletion` take an `aal2Token` and send it as the Authorization bearer value. The KYC API requires `ext.aal` of at least 2 on both deletion routes
   - Controller state is left unchanged
 
 ## [0.14.0]
