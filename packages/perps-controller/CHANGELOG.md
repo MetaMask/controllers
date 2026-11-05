@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
+
 ### Fixed
 
 - Hyperliquid account balance aggregation now uses decimal-safe arithmetic and emits canonical six-decimal USDC balances, preventing equivalent unified-account balances from differing by one atomic unit ([#11253](https://github.com/MetaMask/core/pull/11253))
