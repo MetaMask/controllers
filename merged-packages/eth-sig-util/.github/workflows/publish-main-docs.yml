@@ -1,0 +1,15 @@
+name: Publish main branch docs to GitHub Pages
+
+on:
+  push:
+    branches: main
+
+jobs:
+  publish-to-gh-pages:
+    name: Publish docs to `staging` directory of `gh-pages` branch
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-docs.yml
+    with:
+      destination_dir: staging
