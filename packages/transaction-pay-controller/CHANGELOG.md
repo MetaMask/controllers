@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump `@metamask/assets-controller` from `^20.2.1` to `^20.2.2` ([#11300](https://github.com/MetaMask/core/pull/11300))
+- Bump `@metamask/transaction-controller` from `^73.1.0` to `^73.1.1` ([#11300](https://github.com/MetaMask/core/pull/11300))
+
+## [30.4.2]
+
+### Changed
+
 - Treat an unreadable live payment token balance as unknown rather than insufficient, so a failing RPC no longer blocks the transaction ([#11284](https://github.com/MetaMask/core/pull/11284))
   - The live balance check is a fast-fail optimisation; when the RPC request fails the check is now skipped, and quote simulation plus on-chain execution still reject a genuinely underfunded transaction.
   - Affects quote validation (`Unable to verify balance`) and both the Relay and server submit paths (`Cannot validate payment token balance`).
@@ -1813,7 +1820,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release ([#6820](https://github.com/MetaMask/core/pull/6820))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.1...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.2...HEAD
+[30.4.2]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.1...@metamask/transaction-pay-controller@30.4.2
 [30.4.1]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.4.0...@metamask/transaction-pay-controller@30.4.1
 [30.4.0]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.3...@metamask/transaction-pay-controller@30.4.0
 [30.3.3]: https://github.com/MetaMask/core/compare/@metamask/transaction-pay-controller@30.3.2...@metamask/transaction-pay-controller@30.3.3
