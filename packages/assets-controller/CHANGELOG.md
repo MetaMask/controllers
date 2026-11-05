@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Uncategorized
+
+- refactor(network-controller)!: remove legacy per-endpoint failoverUrls ([#11266](https://github.com/MetaMask/core/pull/11266))
+
 ## [20.2.2]
 
 ### Changed
