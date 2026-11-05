@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Resume queries that were paused because `onlineManager` reported offline once connectivity returns, instead of leaving them (and every later call for the same key) pending forever ([#XXXXX](https://github.com/MetaMask/core/pull/XXXXX))
+- Resume queries that were paused because `onlineManager` reported offline once connectivity returns, instead of leaving them (and every later call for the same key) pending forever ([#11342](https://github.com/MetaMask/core/pull/11342))
   - `BaseDataService` now mounts its internal `QueryClient` on construction, subscribing it to TanStack's `onlineManager` and `focusManager`, and unmounts it in `destroy`
 
 ## [2.1.0]
