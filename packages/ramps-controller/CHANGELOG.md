@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-- test: switch Vitest coverage provider to `v8` ([#11261](https://github.com/MetaMask/core/pull/11261))
-- fix(ramps-controller): move NeoBankService changelog entries to Unreleased ([#11257](https://github.com/MetaMask/core/pull/11257))
-
 ### Added
 
 - Add `RampsServiceInvalidateQueriesAction`, `RampsServiceCacheUpdatedEvent` and `RampsServiceGranularCacheUpdatedEvent`, also included in `RampsServiceActions` and `RampsServiceEvents` ([#11214](https://github.com/MetaMask/core/pull/11214))

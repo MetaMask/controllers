@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Uncategorized
-
-- Release 1392.0.0 ([#11300](https://github.com/MetaMask/core/pull/11300))
-- Release 1390.0.0 ([#11289](https://github.com/MetaMask/core/pull/11289))
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-
 ### Changed
 
 - Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
