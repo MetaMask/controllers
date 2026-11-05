@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Normalize known Hyperliquid venue failures to stable `PerpsErrorCode` values. Unknown failures now return `UNKNOWN_ERROR` instead of raw venue text, while the original failure remains attached as the telemetry cause. ([#11206](https://github.com/MetaMask/core/pull/11206))
+- Normalize known Hyperliquid venue failures to stable `PerpsErrorCode` values on every provider result boundary, including order placement and cancellation, edits, closes, TP/SL updates, margin changes, withdrawals, transfers, and readiness failures. Unknown failures now return `UNKNOWN_ERROR` with provider-tagged details instead of raw venue text, while the original failure remains attached as the telemetry cause. ([#11206](https://github.com/MetaMask/core/pull/11206))
 - Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
 
 ### Fixed
