@@ -557,14 +557,10 @@ export class ProfileService extends BaseDataService<
       staleTime: 0,
       responseStruct: FieldValidityResponseStruct,
       queryFn: async () =>
-        this.#fetch<FieldValidityResponse>(
-          'profiles/display-name/validity',
-          {
-            error:
-              ProfileServiceErrorMessage.CHECK_DISPLAY_NAME_VALIDITY_FAILED,
-            searchParams: { display_name: displayName },
-          },
-        ),
+        this.#fetch<FieldValidityResponse>('profiles/display-name/validity', {
+          error: ProfileServiceErrorMessage.CHECK_DISPLAY_NAME_VALIDITY_FAILED,
+          searchParams: { display_name: displayName },
+        }),
     });
   }
 
