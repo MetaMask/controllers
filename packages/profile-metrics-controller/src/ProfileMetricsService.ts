@@ -300,9 +300,6 @@ export class ProfileMetricsService extends BaseDataService<
     identifiers: string[],
     entropySourceId: string | null | undefined,
   ): Promise<Record<string, string>> {
-    // The key carries no identifiers or entropy source ID (keys show up in
-    // the names of published cache events), and it is unique per request so
-    // that single-use nonces are never shared between callers.
     this.#nonceRequestCounter += 1;
     const body = await this.fetchQuery({
       queryKey: [`${this.name}:fetchNonces`, this.#nonceRequestCounter],
@@ -361,8 +358,6 @@ export class ProfileMetricsService extends BaseDataService<
    */
   async submitMetrics(data: ProfileMetricsSubmitMetricsRequest): Promise<void> {
     await this.executeMutation({
-      // No request data in the key: keys show up in the names of published
-      // cache events.
       mutationKey: [`${this.name}:submitMetrics`],
       gcTime: 0,
       mutationFn: async () => {
