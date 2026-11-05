@@ -10,6 +10,7 @@
  */
 import { DECIMAL_PRECISION_CONFIG } from '../constants/perpsConfig.js';
 import type { OrderDirection } from '../types/index.js';
+import { parseFormattedPrice } from './stringParseUtils.js';
 
 /**
  * Price context for the TP/SL calculations and checks.
@@ -37,16 +38,6 @@ const MAX_STOP_LOSS_ROE_PER_LEVERAGE = 99;
  * Upper bound of a stop loss percentage, whatever the leverage.
  */
 const MAX_STOP_LOSS_PERCENTAGE = 999;
-
-/**
- * Parse a price that may carry `$` or `,` formatting.
- *
- * @param price - The price text.
- * @returns The price, or NaN when it is not a number.
- */
-function parsePrice(price: string): number {
-  return Number.parseFloat(price.replace(/[$,]/gu, ''));
-}
 
 /**
  * Whether a trigger on this side gains as the price rises: a long's take
@@ -115,7 +106,7 @@ function getSignedRoE(
   if (!basePrice || basePrice <= 0 || !price || !direction || !(leverage > 0)) {
     return undefined;
   }
-  const triggerPrice = parsePrice(price);
+  const triggerPrice = parseFormattedPrice(price);
   if (Number.isNaN(triggerPrice) || triggerPrice <= 0) {
     return undefined;
   }
@@ -251,7 +242,7 @@ export function calculatePercentageForPrice(
   if (!currentPrice || !price) {
     return '';
   }
-  const triggerPrice = parsePrice(price);
+  const triggerPrice = parseFormattedPrice(price);
   if (Number.isNaN(triggerPrice)) {
     return '';
   }
@@ -302,7 +293,7 @@ export function isPositiveTriggerPrice(price?: string): boolean {
   if (!price) {
     return true;
   }
-  const triggerPrice = parsePrice(price);
+  const triggerPrice = parseFormattedPrice(price);
   return Number.isNaN(triggerPrice) || triggerPrice > 0;
 }
 
@@ -327,7 +318,7 @@ function isTriggerPriceOnSide(
   if (!currentPrice || !direction || !price) {
     return true;
   }
-  const triggerPrice = parsePrice(price);
+  const triggerPrice = parseFormattedPrice(price);
   if (Number.isNaN(triggerPrice)) {
     return true;
   }
@@ -386,8 +377,8 @@ export function isStopLossSafeFromLiquidation(
   if (!liquidationPrice || !direction || !price) {
     return true;
   }
-  const stopLossPrice = parsePrice(price);
-  const liquidation = parsePrice(liquidationPrice);
+  const stopLossPrice = parseFormattedPrice(price);
+  const liquidation = parseFormattedPrice(liquidationPrice);
   if (Number.isNaN(stopLossPrice) || Number.isNaN(liquidation)) {
     return true;
   }
