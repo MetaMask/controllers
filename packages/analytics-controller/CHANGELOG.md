@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0]
+
 ### Added
 
 - Add `trackErrorAsAnalytics` on `AnalyticsController` to report caught errors as `Error Occurred` events with a unique `source` and a sanitized `error_message`, bounded by sampling, deduplication, and a per-session cap ([#11051](https://github.com/MetaMask/core/pull/11051))
@@ -141,7 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release of @metamask/analytics-controller. ([#7017](https://github.com/MetaMask/core/pull/7017), [#7202](https://github.com/MetaMask/core/pull/7202))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/analytics-controller@4.1.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/analytics-controller@4.2.0...HEAD
+[4.2.0]: https://github.com/MetaMask/core/compare/@metamask/analytics-controller@4.1.0...@metamask/analytics-controller@4.2.0
 [4.1.0]: https://github.com/MetaMask/core/compare/@metamask/analytics-controller@4.0.0...@metamask/analytics-controller@4.1.0
 [4.0.0]: https://github.com/MetaMask/core/compare/@metamask/analytics-controller@3.2.0...@metamask/analytics-controller@4.0.0
 [3.2.0]: https://github.com/MetaMask/core/compare/@metamask/analytics-controller@3.1.0...@metamask/analytics-controller@3.2.0
