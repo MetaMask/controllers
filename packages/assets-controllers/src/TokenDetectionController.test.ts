@@ -231,6 +231,116 @@ function buildTokenDetectionControllerMessenger(
   return tokenDetectionControllerMessenger;
 }
 
+describe('TokenDetectionController construction and init', () => {
+  const buildController = (
+    messenger: TokenDetectionControllerMessenger,
+  ): TokenDetectionController =>
+    new TokenDetectionController({
+      disabled: false,
+      getBalancesInSingleCall: vi.fn(),
+      trackMetaMetricsEvent: vi.fn(),
+      messenger,
+      tokenListService: {
+        fetchTokensByChainId: vi.fn().mockResolvedValue({}),
+      } as unknown as TokenListService,
+    });
+
+  it('does not call other controllers when constructed', () => {
+    const messenger: TokenDetectionControllerMessenger = new Messenger({
+      namespace: controllerName,
+    });
+    const call = vi.spyOn(messenger, 'call');
+
+    const controller = buildController(messenger);
+
+    expect(controller.isActive).toBe(false);
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('reads the selected account, keyring and preferences state in init, only once', () => {
+    const rootMessenger = buildRootMessenger();
+    const getSelectedAccount = vi
+      .fn()
+      .mockReturnValue(createMockInternalAccount());
+    rootMessenger.registerActionHandler(
+      'AccountsController:getSelectedAccount',
+      getSelectedAccount,
+    );
+    rootMessenger.registerActionHandler('KeyringController:getState', () => ({
+      isUnlocked: true,
+      keyrings: [],
+    }));
+    const getPreferencesState = vi
+      .fn()
+      .mockReturnValue(getDefaultPreferencesState());
+    rootMessenger.registerActionHandler(
+      'PreferencesController:getState',
+      getPreferencesState,
+    );
+    const controller = buildController(
+      buildTokenDetectionControllerMessenger(rootMessenger),
+    );
+
+    controller.init();
+    controller.init();
+
+    expect(controller.isActive).toBe(true);
+    expect(getSelectedAccount).toHaveBeenCalledTimes(1);
+    expect(getPreferencesState).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the selected account address before init is called', async () => {
+    const rootMessenger = buildRootMessenger();
+    const getSelectedAccount = vi
+      .fn()
+      .mockReturnValue(createMockInternalAccount());
+    rootMessenger.registerActionHandler(
+      'AccountsController:getSelectedAccount',
+      getSelectedAccount,
+    );
+    rootMessenger.registerActionHandler(
+      'NetworkController:getState',
+      getDefaultNetworkControllerState,
+    );
+    const controller = buildController(
+      buildTokenDetectionControllerMessenger(rootMessenger),
+    );
+    rootMessenger.publish('KeyringController:unlock');
+
+    await controller.detectTokens({ chainIds: [] });
+
+    expect(getSelectedAccount).toHaveBeenCalled();
+  });
+
+  it('reports the error and continues when PreferencesController is not registered yet', () => {
+    const captureException = vi.fn();
+    const rootMessenger: RootMessenger = new Messenger({
+      namespace: MOCK_ANY_NAMESPACE,
+      captureException,
+    });
+    rootMessenger.registerActionHandler(
+      'AccountsController:getSelectedAccount',
+      () => createMockInternalAccount(),
+    );
+    rootMessenger.registerActionHandler('KeyringController:getState', () => ({
+      isUnlocked: true,
+      keyrings: [],
+    }));
+    const controller = buildController(
+      buildTokenDetectionControllerMessenger(rootMessenger),
+    );
+
+    controller.init();
+
+    expect(controller.isActive).toBe(true);
+    expect(captureException).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('PreferencesController:getState'),
+      }),
+    );
+  });
+});
+
 describe('TokenDetectionController', () => {
   const defaultSelectedAccount = createMockInternalAccount();
 
@@ -4581,6 +4691,7 @@ async function withController<ReturnValue>(
     tokenListService,
     ...options,
   });
+  controller.init();
   try {
     return await fn({
       controller,

@@ -199,9 +199,11 @@ export class TokenRatesController extends StaticIntervalPollingController<TokenR
 
   readonly #isDeprecated: () => boolean;
 
-  #allTokens: TokensControllerState['allTokens'];
+  #allTokens: TokensControllerState['allTokens'] = {};
 
-  #allDetectedTokens: TokensControllerState['allDetectedTokens'];
+  #allDetectedTokens: TokensControllerState['allDetectedTokens'] = {};
+
+  #initialized = false;
 
   /**
    * Creates a TokenRatesController instance.
@@ -250,16 +252,32 @@ export class TokenRatesController extends StaticIntervalPollingController<TokenR
       this.#enforceDisabledState();
     }
 
+    this.#subscribeToTokensStateChange();
+
+    this.#subscribeToNetworkStateChange();
+  }
+
+  /**
+   * Complete initialization once the controllers this controller reads from
+   * have been constructed: read the current tokens from `TokensController` and
+   * pass the native asset identifiers from `NetworkEnablementController` to the
+   * token prices service.
+   *
+   * The constructor does not call other controllers, so it can run before they
+   * are constructed. Calling it more than once has no effect.
+   */
+  init(): void {
+    if (this.#initialized) {
+      return;
+    }
+    this.#initialized = true;
+
     const { allTokens, allDetectedTokens } = this.#getTokensControllerState();
     this.#allTokens = allTokens;
     this.#allDetectedTokens = allDetectedTokens;
 
     // Set native asset identifiers from NetworkEnablementController for CAIP-19 native token lookups
     this.#initNativeAssetIdentifiers();
-
-    this.#subscribeToTokensStateChange();
-
-    this.#subscribeToNetworkStateChange();
   }
 
   /**
