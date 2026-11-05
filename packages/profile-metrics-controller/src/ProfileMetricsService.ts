@@ -250,9 +250,10 @@ export class ProfileMetricsService extends BaseDataService<
    * service policy (retry, circuit-breaker, degraded).
    *
    * Nonces are single-use, so concurrent calls with identical arguments are
-   * not deduplicated: every call, and every chunk, makes its own request. If any chunk ultimately
-   * fails, the whole call rejects so the caller can soft-degrade the entire
-   * entropy-source batch consistently.
+   * not deduplicated: every call, and every chunk, makes its own request.
+   *
+   * If any chunk ultimately fails, the whole call rejects so the caller can
+   * soft-degrade the entire entropy-source batch consistently.
    *
    * The returned record is keyed by the auth API's echoed `identifier` field
    * (`response[i].identifier -> response[i].nonce`). The call asserts that

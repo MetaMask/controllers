@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [20.2.2]
+
+### Changed
+
+- Bump `@metamask/core-backend` from `^13.0.0` to `^14.0.0` ([#11300](https://github.com/MetaMask/core/pull/11300))
+- Bump `@metamask/assets-controllers` from `^113.1.0` to `^113.1.1` ([#11300](https://github.com/MetaMask/core/pull/11300))
+- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.1` ([#11289](https://github.com/MetaMask/core/pull/11289), [#11300](https://github.com/MetaMask/core/pull/11300))
+
+### Fixed
+
+- Fix the launchpad spam check throwing `TypeError: apiClient.token.fetchV2Assets is not a function` during the unlock spam cleanup, which stopped any spam tokens from being removed ([#11300](https://github.com/MetaMask/core/pull/11300))
+  - The check calls `TokenApiClient.fetchV2Assets`, which first ships in `@metamask/core-backend` 14.0.0; the previous `^13.0.0` range could not resolve to a version that has it.
+
+## [20.2.1]
+
+### Fixed
+
+- Stop removing launchpad tokens as spam: EVM ERC-20s below the occurrence floor are now kept when Token API `/v2/assets` identifies them as launchpad tokens and their security data does not classify them as malicious ([#11251](https://github.com/MetaMask/core/pull/11251))
+  - Applies to metadata enrichment, websocket balance updates, and the unlock spam cleanup.
+
+## [20.2.0]
+
+### Changed
+
+- Use SLIP-44 coin type 16661 for the 0G native asset ([#11221](https://github.com/MetaMask/core/pull/11221))
+- Bump `@metamask/assets-controllers` from `^113.0.1` to `^113.1.0` ([#11255](https://github.com/MetaMask/core/pull/11255))
+
 ## [20.1.0]
 
 ### Added
@@ -1225,7 +1252,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor `RpcDataSource` to delegate polling to `BalanceFetcher` and `TokenDetector` services ([#7709](https://github.com/MetaMask/core/pull/7709))
 - Refactor `BalanceFetcher` and `TokenDetector` to extend `StaticIntervalPollingControllerOnly` for independent polling management ([#7709](https://github.com/MetaMask/core/pull/7709))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.1.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.2.2...HEAD
+[20.2.2]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.2.1...@metamask/assets-controller@20.2.2
+[20.2.1]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.2.0...@metamask/assets-controller@20.2.1
+[20.2.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.1.0...@metamask/assets-controller@20.2.0
 [20.1.0]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.2...@metamask/assets-controller@20.1.0
 [20.0.2]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.1...@metamask/assets-controller@20.0.2
 [20.0.1]: https://github.com/MetaMask/core/compare/@metamask/assets-controller@20.0.0...@metamask/assets-controller@20.0.1

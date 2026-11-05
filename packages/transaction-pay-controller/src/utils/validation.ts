@@ -15,7 +15,7 @@ import {
   TransactionPaySimulationError,
 } from './simulation.js';
 import {
-  getLiveTokenBalance,
+  getLiveTokenBalanceOrUndefined,
   getNativeToken,
   getTokenInfo,
   normalizeTokenAddress,
@@ -190,10 +190,18 @@ function formatTokenAmount(
   return `${human} ${tokenInfo.symbol}`;
 }
 
+/**
+ * Read the live source token balance, or `undefined` if it cannot be read.
+ *
+ * @param quote - Quote being validated.
+ * @param messenger - Controller messenger.
+ * @returns Raw balance as a decimal string, or `undefined` when the RPC
+ * request failed.
+ */
 async function getLiveSourceBalance(
   quote: TransactionPayQuote<unknown>,
   messenger: TransactionPayControllerMessenger,
-): Promise<string> {
+): Promise<string | undefined> {
   const { from, sourceChainId, sourceTokenAddress } = quote.request;
   const normalizedSourceTokenAddress = normalizeTokenAddress(
     sourceTokenAddress,
@@ -201,27 +209,24 @@ async function getLiveSourceBalance(
     TokenAddressTarget.MetaMask,
   );
 
-  try {
-    return await getLiveTokenBalance(
-      messenger,
-      from,
-      sourceChainId,
-      normalizedSourceTokenAddress,
-    );
-  } catch (error) {
-    throw new QuoteError({
-      message: 'Unable to verify balance',
-      reason: 'balance-unavailable',
-      detail: [(error as Error).message],
-    });
-  }
+  return await getLiveTokenBalanceOrUndefined(
+    messenger,
+    from,
+    sourceChainId,
+    normalizedSourceTokenAddress,
+  );
 }
 
 function validateRequiredSourceAmount(
   messenger: TransactionPayControllerMessenger,
   quote: TransactionPayQuote<unknown>,
-  liveBalance: string,
+  liveBalance: string | undefined,
 ): void {
+  if (liveBalance === undefined) {
+    log('Skipping quote source amount check: live balance unavailable');
+    return;
+  }
+
   if (quote.request.isPostQuote || quote.request.paymentOverride) {
     log('Skipping quote source amount check', {
       hasPaymentOverride: Boolean(quote.request.paymentOverride),
@@ -253,9 +258,14 @@ function validateRequiredSourceAmount(
 function validateDecodedSourceTransfers(
   messenger: TransactionPayControllerMessenger,
   quote: TransactionPayQuote<unknown>,
-  liveBalance: string,
+  liveBalance: string | undefined,
   transactions: SimulationTransaction[],
 ): void {
+  if (liveBalance === undefined) {
+    log('Skipping decoded source transfer check: live balance unavailable');
+    return;
+  }
+
   // Only valid for a single source-token transfer. Multi-step batches produce
   // or transform the source-token balance mid-batch, so comparing against the
   // starting balance is wrong; rely on the full simulation instead.
