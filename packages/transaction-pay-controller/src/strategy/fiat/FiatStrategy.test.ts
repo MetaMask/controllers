@@ -38,10 +38,9 @@ describe('FiatStrategy', () => {
           requests: [
             {
               from: '0x1',
+              sourceAccountId: 'eip155:1:0x1',
               sourceAssetId: 'eip155:1/slip44:60',
               sourceBalanceRaw: '1',
-              sourceChainId: '0x1',
-              sourceTokenAddress: '0x0000000000000000000000000000000000000000',
               sourceTokenAmount: '1',
               targetAmountMinimum: '1',
               targetChainId: '0x2',
@@ -67,7 +66,6 @@ describe('FiatStrategy', () => {
               sourceAssetId:
                 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
               sourceBalanceRaw: '1',
-              sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
               sourceTokenAmount: '1',
               targetAmountMinimum: '1',
               targetChainId: '0x2',

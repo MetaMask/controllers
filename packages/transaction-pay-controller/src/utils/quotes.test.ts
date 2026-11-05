@@ -61,9 +61,7 @@ vi.mock(import('./token.js'), async (importOriginal) =>
     'getEvmAsset',
     'getEvmPaymentToken',
     'getNativeToken',
-    'isEvmQuoteRequest',
     'isNonEvmPaymentToken',
-    'isNonEvmQuoteRequest',
   ]),
 );
 
@@ -1055,12 +1053,11 @@ describe('Quotes Utils', () => {
           {
             isMaxAmount: false,
             from: TRANSACTION_META_MOCK.txParams.from,
+            sourceAccountId: `eip155:291:${TRANSACTION_META_MOCK.txParams.from}`,
             sourceAssetId: PAYMENT_TOKEN_MOCK.assetId,
             sourceBalanceRaw: '5000000',
             sourceTokenAmount:
               TRANSACTION_DATA_MOCK.sourceAmounts?.[0].sourceAmountRaw,
-            sourceChainId: PAYMENT_TOKEN_CHAIN_ID_MOCK,
-            sourceTokenAddress: PAYMENT_TOKEN_ADDRESS_MOCK,
             targetAmountMinimum: TRANSACTION_DATA_MOCK.tokens?.[0].amountRaw,
             targetChainId: TRANSACTION_DATA_MOCK.tokens?.[0].chainId,
             targetTokenAddress: TRANSACTION_DATA_MOCK.tokens?.[0].address,
@@ -1874,7 +1871,6 @@ describe('Quotes Utils', () => {
             sourceAccountId: SOLANA_CAIP_ACCOUNT_ID_MOCK,
             sourceAssetId: SOLANA_ASSET_ID_MOCK,
             sourceBalanceRaw: '3000000000',
-            sourceChainId: SOLANA_CHAIN_ID_MOCK,
             sourceTokenAmount: '500000000',
             targetAmountMinimum: TARGET_TOKEN_MOCK.amountRaw,
             targetChainId: TARGET_TOKEN_MOCK.chainId,
@@ -1960,11 +1956,18 @@ describe('Quotes Utils', () => {
       });
     });
 
-    it('keeps non-EVM quotes without EVM quote support checks or batch transactions', async () => {
+    it('leaves quote support and batch transactions of non-EVM quotes to the strategy', async () => {
+      getBatchTransactionsMock.mockResolvedValue([]);
+
       await run({ transactionData: NON_EVM_TRANSACTION_DATA });
 
-      expect(checkStrategyQuoteSupportMock).not.toHaveBeenCalled();
-      expect(getBatchTransactionsMock).not.toHaveBeenCalled();
+      expect(checkStrategyQuoteSupportMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ quotes: [QUOTE_MOCK] }),
+      );
+      expect(getBatchTransactionsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ quotes: [QUOTE_MOCK] }),
+      );
 
       const transactionDataMock: Partial<TransactionData> = {};
 
@@ -2186,9 +2189,8 @@ describe('Quotes Utils', () => {
           ...QUOTE_MOCK,
           request: {
             from: TRANSACTION_META_MOCK.txParams.from as Hex,
+            sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1',
-            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '100',
             targetChainId: '0x2',
@@ -2213,7 +2215,7 @@ describe('Quotes Utils', () => {
         );
 
         expect(getRefreshIntervalMock).toHaveBeenCalledWith({
-          chainId: '0x1',
+          chainId: 'eip155:1',
           messenger: typedMessenger,
           transactionId: TRANSACTION_ID_MOCK,
         });
@@ -2337,10 +2339,9 @@ describe('Quotes Utils', () => {
             from: TRANSACTION_META_MOCK.txParams.from,
             isMaxAmount: false,
             isPostQuote: true,
+            sourceAccountId: `eip155:137:${TRANSACTION_META_MOCK.txParams.from}`,
             sourceAssetId: 'eip155:137/erc20:0x456',
             sourceBalanceRaw: SOURCE_TOKEN_MOCK.balanceRaw,
-            sourceChainId: SOURCE_TOKEN_MOCK.chainId,
-            sourceTokenAddress: SOURCE_TOKEN_MOCK.address,
             sourceTokenAmount: '10000000',
             targetAmountMinimum: '0',
             targetChainId: '0x38',

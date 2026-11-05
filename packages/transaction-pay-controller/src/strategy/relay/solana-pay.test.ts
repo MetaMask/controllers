@@ -54,15 +54,12 @@ const SOLANA_NATIVE_RELAY_ADDRESS = '11111111111111111111111111111111';
 const RECIPIENT = '0x1234567890123456789012345678901234567890' as Hex;
 const TARGET_TOKEN = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as Hex;
 
-function getRequest(
-  overrides: Partial<QuoteRequest<CaipChainId>> = {},
-): QuoteRequest<CaipChainId> {
+function getRequest(overrides: Partial<QuoteRequest> = {}): QuoteRequest {
   return {
     from: RECIPIENT,
     sourceAccountId: SOLANA_ACCOUNT,
     sourceAssetId: SOLANA_USDC,
     sourceBalanceRaw: '2000000',
-    sourceChainId: SOLANA_CHAIN_ID,
     sourceTokenAmount: '1000000',
     targetAmountMinimum: '900000',
     targetChainId: '0xa4b1',
@@ -382,7 +379,6 @@ describe('Solana Relay Pay', () => {
         {
           sourceAccountId: 'solana:devnet:account',
           sourceAssetId: 'solana:devnet/token:mint',
-          sourceChainId: 'solana:devnet',
         },
         'Unsupported Solana source chain',
       ],
@@ -399,7 +395,7 @@ describe('Solana Relay Pay', () => {
       async (overrides, error) => {
         await expect(
           buildRelaySolanaQuoteRequest(
-            getRequest(overrides as Partial<QuoteRequest<CaipChainId>>),
+            getRequest(overrides as Partial<QuoteRequest>),
             TRANSACTION,
             messenger,
           ),

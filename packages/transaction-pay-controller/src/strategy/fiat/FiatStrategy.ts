@@ -1,5 +1,3 @@
-import type { CaipChainId, Hex } from '@metamask/utils';
-
 import type {
   PayStrategy,
   PayStrategyExecuteRequest,
@@ -15,7 +13,7 @@ import type { FiatQuote } from './types.js';
 const ERROR_PREFIX = 'Fiat: ';
 
 export class FiatStrategy implements PayStrategy<FiatQuote> {
-  supports(request: PayStrategyGetQuotesRequest<Hex | CaipChainId>): boolean {
+  supports(request: PayStrategyGetQuotesRequest): boolean {
     return request.requests.every(isEvmQuoteRequest);
   }
 

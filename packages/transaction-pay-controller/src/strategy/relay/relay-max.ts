@@ -16,7 +16,7 @@ import {
   shouldUseGasStation,
   resolveGasStationCost,
 } from '../../utils/gas-payment.js';
-import { getTokenInfo } from '../../utils/token.js';
+import { getEvmQuoteSource, getTokenInfo } from '../../utils/token.js';
 import { QuoteError } from '../../utils/validation.js';
 import { ATOMIC_PROMOTION_FAILURE_PREFIX } from './constants.js';
 import { isSubsidizedRelayQuote } from './relay-submit-execute.js';
@@ -70,10 +70,12 @@ export async function getRelayMaxQuote(
   }
 
   if (atomic !== false) {
+    const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+      getEvmQuoteSource(request);
     const sourceToken = getTokenInfo(
       messenger,
-      request.sourceTokenAddress,
-      request.sourceChainId,
+      sourceTokenAddress,
+      sourceChainId,
     );
     const targetToken = getTokenInfo(
       messenger,
@@ -180,7 +182,10 @@ export async function getRelayMaxGasStationQuote(
     nativeGasCostRaw: phase1Quote.fees.isSourceGasFeeToken
       ? undefined
       : phase1Quote.fees.sourceNetwork.max.raw,
-    request,
+    request: {
+      from: request.from,
+      sourceChainId: getEvmQuoteSource(request).chainId,
+    },
   });
 
   if (!useGasStation) {
@@ -377,6 +382,9 @@ async function getGasCostFromQuoteOrGasStation(
     0,
   );
 
+  const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+    getEvmQuoteSource(request);
+
   // Native balance and chain eligibility were already checked before the probe
   // flow started, so only the source-token pricing is needed here.
   const gasStationCost = await resolveGasStationCost({
@@ -384,8 +392,8 @@ async function getGasCostFromQuoteOrGasStation(
     messenger,
     request: {
       from: request.from,
-      sourceChainId: request.sourceChainId,
-      sourceTokenAddress: request.sourceTokenAddress,
+      sourceChainId,
+      sourceTokenAddress,
     },
     totalGasEstimate,
     totalItemCount,
@@ -406,10 +414,12 @@ async function getProbeGasCostInSourceTokenRaw(
 ): Promise<BigNumber | undefined> {
   const { fullRequest, getSingleQuote, messenger, request } = context;
 
+  const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+    getEvmQuoteSource(request);
   const sourceTokenInfo = getTokenInfo(
     messenger,
-    request.sourceTokenAddress,
-    request.sourceChainId,
+    sourceTokenAddress,
+    sourceChainId,
   );
 
   if (!sourceTokenInfo) {

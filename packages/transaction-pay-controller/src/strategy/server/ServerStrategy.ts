@@ -1,5 +1,4 @@
 import { createModuleLogger } from '@metamask/utils';
-import type { CaipChainId, Hex } from '@metamask/utils';
 
 import { projectLogger } from '../../logger.js';
 import type {
@@ -25,7 +24,7 @@ const log = createModuleLogger(projectLogger, 'server-strategy');
  * `payStrategies.server.enabledTransactionTypes`.
  */
 export class ServerStrategy implements PayStrategy<ServerQuote> {
-  supports(request: PayStrategyGetQuotesRequest<Hex | CaipChainId>): boolean {
+  supports(request: PayStrategyGetQuotesRequest): boolean {
     const config = getPayStrategiesConfig(request.messenger);
 
     if (!config.server.enabled) {

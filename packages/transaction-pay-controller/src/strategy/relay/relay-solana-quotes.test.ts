@@ -70,15 +70,12 @@ const TARGET_TOKEN = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as Hex;
 const FEE_RAW = '5000';
 const RENT_RAW = '890880';
 
-function getRequest(
-  overrides: Partial<QuoteRequest<CaipChainId>> = {},
-): QuoteRequest<CaipChainId> {
+function getRequest(overrides: Partial<QuoteRequest> = {}): QuoteRequest {
   return {
     from: FROM,
     sourceAccountId: SOLANA_ACCOUNT,
     sourceAssetId: SOLANA_USDC,
     sourceBalanceRaw: '20000000',
-    sourceChainId: SOLANA_CHAIN_ID,
     sourceTokenAmount: '10000000',
     targetAmountMinimum: '9900000',
     targetChainId: '0xa4b1',
@@ -162,8 +159,8 @@ describe('getRelaySolanaQuotes', () => {
   } = getMessengerMock();
 
   function getFullRequest(
-    requests: QuoteRequest<CaipChainId>[],
-  ): PayStrategyGetQuotesRequest<CaipChainId> {
+    requests: QuoteRequest[],
+  ): PayStrategyGetQuotesRequest {
     return {
       accountSupports7702: false,
       from: FROM,

@@ -40,15 +40,12 @@ const SNAP_ID = 'npm:@metamask/solana-wallet-snap';
 const FROM = '0x1234567890123456789012345678901234567890' as Hex;
 const TRANSACTION_ID = 'transaction-1';
 
-function getRequest(
-  overrides: Partial<QuoteRequest<CaipChainId>> = {},
-): QuoteRequest<CaipChainId> {
+function getRequest(overrides: Partial<QuoteRequest> = {}): QuoteRequest {
   return {
     from: FROM,
     sourceAccountId: `${SOLANA_CHAIN_ID}:${SOLANA_ADDRESS}` as CaipAccountId,
     sourceAssetId: `${SOLANA_CHAIN_ID}/slip44:501` as CaipAssetType,
     sourceBalanceRaw: '100000000',
-    sourceChainId: SOLANA_CHAIN_ID,
     sourceTokenAmount: '10000000',
     targetAmountMinimum: '9900000',
     targetChainId: '0xa4b1',
@@ -58,9 +55,9 @@ function getRequest(
 }
 
 function getQuote(
-  overrides: Partial<QuoteRequest<CaipChainId>> = {},
+  overrides: Partial<QuoteRequest> = {},
   isAffordable = true,
-): TransactionPayQuote<RelaySolanaPayQuote, CaipChainId> {
+): TransactionPayQuote<RelaySolanaPayQuote> {
   return {
     dust: { fiat: '0', usd: '0' },
     estimatedDuration: 12,

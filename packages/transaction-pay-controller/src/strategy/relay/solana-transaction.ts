@@ -165,7 +165,7 @@ export async function compileRelaySolanaTransaction({
  */
 export function getSourceWalletAccountId(
   messenger: TransactionPayControllerMessenger,
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
 ): string {
   const { address: sourceAddress, chainId } = parseCaipAccountId(
     request.sourceAccountId,

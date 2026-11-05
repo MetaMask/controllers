@@ -1,5 +1,5 @@
 import type { TransactionMeta } from '@metamask/transaction-controller';
-import type { CaipChainId, Hex } from '@metamask/utils';
+import type { Hex } from '@metamask/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TransactionPayStrategy } from '../../constants.js';
@@ -44,22 +44,20 @@ describe('RelayStrategy', () => {
       'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:7Ec4QeG8wF3RnTjHDrTuYP8hVV7WYuPFyM4hZUodkG6Z',
     sourceAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
     sourceBalanceRaw: '100',
-    sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
     sourceTokenAmount: '100',
     targetAmountMinimum: '100',
     targetChainId: '0x2' as Hex,
     targetTokenAddress: '0xdef' as Hex,
-  } satisfies QuoteRequest<CaipChainId>;
+  } satisfies QuoteRequest;
 
   const request = {
     messenger,
     requests: [
       {
         from: '0xabc' as Hex,
+        sourceAccountId: 'eip155:1:0xabc',
         sourceAssetId: 'eip155:1/erc20:0xabc',
         sourceBalanceRaw: '100',
-        sourceChainId: '0x1' as Hex,
-        sourceTokenAddress: '0xabc' as Hex,
         sourceTokenAmount: '100',
         targetAmountMinimum: '100',
         targetChainId: '0x2' as Hex,
@@ -116,8 +114,7 @@ describe('RelayStrategy', () => {
   it('delegates getQuotes', async () => {
     const quote = {
       request: {
-        sourceChainId: '0x1',
-        sourceTokenAddress: '0xabc',
+        sourceAssetId: 'eip155:1/erc20:0xabc',
       },
       strategy: TransactionPayStrategy.Relay,
     } as TransactionPayQuote<RelayQuote>;
@@ -140,7 +137,7 @@ describe('RelayStrategy', () => {
     const nonEvmRequest = {
       ...request,
       requests: [nonEvmQuoteRequest],
-    } as PayStrategyGetQuotesRequest<Hex | CaipChainId>;
+    } as PayStrategyGetQuotesRequest;
     getRelaySolanaQuotesMock.mockResolvedValue([]);
 
     const strategy = new RelayStrategy();
@@ -170,10 +167,7 @@ describe('RelayStrategy', () => {
       quotes: [nonEvmQuote],
       transaction: request.transaction,
       isSmartTransaction: vi.fn(),
-    } as unknown as PayStrategyExecuteRequest<
-      RelayQuote | RelaySolanaPayQuote,
-      Hex | CaipChainId
-    >;
+    } as unknown as PayStrategyExecuteRequest<RelayQuote | RelaySolanaPayQuote>;
 
     submitRelayNonEvmQuoteMock.mockResolvedValue({
       externallyHandled: true,
@@ -201,10 +195,7 @@ describe('RelayStrategy', () => {
       quotes: [nonEvmQuote, nonEvmQuote],
       transaction: request.transaction,
       isSmartTransaction: vi.fn(),
-    } as unknown as PayStrategyExecuteRequest<
-      RelayQuote | RelaySolanaPayQuote,
-      Hex | CaipChainId
-    >;
+    } as unknown as PayStrategyExecuteRequest<RelayQuote | RelaySolanaPayQuote>;
 
     const strategy = new RelayStrategy();
 
@@ -225,7 +216,7 @@ describe('RelayStrategy', () => {
       call: getStateMock,
     } as unknown as TransactionPayControllerMessenger;
     const refreshRequest = {
-      chainId: '0x1' as Hex,
+      chainId: 'eip155:1' as const,
       messenger: refreshMessenger,
       transactionId: 'tx-1',
     };

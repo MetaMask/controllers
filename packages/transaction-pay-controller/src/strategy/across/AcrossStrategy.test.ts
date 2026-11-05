@@ -57,10 +57,9 @@ describe('AcrossStrategy', () => {
     requests: [
       {
         from: '0xabc',
+        sourceAccountId: 'eip155:1:0xabc',
         sourceAssetId: 'eip155:1/erc20:0xabc',
         sourceBalanceRaw: '100',
-        sourceChainId: '0x1',
-        sourceTokenAddress: '0xabc',
         sourceTokenAmount: '100',
         targetAmountMinimum: '100',
         targetChainId: '0x2',
@@ -117,7 +116,6 @@ describe('AcrossStrategy', () => {
             sourceAccountId:
               'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:7Ec4QeG8wF3RnTjHDrTuYP8hVV7WYuPFyM4hZUodkG6Z',
             sourceAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
-            sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
           },
         ],
       }),
@@ -152,10 +150,9 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAccountId: 'eip155:42161:0xabc',
             sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
-            sourceChainId: CHAIN_ID_ARBITRUM,
-            sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
             sourceTokenAmount: '100',
             targetAmountMinimum: '100',
             targetChainId: CHAIN_ID_ARBITRUM,
@@ -175,10 +172,9 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAccountId: 'eip155:42161:0xabc',
             sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
-            sourceChainId: CHAIN_ID_ARBITRUM,
-            sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
             sourceTokenAmount: '100',
             targetAmountMinimum: '100',
             targetChainId: CHAIN_ID_ARBITRUM,
@@ -186,10 +182,9 @@ describe('AcrossStrategy', () => {
           },
           {
             from: '0xabc',
+            sourceAccountId: 'eip155:42161:0xabc',
             sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
-            sourceChainId: CHAIN_ID_ARBITRUM,
-            sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
             targetChainId: CHAIN_ID_ARBITRUM,
@@ -208,10 +203,9 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAccountId: 'eip155:42161:0xabc',
             sourceAssetId: `eip155:42161/erc20:${ARBITRUM_USDC_ADDRESS}`,
             sourceBalanceRaw: '100',
-            sourceChainId: CHAIN_ID_ARBITRUM,
-            sourceTokenAddress: ARBITRUM_USDC_ADDRESS,
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
             targetChainId: CHAIN_ID_ARBITRUM,
@@ -231,10 +225,9 @@ describe('AcrossStrategy', () => {
           {
             from: '0xabc',
             isMaxAmount: true,
+            sourceAccountId: 'eip155:1:0xabc',
             sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1',
-            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
             targetChainId: '0x2',
@@ -264,10 +257,9 @@ describe('AcrossStrategy', () => {
           {
             from: '0xabc',
             isPostQuote: true,
+            sourceAccountId: 'eip155:1:0xabc',
             sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1',
-            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
             targetChainId: '0x2',
@@ -287,10 +279,9 @@ describe('AcrossStrategy', () => {
           {
             from: '0xabc',
             isPostQuote: true,
+            sourceAccountId: 'eip155:1:0xabc',
             sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1',
-            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '0',
             targetChainId: '0x2',
@@ -332,10 +323,9 @@ describe('AcrossStrategy', () => {
         requests: [
           {
             from: '0xabc',
+            sourceAccountId: 'eip155:1:0xabc',
             sourceAssetId: 'eip155:1/erc20:0xabc',
             sourceBalanceRaw: '100',
-            sourceChainId: '0x1',
-            sourceTokenAddress: '0xabc',
             sourceTokenAmount: '100',
             targetAmountMinimum: '100',
             targetChainId: '0x1',

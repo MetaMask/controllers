@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `updatePaymentToken` accepts a non-EVM `assetId`, reading its metadata, balance, and price from `AssetsController` state.
   - The non-EVM source account defaults to the account in the same account group as the transaction account that supports the asset chain, or is selected explicitly by `accountOverride`.
 - Quote and submit Solana payment tokens through `RelayStrategy` ([#10273](https://github.com/MetaMask/core/pull/10273))
-  - A non-EVM payment token produces quote requests through the same `requests` channel as EVM tokens. Every quote request has a CAIP-19 `sourceAssetId`, and a non-EVM request has a CAIP-2 `sourceChainId` and the CAIP-10 `sourceAccountId` of the account holding the payment token instead of a `sourceTokenAddress`. Post-quote flows with a non-EVM destination token produce no quote requests.
-  - `AcrossStrategy`, `ServerStrategy` and `FiatStrategy` only support requests with an `eip155` source asset. `RelayStrategy` selects its quote and execution path from the protocol of the source asset.
+  - Quote requests are built the same way for every payment token. Post-quote flows with a non-EVM destination token produce no quote requests.
+  - `AcrossStrategy`, `ServerStrategy` and `FiatStrategy` only support requests with an `eip155` source asset. `RelayStrategy` supports every source, and executes a non-EVM source through the account Snap instead of the `TransactionController`.
   - `RelayStrategy` quotes non-EVM requests through the same Relay quote URL as EVM sources (`relayQuoteUrl`, the MetaMask Relay proxy). New quotes require the `payStrategies.relay.solana.enabled` feature flag.
   - Core compiles the unsigned Solana transaction from the Relay instructions. It reads the blockhash and lookup tables from the `ConfigRegistryController` Solana RPC URL. Instructions with empty data are supported.
   - When Relay rejects a Solana quote with the `SOLANA_TX_TOO_LARGE` error code, Core retries once with `maxRouteLength: 4`. Core makes the same one-time retry when the transaction it compiles from a quote exceeds the Solana size limit. The native SOL Max re-quote keeps the route length of the first quote. Relay API errors now keep the response body `errorCode` as an `errorCode` property on the thrown error.
@@ -47,9 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fiat payments throw if the account override is not an EVM account.
 - **BREAKING:** `TransactionPayControllerMessenger` requires the `AccountTreeController:getAccountContext` and `AccountTreeController:getAccountGroupObject` actions ([#10272](https://github.com/MetaMask/core/pull/10272))
 - **BREAKING:** `TransactionPayControllerMessenger` requires the `SnapController:handleRequest`, `ConfigRegistryController:getNetworkConfigByCaip2ChainId`, `TransactionController:confirmTransaction` and `TransactionController:failTransaction` actions ([#10273](https://github.com/MetaMask/core/pull/10273))
-- **BREAKING:** `TransactionData.quotes` can contain quotes for a non-EVM source ([#10273](https://github.com/MetaMask/core/pull/10273))
-  - `TransactionPayQuote` has a second type parameter for the source chain ID, defaulting to a Hex chain ID.
-  - The `request` of a quote for a non-EVM source has a CAIP-2 `sourceChainId` and no `sourceTokenAddress`. Check the protocol of `quote.request.sourceAssetId` before reading the Hex `sourceChainId` or `sourceTokenAddress`.
+- **BREAKING:** The `request` of a `TransactionPayQuote` identifies its source by CAIP identifiers for every protocol ([#10273](https://github.com/MetaMask/core/pull/10273))
+  - Remove `sourceChainId` and `sourceTokenAddress`. Add the CAIP-19 `sourceAssetId` and the CAIP-10 `sourceAccountId` of the account holding the source token, and derive an EVM chain ID and token address from `sourceAssetId` where needed.
+  - `TransactionData.quotes` can contain quotes for a non-EVM source.
 - Add dependency on `@metamask/account-tree-controller` `^11.2.0` ([#10272](https://github.com/MetaMask/core/pull/10272))
 - Add dependencies on `@metamask/config-registry-controller` `^5.0.0`, `@metamask/rpc-errors` `^7.0.3`, `@metamask/snaps-controllers` `^19.0.1`, `@metamask/snaps-sdk` `^11.0.0`, `@metamask/snaps-utils` `^12.1.2`, `@solana/addresses` `^2.3.0`, `@solana/instructions` `^2.3.0`, `@solana/rpc-types` `^2.3.0`, `@solana/transaction-messages` `^2.3.0`, `@solana/transactions` `^2.3.0` and `uuid` `^14.0.2` ([#10273](https://github.com/MetaMask/core/pull/10273))
 - Bump `@metamask/assets-controller` from `^20.2.2` to `^20.2.3` ([#11326](https://github.com/MetaMask/core/pull/11326))

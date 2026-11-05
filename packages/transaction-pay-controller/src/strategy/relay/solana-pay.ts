@@ -76,11 +76,11 @@ const TERMINAL_OUTCOMES: SolanaPayOutcome[] = [
  * @returns A Relay Solana request derived entirely by Core.
  */
 export async function buildRelaySolanaQuoteRequest(
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
   transaction: TransactionMeta,
   messenger: TransactionPayControllerMessenger,
 ): Promise<RelaySolanaQuoteRequest> {
-  const { sourceChainId } = request;
+  const sourceChainId = getSolanaSourceChainId(request);
 
   if (sourceChainId !== SOLANA_MAINNET_CAIP_CHAIN_ID) {
     throw new Error(`Unsupported Solana source chain: ${sourceChainId}`);
@@ -215,16 +215,27 @@ export function getSolanaNativeAssetId(chainId: CaipChainId): CaipAssetType {
 }
 
 /**
+ * Get the CAIP-2 chain of the source asset of a Solana quote request.
+ *
+ * @param request - Solana quote request.
+ * @returns The CAIP-2 chain ID of the source asset.
+ */
+export function getSolanaSourceChainId(
+  request: Pick<QuoteRequest, 'sourceAssetId'>,
+): CaipChainId {
+  return parseCaipAssetType(request.sourceAssetId).chainId;
+}
+
+/**
  * Whether a non-EVM request pays with native SOL.
  *
  * @param request - Non-EVM quote request.
  * @returns True if the source asset is native SOL.
  */
-export function isSolanaNativeRequest(
-  request: QuoteRequest<CaipChainId>,
-): boolean {
+export function isSolanaNativeRequest(request: QuoteRequest): boolean {
   return (
-    request.sourceAssetId === getSolanaNativeAssetId(request.sourceChainId)
+    request.sourceAssetId ===
+    getSolanaNativeAssetId(getSolanaSourceChainId(request))
   );
 }
 
@@ -235,9 +246,7 @@ export function isSolanaNativeRequest(
  * @param request - Non-EVM quote request.
  * @returns True for non-atomic Money Account requests.
  */
-export function isMoneyAccountRequest(
-  request: QuoteRequest<CaipChainId>,
-): boolean {
+export function isMoneyAccountRequest(request: QuoteRequest): boolean {
   return (
     request.atomic === false &&
     request.paymentOverride === PaymentOverride.MoneyAccount
@@ -250,12 +259,10 @@ export function isMoneyAccountRequest(
  * @param request - Non-EVM quote request.
  * @returns The Solana address of the source account.
  */
-export function getSolanaSourceAddress(
-  request: QuoteRequest<CaipChainId>,
-): string {
+export function getSolanaSourceAddress(request: QuoteRequest): string {
   const { address, chainId } = parseCaipAccountId(request.sourceAccountId);
 
-  if (chainId !== request.sourceChainId) {
+  if (chainId !== getSolanaSourceChainId(request)) {
     throw new Error('Solana source account and asset must use the same chain');
   }
 
@@ -706,7 +713,7 @@ function getSubmissionOutcome(
   }
 }
 
-function getOriginCurrency(request: QuoteRequest<CaipChainId>): string {
+function getOriginCurrency(request: QuoteRequest): string {
   const { assetNamespace, assetReference } = parseCaipAssetType(
     request.sourceAssetId,
   );
@@ -780,7 +787,7 @@ function isRelaySolanaInstructionKey(value: unknown): boolean {
  * @returns True for Perps deposits targeting Arbitrum USDC.
  */
 function isHyperliquidDepositRequest(
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
   transaction: TransactionMeta,
 ): boolean {
   return (

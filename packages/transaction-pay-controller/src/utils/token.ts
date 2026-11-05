@@ -9,7 +9,7 @@ import {
   parseCaipAssetType,
   toCaipAssetType,
 } from '@metamask/utils';
-import type { CaipAssetType, CaipChainId, Hex } from '@metamask/utils';
+import type { CaipAssetType, Hex } from '@metamask/utils';
 import { BigNumber } from 'bignumber.js';
 
 import {
@@ -74,31 +74,39 @@ export function isNonEvmPaymentToken(
 }
 
 /**
- * Check if a quote request pays with an EVM source token.
+ * Check if the source asset of a quote request is on an EVM chain.
  *
- * The protocol is derived from the CAIP-19 source asset type of the request.
+ * Strategies use it to support or reject a request and to select their
+ * execution path, which is the only place the source protocol matters.
  *
  * @param request - Quote request to check.
  * @returns True if the source asset is on an EVM chain.
  */
 export function isEvmQuoteRequest(
-  request: QuoteRequest<Hex | CaipChainId>,
-): request is QuoteRequest {
+  request: Pick<QuoteRequest, 'sourceAssetId'>,
+): boolean {
   return Boolean(getEvmAsset(request.sourceAssetId));
 }
 
 /**
- * Check if a quote request pays with a non-EVM source token.
+ * Get the Hex chain ID and token address of the EVM source asset of a quote
+ * request, as used by the EVM quote and execution paths.
  *
- * The protocol is derived from the CAIP-19 source asset type of the request.
- *
- * @param request - Quote request to check.
- * @returns True if the source asset is not on an EVM chain.
+ * @param request - Quote request.
+ * @returns The Hex chain ID and token address derived from `sourceAssetId`.
  */
-export function isNonEvmQuoteRequest(
-  request: QuoteRequest<Hex | CaipChainId>,
-): request is QuoteRequest<CaipChainId> {
-  return !isEvmQuoteRequest(request);
+export function getEvmQuoteSource(
+  request: Pick<QuoteRequest, 'sourceAssetId'>,
+): { chainId: Hex; tokenAddress: Hex } {
+  const evmAsset = getEvmAsset(request.sourceAssetId);
+
+  if (!evmAsset) {
+    throw new Error(
+      `Unsupported non-EVM source asset: ${request.sourceAssetId}`,
+    );
+  }
+
+  return { chainId: evmAsset.chainId, tokenAddress: evmAsset.address };
 }
 
 /**

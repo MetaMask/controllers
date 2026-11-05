@@ -20,7 +20,7 @@ const TRANSACTION_META_MOCK = {
 } as TransactionMeta;
 
 const QUOTE_MOCK = {
-  request: { sourceAssetId: 'eip155:1/slip44:60', sourceChainId: '0x1' },
+  request: { sourceAssetId: 'eip155:1/slip44:60' },
   strategy: TransactionPayStrategy.Across,
 } as unknown as TransactionPayQuote<unknown>;
 
@@ -32,8 +32,9 @@ const NON_EVM_PAYMENT_TOKEN_MOCK = {
 
 const NON_EVM_QUOTE_MOCK = {
   request: {
+    sourceAccountId:
+      'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:7Ec4QeG8wF3RnTjHDrTuYP8hVV7WYuPFyM4hZUodkG6Z',
     sourceAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
-    sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
   },
   strategy: TransactionPayStrategy.Relay,
 };

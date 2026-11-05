@@ -56,10 +56,9 @@ describe('No-Op Quote Utils', () => {
 
       expect(quote.request).toStrictEqual({
         from: FROM_MOCK,
+        sourceAccountId: `eip155:137:${FROM_MOCK}`,
         sourceAssetId: PAYMENT_TOKEN_MOCK.assetId,
         sourceBalanceRaw: PAYMENT_TOKEN_MOCK.balanceRaw,
-        sourceChainId: PAYMENT_TOKEN_MOCK.chainId,
-        sourceTokenAddress: PAYMENT_TOKEN_MOCK.address,
         sourceTokenAmount: '0',
         targetAmountMinimum: '0',
         targetChainId: PAYMENT_TOKEN_MOCK.chainId,

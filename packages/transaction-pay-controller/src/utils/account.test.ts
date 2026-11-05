@@ -267,7 +267,7 @@ describe('Account Utils', () => {
 
   describe('getCaipAccountId', () => {
     it('returns the CAIP-10 account ID on the asset chain', () => {
-      expect(getCaipAccountId(SOL_ASSET_ID_MOCK, SOLANA_ACCOUNT_MOCK)).toBe(
+      expect(getCaipAccountId(SOL_ASSET_ID_MOCK, SOLANA_ADDRESS_MOCK)).toBe(
         `${SOLANA_CHAIN_ID_MOCK}:${SOLANA_ADDRESS_MOCK}`,
       );
     });

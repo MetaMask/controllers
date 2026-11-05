@@ -1,5 +1,4 @@
 import { createModuleLogger } from '@metamask/utils';
-import type { CaipChainId } from '@metamask/utils';
 import { BigNumber } from 'bignumber.js';
 
 import { TransactionPayStrategy } from '../../constants.js';
@@ -33,6 +32,7 @@ import {
   getSolanaAffordability,
   getSolanaNativeAssetId,
   getSolanaSourceAddress,
+  getSolanaSourceChainId,
   isSolanaNativeRequest,
 } from './solana-pay.js';
 import {
@@ -57,10 +57,8 @@ const SOLANA_TX_TOO_LARGE = 'SOLANA_TX_TOO_LARGE';
 const SOLANA_MAX_ROUTE_LENGTH = 4;
 
 /** Relay quote paid with a non-EVM payment token. */
-type RelaySolanaPayTransactionPayQuote = TransactionPayQuote<
-  RelaySolanaPayQuote,
-  CaipChainId
->;
+type RelaySolanaPayTransactionPayQuote =
+  TransactionPayQuote<RelaySolanaPayQuote>;
 
 /**
  * Fetches Relay quotes for non-EVM payment token requests.
@@ -74,7 +72,7 @@ type RelaySolanaPayTransactionPayQuote = TransactionPayQuote<
  * @returns Normalized quotes.
  */
 export async function getRelaySolanaQuotes(
-  request: PayStrategyGetQuotesRequest<CaipChainId>,
+  request: PayStrategyGetQuotesRequest,
 ): Promise<RelaySolanaPayTransactionPayQuote[]> {
   const { messenger, requests } = request;
 
@@ -114,11 +112,11 @@ export async function getRelaySolanaQuotes(
 }
 
 async function getSingleSolanaQuote(
-  request: QuoteRequest<CaipChainId>,
-  fullRequest: PayStrategyGetQuotesRequest<CaipChainId>,
+  request: QuoteRequest,
+  fullRequest: PayStrategyGetQuotesRequest,
 ): Promise<RelaySolanaPayTransactionPayQuote> {
   const { messenger, signal, transaction } = fullRequest;
-  const scope = request.sourceChainId;
+  const scope = getSolanaSourceChainId(request);
   const sourceWalletAccountId = getSourceWalletAccountId(messenger, request);
   const snapId = getAccountSnapId(messenger, sourceWalletAccountId);
   const isNative = isSolanaNativeRequest(request);
@@ -246,7 +244,7 @@ async function getSingleSolanaQuote(
  * @returns The source amount in lamports.
  */
 function getMaxNativeAmountRaw(
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
   feeRaw: string,
   rentReserveRaw: string,
 ): string {
@@ -310,7 +308,7 @@ async function fetchSolanaQuote(
  */
 async function fetchCompiledSolanaQuote(
   messenger: TransactionPayControllerMessenger,
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
   quoteRequest: RelaySolanaQuoteRequest,
   signal?: AbortSignal,
 ): Promise<{
@@ -346,20 +344,20 @@ async function fetchCompiledSolanaQuote(
 
 async function compileQuote(
   messenger: TransactionPayControllerMessenger,
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
   quote: RelaySolanaQuote,
 ): Promise<CompiledSolanaTransaction> {
   return await compileRelaySolanaTransaction({
     messenger,
     payer: getSolanaSourceAddress(request),
-    scope: request.sourceChainId,
+    scope: getSolanaSourceChainId(request),
     transaction: getRelaySolanaTransaction(quote),
   });
 }
 
 async function computeFee(
   messenger: TransactionPayControllerMessenger,
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
   sourceWalletAccountId: string,
   snapId: string,
   transaction: string,
@@ -367,7 +365,7 @@ async function computeFee(
   return await computeSolanaFeeRaw({
     accountId: sourceWalletAccountId,
     messenger,
-    scope: request.sourceChainId,
+    scope: getSolanaSourceChainId(request),
     snapId,
     transaction,
   });
@@ -375,13 +373,13 @@ async function computeFee(
 
 function normalizeSolanaQuote(
   quote: RelaySolanaPayQuote,
-  request: QuoteRequest<CaipChainId>,
+  request: QuoteRequest,
   messenger: TransactionPayControllerMessenger,
 ): RelaySolanaPayTransactionPayQuote {
   const { currencyIn, currencyOut, timeEstimate } = quote.details;
   const nativeFiatRates = getFiatRates(
     messenger,
-    getSolanaNativeAssetId(request.sourceChainId),
+    getSolanaNativeAssetId(getSolanaSourceChainId(request)),
   );
   const usdToFiatRate = new BigNumber(nativeFiatRates.fiatRate).dividedBy(
     nativeFiatRates.usdRate,

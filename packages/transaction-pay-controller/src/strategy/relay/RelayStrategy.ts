@@ -1,5 +1,3 @@
-import type { CaipChainId, Hex } from '@metamask/utils';
-
 import type {
   PayStrategy,
   PayStrategyExecuteRequest,
@@ -12,7 +10,7 @@ import {
   getMaxBalanceRefreshInterval,
   getPayStrategiesConfig,
 } from '../../utils/feature-flags.js';
-import { isEvmQuoteRequest, isNonEvmQuoteRequest } from '../../utils/token.js';
+import { isEvmQuoteRequest } from '../../utils/token.js';
 import { getTransaction } from '../../utils/transaction.js';
 import { getRelayQuotes } from './relay-quotes.js';
 import { getRelaySolanaQuotes } from './relay-solana-quotes.js';
@@ -22,36 +20,26 @@ import type { RelayQuote, RelaySolanaPayQuote } from './types.js';
 
 /**
  * Pay strategy that quotes and submits through Relay. Supports every source
- * protocol, and selects the quote and execution path from the protocol of the
- * source asset of each request.
+ * protocol. Quotes for a non-EVM source are prepared for and executed through
+ * the account Snap, and quotes for an EVM source through the
+ * `TransactionController`, selected from the protocol of the source asset.
  */
 export class RelayStrategy implements PayStrategy<
-  RelayQuote | RelaySolanaPayQuote,
-  Hex | CaipChainId
+  RelayQuote | RelaySolanaPayQuote
 > {
-  supports(request: PayStrategyGetQuotesRequest<Hex | CaipChainId>): boolean {
+  supports(request: PayStrategyGetQuotesRequest): boolean {
     const config = getPayStrategiesConfig(request.messenger);
     return config.relay.enabled;
   }
 
   async getQuotes(
-    request: PayStrategyGetQuotesRequest<Hex | CaipChainId>,
-  ): Promise<
-    TransactionPayQuote<RelayQuote | RelaySolanaPayQuote, Hex | CaipChainId>[]
-  > {
-    const { requests } = request;
-
-    if (requests.some(isNonEvmQuoteRequest)) {
-      return getRelaySolanaQuotes({
-        ...request,
-        requests: requests.filter(isNonEvmQuoteRequest),
-      });
+    request: PayStrategyGetQuotesRequest,
+  ): Promise<TransactionPayQuote<RelayQuote | RelaySolanaPayQuote>[]> {
+    if (!request.requests.every(isEvmQuoteRequest)) {
+      return getRelaySolanaQuotes(request);
     }
 
-    return getRelayQuotes({
-      ...request,
-      requests: requests.filter(isEvmQuoteRequest),
-    });
+    return getRelayQuotes(request);
   }
 
   async getRefreshInterval(
@@ -71,24 +59,18 @@ export class RelayStrategy implements PayStrategy<
   }
 
   async execute(
-    request: PayStrategyExecuteRequest<
-      RelayQuote | RelaySolanaPayQuote,
-      Hex | CaipChainId
-    >,
+    request: PayStrategyExecuteRequest<RelayQuote | RelaySolanaPayQuote>,
   ): Promise<PayStrategyExecuteResult> {
     const { messenger, quotes, transaction } = request;
 
-    if (quotes.some((quote) => isNonEvmQuoteRequest(quote.request))) {
+    if (!quotes.every((quote) => isEvmQuoteRequest(quote.request))) {
       if (quotes.length > 1) {
         throw new Error('Relay: Multiple non-EVM quotes are not supported');
       }
 
       return await submitRelayNonEvmQuote({
         messenger,
-        quote: quotes[0] as TransactionPayQuote<
-          RelaySolanaPayQuote,
-          CaipChainId
-        >,
+        quote: quotes[0] as TransactionPayQuote<RelaySolanaPayQuote>,
         transaction,
       });
     }

@@ -4,7 +4,6 @@ import type {
   TransactionMeta,
 } from '@metamask/transaction-controller';
 import { createModuleLogger, isObject } from '@metamask/utils';
-import type { CaipChainId } from '@metamask/utils';
 
 import { DEFAULT_QUOTE_REFRESH_INTERVAL } from '../../constants.js';
 import { projectLogger } from '../../logger.js';
@@ -23,6 +22,7 @@ import {
   getRelaySolanaTransaction,
   getSolanaPayFailure,
   getSolanaSourceAddress,
+  getSolanaSourceChainId,
   isHypercoreDepositQuoteRequest,
   isMoneyAccountRequest,
   isSolanaPayProductTransaction,
@@ -77,7 +77,7 @@ export async function submitRelayNonEvmQuote({
   transaction,
 }: {
   messenger: TransactionPayControllerMessenger;
-  quote: TransactionPayQuote<RelaySolanaPayQuote, CaipChainId>;
+  quote: TransactionPayQuote<RelaySolanaPayQuote>;
   transaction: TransactionMeta;
 }): Promise<PayStrategyExecuteResult> {
   const { id: transactionId } = transaction;
@@ -112,7 +112,7 @@ export async function submitRelayNonEvmQuote({
   }
 
   const { request } = quote;
-  const scope = request.sourceChainId;
+  const scope = getSolanaSourceChainId(request);
   const sourceWalletAccountId = getSourceWalletAccountId(messenger, request);
   const snapId = getAccountSnapId(messenger, sourceWalletAccountId);
 
@@ -219,7 +219,7 @@ async function completeExecution({
   transaction,
 }: {
   messenger: TransactionPayControllerMessenger;
-  quote: TransactionPayQuote<RelaySolanaPayQuote, CaipChainId>;
+  quote: TransactionPayQuote<RelaySolanaPayQuote>;
   transaction: TransactionMeta;
 }): Promise<PayStrategyExecuteResult> {
   const { id: transactionId } = transaction;

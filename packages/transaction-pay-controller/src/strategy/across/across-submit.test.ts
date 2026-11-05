@@ -33,6 +33,9 @@ const TRANSACTION_META_MOCK = {
   },
 } as TransactionMeta;
 
+const SOURCE_CHAIN_ID_MOCK = '0x1' as Hex;
+const SOURCE_TOKEN_ADDRESS_MOCK = '0xabc' as Hex;
+
 const QUOTE_MOCK: TransactionPayQuote<AcrossQuote> = {
   dust: { usd: '0', fiat: '0' },
   estimatedDuration: 0,
@@ -87,10 +90,9 @@ const QUOTE_MOCK: TransactionPayQuote<AcrossQuote> = {
   },
   request: {
     from: FROM_MOCK,
+    sourceAccountId: `eip155:1:${FROM_MOCK}`,
     sourceAssetId: 'eip155:1/erc20:0xabc',
     sourceBalanceRaw: '100',
-    sourceChainId: '0x1',
-    sourceTokenAddress: '0xabc',
     sourceTokenAmount: '100',
     targetAmountMinimum: '100',
     targetChainId: '0x2',
@@ -246,7 +248,7 @@ describe('Across Submit', () => {
       expect(addTransactionBatchMock).toHaveBeenCalledWith(
         expect.objectContaining({
           excludeNativeTokenForFee: true,
-          gasFeeToken: QUOTE_MOCK.request.sourceTokenAddress,
+          gasFeeToken: SOURCE_TOKEN_ADDRESS_MOCK,
         }),
       );
     });
@@ -350,7 +352,7 @@ describe('Across Submit', () => {
       });
 
       expect(estimateGasBatchMock).toHaveBeenCalledWith({
-        chainId: QUOTE_MOCK.request.sourceChainId,
+        chainId: SOURCE_CHAIN_ID_MOCK,
         from: FROM_MOCK,
         transactions: [
           expect.objectContaining({
@@ -649,7 +651,7 @@ describe('Across Submit', () => {
         expect.anything(),
         expect.objectContaining({
           excludeNativeTokenForFee: true,
-          gasFeeToken: QUOTE_MOCK.request.sourceTokenAddress,
+          gasFeeToken: SOURCE_TOKEN_ADDRESS_MOCK,
         }),
       );
     });
@@ -883,7 +885,7 @@ describe('Across Submit', () => {
       expect(addTransactionBatchMock).toHaveBeenCalledWith(
         expect.objectContaining({
           excludeNativeTokenForFee: true,
-          gasFeeToken: QUOTE_MOCK.request.sourceTokenAddress,
+          gasFeeToken: SOURCE_TOKEN_ADDRESS_MOCK,
         }),
       );
     });

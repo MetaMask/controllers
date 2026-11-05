@@ -2,7 +2,6 @@ import {
   TransactionType,
   hasTransactionType,
 } from '@metamask/transaction-controller';
-import type { CaipChainId, Hex } from '@metamask/utils';
 
 import type {
   PayStrategy,
@@ -16,7 +15,7 @@ import {
   isPerpsDepositRequest,
   isPerpsDepositTransaction,
 } from '../../utils/perps.js';
-import { isEvmQuoteRequest } from '../../utils/token.js';
+import { getEvmQuoteSource, isEvmQuoteRequest } from '../../utils/token.js';
 import { getAcrossDestination } from './across-actions.js';
 import { getAcrossQuotes } from './across-quotes.js';
 import { submitAcrossQuotes } from './across-submit.js';
@@ -25,7 +24,7 @@ import { isAcrossQuoteRequest } from './requests.js';
 import type { AcrossQuote } from './types.js';
 
 export class AcrossStrategy implements PayStrategy<AcrossQuote> {
-  supports(request: PayStrategyGetQuotesRequest<Hex | CaipChainId>): boolean {
+  supports(request: PayStrategyGetQuotesRequest): boolean {
     const config = getPayStrategiesConfig(request.messenger);
 
     if (!config.across.enabled) {
@@ -54,7 +53,8 @@ export class AcrossStrategy implements PayStrategy<AcrossQuote> {
       // Across doesn't support same-chain swaps (e.g. mUSD conversions).
       const hasSameChainRequest = actionableRequests.some(
         (singleRequest) =>
-          singleRequest.sourceChainId === singleRequest.targetChainId,
+          getEvmQuoteSource(singleRequest).chainId ===
+          singleRequest.targetChainId,
       );
 
       if (hasSameChainRequest) {

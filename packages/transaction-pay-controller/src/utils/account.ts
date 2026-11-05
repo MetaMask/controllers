@@ -123,19 +123,19 @@ export function getAssetAccount(
 }
 
 /**
- * Get the CAIP-10 account ID of an account on the chain of a CAIP-19 asset.
+ * Get the CAIP-10 account ID of an address on the chain of a CAIP-19 asset.
  *
  * @param assetId - CAIP-19 asset type.
- * @param account - Account holding the asset.
+ * @param address - Address of the account holding the asset.
  * @returns The CAIP-10 account ID.
  */
 export function getCaipAccountId(
   assetId: CaipAssetType,
-  account: AssetAccount,
+  address: string,
 ): CaipAccountId {
   const { chain } = parseCaipAssetType(assetId);
 
-  return toCaipAccountId(chain.namespace, chain.reference, account.address);
+  return toCaipAccountId(chain.namespace, chain.reference, address);
 }
 
 /**
