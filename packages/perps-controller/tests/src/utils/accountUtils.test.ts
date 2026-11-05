@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PERPS_CONSTANTS } from '../../../src/constants/perpsConfig.js';
 import type { AccountState } from '../../../src/types/index.js';
+import type { CalculateAccountSummaryParams } from '../../../src/utils/accountUtils.js';
 import {
   addSpotBalanceToAccountState,
   aggregateAccountStates,
@@ -623,9 +624,9 @@ describe('cross margin summary aggregation', () => {
   });
 });
 
-// Shared fixtures (TAT-4464): 40 USD of cross account value, 5 USD maintenance
-// margin, 250 USD notional and 25 USD of margin held, in a 1,000 USD account.
 describe('calculateAccountSummary', () => {
+  // 40 USD of cross account value, 5 USD maintenance margin, 250 USD notional
+  // and 25 USD of margin held, in a 1,000 USD account.
   const crossMarginSummary = {
     accountValue: '40',
     maintenanceMargin: '5',
@@ -633,39 +634,58 @@ describe('calculateAccountSummary', () => {
     marginUsed: '25',
   };
 
-  it('divides cross notional by total equity, isolated margin included, and keeps ratio and usage over cross collateral', () => {
-    // 15.57 USD of equity, of which 10.4 USD backs the cross positions.
-    const summary = calculateAccountSummary({
-      totalEquity: '15.57',
-      crossMarginSummary: {
-        accountValue: '10.4',
-        maintenanceMargin: '0.2444',
-        notional: '12.31',
-        marginUsed: '1.231',
+  // Shared fixtures (TAT-4464): clients assert the same rows against
+  // `calculateAccountSummary`. Leverage is cross notional over total equity,
+  // isolated margin included; ratio and usage are over cross collateral
+  // (cross account value plus spot collateral). Expected figures are rounded
+  // to 4 decimals.
+  const ACCOUNT_SUMMARY_ROWS: {
+    account: string;
+    params: CalculateAccountSummaryParams;
+    maintenanceMargin: number;
+    leverage: number;
+    ratio: number;
+    usage: number;
+  }[] = [
+    {
+      // 15.57 USD of equity, of which 10.4 USD backs the cross positions.
+      account: 'cross and isolated positions',
+      params: {
+        totalEquity: '15.57',
+        crossMarginSummary: {
+          accountValue: '10.4',
+          maintenanceMargin: '0.2444',
+          notional: '12.31',
+          marginUsed: '1.231',
+        },
+        spotCollateral: 0,
       },
-      spotCollateral: 0,
-    });
-
-    expect(summary.accountLeverage).toBeCloseTo(12.31 / 15.57);
-    expect(summary.accountRatio).toBeCloseTo(0.0235);
-    expect(summary.crossMarginUsage).toBeCloseTo(1.231 / 10.4);
-    expect(summary.maintenanceMargin).toBe(0.2444);
-  });
-
-  it('counts spot collateral in the cross collateral for ratio and usage', () => {
-    expect(
-      calculateAccountSummary({
-        totalEquity: '1000',
-        crossMarginSummary,
-        spotCollateral: '60',
-      }),
-    ).toStrictEqual({
+      maintenanceMargin: 0.2444,
+      leverage: 0.7906,
+      ratio: 0.0235,
+      usage: 0.1184,
+    },
+    {
+      account: 'cross positions with spot collateral',
+      params: { totalEquity: '1000', crossMarginSummary, spotCollateral: '60' },
       maintenanceMargin: 5,
-      accountRatio: 0.05,
-      accountLeverage: 0.25,
-      crossMarginUsage: 0.25,
-    });
-  });
+      leverage: 0.25,
+      ratio: 0.05,
+      usage: 0.25,
+    },
+  ];
+
+  it.each(ACCOUNT_SUMMARY_ROWS)(
+    'gives $leverage leverage, $ratio ratio and $usage usage for $account',
+    ({ params, maintenanceMargin, leverage, ratio, usage }) => {
+      const summary = calculateAccountSummary(params);
+
+      expect(summary.maintenanceMargin).toBe(maintenanceMargin);
+      expect(summary.accountLeverage).toBeCloseTo(leverage, 4);
+      expect(summary.accountRatio).toBeCloseTo(ratio, 4);
+      expect(summary.crossMarginUsage).toBeCloseTo(usage, 4);
+    },
+  );
 
   it('accepts numeric figures', () => {
     expect(
