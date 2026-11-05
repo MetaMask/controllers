@@ -321,6 +321,14 @@ export type Position = {
   currentValueUSD?: number | null;
   /** Unrealized + realized PnL in USD. */
   pnlValueUsd?: number | null;
+  /**
+   * USD size of the position. For perps this is the leveraged notional,
+   * `|positionAmountWithLeverage|` × mark price, which is the key social-api
+   * ranks an asset's holders by. For spot it equals `currentValueUSD`; `0` for
+   * closed positions. Absent when no price is available, and on social-api
+   * builds that predate the field.
+   */
+  positionValueUSD?: number | null;
   /** PnL as a percentage of cost basis. */
   pnlPercent?: number | null;
   /** Number of detected copy trades for this position. */
