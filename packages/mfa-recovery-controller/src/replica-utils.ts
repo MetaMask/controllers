@@ -76,6 +76,26 @@ export function isEnrolledInEvery(
 }
 
 /**
+ * Ensures every escrow has enrolled the identifier before a write. Escrows
+ * fail a write for an unknown identifier, and a failed write stays pending.
+ *
+ * @param replicas - Escrow reads.
+ * @param identifier - Identifier to find. `null` skips the check.
+ * @throws `identifier_not_enrolled` when an escrow has not enrolled it.
+ */
+export function assertEnrolledInEvery(
+  replicas: GetIdentifiersResponse[],
+  identifier: Identifier | null,
+): void {
+  if (identifier && !isEnrolledInEvery(replicas, identifier)) {
+    throw new MfaRecoveryError(
+      'Identifier is not enrolled on every escrow',
+      'identifier_not_enrolled',
+    );
+  }
+}
+
+/**
  * Plans the write that brings escrows one version behind the highest up to it.
  *
  * @param replicas - Reads of every escrow.

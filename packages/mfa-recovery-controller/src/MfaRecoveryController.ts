@@ -45,7 +45,7 @@ import {
 } from './pending-operation-validation.js';
 import {
   assertSameVersion,
-  isEnrolledInEvery,
+  assertEnrolledInEvery,
   planRepair,
   getEscrowIdentifiers,
 } from './replica-utils.js';
@@ -596,12 +596,7 @@ export class MfaRecoveryController extends BaseController<
       await this.#assertEscrowsAvailable(escrows);
       const { replicas } = await this.#readReplicas(escrows);
       assertSameVersion(replicas);
-      if (identifier && !isEnrolledInEvery(replicas, identifier)) {
-        throw new MfaRecoveryError(
-          'Identifier is not enrolled on every escrow',
-          'identifier_not_enrolled',
-        );
-      }
+      assertEnrolledInEvery(replicas, identifier);
 
       const profileId = await this.#authProvider.getAuthenticatedProfileId();
       const audiences = escrows.map((escrow) => escrow.id);
@@ -848,12 +843,12 @@ export class MfaRecoveryController extends BaseController<
     };
   }
 
-  // An escrow whose version is no longer `expectedVersion` was already written
-  // to. Only those escrows get this mutation, without proofs: each returns our
-  // receipt or rejects. If no escrow was written to, we write to all of them.
-  // First we check that every escrow knows the identifier. Escrows return an
-  // error for an unknown one, so checking here keeps the write from getting
-  // stuck.
+  // Picks the escrows to send the mutation to.
+  // If an escrow is no longer at `expectedVersion`, it was already written to.
+  // Send the mutation only to those escrows, without proofs. Each one returns
+  // our receipt or rejects.
+  // Otherwise, send it to every escrow. `resume` can replace the identifier, so
+  // check its enrollment again.
   async #getEscrowsToWrite(
     writing: WritingPendingOperation,
     remainingEscrows: RecoveryEscrowProvider[],
@@ -873,12 +868,7 @@ export class MfaRecoveryController extends BaseController<
     if (moved.length > 0) {
       return { escrows: moved, probe: true, replicas };
     }
-    if (identifier && !isEnrolledInEvery(replicas, identifier)) {
-      throw new MfaRecoveryError(
-        'Identifier is not enrolled on every escrow',
-        'identifier_not_enrolled',
-      );
-    }
+    assertEnrolledInEvery(replicas, identifier);
     return { escrows: remainingEscrows, probe: false, replicas };
   }
 
