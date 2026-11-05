@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `TradingPrivacy` (`'public' | 'private'`) and an optional `tradingPrivacy` field on `TraderProfileResponse`. `TraderProfileResponseStruct` validates it, and responses from social-api builds that predate it still parse. Export `TradingPrivacy`.
-- Add an optional `profileId` to `FetchPositionByIdOptions`. When it is set, `fetchPositionById` picks the route from it without an extra request.
+- Add `TradingPrivacy` (`'public' | 'private'`) and an optional `tradingPrivacy` field on `TraderProfileResponse`. `TraderProfileResponseStruct` validates it, and responses from social-api builds that predate it still parse. Export `TradingPrivacy` ([#11325](https://github.com/MetaMask/core/pull/11325))
+- Add an optional `profileId` to `FetchPositionByIdOptions`. When it is set, `fetchPositionById` picks the route from it without an extra request ([#11325](https://github.com/MetaMask/core/pull/11325))
 
 ### Changed
 
-- `fetchTraderProfile`, `fetchOpenPositions`, `fetchClosedPositions`, `fetchTraderFeed`, and `fetchPositionById` are now viewer-aware (`SocialService:fetchTraderProfile`, and so on). When the trader is the signed-in user, they call the user's own `GET /v1/traders/me/...` route, which includes private trading. Otherwise they call the public route. The route is chosen inside `SocialService`, so callers do not pick it. Without a `profileId`, `fetchPositionById` tries the signed-in user's own route first and falls back to the public route on a 404. `fetchTraderProfile` rejects a profile response for a different profile than the one requested. The signed-in user is read from the subject of the bearer token. Responses are not cached across requests, so one signed-in user's data is not served to another.
+- `fetchTraderProfile`, `fetchOpenPositions`, `fetchClosedPositions`, `fetchTraderFeed`, and `fetchPositionById` are now viewer-aware (`SocialService:fetchTraderProfile`, and so on). When the trader is the signed-in user, they call the user's own `GET /v1/traders/me/...` route, which includes private trading. Otherwise they call the public route. The route is chosen inside `SocialService`, so callers do not pick it. Without a `profileId`, `fetchPositionById` tries the signed-in user's own route first and falls back to the public route on a 404. That 404 is not retried, so viewing someone else's position makes one owner route request before the public request. `fetchTraderProfile` rejects a profile response for a different profile than the one requested. The signed-in user is read from the subject of the bearer token. Responses are not cached across requests, so one signed-in user's data is not served to another ([#11325](https://github.com/MetaMask/core/pull/11325))
 
 ## [3.18.0]
 
