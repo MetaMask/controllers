@@ -263,6 +263,23 @@ export class StubEscrowProvider implements RecoveryEscrowProvider {
     return { identifiers: record.identifiers, version: record.version };
   }
 
+  async getMutationReceipt(
+    authControllerToken: AuthControllerToken,
+    version: number,
+  ): Promise<MutationReceipt | null> {
+    const record = this.#records.get(
+      this.#verifyProfileToken(authControllerToken),
+    );
+    const applied = Object.entries(record?.appliedMutations ?? {}).find(
+      ([, mutation]) => mutation.version === version,
+    );
+    if (applied === undefined) {
+      return null;
+    }
+    const [id, { requestHash }] = applied;
+    return await this.#signReceipt({ id, requestHash, newVersion: version });
+  }
+
   #verifyProfileToken(authControllerToken: AuthControllerToken): string {
     const claims = decodeAuthControllerToken(authControllerToken);
     if (!claims || claims.ext.aal < 1 || claims.exp <= this.now()) {
@@ -578,7 +595,9 @@ export class StubEscrowProvider implements RecoveryEscrowProvider {
     Object.assign(record, patch);
   }
 
-  async #signReceipt(mutation: Mutation): Promise<MutationReceipt> {
+  async #signReceipt(
+    mutation: Pick<Mutation, 'id' | 'requestHash' | 'newVersion'>,
+  ): Promise<MutationReceipt> {
     const unsigned = {
       mutationId: mutation.id,
       requestHash: mutation.requestHash,

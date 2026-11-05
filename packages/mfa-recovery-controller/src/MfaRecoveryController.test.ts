@@ -373,7 +373,7 @@ describe('MfaRecoveryController', () => {
         await controller.register(SECRET, IDENTIFIERS);
         await expect(
           controller.register(SECRET, IDENTIFIERS),
-        ).rejects.toBeInstanceOf(MutationRejectedError);
+        ).rejects.toMatchObject({ code: 'mutation_superseded' });
         expect(await controller.getPhase()).toBe('idle');
         await controller.updateRecoverySecret(
           PASSKEY,
@@ -756,9 +756,9 @@ describe('MfaRecoveryController', () => {
           ).rejects.toThrow('auth down');
           escrowA.patchRecord('profile-1', { version: 2 });
 
-          await expect(controller.resume()).rejects.toBeInstanceOf(
-            MutationRejectedError,
-          );
+          await expect(controller.resume()).rejects.toMatchObject({
+            code: 'mutation_superseded',
+          });
 
           expect(await escrowB.getRecoveryMetadata('profile-1')).toMatchObject({
             version: 1,
@@ -771,25 +771,24 @@ describe('MfaRecoveryController', () => {
     it('confirms a write that landed without a receipt before writing the rest', async () => {
       await withController(async ({ controller, escrowA, escrowB }) => {
         await controller.register(SECRET, IDENTIFIERS);
-        const applyA = escrowA.applyMutation.bind(escrowA);
-        vi.spyOn(escrowA, 'applyMutation').mockImplementationOnce(
-          async (...args) => {
-            await applyA(...args);
+        const apply = escrowA.applyMutation.bind(escrowA);
+        const applyA = vi
+          .spyOn(escrowA, 'applyMutation')
+          .mockImplementationOnce(async (...args) => {
+            await apply(...args);
             throw new Error('timeout');
-          },
-        );
+          });
         escrowB.failNextApplyCount = 1;
         await expect(
           controller.updateRecoverySecret(PASSKEY, SECRET_2, REGISTERED_EPOCH),
         ).rejects.toBeInstanceOf(IncompleteMutationError);
+        applyA.mockClear();
         const applyB = vi.spyOn(escrowB, 'applyMutation');
 
-        await expect(controller.resume()).rejects.toBeInstanceOf(
-          IncompleteMutationError,
-        );
-        expect(applyB).not.toHaveBeenCalled();
         await controller.resume();
 
+        expect(applyA).not.toHaveBeenCalled();
+        expect(applyB).toHaveBeenCalledTimes(1);
         expect(await escrowB.getRecoveryMetadata('profile-1')).toMatchObject({
           version: 2,
         });
@@ -887,12 +886,12 @@ describe('MfaRecoveryController', () => {
       });
     });
 
-    it('drops an update every escrow rejects for a stale epoch', async () => {
+    it('drops an update with a stale epoch', async () => {
       await withController(async ({ controller }) => {
         await controller.register(SECRET, IDENTIFIERS);
         await expect(
           controller.updateRecoverySecret(PASSKEY, SECRET_2, 0),
-        ).rejects.toBeInstanceOf(MutationRejectedError);
+        ).rejects.toMatchObject({ code: 'mutation_superseded' });
         expect(await controller.getPhase()).toBe('idle');
         await controller.updateRecoverySecret(
           PASSKEY,
@@ -1199,7 +1198,7 @@ describe('MfaRecoveryController', () => {
       });
     });
 
-    it('does not prove SIWE identifiers to an escrow that already applied the mutation', async () => {
+    it('reads the receipt of an escrow that already applied the mutation', async () => {
       await withController(async ({ controller, escrowA }) => {
         await controller.register(SECRET, IDENTIFIERS);
         escrowA.invalidReceipts = true;
@@ -1213,7 +1212,7 @@ describe('MfaRecoveryController', () => {
         escrowA.invalidReceipts = false;
         const apply = vi.spyOn(escrowA, 'applyMutation');
         await controller.resume();
-        expect(apply.mock.calls[0][2]).toStrictEqual([]);
+        expect(apply).not.toHaveBeenCalled();
         expect(await controller.getPhase()).toBe('idle');
       });
     });
@@ -1237,9 +1236,9 @@ describe('MfaRecoveryController', () => {
             'getKeyBoundIdentifierToken',
           );
 
-          await expect(controller.resume()).rejects.toBeInstanceOf(
-            MutationRejectedError,
-          );
+          await expect(controller.resume()).rejects.toMatchObject({
+            code: 'mutation_superseded',
+          });
 
           expect(getToken).not.toHaveBeenCalled();
           expect(await controller.getPhase()).toBe('idle');
@@ -1594,7 +1593,12 @@ describe('MfaRecoveryController', () => {
       await withController(
         async ({ controller, escrowA, escrowB, options }) => {
           await controller.register(SECRET, IDENTIFIERS);
-          const pending = await getValidWritingPending([escrowA, escrowB], 0);
+          const pending = await getValidWritingPending([escrowA, escrowB]);
+          for (const escrow of [escrowA, escrowB]) {
+            vi.spyOn(escrow, 'applyMutation').mockRejectedValueOnce(
+              new MutationRejectedError('denied'),
+            );
+          }
           const resumed = new MfaRecoveryController({
             ...options,
             messenger: getMessenger(getRootMessenger()),
@@ -1618,23 +1622,7 @@ describe('MfaRecoveryController', () => {
       );
     });
 
-    it('clears an acknowledged mutation that every remaining escrow refuses as superseded', async () => {
-      await withController(async ({ controller, escrowA }) => {
-        await controller.register(SECRET, IDENTIFIERS);
-        escrowA.failNextApplyCount = 1;
-        await expect(
-          controller.updateRecoverySecret(PASSKEY, SECRET_2, REGISTERED_EPOCH),
-        ).rejects.toBeInstanceOf(IncompleteMutationError);
-        escrowA.patchRecord('profile-1', { version: 2 });
-
-        await expect(controller.resume()).rejects.toMatchObject({
-          code: 'mutation_superseded',
-        });
-        expect(await controller.getPhase()).toBe('idle');
-      });
-    });
-
-    describe('when the renewed approval no longer covers the payload', () => {
+    describe('when the approval expires and Auth drops a payload identifier', () => {
       const writeThenRemoveFromAuth = async ({
         controller,
         escrowB,
@@ -1661,28 +1649,31 @@ describe('MfaRecoveryController', () => {
         });
       };
 
-      it('clears the mutation once every remaining escrow moved', async () => {
+      it('clears the mutation without 2FA once every remaining escrow moved', async () => {
         await withController(async (args) => {
           const later = await writeThenRemoveFromAuth(args);
           args.escrowB.patchRecord('profile-1', { version: 3 });
           const apply = vi.spyOn(args.escrowB, 'applyMutation');
+          const auth = vi.spyOn(args.authProvider, 'authorizeRecoveryRequest');
 
           await expect(later.resume()).rejects.toMatchObject({
             code: 'mutation_superseded',
           });
 
           expect(apply).not.toHaveBeenCalled();
+          expect(auth).toHaveBeenCalledTimes(1);
+          expect(auth.mock.calls[0][0].requireTwoFactor).toBeUndefined();
           expect(await later.getPhase()).toBe('idle');
         });
       });
 
-      it('keeps the mutation when the approval is for another profile', async () => {
+      it('keeps the mutation when signed in to another profile', async () => {
         await withController(async (args) => {
           const later = await writeThenRemoveFromAuth(args);
           args.authProvider.profileId = 'profile-2';
 
           await expect(later.resume()).rejects.toThrow(
-            'Invalid pending operation',
+            'Pending mutation is for another profile',
           );
 
           expect(await later.getPhase()).toBe('writing');
@@ -2611,7 +2602,6 @@ async function recover(
 
 async function getValidWritingPending(
   escrows: RecoveryEscrowProvider[],
-  expectedVersion = 1,
 ): Promise<WritingPendingOperation> {
   const payload = {
     recoverySecret: bytesToHex(SECRET_2),
@@ -2621,8 +2611,8 @@ async function getValidWritingPending(
     id: '0xvalid-pending',
     profileId: 'profile-1',
     operation: 'updateRecoverySecret' as const,
-    expectedVersion,
-    newVersion: expectedVersion + 1,
+    expectedVersion: 1,
+    newVersion: 2,
     payloadHash,
     audiences: escrows.map((escrow) => escrow.id),
   };

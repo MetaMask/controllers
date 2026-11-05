@@ -147,12 +147,12 @@ export async function authorizeEscrowsWithToken({
 
 /**
  * @param writing - Writing pending mutation.
- * @param replicas - Reads of the escrows to write.
+ * @param records - Records of the escrows to write.
  * @returns The payload's SIWE identifiers some escrow has not enrolled.
  */
 export function findNewSiweIdentifiers(
   writing: WritingPendingOperation,
-  replicas: GetIdentifiersResponse[],
+  records: GetIdentifiersResponse[],
 ): Identifier[] {
   const { mutation, payload } = writing;
   const siweIdentifiers =
@@ -163,7 +163,7 @@ export function findNewSiweIdentifiers(
     return siweIdentifiers;
   }
   return siweIdentifiers.filter(
-    (identifier) => !isEnrolledInEvery(replicas, identifier),
+    (identifier) => !isEnrolledInEvery(records, identifier),
   );
 }
 

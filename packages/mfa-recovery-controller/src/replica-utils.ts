@@ -38,11 +38,11 @@ export async function getEscrowIdentifiers(
 /**
  * Ensures every escrow is at the same version before a read or mutation.
  *
- * @param replicas - Escrow reads.
+ * @param records - Escrow records.
  * @throws `replica_lagging` when the escrows are at different versions.
  */
-export function assertSameVersion(replicas: GetIdentifiersResponse[]): void {
-  if (new Set(replicas.map(({ version }) => version)).size > 1) {
+export function assertSameVersion(records: GetIdentifiersResponse[]): void {
+  if (new Set(records.map(({ version }) => version)).size > 1) {
     throw new MfaRecoveryError(
       'Escrows are at different versions; call resume with an identifier',
       'replica_lagging',
@@ -54,18 +54,18 @@ export function assertSameVersion(replicas: GetIdentifiersResponse[]): void {
  * Matches on type, namespace and value; SIWE addresses compare
  * case-insensitively, as escrows do.
  *
- * @param replicas - Escrow reads.
+ * @param records - Escrow records.
  * @param identifier - Identifier to find.
  * @returns Whether every escrow has enrolled `identifier`.
  */
 export function isEnrolledInEvery(
-  replicas: GetIdentifiersResponse[],
+  records: GetIdentifiersResponse[],
   identifier: Identifier,
 ): boolean {
   const { type, namespace, value } = identifier;
   const normalize = (raw: string): string =>
     type === 'siwe' ? raw.toLowerCase() : raw;
-  return replicas.every(({ identifiers }) =>
+  return records.every(({ identifiers }) =>
     identifiers.some(
       (other) =>
         other.type === type &&
@@ -79,15 +79,15 @@ export function isEnrolledInEvery(
  * Ensures every escrow has enrolled the identifier before a write. Escrows
  * fail a write for an unknown identifier, and a failed write stays pending.
  *
- * @param replicas - Escrow reads.
+ * @param records - Escrow records.
  * @param identifier - Identifier to find. `null` skips the check.
  * @throws `identifier_not_enrolled` when an escrow has not enrolled it.
  */
 export function assertEnrolledInEvery(
-  replicas: GetIdentifiersResponse[],
+  records: GetIdentifiersResponse[],
   identifier: Identifier | null,
 ): void {
-  if (identifier && !isEnrolledInEvery(replicas, identifier)) {
+  if (identifier && !isEnrolledInEvery(records, identifier)) {
     throw new MfaRecoveryError(
       'Identifier is not enrolled on every escrow',
       'identifier_not_enrolled',
@@ -98,27 +98,27 @@ export function assertEnrolledInEvery(
 /**
  * Plans the write that brings escrows one version behind the highest up to it.
  *
- * @param replicas - Reads of every escrow.
+ * @param records - Records of every escrow.
  * @returns The plan, or `null` when every escrow is at the same version.
  * @throws `replica_corruption` when escrows are more than one version apart,
  * or the highest records disagree.
  */
 export async function planRepair(
-  replicas: GetIdentifiersResponse[],
+  records: GetIdentifiersResponse[],
 ): Promise<RepairPlan | null> {
-  const epoch = Math.max(...replicas.map(({ version }) => version));
-  if (replicas.some(({ version }) => version < epoch - 1)) {
+  const epoch = Math.max(...records.map(({ version }) => version));
+  if (records.some(({ version }) => version < epoch - 1)) {
     throw new MfaRecoveryError(
       'Escrows are more than one version apart',
       'replica_corruption',
     );
   }
-  const lagging = replicas.map(({ version }) => version < epoch);
+  const lagging = records.map(({ version }) => version < epoch);
   if (!lagging.includes(true)) {
     return null;
   }
   const hashes = await Promise.all(
-    replicas.map(async ({ identifiers }) => await hash(identifiers)),
+    records.map(async ({ identifiers }) => await hash(identifiers)),
   );
   if (new Set(hashes.filter((_, index) => !lagging[index])).size > 1) {
     throw new MfaRecoveryError(
@@ -126,7 +126,7 @@ export async function planRepair(
       'replica_corruption',
     );
   }
-  const leader = replicas[lagging.indexOf(false)];
+  const leader = records[lagging.indexOf(false)];
   return {
     epoch,
     lagging,

@@ -99,9 +99,11 @@ include them; each new wallet proves control instead. In step 1 the primary
 account signs a SIWE proof for `register`.
 
 If every remaining replica refuses the mutation (`MutationRejectedError`), the
-controller clears the pending mutation. It throws `mutation_superseded` instead
-if another replica already has a receipt; reread state. Any other failure keeps
-it and throws `incomplete_mutation`; call `resume()` to finish that write.
+controller clears the pending mutation. Any other failure keeps it and throws
+`incomplete_mutation`; call `resume()` to finish that write. Before a retry, the
+controller calls `getMutationReceipt` on each replica that has moved past
+`expectedVersion`. If a replica has no receipt for this mutation, the controller
+clears it and throws `mutation_superseded`; reread state.
 
 ## Proof of possession
 

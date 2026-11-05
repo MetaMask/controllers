@@ -340,6 +340,35 @@ describe('CubistEscrowProvider', () => {
     });
   });
 
+  describe('getMutationReceipt', () => {
+    it('invokes getMutationReceipt and returns the receipt', async () => {
+      const receipt = await signedReceipt();
+      const { provider, invoke } = createProvider({ stdout: receipt });
+      expect(await provider.getMutationReceipt(TOKEN, 1)).toStrictEqual(
+        receipt,
+      );
+      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'latest', {
+        request: {
+          cmd: 'getMutationReceipt',
+          authControllerToken: TOKEN,
+          version: 1,
+        },
+      });
+    });
+
+    it('returns null when the escrow has no receipt at that version', async () => {
+      const { provider } = createProvider({ stdout: null });
+      expect(await provider.getMutationReceipt(TOKEN, 1)).toBeNull();
+    });
+
+    it('rejects a response that is not a receipt', async () => {
+      const { provider } = createProvider({ stdout: { nope: true } });
+      await expect(provider.getMutationReceipt(TOKEN, 1)).rejects.toMatchObject(
+        { code: 'escrow_response_invalid' },
+      );
+    });
+  });
+
   describe('request failures', () => {
     it('throws when the policy denies the invocation', async () => {
       const { provider } = createProvider({

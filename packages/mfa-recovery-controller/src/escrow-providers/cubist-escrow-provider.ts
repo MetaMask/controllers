@@ -146,6 +146,22 @@ export class CubistEscrowProvider implements RecoveryEscrowProvider {
   }
 
   /**
+   * @param authControllerToken - Approval for the profile to read.
+   * @param version - Record version the receipt was stored at.
+   * @returns The receipt, or `null` when the escrow has none at `version`.
+   */
+  async getMutationReceipt(
+    authControllerToken: AuthControllerToken,
+    version: number,
+  ): Promise<MutationReceipt | null> {
+    return await this.#invoke(
+      'getMutationReceipt',
+      { authControllerToken, version },
+      (value) => (value === null ? null : parseReceipt(value)),
+    );
+  }
+
+  /**
    * @param authControllerToken - Request-bound approval for this read.
    * @param authorization - Identifier proof for this read.
    * @param requestId - Client request id bound into the read hash.

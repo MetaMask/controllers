@@ -156,11 +156,15 @@ sequenceDiagram
   M->>A: authorizeRecoveryRequest (AuthController token)
   M->>M: skip escrows with a stored receipt, re-verify stored receipts
   M->>E: isAvailable (remaining escrows)
+  M->>E: getIdentifiers (remaining escrows, live token or read-only approval)
+  M->>M: approval for another profile → invalid_pending_operation
+  opt some escrow off expectedVersion
+    M->>E: getMutationReceipt(newVersion) on those escrows
+    M->>M: any receipt missing or not ours → clear, mutation_superseded
+    M->>M: persist the receipts, then reread the rest
+  end
+  M->>M: update identifier missing at expectedVersion → identifier_not_enrolled
   M->>M: reuse token, or re-issue it if exp <= now()
-  M->>E: getIdentifiers (remaining escrows)
-  M->>M: some escrow off expectedVersion → probe only those, no proofs
-  M->>M: else update identifier missing at expectedVersion → identifier_not_enrolled
-  M->>M: re-issued approval misses a payload identifier and every escrow moved → clear, mutation_superseded
   opt update identifier, or SIWE identifiers not yet enrolled
     M->>I: getKeyBoundIdentifierToken per identifier
     M->>E: generateChallenge + PoPs per remaining escrow (all required)
@@ -169,12 +173,9 @@ sequenceDiagram
   par write every remaining replica
     M->>E: applyMutation
   end
-  alt every remaining escrow rejects, none has a receipt
+  alt every remaining escrow rejects
     M->>M: clear pending → idle
     M-->>C: MutationRejectedError (start a new mutation)
-  else every remaining escrow rejects, others have receipts
-    M->>M: clear pending → idle
-    M-->>C: mutation_superseded (reread state)
   else
     M->>M: persist valid receipts
     alt a receipt failed verification
@@ -199,8 +200,8 @@ Auth approvals:
   Hashing sorts object keys, not arrays.
 - Auth does not vouch for SIWE wallets. Each SIWE identifier an escrow has not
   enrolled needs its own proof in `identifierAuthorizations`; updates add one
-  proof for the `identifier` argument. Escrows past `expectedVersion` replay
-  their receipt, so they get no SIWE proofs.
+  proof for the `identifier` argument. Escrows past `expectedVersion` are only
+  asked for their receipt, so they get no proofs.
 - Missing or stale MFA rejects with `AuthenticationController`'s
   `StepUpRequiredError`.
 - Escrows verify signatures. The controller decodes claims only for pending-state
@@ -213,11 +214,8 @@ Receipts:
 - Stored receipts are re-verified before every retry. A receipt for an
   escrow that is no longer configured fails with `unknown_receipt_escrow`.
 - When **every** remaining escrow throws `MutationRejectedError`, the pending
-  mutation is cleared. With no receipts nothing was applied, and that error is
-  surfaced. With receipts the mutation was applied on some escrows and is
-  obsolete or already repaired elsewhere, so `mutation_superseded` is thrown
-  instead; reread state. Anything else may have been applied and stays
-  `writing`.
+  mutation is cleared and that error is surfaced. Anything else may have been
+  applied and stays `writing`.
 
 Versioning:
 
@@ -234,13 +232,14 @@ Versioning:
 - An escrow with no record reports version `0`. New mutations require every
   escrow at the same version (`replica_lagging`).
 - That check runs before the lease, so another device may write first. Each
-  write rereads versions under the lease. Escrows off `expectedVersion` are
-  probed alone with no identifier proofs: they replay
-  this mutation's receipt or reject it. So it never forks the rest, and an
-  obsolete mutation clears even if its identifier or SIWE wallet is gone.
-- A re-issued approval drops identifiers removed from Auth, and escrows fail a
-  payload it does not cover. If every remaining escrow moved, the mutation can
-  no longer land, so it is cleared with `mutation_superseded` unsent.
+  write rereads versions under the lease. For each escrow off
+  `expectedVersion`, the controller reads its receipt at `newVersion`. If any
+  escrow has no receipt for this mutation, another write got there first: the
+  mutation is cleared with `mutation_superseded` and nothing is sent. So it
+  never forks the rest, and it clears without identifier proofs, even if its
+  identifier or SIWE wallet is gone. A `writing` mutation also clears without
+  2FA. Escrows keep only recent receipts, so a very old receipt also reads as
+  missing.
 - An update's `identifier` must be enrolled on every target escrow
   (`identifier_not_enrolled`), checked before approval and before each write:
   escrows fail, rather than reject, an unknown one.
@@ -272,14 +271,13 @@ before `register`.
 
 `CubistEscrowProvider` sends every command with `policyInvoke` on the C2F
 (default `cubist_secret_escrow`, version `latest`) as `{ cmd, ...fields }`:
-`ping` (`isAvailable`), `generateChallenge`, `getIdentifiers`, `getSecret`,
-and `applyMutation`. `generateChallenge` and `getIdentifiers` take the
-operation's `authControllerToken`; the escrow keys the challenge to its
-profile. Escrow JSON is parsed from C2F stdout. A policy `Deny` on
-`applyMutation` becomes `MutationRejectedError`; any other failure is
-`escrow_request_failed` / `escrow_response_invalid`. Probes send no identifier
-authorizations, so `store::apply` must replay a receipt or deny a version
-mismatch before verifying them. `verifyReceipt` checks
+`ping` (`isAvailable`), `generateChallenge`, `getIdentifiers`,
+`getMutationReceipt`, `getSecret`, and `applyMutation`. `generateChallenge`,
+`getIdentifiers`, and `getMutationReceipt` take the operation's
+`authControllerToken`; the escrow keys the challenge to its profile. Escrow
+JSON is parsed from C2F stdout. A policy `Deny` on `applyMutation` becomes
+`MutationRejectedError`; any other failure is
+`escrow_request_failed` / `escrow_response_invalid`. `verifyReceipt` checks
 the mutation id, request hash, escrow id, `version === newVersion`,
 `receiptKeyId` (SHA-256 of the pinned receipt key), and the Ed25519 signature
 locally.
