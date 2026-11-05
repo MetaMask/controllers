@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Preserve the Profile API's error message in the `HttpError` thrown by `ProfileService` requests, so clients can surface the server-provided reason. When a non-2xx response body contains a `{ code, message }` payload, the error message is now `<operation error>: <status>: <API message>`; it falls back to the previous `<operation error>: <status>` when the body is absent, unreadable, or has no `message`.
+- Preserve the Profile API's error message in the `HttpError` thrown by `ProfileService` requests, so clients can surface the server-provided reason. When a non-2xx response body contains a `{ code, message }` payload, the error message is now `<operation error>: <status>: <API message>`; it falls back to the previous `<operation error>: <status>` when the body is absent, unreadable, or has no `message` ([#11330](https://github.com/MetaMask/core/pull/11330))
 
 ## [1.2.1]
 
