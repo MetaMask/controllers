@@ -580,8 +580,31 @@ export {
   getSelectedEvmAccount,
   calculateWeightedReturnOnEquity,
   aggregateAccountStates,
+  getCrossCollateral,
+  calculateAccountSummary,
 } from './utils/index.js';
-export type { ReturnOnEquityInput } from './utils/index.js';
+export type {
+  ReturnOnEquityInput,
+  CrossMarginSummaryInput,
+  PerpsAccountSummary,
+  CalculateAccountSummaryParams,
+} from './utils/index.js';
+export {
+  calculatePriceForRoE,
+  calculateSignedRoEForPrice,
+  calculateRoEForPrice,
+  calculatePriceForPercentage,
+  calculatePercentageForPrice,
+  getMaxStopLossPercentage,
+  isValidStopLossPercentage,
+  isPositiveTriggerPrice,
+  isValidTakeProfitPrice,
+  isValidStopLossPrice,
+  isStopLossSafeFromLiquidation,
+  validateTPSLPrices,
+  formatRoePercent,
+} from './utils/index.js';
+export type { TpslCalculationParams } from './utils/index.js';
 export { ensureError, isAbortError } from './utils/index.js';
 export type {
   OrderBookCacheEntry,

@@ -21,8 +21,26 @@ import {
   HYPERLIQUID_L1_ACTION_DOMAIN_NAME,
   HYPERLIQUID_L1_ACTION_PRIMARY_TYPE,
   PerpsController,
+  calculateAccountSummary,
+  calculatePercentageForPrice,
+  calculatePriceForPercentage,
+  calculatePriceForRoE,
+  calculateRoEForPrice,
+  calculateSignedRoEForPrice,
+  formatRoePercent,
+  getCrossCollateral,
+  getMaxStopLossPercentage,
+  isPositiveTriggerPrice,
+  isStopLossSafeFromLiquidation,
+  isValidStopLossPercentage,
+  isValidStopLossPrice,
+  isValidTakeProfitPrice,
+  validateTPSLPrices,
 } from '../src/index.js';
 import type {
+  CalculateAccountSummaryParams,
+  PerpsAccountSummary,
+  TpslCalculationParams,
   DirectProviderOrderCapabilities,
   DirectProviderOrderCapabilitiesUnavailableReason,
   GetAccountSupportParams,
@@ -239,6 +257,44 @@ describe('@metamask/perps-controller public API', () => {
       'PerpsController:clearAgentSigners',
       'PerpsController:prepareTradingWallet',
     ]);
+  });
+
+  it('exports the shared TP/SL and account summary calculations', () => {
+    const params: TpslCalculationParams = {
+      currentPrice: 2500,
+      entryPrice: 2500,
+      direction: 'long',
+      leverage: 2,
+    };
+    const accountParams: CalculateAccountSummaryParams = {
+      totalEquity: '15.57',
+      crossMarginSummary: {
+        accountValue: '10.4',
+        maintenanceMargin: '0.2444',
+        notional: '12.31',
+        marginUsed: '1.231',
+      },
+      spotCollateral: 0,
+    };
+    const summary: PerpsAccountSummary = calculateAccountSummary(accountParams);
+
+    expect(calculatePriceForRoE(-10, false, params)).toBe('2375');
+    expect(calculateSignedRoEForPrice('2375', params)).toBe('-10.00');
+    expect(calculateRoEForPrice('2375', true, params)).toBe('0.00');
+    expect(calculatePriceForPercentage(10, true, params)).toBe('2750.00');
+    expect(calculatePercentageForPrice('2750', true, params)).toBe('10.00');
+    expect(getMaxStopLossPercentage(2)).toBe(198);
+    expect(isValidStopLossPercentage(199, 2)).toBe(false);
+    expect(isPositiveTriggerPrice('-5')).toBe(false);
+    expect(isValidTakeProfitPrice('2625', params)).toBe(true);
+    expect(isValidStopLossPrice('2625', params)).toBe(false);
+    expect(isStopLossSafeFromLiquidation('1900', '2000', 'long')).toBe(false);
+    expect(validateTPSLPrices('2625', '2375', params)).toBe(true);
+    expect(formatRoePercent(12.5, { signed: true })).toBe('+12.50');
+    expect(getCrossCollateral(accountParams.crossMarginSummary, 0)).toBeCloseTo(
+      10.4,
+    );
+    expect(summary.accountLeverage).toBeCloseTo(12.31 / 15.57);
   });
 
   it('exports the optional trading fee grant dependency contract', async () => {

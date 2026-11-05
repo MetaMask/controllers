@@ -6,7 +6,9 @@ import type { AccountState } from '../../../src/types/index.js';
 import {
   addSpotBalanceToAccountState,
   aggregateAccountStates,
+  calculateAccountSummary,
   calculateWeightedReturnOnEquity,
+  getCrossCollateral,
   getSpotBalance,
   sumCrossMarginSummaries,
 } from '../../../src/utils/accountUtils.js';
@@ -618,5 +620,166 @@ describe('cross margin summary aggregation', () => {
     expect(
       aggregateAccountStates([withSummary('100'), base]),
     ).not.toHaveProperty('crossMarginSummary');
+  });
+});
+
+// Shared fixtures (TAT-4464): 40 USD of cross account value, 5 USD maintenance
+// margin, 250 USD notional and 25 USD of margin held, in a 1,000 USD account.
+describe('calculateAccountSummary', () => {
+  const crossMarginSummary = {
+    accountValue: '40',
+    maintenanceMargin: '5',
+    notional: '250',
+    marginUsed: '25',
+  };
+
+  it('divides cross notional by total equity, isolated margin included, and keeps ratio and usage over cross collateral', () => {
+    // 15.57 USD of equity, of which 10.4 USD backs the cross positions.
+    const summary = calculateAccountSummary({
+      totalEquity: '15.57',
+      crossMarginSummary: {
+        accountValue: '10.4',
+        maintenanceMargin: '0.2444',
+        notional: '12.31',
+        marginUsed: '1.231',
+      },
+      spotCollateral: 0,
+    });
+
+    expect(summary.accountLeverage).toBeCloseTo(12.31 / 15.57);
+    expect(summary.accountRatio).toBeCloseTo(0.0235);
+    expect(summary.crossMarginUsage).toBeCloseTo(1.231 / 10.4);
+    expect(summary.maintenanceMargin).toBe(0.2444);
+  });
+
+  it('counts spot collateral in the cross collateral for ratio and usage', () => {
+    expect(
+      calculateAccountSummary({
+        totalEquity: '1000',
+        crossMarginSummary,
+        spotCollateral: '60',
+      }),
+    ).toStrictEqual({
+      maintenanceMargin: 5,
+      accountRatio: 0.05,
+      accountLeverage: 0.25,
+      crossMarginUsage: 0.25,
+    });
+  });
+
+  it('accepts numeric figures', () => {
+    expect(
+      calculateAccountSummary({
+        totalEquity: 1000,
+        crossMarginSummary: {
+          accountValue: 40,
+          maintenanceMargin: 5,
+          notional: 250,
+          marginUsed: 25,
+        },
+        spotCollateral: 60,
+      }),
+    ).toStrictEqual({
+      maintenanceMargin: 5,
+      accountRatio: 0.05,
+      accountLeverage: 0.25,
+      crossMarginUsage: 0.25,
+    });
+  });
+
+  it('keeps leverage known while the spot collateral is unknown', () => {
+    expect(
+      calculateAccountSummary({
+        totalEquity: '1000',
+        crossMarginSummary,
+        spotCollateral: undefined,
+      }),
+    ).toStrictEqual({
+      maintenanceMargin: 5,
+      accountRatio: undefined,
+      accountLeverage: 0.25,
+      crossMarginUsage: undefined,
+    });
+  });
+
+  it.each(['0', '-10', '--'])(
+    'leaves leverage unknown with %s total equity',
+    (totalEquity) => {
+      const summary = calculateAccountSummary({
+        totalEquity,
+        crossMarginSummary,
+        spotCollateral: '60',
+      });
+
+      expect(summary.accountLeverage).toBeUndefined();
+      expect(summary.accountRatio).toBe(0.05);
+      expect(summary.crossMarginUsage).toBe(0.25);
+    },
+  );
+
+  it('reports zero leverage for an account with only isolated positions', () => {
+    expect(
+      calculateAccountSummary({
+        totalEquity: '1000',
+        crossMarginSummary: {
+          accountValue: '0',
+          maintenanceMargin: '0',
+          notional: '0',
+          marginUsed: '0',
+        },
+        spotCollateral: '0',
+      }),
+    ).toStrictEqual({
+      maintenanceMargin: 0,
+      accountRatio: undefined,
+      accountLeverage: 0,
+      crossMarginUsage: undefined,
+    });
+  });
+
+  it('leaves every figure unknown until the cross margin is read', () => {
+    expect(
+      calculateAccountSummary({
+        totalEquity: '1000',
+        crossMarginSummary: undefined,
+        spotCollateral: '60',
+      }),
+    ).toStrictEqual({
+      maintenanceMargin: undefined,
+      accountRatio: undefined,
+      accountLeverage: undefined,
+      crossMarginUsage: undefined,
+    });
+  });
+});
+
+describe('getCrossCollateral', () => {
+  it('adds the spot collateral to the cross account value', () => {
+    expect(
+      getCrossCollateral(
+        {
+          accountValue: '40',
+          maintenanceMargin: '5',
+          notional: '250',
+          marginUsed: '25',
+        },
+        60,
+      ),
+    ).toBe(100);
+  });
+
+  it('is unknown until both are read', () => {
+    expect(getCrossCollateral(undefined, 60)).toBeUndefined();
+    expect(
+      getCrossCollateral(
+        {
+          accountValue: '40',
+          maintenanceMargin: '5',
+          notional: '250',
+          marginUsed: '25',
+        },
+        undefined,
+      ),
+    ).toBeUndefined();
   });
 });

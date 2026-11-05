@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Export shared TP/SL calculations so Mobile, Extension and Terminal compute the same RoE and trigger prices
+  - `calculatePriceForRoE` and `calculateSignedRoEForPrice` convert between a trigger price and a signed RoE (positive at a gain, negative at a loss, for take profit and stop loss alike), scaled by leverage, with a stop loss's loss capped at 99% per 1x of leverage
+  - `calculateRoEForPrice` returns the RoE on the trigger's own side, a take profit's gain or a stop loss's loss, and zero for a trigger on the wrong side
+  - `calculatePriceForPercentage` and `calculatePercentageForPrice` convert between a trigger price and a price move
+  - `getMaxStopLossPercentage` and `isValidStopLossPercentage` bound the stop loss percentage
+  - `isPositiveTriggerPrice`, `isValidTakeProfitPrice`, `isValidStopLossPrice`, `isStopLossSafeFromLiquidation` and `validateTPSLPrices` check a trigger price's sign, side and distance from liquidation
+  - `formatRoePercent` rounds a RoE for display
+  - Type `TpslCalculationParams`
+- Export `calculateAccountSummary` and `getCrossCollateral` to derive account ratio, account leverage and cross margin usage from `AccountState.crossMarginSummary`, with account leverage as cross notional over total account equity, isolated margin included, as Hyperliquid computes it
+  - Types `PerpsAccountSummary`, `CalculateAccountSummaryParams` and `CrossMarginSummaryInput`
+
 ## [22.1.2]
 
 ### Changed
