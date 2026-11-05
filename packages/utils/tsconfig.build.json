@@ -2,7 +2,10 @@
   "extends": "../../tsconfig.packages.build.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // Must match `tsconfig.json`, otherwise the emitted `.d.ts` files lose the
+    // exact optional semantics of the struct types.
+    "exactOptionalPropertyTypes": true
   },
   "include": ["../../types", "./src"],
   /**
