@@ -62,7 +62,6 @@ describe('ProfileMetricsService', () => {
           }),
       ).toThrow('invalid environment configuration');
     });
-
   });
 
   describe('BaseDataService integration', () => {
