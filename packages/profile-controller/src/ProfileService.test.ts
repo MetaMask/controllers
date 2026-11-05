@@ -512,9 +512,7 @@ describe('ProfileService', () => {
 
       const service = createService();
 
-      await expect(
-        service.checkDisplayNameValidity('Alice'),
-      ).rejects.toThrow(
+      await expect(service.checkDisplayNameValidity('Alice')).rejects.toThrow(
         `${ProfileServiceErrorMessage.CHECK_DISPLAY_NAME_VALIDITY_FAILED}: 500`,
       );
     });
@@ -528,9 +526,9 @@ describe('ProfileService', () => {
 
       const service = createService();
 
-      await expect(
-        service.checkDisplayNameValidity('Alice'),
-      ).rejects.toThrow('returned an unexpected response');
+      await expect(service.checkDisplayNameValidity('Alice')).rejects.toThrow(
+        'returned an unexpected response',
+      );
     });
   });
 
