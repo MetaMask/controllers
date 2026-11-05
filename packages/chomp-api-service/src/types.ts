@@ -374,6 +374,18 @@ export type AddressIdentityResponse = {
   };
 };
 
+/**
+ * Returned by POST /v1/money-account/identities/address/:address/funds-transfer.
+ * Addresses are lowercased.
+ */
+export type FundsTransferStart = {
+  from: Hex;
+  to: Hex;
+  transfer: MigrationTransfer | null;
+  /** Stays `null` for a standard link, and until CHOMP creates it. */
+  premiumTransfer: MigrationTransfer | null;
+};
+
 // === SERVICE DETAILS TYPES ===
 
 export type ServiceDetailsSupportedToken = {

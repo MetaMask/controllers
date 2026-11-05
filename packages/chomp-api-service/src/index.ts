@@ -22,6 +22,7 @@ export type {
   ChompApiServiceGetServiceDetailsAction,
   ChompApiServiceGetDerivedIdentitiesAction,
   ChompApiServiceGetDerivedIdentityByAddressAction,
+  ChompApiServiceStartFundsTransferAction,
 } from './chomp-api-service-method-action-types.js';
 export type {
   AccountUpgradeStatus,
@@ -37,6 +38,7 @@ export type {
   CreateUpgradeParams,
   CreateUpgradeResponse,
   CreateWithdrawalParams,
+  FundsTransferStart,
   CreateWithdrawalResponse,
   DelegationCaveat,
   DerivedIdentitiesResponse,

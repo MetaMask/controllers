@@ -1543,6 +1543,115 @@ describe('ChompApiService', () => {
     });
   });
 
+  describe('startFundsTransfer', () => {
+    const fundsTransferPath = `/v1/money-account/identities/address/${ADDRESS_B}/funds-transfer`;
+    const fundsTransferStart = {
+      from: ADDRESS_B,
+      to: ADDRESS_C,
+      transfer: { requestId: 'transfer-request-id', status: 'PENDING' },
+      premiumTransfer: null,
+    };
+
+    it('sends a POST with auth headers and returns the funds-transfer requests', async () => {
+      nock(BASE_URL)
+        .post(fundsTransferPath)
+        .matchHeader('Authorization', `Bearer ${MOCK_TOKEN}`)
+        .reply(200, fundsTransferStart);
+      const { rootMessenger } = createService();
+
+      const result = await rootMessenger.call(
+        'ChompApiService:startFundsTransfer',
+        ADDRESS_B,
+      );
+
+      expect(result).toStrictEqual(fundsTransferStart);
+    });
+
+    it('returns the premium transfer request of a premium migration', async () => {
+      const premiumFundsTransferStart = {
+        ...fundsTransferStart,
+        premiumTransfer: {
+          requestId: 'premium-transfer-request-id',
+          status: 'PENDING',
+        },
+      };
+      nock(BASE_URL)
+        .post(fundsTransferPath)
+        .reply(200, premiumFundsTransferStart);
+      const { service } = createService();
+
+      expect(await service.startFundsTransfer(ADDRESS_B)).toStrictEqual(
+        premiumFundsTransferStart,
+      );
+    });
+
+    it('lowercases returned addresses', async () => {
+      nock(BASE_URL)
+        .post(fundsTransferPath)
+        .reply(200, {
+          ...fundsTransferStart,
+          from: checksumLike(ADDRESS_B),
+          to: checksumLike(ADDRESS_C),
+        });
+      const { service } = createService();
+
+      expect(await service.startFundsTransfer(ADDRESS_B)).toStrictEqual(
+        fundsTransferStart,
+      );
+    });
+
+    it('sends a new request on every call', async () => {
+      nock(BASE_URL)
+        .post(fundsTransferPath)
+        .reply(200, { ...fundsTransferStart, transfer: null });
+      nock(BASE_URL).post(fundsTransferPath).reply(200, fundsTransferStart);
+      const { service } = createService();
+
+      const first = await service.startFundsTransfer(ADDRESS_B);
+      const second = await service.startFundsTransfer(ADDRESS_B);
+
+      expect(first.transfer).toBeNull();
+      expect(second).toStrictEqual(fundsTransferStart);
+    });
+
+    it('throws the CHOMP error code without retrying when a step is missing', async () => {
+      nock(BASE_URL)
+        .post(fundsTransferPath)
+        .reply(409, {
+          code: 'MIGRATION_STEPS_INCOMPLETE',
+          missingSteps: ['ROOT_DELEGATION'],
+        });
+      const { service } = createService();
+
+      await expect(service.startFundsTransfer(ADDRESS_B)).rejects.toMatchObject(
+        { httpStatus: 409, code: 'MIGRATION_STEPS_INCOMPLETE' },
+      );
+    });
+
+    it('throws on non-OK status', async () => {
+      nock(BASE_URL)
+        .post(fundsTransferPath)
+        .times(DEFAULT_MAX_RETRIES + 1)
+        .reply(500);
+      const { service } = createService();
+
+      await expect(service.startFundsTransfer(ADDRESS_B)).rejects.toThrow(
+        `POST ${fundsTransferPath} failed with status '500'`,
+      );
+    });
+
+    it('throws on a malformed response', async () => {
+      nock(BASE_URL)
+        .post(fundsTransferPath)
+        .reply(200, { ...fundsTransferStart, transfer: { requestId: 1 } });
+      const { service } = createService();
+
+      await expect(service.startFundsTransfer(ADDRESS_B)).rejects.toThrow(
+        'At path: transfer',
+      );
+    });
+  });
+
   describe('error codes', () => {
     it('leaves the code undefined when the error body has no code', async () => {
       nock(BASE_URL).post('/v1/intent').reply(400, { message: 'Bad request' });

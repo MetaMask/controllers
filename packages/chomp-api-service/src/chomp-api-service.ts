@@ -46,6 +46,7 @@ import type {
   CreateUpgradeResponse,
   UpgradeEntry,
   CreateWithdrawalParams,
+  FundsTransferStart,
   CreateWithdrawalResponse,
   DerivedIdentitiesResponse,
   IntentEntry,
@@ -164,6 +165,7 @@ const MESSENGER_EXPOSED_METHODS = [
   'getServiceDetails',
   'getDerivedIdentities',
   'getDerivedIdentityByAddress',
+  'startFundsTransfer',
 ] as const;
 
 /**
@@ -293,6 +295,13 @@ const AddressIdentityResponseStruct = type({
     predecessor: nullable(LowercaseHexAddressStruct),
     successor: nullable(LowercaseHexAddressStruct),
   }),
+});
+
+const FundsTransferStartStruct = type({
+  from: LowercaseHexAddressStruct,
+  to: LowercaseHexAddressStruct,
+  transfer: MigrationTransferStruct,
+  premiumTransfer: MigrationTransferStruct,
 });
 
 const AccountUpgradeStatusStruct = enums(['pending', 'upgraded']);
@@ -1109,5 +1118,48 @@ export class ChompApiService extends BaseDataService<
     return jsonResponse === null
       ? null
       : create(jsonResponse, AddressIdentityResponseStruct);
+  }
+
+  /**
+   * Starts moving the funds of a migrating Money Account to its successor.
+   *
+   * POST /v1/money-account/identities/address/:address/funds-transfer
+   *
+   * CHOMP starts the transfer for the predecessor of the migrating identity
+   * that contains `address`, once every other migration step is complete,
+   * and rejects the request with `MIGRATION_STEPS_INCOMPLETE` otherwise. Once
+   * the transfer exists, the migration can no longer be cancelled. Repeating
+   * the request returns the existing transfer requests, so it is retried like
+   * a read.
+   *
+   * @param address - Any address of the migrating identity.
+   * @returns The funds-transfer requests. Addresses are lowercased.
+   */
+  async startFundsTransfer(address: Hex): Promise<FundsTransferStart> {
+    const { token, profileKey } = await this.#getProfileScopedToken();
+    const path = `/v1/money-account/identities/address/${address}/funds-transfer`;
+
+    const jsonResponse = await this.fetchQuery({
+      queryKey: [`${this.name}:startFundsTransfer`, profileKey, address],
+      staleTime: 0,
+      gcTime: 0,
+      queryFn: async () => {
+        const response = await fetch(new URL(path, this.#baseUrl), {
+          method: 'POST',
+          headers: this.#headersForToken(token),
+        });
+
+        if (!response.ok) {
+          throw await createChompApiError(
+            response,
+            `POST ${path} failed with status '${response.status}'`,
+          );
+        }
+
+        return response.json();
+      },
+    });
+
+    return create(jsonResponse, FundsTransferStartStruct);
   }
 }
