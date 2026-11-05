@@ -1680,6 +1680,39 @@ describe('MfaRecoveryController', () => {
         });
       });
 
+      it('clears the mutation when no escrow applied it', async () => {
+        await withController(
+          async ({ controller, escrowA, escrowB, options }) => {
+            await controller.register(SECRET, IDENTIFIERS);
+            options.authProvider.identifiers = [...IDENTIFIERS, OTHER_PASSKEY];
+            escrowA.failNextApplyCount = 1;
+            escrowB.failNextApplyCount = 1;
+            await expect(
+              controller.updateIdentifiers(
+                PASSKEY,
+                [...IDENTIFIERS, OTHER_PASSKEY],
+                REGISTERED_EPOCH,
+              ),
+            ).rejects.toBeInstanceOf(IncompleteMutationError);
+            options.authProvider.identifiers = IDENTIFIERS;
+            const later = new MfaRecoveryController({
+              ...options,
+              messenger: getMessenger(getRootMessenger()),
+              state: { ...controller.state },
+              now: (): number => unixNow() + 600,
+            });
+
+            await expect(later.resume()).rejects.toBeInstanceOf(
+              MutationRejectedError,
+            );
+
+            expect(await later.getPhase()).toBe('idle');
+            const { identifiers } = await later.getIdentifiers();
+            expect(identifiers).toStrictEqual(IDENTIFIERS);
+          },
+        );
+      });
+
       it('keeps the mutation while an escrow can still apply it', async () => {
         await withController(async (args) => {
           const later = await writeThenRemoveFromAuth(args);

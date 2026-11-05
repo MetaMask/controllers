@@ -165,6 +165,7 @@ sequenceDiagram
   end
   M->>M: update identifier missing at expectedVersion → identifier_not_enrolled
   M->>M: reuse token, or re-issue it if exp <= now()
+  M->>M: re-issued approval misses a payload identifier, no receipts → clear, MutationRejectedError
   opt update identifier, or SIWE identifiers not yet enrolled
     M->>I: getKeyBoundIdentifierToken per identifier
     M->>E: generateChallenge + PoPs per remaining escrow (all required)
@@ -240,6 +241,10 @@ Versioning:
   identifier or SIWE wallet is gone. A `writing` mutation also clears without
   2FA. Escrows keep only recent receipts, so a very old receipt also reads as
   missing.
+- Auth can drop an identifier while a mutation that no escrow applied is
+  pending. Then the re-issued approval no longer covers the payload, and the
+  mutation is cleared with `MutationRejectedError`. The old approval expired,
+  so no write with it can still land.
 - An update's `identifier` must be enrolled on every target escrow
   (`identifier_not_enrolled`), checked before approval and before each write:
   escrows fail, rather than reject, an unknown one.

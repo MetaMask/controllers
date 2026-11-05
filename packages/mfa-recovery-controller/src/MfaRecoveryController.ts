@@ -689,17 +689,17 @@ export class MfaRecoveryController extends BaseController<
     await this.#assertEscrowsAvailable(remainingEscrows);
 
     const claims = decodeAuthControllerToken(pending.authControllerToken);
-    const isLive = claims !== undefined && claims.exp > this.#now();
+    const isApprovalExpired = claims === undefined || claims.exp <= this.#now();
     // Reads need no write approval, so they never ask for 2FA.
-    const { approval, records } = isLive
-      ? {
+    const { approval, records } = isApprovalExpired
+      ? await this.#readReplicas(remainingEscrows)
+      : {
           approval: pending.authControllerToken,
           records: await getEscrowIdentifiers(
             remainingEscrows,
             pending.authControllerToken,
           ),
-        }
-      : await this.#readReplicas(remainingEscrows);
+        };
     if (decodeAuthControllerToken(approval)?.sub !== mutation.profileId) {
       throw new MfaRecoveryError(
         'Pending mutation is for another profile',
@@ -718,10 +718,23 @@ export class MfaRecoveryController extends BaseController<
 
     // `resume` can replace the identifier, so check its enrollment again.
     assertEnrolledInEvery(records, pending.identifier);
-    const writing = isLive
-      ? pending
-      : { ...pending, ...(await this.#authorizeMutation(mutation)) };
-    await this.#assertPending(writing);
+    const writing = isApprovalExpired
+      ? { ...pending, ...(await this.#authorizeMutation(mutation)) }
+      : pending;
+    try {
+      await this.#assertPending(writing);
+    } catch (error) {
+      // A fresh approval leaves the mutation `authorizing`, so it can be
+      // aborted. A renewed one means the old approval expired and no write
+      // with it can land. With no receipts and no moved escrows, none landed.
+      if (isApprovalExpired && pending.receipts.length === 0) {
+        await this.#clearPending();
+        throw new MutationRejectedError(
+          'Auth no longer approves this mutation',
+        );
+      }
+      throw error;
+    }
     const authorizations = await this.#authorizeEscrows(
       writing,
       remainingEscrows,
