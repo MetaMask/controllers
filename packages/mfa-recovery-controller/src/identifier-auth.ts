@@ -2,15 +2,17 @@ import { isObject } from '@metamask/utils';
 
 import { generateSigningKey, hash, sign } from './crypto.js';
 import { MfaRecoveryError } from './errors.js';
-import { isFulfilledResult } from './escrow-utils.js';
+import { isEnrolledInEvery, isFulfilledResult } from './replica-utils.js';
 import type {
   AuthControllerToken,
+  GetIdentifiersResponse,
   Identifier,
   IdentifierAuthMode,
   IdentifierAuthorization,
   KeyBoundCredential,
   RecoveryEscrowProvider,
   RecoveryIdentifierAuthProvider,
+  WritingPendingOperation,
 } from './types.js';
 
 /**
@@ -140,6 +142,28 @@ export async function authorizeEscrowsWithToken({
   return authorizationResults
     .filter(isFulfilledResult)
     .map((result) => result.value);
+}
+
+/**
+ * @param writing - Writing pending mutation.
+ * @param records - Records of the escrows to write.
+ * @returns The payload's SIWE identifiers some escrow has not enrolled.
+ */
+export function findNewSiweIdentifiers(
+  writing: WritingPendingOperation,
+  records: GetIdentifiersResponse[],
+): Identifier[] {
+  const { mutation, payload } = writing;
+  const siweIdentifiers =
+    'identifiers' in payload
+      ? payload.identifiers.filter(({ type }) => type === 'siwe')
+      : [];
+  if (mutation.operation === 'register') {
+    return siweIdentifiers;
+  }
+  return siweIdentifiers.filter(
+    (identifier) => !isEnrolledInEvery(records, identifier),
+  );
 }
 
 /**

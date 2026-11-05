@@ -25,7 +25,7 @@ import {
   verifySignature,
 } from '../crypto.js';
 import { MfaRecoveryError, MutationRejectedError } from '../errors.js';
-import { isMutationReceipt } from '../escrow-utils.js';
+import { isMutationReceipt } from '../receipt-utils.js';
 import type {
   AuthControllerToken,
   GetIdentifiersResponse,
@@ -142,6 +142,22 @@ export class CubistEscrowProvider implements RecoveryEscrowProvider {
       'getIdentifiers',
       { authControllerToken },
       parseIdentifiers,
+    );
+  }
+
+  /**
+   * @param authControllerToken - Approval for the profile to read.
+   * @param version - Record version the receipt was stored at.
+   * @returns The receipt, or `null` when the escrow has none at `version`.
+   */
+  async getMutationReceipt(
+    authControllerToken: AuthControllerToken,
+    version: number,
+  ): Promise<MutationReceipt | null> {
+    return await this.#invoke(
+      'getMutationReceipt',
+      { authControllerToken, version },
+      (value) => (value === null ? null : parseReceipt(value)),
     );
   }
 

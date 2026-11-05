@@ -332,6 +332,14 @@ export type RecoveryEscrowProvider = {
   getIdentifiers: (
     authControllerToken: AuthControllerToken,
   ) => Promise<GetIdentifiersResponse>;
+  /**
+   * Returns the receipt the escrow stored when its record reached `version`,
+   * or `null` when there is none. Escrows keep only recent receipts.
+   */
+  getMutationReceipt: (
+    authControllerToken: AuthControllerToken,
+    version: number,
+  ) => Promise<MutationReceipt | null>;
   getSecret: (
     authControllerToken: AuthControllerToken,
     authorization: IdentifierAuthorization,
