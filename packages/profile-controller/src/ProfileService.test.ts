@@ -487,6 +487,142 @@ describe('ProfileService', () => {
     });
   });
 
+  describe('checkDisplayNameValidity', () => {
+    const mockValidityResponse = { valid: true };
+
+    it('fetches display name validity from correct endpoint', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockValidityResponse),
+      });
+
+      const service = createService();
+      const result = await service.checkDisplayNameValidity('Alice Wonderland');
+
+      expect(result).toStrictEqual(mockValidityResponse);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${V1_URL}/profiles/display-name/validity?display_name=Alice+Wonderland`,
+        { headers: { Authorization: `Bearer ${MOCK_TOKEN}` } },
+      );
+    });
+
+    it('throws HttpError on non-ok response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+      const service = createService();
+
+      await expect(
+        service.checkDisplayNameValidity('Alice'),
+      ).rejects.toThrow(
+        `${ProfileServiceErrorMessage.CHECK_DISPLAY_NAME_VALIDITY_FAILED}: 500`,
+      );
+    });
+
+    it('throws when response schema is invalid', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ invalid: 'shape' }),
+      });
+
+      const service = createService();
+
+      await expect(
+        service.checkDisplayNameValidity('Alice'),
+      ).rejects.toThrow('returned an unexpected response');
+    });
+  });
+
+  describe('checkBioValidity', () => {
+    const mockValidityResponse = { valid: true };
+
+    it('fetches bio validity from correct endpoint', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockValidityResponse),
+      });
+
+      const service = createService();
+      const result = await service.checkBioValidity('MetaMask user');
+
+      expect(result).toStrictEqual(mockValidityResponse);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${V1_URL}/profiles/bio/validity?bio=MetaMask+user`,
+        { headers: { Authorization: `Bearer ${MOCK_TOKEN}` } },
+      );
+    });
+
+    it('throws HttpError on non-ok response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+      const service = createService();
+
+      await expect(service.checkBioValidity('bio text')).rejects.toThrow(
+        `${ProfileServiceErrorMessage.CHECK_BIO_VALIDITY_FAILED}: 500`,
+      );
+    });
+
+    it('throws when response schema is invalid', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ invalid: 'shape' }),
+      });
+
+      const service = createService();
+
+      await expect(service.checkBioValidity('bio text')).rejects.toThrow(
+        'returned an unexpected response',
+      );
+    });
+  });
+
+  describe('checkEarlyAccess', () => {
+    const mockEarlyAccessResponse = { hasAccess: true };
+
+    it('fetches early access status from correct endpoint', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockEarlyAccessResponse),
+      });
+
+      const service = createService();
+      const result = await service.checkEarlyAccess();
+
+      expect(result).toStrictEqual(mockEarlyAccessResponse);
+      expect(mockFetch).toHaveBeenCalledWith(`${V1_URL}/early-access`, {
+        headers: { Authorization: `Bearer ${MOCK_TOKEN}` },
+      });
+    });
+
+    it('throws HttpError on non-ok response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 403 });
+
+      const service = createService();
+
+      await expect(service.checkEarlyAccess()).rejects.toThrow(
+        `${ProfileServiceErrorMessage.CHECK_EARLY_ACCESS_FAILED}: 403`,
+      );
+    });
+
+    it('throws when response schema is invalid', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ invalid: 'shape' }),
+      });
+
+      const service = createService();
+
+      await expect(service.checkEarlyAccess()).rejects.toThrow(
+        'returned an unexpected response',
+      );
+    });
+  });
+
   describe('getXAuthUrl', () => {
     const mockAuthUrlResponse = {
       url: 'https://twitter.com/i/oauth2/authorize?client_id=abc&state=xyz',
