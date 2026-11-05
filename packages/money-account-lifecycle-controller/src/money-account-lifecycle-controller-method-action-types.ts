@@ -115,7 +115,9 @@ export type MoneyAccountLifecycleControllerUpgradeMoneyAccountAction = {
  * Finally, asks CHOMP to start moving the funds of the Money Account to the
  * MFA address. From then on, the migration can no longer be cancelled.
  * CHOMP refuses while a step is missing, for example while the MFA address
- * is not yet monitored, and calling this again starts the transfer then.
+ * is not yet monitored, or when a concurrent request conflicts, so the
+ * request is retried once after a short delay. If that fails too, calling
+ * this again starts the transfer.
  *
  * Identities are then refetched, so the recorded lifecycle becomes
  * `migrating`, even when any of these steps fails.

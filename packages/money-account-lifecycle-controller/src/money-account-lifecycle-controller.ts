@@ -4,6 +4,7 @@ import type {
   StateMetadata,
 } from '@metamask/base-controller';
 import { BaseController } from '@metamask/base-controller';
+import { ChompApiError } from '@metamask/chomp-api-service';
 import type {
   ChompApiServiceGetDerivedIdentitiesAction,
   ChompApiServiceStartFundsTransferAction,
@@ -61,6 +62,13 @@ import type { MoneyAccountLifecycle } from './get-money-account-lifecycle.js';
 import type { MoneyAccountLifecycleControllerMethodActions } from './money-account-lifecycle-controller-method-action-types.js';
 
 const CONTROLLER_NAME = 'MoneyAccountLifecycleController';
+
+const FUNDS_TRANSFER_RETRY_DELAY_MS = 2000;
+
+const RETRYABLE_FUNDS_TRANSFER_ERROR_CODES = [
+  'MIGRATION_STEPS_INCOMPLETE',
+  'MIGRATION_TRANSFER_CONFLICT',
+];
 
 const ACTIVE_SUBSCRIPTION_STATUSES: string[] = [
   SUBSCRIPTION_STATUSES.active,
@@ -455,7 +463,9 @@ export class MoneyAccountLifecycleController extends BaseController<
    * Finally, asks CHOMP to start moving the funds of the Money Account to the
    * MFA address. From then on, the migration can no longer be cancelled.
    * CHOMP refuses while a step is missing, for example while the MFA address
-   * is not yet monitored, and calling this again starts the transfer then.
+   * is not yet monitored, or when a concurrent request conflicts, so the
+   * request is retried once after a short delay. If that fails too, calling
+   * this again starts the transfer.
    *
    * Identities are then refetched, so the recorded lifecycle becomes
    * `migrating`, even when any of these steps fails.
@@ -525,15 +535,38 @@ export class MoneyAccountLifecycleController extends BaseController<
       if (!this.#isReady()) {
         return;
       }
-      await this.messenger.call(
-        'ChompApiService:startFundsTransfer',
-        moneyAccountAddress,
-      );
+      await this.#startFundsTransfer(moneyAccountAddress);
     } finally {
       if (this.#isReady()) {
         this.#fetchDerivedIdentities();
         await this.#waitForLatestDerivedIdentities().catch(() => undefined);
       }
+    }
+  }
+
+  async #startFundsTransfer(moneyAccountAddress: Hex): Promise<void> {
+    try {
+      await this.messenger.call(
+        'ChompApiService:startFundsTransfer',
+        moneyAccountAddress,
+      );
+    } catch (error) {
+      if (
+        !(error instanceof ChompApiError) ||
+        !RETRYABLE_FUNDS_TRANSFER_ERROR_CODES.includes(error.code ?? '')
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, FUNDS_TRANSFER_RETRY_DELAY_MS),
+      );
+      if (!this.#isReady()) {
+        return;
+      }
+      await this.messenger.call(
+        'ChompApiService:startFundsTransfer',
+        moneyAccountAddress,
+      );
     }
   }
 
