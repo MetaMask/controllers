@@ -9,15 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [22.2.0]
 
-### Uncategorized
-
-- chore: add `allow-scripts` script to child workspaces so Yarn doesn't fail ([#11324](https://github.com/MetaMask/core/pull/11324))
-- Release 1392.0.0 ([#11300](https://github.com/MetaMask/core/pull/11300))
-- Release 1390.0.0 ([#11289](https://github.com/MetaMask/core/pull/11289))
-- test: turn coverage off by default and add test:coverage ([#11061](https://github.com/MetaMask/core/pull/11061))
-
 ### Changed
 
+- Bump `@metamask/subscription-controller` from `^15.1.2` to `^15.2.0` ([#11289](https://github.com/MetaMask/core/pull/11289))
+- Bump `@metamask/transaction-controller` from `^73.0.0` to `^73.1.1` ([#11289](https://github.com/MetaMask/core/pull/11289), [#11300](https://github.com/MetaMask/core/pull/11300))
 - Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
 
 ### Fixed
