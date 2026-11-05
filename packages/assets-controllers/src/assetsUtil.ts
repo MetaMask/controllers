@@ -299,20 +299,14 @@ export function isDataUri(uri: string): boolean {
  * JSON object.
  */
 export function parseJsonDataUri(uri: string): Record<string, unknown> | null {
-  // Split `data:application/json[;charset=utf-8][;base64],<payload>`.
-  const commaIndex = uri.indexOf(',');
-  if (commaIndex === -1) {
+  // `data:application/json[;charset=utf-8][;base64],<payload>`. The payload
+  // itself may contain commas, so everything after the first one is rejoined.
+  const [header, ...payloadParts] = uri.split(',');
+  const [mediaType, ...params] = header.trim().toLowerCase().split(';');
+  if (mediaType !== 'data:application/json' || payloadParts.length === 0) {
     return null;
   }
-  const [mediaType, ...params] = uri
-    .slice(0, commaIndex)
-    .trim()
-    .toLowerCase()
-    .split(';');
-  if (mediaType !== 'data:application/json') {
-    return null;
-  }
-  const payload = uri.slice(commaIndex + 1);
+  const payload = payloadParts.join(',');
 
   try {
     const json = params.includes('base64')
