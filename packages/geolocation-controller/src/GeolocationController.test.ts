@@ -84,7 +84,7 @@ describe('GeolocationController', () => {
       });
     });
 
-    it('persists no state', async () => {
+    it('persists the last geolocation result', async () => {
       await withController(({ controller }) => {
         expect(
           deriveStateFromMetadata(
@@ -92,7 +92,15 @@ describe('GeolocationController', () => {
             controller.metadata,
             'persist',
           ),
-        ).toMatchInlineSnapshot(`{}`);
+        ).toMatchInlineSnapshot(`
+          {
+            "country": null,
+            "lastFetchedAt": null,
+            "location": "UNKNOWN",
+            "region": null,
+            "timezone": null,
+          }
+        `);
       });
     });
 

@@ -47,26 +47,29 @@ export type GeolocationControllerState = {
  * The metadata for each property in {@link GeolocationControllerState}.
  */
 const geolocationControllerMetadata = {
+  // The last result is persisted so the next launch can choose an RPC host
+  // before this controller fetches again. A fetch that dies mid-request must
+  // not come back as `loading` or as an old error, so those fields are not saved.
   location: {
-    persist: false,
+    persist: true,
     includeInDebugSnapshot: true,
     includeInStateLogs: true,
     usedInUi: true,
   },
   country: {
-    persist: false,
+    persist: true,
     includeInDebugSnapshot: true,
     includeInStateLogs: true,
     usedInUi: true,
   },
   region: {
-    persist: false,
+    persist: true,
     includeInDebugSnapshot: true,
     includeInStateLogs: true,
     usedInUi: true,
   },
   timezone: {
-    persist: false,
+    persist: true,
     includeInDebugSnapshot: true,
     includeInStateLogs: true,
     usedInUi: true,
@@ -78,7 +81,7 @@ const geolocationControllerMetadata = {
     usedInUi: true,
   },
   lastFetchedAt: {
-    persist: false,
+    persist: true,
     includeInDebugSnapshot: true,
     includeInStateLogs: true,
     usedInUi: false,
@@ -127,8 +130,7 @@ export type GeolocationControllerGetStateAction = ControllerGetStateAction<
  * Actions that {@link GeolocationControllerMessenger} exposes to other consumers.
  */
 export type GeolocationControllerActions =
-  | GeolocationControllerGetStateAction
-  | GeolocationControllerMethodActions;
+  GeolocationControllerGetStateAction | GeolocationControllerMethodActions;
 
 /**
  * Actions from other messengers that {@link GeolocationControllerMessenger} calls.

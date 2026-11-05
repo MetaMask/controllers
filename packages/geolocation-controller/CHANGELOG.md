@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Persist the last geolocation result (`location`, `country`, `region`, `timezone`, and `lastFetchedAt`) so the next launch can use it before any chain request. `status` and `error` stay unpersisted ([#11304](https://github.com/MetaMask/core/pull/11304))
 - **BREAKING:** `GeolocationApiService` now extends `BaseDataService` from `@metamask/base-data-service` ([#10881](https://github.com/MetaMask/core/pull/10881))
   - `GeolocationApiServiceMessenger` now includes the `GeolocationApiService:invalidateQueries` action and `GeolocationApiService:cacheUpdated` events. Messengers built from `GeolocationApiServiceActions` / `GeolocationApiServiceEvents` pick these up automatically.
   - The hand-rolled TTL cache and in-flight deduplication are replaced by the `BaseDataService` query cache. `ttlMs` and `bypassCache` keep their existing behaviour.

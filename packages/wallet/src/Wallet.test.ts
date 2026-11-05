@@ -7,6 +7,7 @@ import {
 import { CONNECTIVITY_STATUSES } from '@metamask/connectivity-controller';
 import { LoggingController, LogType } from '@metamask/logging-controller';
 import { Messenger } from '@metamask/messenger';
+import { NetworkController } from '@metamask/network-controller';
 import {
   PermissionController,
   SubjectMetadataController,
@@ -58,6 +59,19 @@ function getInstanceOptions(): WalletOptions['instanceOptions'] {
     },
     gasFeeController: {
       clientId: 'test',
+    },
+    geolocationApiService: {
+      fetch: vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              country: 'US',
+              region: 'NY',
+              timezone: 'America/New_York',
+            }),
+            { status: 200 },
+          ),
+      ),
     },
     networkController: {
       infuraProjectId: 'fake-infura-project-id',
@@ -200,6 +214,98 @@ describe('Wallet', () => {
     const results = await wallet.init();
 
     expect(results).toHaveLength(10);
+  });
+
+  it('does not wait on geolocation before network init', async () => {
+    let releaseGeolocation: ((response: Response) => void) | undefined;
+    const setRpcFailoverMode = vi.spyOn(
+      NetworkController.prototype,
+      'setRpcFailoverMode',
+    );
+    const wallet = new Wallet({
+      instanceOptions: {
+        ...getInstanceOptions(),
+        geolocationApiService: {
+          fetch: vi.fn(
+            () =>
+              new Promise<Response>((resolve) => {
+                releaseGeolocation = resolve;
+              }),
+          ),
+        },
+        networkController: {
+          infuraProjectId: 'fake-infura-project-id',
+          failoverUrls: {
+            '0x1': ['https://quicknode.example'],
+          },
+        },
+      },
+    });
+
+    await wallet.init();
+
+    expect(setRpcFailoverMode).not.toHaveBeenCalled();
+
+    releaseGeolocation?.(
+      new Response(
+        JSON.stringify({
+          country: 'CN',
+          region: 'SC',
+          timezone: 'Asia/Shanghai',
+        }),
+        { status: 200 },
+      ),
+    );
+    await vi.waitFor(() => {
+      expect(setRpcFailoverMode).toHaveBeenCalledWith('forced');
+    });
+  });
+
+  it('does not wait on geolocation when a country is already persisted', async () => {
+    let releaseGeolocation: ((response: Response) => void) | undefined;
+    const fetchStarted = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseGeolocation = resolve;
+        }),
+    );
+    const setRpcFailoverMode = vi.spyOn(
+      NetworkController.prototype,
+      'setRpcFailoverMode',
+    );
+
+    const wallet = new Wallet({
+      state: {
+        GeolocationController: {
+          country: 'CN',
+          location: 'CN',
+          region: 'SC',
+          timezone: 'Asia/Shanghai',
+          lastFetchedAt: 1,
+        },
+      },
+      instanceOptions: {
+        ...getInstanceOptions(),
+        geolocationApiService: {
+          fetch: fetchStarted,
+        },
+      },
+    });
+
+    await wallet.init();
+
+    expect(setRpcFailoverMode).toHaveBeenCalledWith('forced');
+    expect(fetchStarted).toHaveBeenCalled();
+    releaseGeolocation?.(
+      new Response(
+        JSON.stringify({
+          country: 'CN',
+          region: 'SC',
+          timezone: 'Asia/Shanghai',
+        }),
+        { status: 200 },
+      ),
+    );
   });
 
   it('disallows modifying the messenger', async () => {

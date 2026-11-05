@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Start Infura failover in `forced` mode when geolocation is `CN`. A persisted `CN` country is applied before network init. `Wallet.init` does not wait on the geolocation request. A completed refresh leaves `forced` mode when the country is no longer `CN` ([#11304](https://github.com/MetaMask/core/pull/11304))
+
 ### Changed
 
 - Bump `@metamask/gas-fee-controller` from `^27.0.0` to `^27.1.0` ([#11289](https://github.com/MetaMask/core/pull/11289))

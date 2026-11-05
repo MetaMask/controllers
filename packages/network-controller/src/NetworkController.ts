@@ -775,8 +775,7 @@ export type NetworkControllerGetStateAction = ControllerGetStateAction<
  * externally.
  */
 export type NetworkControllerActions =
-  | NetworkControllerGetStateAction
-  | NetworkControllerMethodActions;
+  NetworkControllerGetStateAction | NetworkControllerMethodActions;
 
 /**
  * All actions that {@link NetworkController} calls internally.
@@ -1360,6 +1359,12 @@ export class NetworkController extends BaseController<
   #rpcFailoverMode: RpcFailoverMode = 'disabled';
 
   /**
+   * Session override applied on top of `corePlatformRpcFailoverMode`.
+   * `forced` is kept when the feature flag later changes. `null` follows the flag.
+   */
+  #sessionRpcFailoverMode: 'forced' | null = null;
+
+  /**
    * Constructs a NetworkController.
    *
    * @param options - The options; see {@link NetworkControllerOptions}.
@@ -1474,7 +1479,7 @@ export class NetworkController extends BaseController<
     this.messenger.subscribe(
       'RemoteFeatureFlagController:stateChange',
       (rpcFailoverMode) => {
-        this.#updateRpcFailover(rpcFailoverMode);
+        this.#updateRpcFailover(this.#resolveRpcFailoverMode(rpcFailoverMode));
       },
       getRpcFailoverMode,
     );
@@ -1494,6 +1499,36 @@ export class NetworkController extends BaseController<
    */
   getEthQuery(): EthQuery | undefined {
     return this.#ethQuery;
+  }
+
+  /**
+   * Sets a session RPC failover override.
+   *
+   * `forced` skips Infura hostnames that already have failover URLs, including
+   * clients created later by `init`. Passing `null` clears the override and
+   * follows `corePlatformRpcFailoverMode` again. A later feature-flag update
+   * does not clear `forced`.
+   *
+   * Requires `RemoteFeatureFlagController:getState` on the messenger.
+   *
+   * @param mode - `forced` to skip Infura, or `null` to follow the feature flag.
+   */
+  setRpcFailoverMode(mode: 'forced' | null): void {
+    this.#sessionRpcFailoverMode = mode;
+    const state = this.messenger.call('RemoteFeatureFlagController:getState');
+    this.#updateRpcFailover(
+      this.#resolveRpcFailoverMode(getRpcFailoverMode(state)),
+    );
+  }
+
+  /**
+   * Prefers a session `forced` override over the feature-flag mode.
+   *
+   * @param flagMode - Mode derived from `corePlatformRpcFailoverMode`.
+   * @returns The mode to apply.
+   */
+  #resolveRpcFailoverMode(flagMode: RpcFailoverMode): RpcFailoverMode {
+    return this.#sessionRpcFailoverMode === 'forced' ? 'forced' : flagMode;
   }
 
   /**
@@ -1538,8 +1573,7 @@ export class NetworkController extends BaseController<
   getProviderAndBlockTracker(): {
     provider: SwappableProxy<ProxyWithAccessibleTarget<Provider>> | undefined;
     blockTracker:
-      | SwappableProxy<ProxyWithAccessibleTarget<BlockTracker>>
-      | undefined;
+      SwappableProxy<ProxyWithAccessibleTarget<BlockTracker>> | undefined;
   } {
     return {
       provider: this.#providerProxy,
@@ -1684,13 +1718,16 @@ export class NetworkController extends BaseController<
 
   /**
    * Initialize the NetworkController:
-   *   - Apply the RPC failover mode from the `corePlatformRpcFailoverMode` remote feature flag;
+   *   - Apply the RPC failover mode from the `corePlatformRpcFailoverMode` remote feature flag,
+   *     keeping a session `forced` override set via {@link setRpcFailoverMode};
    *   - Apply the network selection.
    *   - Auto-add networks for any chains that are configured to be auto-enabled in ConfigRegistryController.
    */
   init(): void {
     const state = this.messenger.call('RemoteFeatureFlagController:getState');
-    this.#updateRpcFailover(getRpcFailoverMode(state));
+    this.#updateRpcFailover(
+      this.#resolveRpcFailoverMode(getRpcFailoverMode(state)),
+    );
 
     this.#applyNetworkSelection(this.state.selectedNetworkClientId);
 
@@ -2823,8 +2860,7 @@ export class NetworkController extends BaseController<
         (
           networkClientOperation,
         ): networkClientOperation is
-          | AddNetworkClientOperation
-          | NoopNetworkClientOperation => {
+          AddNetworkClientOperation | NoopNetworkClientOperation => {
           return (
             networkClientOperation.type === 'add' ||
             networkClientOperation.type === 'noop'
@@ -3230,8 +3266,7 @@ export class NetworkController extends BaseController<
         }
 
         const rpcEndpoint:
-          | InfuraRpcEndpoint
-          | AddNetworkCustomRpcEndpointFields =
+          InfuraRpcEndpoint | AddNetworkCustomRpcEndpointFields =
           registryNetworkConfig.rpcProviders.default.type === 'infura'
             ? {
                 type: RpcEndpointType.Infura,

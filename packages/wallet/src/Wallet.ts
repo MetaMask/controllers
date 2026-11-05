@@ -1,4 +1,5 @@
 import type { StateMetadataConstraint } from '@metamask/base-controller';
+import type { GeolocationControllerState } from '@metamask/geolocation-controller';
 import { Messenger } from '@metamask/messenger';
 import { hasProperty } from '@metamask/utils';
 
@@ -23,6 +24,33 @@ export class Wallet {
   >;
 
   #isDestroyed = false;
+
+  #geolocationFailoverSubscribed = false;
+
+  /**
+   * Keeps Infura failover aligned with the latest completed geolocation.
+   * A failed or in-flight refresh does not change the mode.
+   *
+   * @param state - The latest geolocation controller state.
+   */
+  readonly #onGeolocationStateChange = (
+    state: GeolocationControllerState,
+  ): void => {
+    if (state.status !== 'complete') {
+      return;
+    }
+    const network = this.#instances.NetworkController;
+    if (state.country === 'CN') {
+      network.setRpcFailoverMode('forced');
+      return;
+    }
+    if (
+      typeof state.country === 'string' &&
+      /^[A-Z]{2}$/u.test(state.country)
+    ) {
+      network.setRpcFailoverMode(null);
+    }
+  };
 
   /**
    * Creates a `Wallet` instance, initializing all instances as specified by the passed options.
@@ -126,9 +154,14 @@ export class Wallet {
   /**
    * Complete additional initialization of instantiated controllers or services after instantiating `Wallet`.
    *
+   * A persisted mainland China geolocation forces Infura failover before
+   * network clients are created. Otherwise failover follows the geolocation
+   * response when it arrives. This method does not wait on that request.
+   *
    * @returns The results of all initialization calls.
    */
-  init(): Promise<PromiseSettledResult<unknown>[]> {
+  async init(): Promise<PromiseSettledResult<unknown>[]> {
+    this.#armGeolocationRpcFailover();
     return Promise.allSettled(
       Object.values(this.#instances)
         .filter(
@@ -150,6 +183,13 @@ export class Wallet {
     }
 
     this.#isDestroyed = true;
+    if (this.#geolocationFailoverSubscribed) {
+      this.#messenger.unsubscribe(
+        'GeolocationController:stateChange',
+        this.#onGeolocationStateChange,
+      );
+      this.#geolocationFailoverSubscribed = false;
+    }
 
     await Promise.allSettled(
       Object.values(this.#instances).map(async (instance) => {
@@ -162,5 +202,32 @@ export class Wallet {
         return;
       }),
     );
+  }
+
+  /**
+   * Follow geolocation without delaying controller init.
+   *
+   * A persisted `CN` country forces failover before network clients are
+   * created. The refresh itself is not awaited. When it completes, the state
+   * subscription applies `CN` or clears a previous forced mode.
+   */
+  #armGeolocationRpcFailover(): void {
+    if (this.#geolocationFailoverSubscribed) {
+      return;
+    }
+    this.#messenger.subscribe(
+      'GeolocationController:stateChange',
+      this.#onGeolocationStateChange,
+    );
+    this.#geolocationFailoverSubscribed = true;
+
+    const geolocation = this.#instances.GeolocationController;
+    if (geolocation.state.country === 'CN') {
+      this.#instances.NetworkController.setRpcFailoverMode('forced');
+    }
+
+    geolocation.refreshGeolocation().catch(() => {
+      // A failed lookup leaves failover on the feature-flag mode.
+    });
   }
 }
