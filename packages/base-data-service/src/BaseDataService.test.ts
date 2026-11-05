@@ -11,6 +11,7 @@ import {
 } from '@metamask/storage-service';
 import {
   CancelledError,
+  focusManager,
   hashKey,
   onlineManager,
   QueryClient,
@@ -549,6 +550,23 @@ describe('BaseDataService', () => {
     onlineManager.setOnline(true);
 
     expect(await promise).toHaveLength(3);
+    service.destroy();
+  });
+
+  it('does not refetch queries on focus or online events', async () => {
+    const messenger = createServiceMessenger();
+    const service = new ExampleDataService(messenger);
+    await service.getAssets(MOCK_ASSETS);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    focusManager.setFocused(undefined);
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+    await new Promise(process.nextTick);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
     service.destroy();
   });
 
