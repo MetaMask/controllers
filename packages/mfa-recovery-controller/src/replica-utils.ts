@@ -27,7 +27,8 @@ export function assertSameVersion(replicas: GetIdentifiersResponse[]): void {
 }
 
 /**
- * Escrows compare SIWE addresses case-insensitively.
+ * Matches on type, namespace and value; SIWE addresses compare
+ * case-insensitively, as escrows do.
  *
  * @param replicas - Escrow reads.
  * @param identifier - Identifier to find.
