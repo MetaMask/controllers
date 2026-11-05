@@ -54,15 +54,15 @@ export async function verifyMutationReceipt(
 }
 
 /**
- * Reads each escrow's receipt at `newVersion`. An escrow off `expectedVersion`
- * was written by this mutation or by another one, and its receipt tells which.
+ * Returns this mutation's receipts if every escrow applied it, or `null` if
+ * any escrow has no receipt for it (another mutation wrote it).
  *
  * @param escrows - Escrows to read.
  * @param token - AuthController token for the read.
  * @param mutation - Mutation the receipts must acknowledge.
  * @returns The receipts, or `null` when an escrow has none for this mutation.
  */
-export async function getMutationReceipts(
+export async function getAppliedMutationReceipts(
   escrows: RecoveryEscrowProvider[],
   token: AuthControllerToken,
   mutation: Mutation,

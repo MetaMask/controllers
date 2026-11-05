@@ -1713,6 +1713,38 @@ describe('MfaRecoveryController', () => {
         );
       });
 
+      it('keeps an unapplied mutation when renewing its approval fails', async () => {
+        await withController(
+          async ({ controller, authProvider, escrowA, escrowB, options }) => {
+            await controller.register(SECRET, IDENTIFIERS);
+            escrowA.failNextApplyCount = 1;
+            escrowB.failNextApplyCount = 1;
+            await expect(
+              controller.updateRecoverySecret(
+                PASSKEY,
+                SECRET_2,
+                REGISTERED_EPOCH,
+              ),
+            ).rejects.toBeInstanceOf(IncompleteMutationError);
+            const later = new MfaRecoveryController({
+              ...options,
+              messenger: getMessenger(getRootMessenger()),
+              state: { ...controller.state },
+              now: (): number => unixNow() + 600,
+            });
+            const authorize =
+              authProvider.authorizeRecoveryRequest.bind(authProvider);
+            vi.spyOn(authProvider, 'authorizeRecoveryRequest')
+              .mockImplementationOnce(authorize)
+              .mockRejectedValueOnce(new Error('step up required'));
+
+            await expect(later.resume()).rejects.toThrow('step up required');
+
+            expect(await later.getPhase()).toBe('writing');
+          },
+        );
+      });
+
       it('keeps the mutation while an escrow can still apply it', async () => {
         await withController(async (args) => {
           const later = await writeThenRemoveFromAuth(args);

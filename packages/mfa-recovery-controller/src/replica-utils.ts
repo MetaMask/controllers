@@ -1,11 +1,12 @@
 import { areUint8ArraysEqual } from '@metamask/utils';
 
 import { hash } from './crypto.js';
-import { MfaRecoveryError } from './errors.js';
+import { MfaRecoveryError, MutationRejectedError } from './errors.js';
 import type {
   AuthControllerToken,
   GetIdentifiersResponse,
   Identifier,
+  MutationReceipt,
   RecoveryEscrowProvider,
 } from './types.js';
 
@@ -16,14 +17,14 @@ export type RecoverySecretResult = {
 };
 
 type RepairPlan = {
+  /** Write the lagging escrows missed. */
+  operation: 'register' | 'updateIdentifiers' | 'updateRecoverySecret';
   /** Highest escrow version. */
   epoch: number;
-  /** Whether each escrow, in read order, is one version behind. */
-  lagging: boolean[];
   /** Identifiers of the highest record. */
   identifiers: Identifier[];
-  /** Whether copying the identifiers alone repairs the lagging escrows. */
-  identifiersOnly: boolean;
+  /** Escrows one version behind. */
+  laggingEscrows: RecoveryEscrowProvider[];
 };
 
 /**
@@ -36,6 +37,29 @@ export function isFulfilledResult<Result>(
   result: PromiseSettledResult<Result>,
 ): result is PromiseFulfilledResult<Result> {
   return result.status === 'fulfilled';
+}
+
+/**
+ * Returns the first `MutationRejectedError` if every escrow threw one,
+ * otherwise `null`.
+ *
+ * @param results - Settled write results, one per escrow.
+ * @returns The first rejection, or `null`.
+ */
+export function getRejectionFromEveryEscrow(
+  results: PromiseSettledResult<MutationReceipt>[],
+): MutationRejectedError | null {
+  let rejection: MutationRejectedError | null = null;
+  for (const result of results) {
+    if (
+      result.status !== 'rejected' ||
+      !(result.reason instanceof MutationRejectedError)
+    ) {
+      return null;
+    }
+    rejection ??= result.reason;
+  }
+  return rejection;
 }
 
 /**
@@ -156,12 +180,14 @@ export function selectHighestConsistentVersion(
 /**
  * Plans the write that brings escrows one version behind the highest up to it.
  *
- * @param records - Records of every escrow.
+ * @param escrows - Every escrow.
+ * @param records - Their records, in `escrows` order.
  * @returns The plan, or `null` when every escrow is at the same version.
  * @throws `replica_corruption` when escrows are more than one version apart,
  * or the highest records disagree.
  */
 export async function planRepair(
+  escrows: RecoveryEscrowProvider[],
   records: GetIdentifiersResponse[],
 ): Promise<RepairPlan | null> {
   const epoch = Math.max(...records.map(({ version }) => version));
@@ -185,10 +211,16 @@ export async function planRepair(
     );
   }
   const leader = records[lagging.indexOf(false)];
+  let operation: RepairPlan['operation'] = 'updateRecoverySecret';
+  if (epoch === 1) {
+    operation = 'register';
+  } else if (new Set(hashes).size > 1) {
+    operation = 'updateIdentifiers';
+  }
   return {
+    operation,
     epoch,
-    lagging,
     identifiers: leader.identifiers,
-    identifiersOnly: epoch > 1 && new Set(hashes).size > 1,
+    laggingEscrows: escrows.filter((_, index) => lagging[index]),
   };
 }
