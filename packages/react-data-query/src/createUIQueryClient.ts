@@ -3,7 +3,7 @@ import type {
   DataServiceGranularCacheUpdatedPayload,
   SerializedQueryError,
 } from '@metamask/base-data-service';
-import { Json, assert } from '@metamask/utils';
+import { Json, assert, isObject } from '@metamask/utils';
 import {
   hashKey,
   hydrate,
@@ -32,17 +32,58 @@ type DataServiceGranularCacheUpdatedHandler = (
 ) => void;
 
 /**
+ * Serialized error keys that are not copied onto the rebuilt error as extra
+ * properties. `name`, `message` and `cause` are set explicitly, and
+ * `__proto__` must never be copied.
+ */
+const RESERVED_ERROR_KEYS = new Set(['name', 'message', 'cause', '__proto__']);
+
+/**
+ * Check whether a serialized `cause` is itself a serialized error.
+ *
+ * @param value - The serialized cause.
+ * @returns Whether the cause has a string `name` and `message`.
+ */
+function isSerializedQueryError(
+  value: SerializedQueryError | Json,
+): value is SerializedQueryError {
+  return (
+    isObject(value) &&
+    typeof value.name === 'string' &&
+    typeof value.message === 'string'
+  );
+}
+
+/**
  * Turn an error that came through a `:cacheUpdated` payload back into an
- * `Error`, so UI code can treat it like any other query error.
+ * `Error`, so UI code can treat it like any other query error. Extra
+ * properties such as `code` or `httpStatus` are copied onto the error, and a
+ * serialized `cause` is rebuilt as an `Error` too.
  *
  * @param serializedError - The serialized error.
- * @param serializedError.name - The name of the original error.
- * @param serializedError.message - The message of the original error.
  * @returns The error.
  */
-function deserializeQueryError({ name, message }: SerializedQueryError): Error {
-  const error = new Error(message);
+function deserializeQueryError(serializedError: SerializedQueryError): Error {
+  const { name, message, cause } = serializedError;
+  const error =
+    cause === undefined
+      ? new Error(message)
+      : new Error(message, {
+          cause: isSerializedQueryError(cause)
+            ? deserializeQueryError(cause)
+            : cause,
+        });
   error.name = name;
+  for (const [key, value] of Object.entries(serializedError)) {
+    if (!RESERVED_ERROR_KEYS.has(key)) {
+      Object.defineProperty(error, key, {
+        value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    }
+  }
   return error;
 }
 

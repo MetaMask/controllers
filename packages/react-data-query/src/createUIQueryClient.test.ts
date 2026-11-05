@@ -2,6 +2,7 @@ import {
   DataServiceGranularCacheUpdatedEvent,
   DataServiceGranularCacheUpdatedPayload,
   DataServiceQueryState,
+  SerializedQueryError,
 } from '@metamask/base-data-service';
 import {
   MOCK_ANY_NAMESPACE,
@@ -1317,6 +1318,95 @@ describe('createUIQueryClient', () => {
       expect(uiQuery.state.errorUpdatedAt).toBe(errorUpdatedAt);
       expect(uiQuery.state.data).toBe(data);
       expect(observer.getCurrentResult().error?.message).toBe('boom');
+
+      observer.destroy();
+      service.destroy();
+    });
+
+    it('restores the extra properties and cause of a background error', async () => {
+      const { client, messenger, service } = createRoundTripClient();
+      const observer = new QueryObserver(client, {
+        queryKey: getAssetsQueryKey,
+      });
+      await subscribeUntilSettled(observer);
+      const uiQuery = client.getQueryCache().get(queryHash);
+      assert(uiQuery);
+      const { data, dataUpdatedAt } = uiQuery.state;
+
+      messenger.publish(
+        cacheUpdatedEvent,
+        buildQueryPayload({
+          data,
+          dataUpdatedAt,
+          status: 'error',
+          error: {
+            name: 'PredictError',
+            message: 'Request failed',
+            code: 'GEO_BLOCKED',
+            httpStatus: 403,
+            responseBody: { reason: 'blocked' },
+            cause: {
+              name: 'TypeError',
+              message: 'fetch failed',
+              code: 'ECONNRESET',
+              cause: { status: 500 },
+            },
+          },
+          errorUpdatedAt: Date.now(),
+        }),
+      );
+
+      const { error } = observer.getCurrentResult();
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toMatchObject({
+        name: 'PredictError',
+        message: 'Request failed',
+        code: 'GEO_BLOCKED',
+        httpStatus: 403,
+        responseBody: { reason: 'blocked' },
+      });
+      expect(error?.cause).toBeInstanceOf(Error);
+      expect(error?.cause).toMatchObject({
+        name: 'TypeError',
+        message: 'fetch failed',
+        code: 'ECONNRESET',
+      });
+      assert(error?.cause instanceof Error);
+      expect(error.cause.cause).toStrictEqual({ status: 500 });
+
+      observer.destroy();
+      service.destroy();
+    });
+
+    it('ignores a `__proto__` key in a serialized background error', async () => {
+      const { client, messenger, service } = createRoundTripClient();
+      const observer = new QueryObserver(client, {
+        queryKey: getAssetsQueryKey,
+      });
+      await subscribeUntilSettled(observer);
+      const uiQuery = client.getQueryCache().get(queryHash);
+      assert(uiQuery);
+      const { data, dataUpdatedAt } = uiQuery.state;
+      const serializedError = JSON.parse(
+        '{"name":"Error","message":"boom","__proto__":{"polluted":true}}',
+      ) as SerializedQueryError;
+
+      messenger.publish(
+        cacheUpdatedEvent,
+        buildQueryPayload({
+          data,
+          dataUpdatedAt,
+          status: 'error',
+          error: serializedError,
+          errorUpdatedAt: Date.now(),
+        }),
+      );
+
+      const { error } = observer.getCurrentResult();
+      expect(error).toBeInstanceOf(Error);
+      expect(error?.name).toBe('Error');
+      expect(error?.message).toBe('boom');
+      expect(error).not.toHaveProperty('polluted');
 
       observer.destroy();
       service.destroy();
