@@ -1,3 +1,4 @@
+import { HttpError } from '@metamask/controller-utils';
 import { Messenger, MOCK_ANY_NAMESPACE } from '@metamask/messenger';
 import type {
   MockAnyNamespace,
@@ -142,6 +143,71 @@ describe('ProfileService', () => {
 
       await expect(service.getProfile('profile-123')).rejects.toThrow(
         `${ProfileServiceErrorMessage.GET_PROFILE_FAILED}: 404`,
+      );
+    });
+
+    it('includes the API error message from the response body', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () =>
+          Promise.resolve({ code: 'not_found', message: 'Profile not found' }),
+      });
+
+      const service = createService();
+
+      await expect(service.getProfile('profile-123')).rejects.toThrow(
+        `${ProfileServiceErrorMessage.GET_PROFILE_FAILED}: 404: Profile not found`,
+      );
+    });
+
+    it('includes the API error message when the response body has no code', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ message: 'Profile not found' }),
+      });
+
+      const service = createService();
+
+      await expect(service.getProfile('profile-123')).rejects.toThrow(
+        `${ProfileServiceErrorMessage.GET_PROFILE_FAILED}: 404: Profile not found`,
+      );
+    });
+
+    it('falls back to the generic message when the error body is not JSON', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new Error('invalid JSON')),
+      });
+
+      const service = createService();
+      const error: unknown = await service
+        .getProfile('profile-123')
+        .catch((caughtError: unknown) => caughtError);
+
+      expect(error).toBeInstanceOf(HttpError);
+      expect((error as Error).message).toBe(
+        `${ProfileServiceErrorMessage.GET_PROFILE_FAILED}: 500`,
+      );
+    });
+
+    it('falls back to the generic message when the error body has no message', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ code: 'bad_request' }),
+      });
+
+      const service = createService();
+      const error: unknown = await service
+        .getProfile('profile-123')
+        .catch((caughtError: unknown) => caughtError);
+
+      expect(error).toBeInstanceOf(HttpError);
+      expect((error as Error).message).toBe(
+        `${ProfileServiceErrorMessage.GET_PROFILE_FAILED}: 400`,
       );
     });
 
