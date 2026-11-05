@@ -41,6 +41,8 @@ export type {
   SeedlessOnboardingControllerRunMigrationsAction,
   SeedlessOnboardingControllerAuthenticateForRecoveryAction,
   SeedlessOnboardingControllerMigrateToEnvelopeAction,
+  SeedlessOnboardingControllerRecoverWithRecoverySecretAction,
+  SeedlessOnboardingControllerResetPasswordWithVaultKeysAction,
 } from './SeedlessOnboardingController-method-action-types.js';
 export type {
   AuthenticatedUserDetails,

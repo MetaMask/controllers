@@ -394,11 +394,9 @@ async function decryptVault(
 describe('SeedlessOnboardingController', () => {
   // These tests cover profiles that were never migrated to key envelopes.
   beforeEach(() => {
-    vi.spyOn(EnvelopeStore.prototype, 'fetchEnvelope').mockResolvedValue(
-      undefined,
-    );
-    vi.spyOn(EnvelopeStore.prototype, 'fetchControlItem').mockResolvedValue(
-      undefined,
+    vi.spyOn(EnvelopeStore.prototype, 'fetchEnvelopes').mockResolvedValue([]);
+    vi.spyOn(EnvelopeStore.prototype, 'fetchControlRecords').mockResolvedValue(
+      [],
     );
   });
 

@@ -101,9 +101,11 @@ export class EnvelopeStore {
     path: EnvelopePath,
   ): Promise<Envelope[]> {
     const items = await this.#fetchItems(keys.wrapKey, keys.envAuth);
-    return parseItems(items, EncAccountDataType.KeyEnvelope, parseEnvelope).filter(
-      (envelope) => envelope.path === path,
-    );
+    return parseItems(
+      items,
+      EncAccountDataType.KeyEnvelope,
+      parseEnvelope,
+    ).filter((envelope) => envelope.path === path);
   }
 
   /**

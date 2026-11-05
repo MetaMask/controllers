@@ -348,6 +348,52 @@ export type SeedlessOnboardingControllerMigrateToEnvelopeAction = {
 };
 
 /**
+ * Recover an envelope-managed vault with the Recovery Secret instead of the
+ * password: open `rbek` to get the vault key set `K_v`, fetch the secret
+ * data with it, and create the local vault under `password`.
+ *
+ * `password` only encrypts the local vault. Until the user syncs it with
+ * the global password ({@link syncLatestGlobalPassword}) or sets it as the
+ * global password ({@link resetPasswordWithVaultKeys}), the password counts
+ * as outdated.
+ *
+ * Authenticate with social login and call {@link authenticateForRecovery}
+ * first.
+ *
+ * @param params - The function parameters.
+ * @param params.recoverySecret - The 32-byte Recovery Secret from escrow.
+ * @param params.password - The password of the new local vault.
+ * @returns The secret data of the vault.
+ * @throws `RecoveryEnvelopeNotFound` if no vault keys are sealed for the
+ * Recovery Secret, `RecoveryKeyShareConflict` if the nodes hold the key of
+ * another Recovery Secret, or `Aal2Required` without a valid aal2 session.
+ */
+export type SeedlessOnboardingControllerRecoverWithRecoverySecretAction = {
+  type: `SeedlessOnboardingController:recoverWithRecoverySecret`;
+  handler: SeedlessOnboardingController['recoverWithRecoverySecret'];
+};
+
+/**
+ * Set a new global password on an envelope-managed vault without the old
+ * one, for example after {@link recoverWithRecoverySecret}.
+ *
+ * The password OPRF key swap is signed with the auth key stored in the
+ * vault's control record, so only the unlocked vault and the social login
+ * are needed. The vault keys and the backend vault stay as they are, and
+ * the local vault is re-encrypted under the new password.
+ *
+ * @param params - The function parameters.
+ * @param params.newPassword - The new global password.
+ * @returns A promise that resolves once the new password is global.
+ * @throws `EnvelopeControlRecordNotFound` if the vault is not
+ * envelope-managed or no control record matches the live password OPRF key.
+ */
+export type SeedlessOnboardingControllerResetPasswordWithVaultKeysAction = {
+  type: `SeedlessOnboardingController:resetPasswordWithVaultKeys`;
+  handler: SeedlessOnboardingController['resetPasswordWithVaultKeys'];
+};
+
+/**
  * Rotate the refresh token — fetch a new refresh/revoke token pair from the
  * auth service and persist the new revoke token in the vault.
  *
@@ -448,6 +494,8 @@ export type SeedlessOnboardingControllerMethodActions =
   | SeedlessOnboardingControllerRefreshAuthTokensAction
   | SeedlessOnboardingControllerAuthenticateForRecoveryAction
   | SeedlessOnboardingControllerMigrateToEnvelopeAction
+  | SeedlessOnboardingControllerRecoverWithRecoverySecretAction
+  | SeedlessOnboardingControllerResetPasswordWithVaultKeysAction
   | SeedlessOnboardingControllerRotateRefreshTokenAction
   | SeedlessOnboardingControllerRevokePendingRefreshTokensAction
   | SeedlessOnboardingControllerGetAccessTokenAction

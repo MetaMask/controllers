@@ -18,8 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Registers the Recovery Secret on the recovery verifier if the nodes hold no share for it yet.
   - Writes the vault keys sealed for the password and for the Recovery Secret, plus a control record, as `KeyEnvelope` and `EnvelopeControl` data items in their own metadata partitions, under the vault's metadata lock. Secret data items and the vault are not changed.
   - The sealed envelopes are checkpointed before the first write, so a failed call can be retried with the same arguments. Does nothing if the vault is already envelope-managed.
+- Add `recoverWithRecoverySecret` and the `SeedlessOnboardingController:recoverWithRecoverySecret` messenger action, which restore an envelope-managed vault with the Recovery Secret instead of the password ([#11220](https://github.com/MetaMask/core/pull/11220))
+  - Takes the 32-byte `recoverySecret` and the `password` of the new local vault, and requires the social login session and an aal2 session from `authenticateForRecovery`.
+  - Opens the vault keys sealed for the Recovery Secret, fetches the secret data with them, creates the local vault under `password`, and returns the secret data.
+  - The local password counts as outdated until it is synced with `syncLatestGlobalPassword` or set as the global password with `resetPasswordWithVaultKeys`.
+- Add `resetPasswordWithVaultKeys` and the `SeedlessOnboardingController:resetPasswordWithVaultKeys` messenger action, which set a new global password on an unlocked, envelope-managed vault without the old password ([#11220](https://github.com/MetaMask/core/pull/11220))
+  - The password OPRF key swap is signed with the auth key stored in the vault's control record. The vault keys and secret data are not changed, and the local vault is re-encrypted under `newPassword`.
 - Add persisted `envelope` state and the `EnvelopeState` type, set once the vault is envelope-managed, and persisted, encrypted `pendingEnvelopeMigration` state for the migration checkpoint ([#11220](https://github.com/MetaMask/core/pull/11220))
-- Add `Aal2Required`, `RecoveryKeyShareConflict`, `InvalidEnvelope`, `EnvelopeVaultKeyMismatch`, `EnvelopeControlRecordNotFound`, and `EnvelopeMigrationRequiresDataTypes` error messages ([#11220](https://github.com/MetaMask/core/pull/11220))
+  - `EnvelopeState.passwordAuthPubKey` is unset after `recoverWithRecoverySecret`, until the local password is synced or reset.
+- Add `Aal2Required`, `RecoveryKeyShareConflict`, `InvalidEnvelope`, `EnvelopeVaultKeyMismatch`, `EnvelopeControlRecordNotFound`, `EnvelopeMigrationRequiresDataTypes`, and `RecoveryEnvelopeNotFound` error messages ([#11220](https://github.com/MetaMask/core/pull/11220))
 
 ### Changed
 
@@ -31,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `changePassword` on an envelope-managed vault keeps the vault keys: it seals them for the new password, appends a control record, and then swaps the password OPRF key, under the vault's metadata lock. Vaults that another device migrated are detected through their control record ([#11220](https://github.com/MetaMask/core/pull/11220))
 - `syncLatestGlobalPassword` and `submitGlobalPassword` open the envelope sealed for the global password first, and fall back to the existing key chain if there is none. A failed envelope fetch is reported as an error, not treated as a missing envelope ([#11220](https://github.com/MetaMask/core/pull/11220))
 - `fetchAllSecretData` with a password opens the envelope sealed for that password first, and restores the vault with the sealed vault keys and sets `envelope` state if there is one ([#11220](https://github.com/MetaMask/core/pull/11220))
-- `checkIsPasswordOutdated` compares the global password key with `envelope.passwordAuthPubKey` on an envelope-managed vault ([#11220](https://github.com/MetaMask/core/pull/11220))
+- `checkIsPasswordOutdated` compares the global password key with `envelope.passwordAuthPubKey` on an envelope-managed vault, and reports the password as outdated while `envelope.passwordAuthPubKey` is unset ([#11220](https://github.com/MetaMask/core/pull/11220))
 - Bump `@metamask/auth-network-utils` from `^0.3.0` to `^0.4.0` ([#11220](https://github.com/MetaMask/core/pull/11220))
 
 ## [12.0.0]

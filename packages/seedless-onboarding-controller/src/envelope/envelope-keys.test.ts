@@ -9,20 +9,19 @@ import { describe, expect, it } from 'vitest';
 
 import { SeedlessOnboardingControllerErrorMessage } from '../constants.js';
 import {
-  appendControlRecord,
   deriveControlKeys,
   deriveEnvelopeKeys,
   deriveKeyPair,
   derivePubKey,
   getPasswordNamespaceAuthKeyPair,
-  MAX_CONTROL_RECORDS,
+  nextControlSeq,
   openEnvelope,
-  parseControlItem,
+  parseControlRecord,
   parseEnvelope,
   pubKeysEqual,
   sealEnvelope,
   selectControlRecord,
-  serializeControlItem,
+  serializeControlRecord,
   serializeEnvelope,
 } from './envelope-keys.js';
 import type { ControlRecord, VaultKeySet } from './envelope-keys.js';
@@ -243,47 +242,44 @@ describe('envelope keys', () => {
     });
   });
 
-  describe('control item', () => {
-    it('round-trips a control item', () => {
-      const item = appendControlRecord(undefined, createRecord(1, 11n));
+  describe('control record', () => {
+    it('round-trips a control record', () => {
+      const record = createRecord(1, 11n);
 
-      expect(parseControlItem(serializeControlItem(item))).toStrictEqual(item);
+      expect(parseControlRecord(serializeControlRecord(record))).toStrictEqual(
+        record,
+      );
     });
 
     it.each([
       ['not JSON', 'nope'],
-      ['no records', '{"v":1,"records":[]}'],
-      ['a malformed record', '{"v":1,"records":[{"v":1}]}'],
-      ['a record without namespace', '{"v":1,"records":[{"v":1,"seq":1}]}'],
-      ['an unknown version', '{"v":2,"records":[]}'],
+      ['an array', '[]'],
+      ['a malformed record', '{"v":1}'],
+      ['a record without namespace', '{"v":1,"seq":1,"migratedAt":1}'],
+      ['an unknown version', JSON.stringify({ ...createRecord(1, 11n), v: 2 })],
     ])('rejects %s', (_name, data) => {
-      expect(() => parseControlItem(stringToBytes(data))).toThrow(
+      expect(() => parseControlRecord(stringToBytes(data))).toThrow(
         INVALID_ENVELOPE,
       );
     });
 
-    it('keeps only the newest records', () => {
-      let item = appendControlRecord(undefined, createRecord(1, 11n));
-      for (let seq = 2; seq <= MAX_CONTROL_RECORDS + 2; seq++) {
-        item = appendControlRecord(item, createRecord(seq, BigInt(10 + seq)));
-      }
+    it('selects the record matching the live key, highest seq first', () => {
+      const records = [
+        createRecord(1, 11n),
+        createRecord(3, 11n),
+        createRecord(2, 12n),
+      ];
 
-      expect(item.records).toHaveLength(MAX_CONTROL_RECORDS);
-      expect(item.records.map(({ seq }) => seq)).toStrictEqual([3, 4, 5]);
+      expect(selectControlRecord(records, derivePubKey(11n))?.seq).toBe(3);
+      expect(selectControlRecord(records, derivePubKey(12n))?.seq).toBe(2);
+      expect(selectControlRecord(records, derivePubKey(13n))).toBeUndefined();
     });
 
-    it('selects the record matching the live key, highest seq first', () => {
-      const item = appendControlRecord(
-        appendControlRecord(
-          appendControlRecord(undefined, createRecord(1, 11n)),
-          createRecord(2, 12n),
-        ),
-        createRecord(3, 11n),
+    it('numbers the next record after the highest seq', () => {
+      expect(nextControlSeq([])).toBe(1);
+      expect(nextControlSeq([createRecord(4, 11n), createRecord(2, 12n)])).toBe(
+        5,
       );
-
-      expect(selectControlRecord(item, derivePubKey(11n))?.seq).toBe(3);
-      expect(selectControlRecord(item, derivePubKey(12n))?.seq).toBe(2);
-      expect(selectControlRecord(item, derivePubKey(13n))).toBeUndefined();
     });
 
     it('rebuilds the password namespace auth key pair', () => {

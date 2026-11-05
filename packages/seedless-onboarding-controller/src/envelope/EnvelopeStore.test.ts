@@ -1,9 +1,11 @@
-import type { ToprfSecureBackup } from '@metamask/toprf-secure-backup';
+import type {
+  FetchedSecretDataItem,
+  ToprfSecureBackup,
+} from '@metamask/toprf-secure-backup';
 import {
   EncAccountDataType,
   TOPRFError,
   TOPRFErrorCode,
-  WrappedKeysItemId,
 } from '@metamask/toprf-secure-backup';
 import { bigIntToHex, stringToBytes } from '@metamask/utils';
 import type { Mock } from 'vitest';
@@ -11,16 +13,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SeedlessOnboardingControllerErrorMessage } from '../constants.js';
 import {
-  appendControlRecord,
   deriveControlKeys,
   deriveEnvelopeKeys,
   deriveKeyPair,
   sealEnvelope,
-  serializeControlItem,
+  serializeControlRecord,
   serializeEnvelope,
 } from './envelope-keys.js';
-import type { VaultKeySet } from './envelope-keys.js';
-import { EnvelopeItemId, EnvelopeStore } from './EnvelopeStore.js';
+import type { ControlRecord, VaultKeySet } from './envelope-keys.js';
+import { EnvelopeStore } from './EnvelopeStore.js';
 
 const vaultKeySet: VaultKeySet = {
   authKeyPair: deriveKeyPair(new Uint8Array(32).fill(1)),
@@ -29,18 +30,43 @@ const vaultKeySet: VaultKeySet = {
 };
 const envelopeKeys = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
 const controlKeys = deriveControlKeys(vaultKeySet);
-const controlItem = appendControlRecord(undefined, {
-  v: 1,
-  seq: 1,
-  passwordNamespace: {
-    verifier: 'verifier',
-    verifierId: 'user',
-    authSk: bigIntToHex(vaultKeySet.authKeyPair.sk),
-    keyIndex: 1,
-    enabled: true,
-  },
-  migratedAt: 1,
-});
+
+/**
+ * @param seq - The record sequence number.
+ * @returns A control record.
+ */
+function createRecord(seq: number): ControlRecord {
+  return {
+    v: 1,
+    seq,
+    passwordNamespace: {
+      verifier: 'verifier',
+      verifierId: 'user',
+      authSk: bigIntToHex(vaultKeySet.authKeyPair.sk),
+      keyIndex: seq,
+      enabled: true,
+    },
+    migratedAt: 1,
+  };
+}
+
+/**
+ * @param data - The item data.
+ * @param overrides - Item fields to override.
+ * @returns A fetched envelope item.
+ */
+function createItem(
+  data: Uint8Array,
+  overrides: Partial<FetchedSecretDataItem> = {},
+): FetchedSecretDataItem {
+  return {
+    itemId: 'item',
+    dataType: EncAccountDataType.KeyEnvelope,
+    data,
+    version: 'v2',
+    ...overrides,
+  };
+}
 
 type MockToprfClient = {
   addSecretDataItem: Mock<ToprfSecureBackup['addSecretDataItem']>;
@@ -66,16 +92,8 @@ function createStore(): {
 }
 
 describe('EnvelopeStore', () => {
-  it('maps each item kind to a fixed WrappedKeys item id', () => {
-    expect(EnvelopeItemId).toStrictEqual({
-      password: WrappedKeysItemId.WrappedPasswordKeys,
-      'recovery-secret': WrappedKeysItemId.WrappedRecoveryKeys,
-      control: WrappedKeysItemId.WrappedSeedKeys,
-    });
-  });
-
   describe('envelopes', () => {
-    it('writes an envelope to its partition under the fixed item id', async () => {
+    it('adds an envelope to its partition', async () => {
       const { store, toprfClient } = createStore();
       const envelope = await sealEnvelope(
         envelopeKeys.wrapKey,
@@ -89,12 +107,80 @@ describe('EnvelopeStore', () => {
         encKey: envelopeKeys.wrapKey,
         authKeyPair: envelopeKeys.envAuth,
         secretData: serializeEnvelope(envelope),
-        itemId: WrappedKeysItemId.WrappedRecoveryKeys,
-        dataType: EncAccountDataType.WrappedKeys,
+        dataType: EncAccountDataType.KeyEnvelope,
       });
     });
 
-    it('fetches the envelope of a partition', async () => {
+    it('fetches the envelopes of a path, newest first', async () => {
+      const { store, toprfClient } = createStore();
+      const older = await sealEnvelope(
+        envelopeKeys.wrapKey,
+        'password',
+        vaultKeySet,
+      );
+      const newer = await sealEnvelope(
+        envelopeKeys.wrapKey,
+        'password',
+        vaultKeySet,
+      );
+      const otherPath = await sealEnvelope(
+        envelopeKeys.wrapKey,
+        'recovery-secret',
+        vaultKeySet,
+      );
+      toprfClient.fetchAllSecretDataItems.mockResolvedValue([
+        createItem(serializeEnvelope(newer), { createdAt: '2000' }),
+        createItem(serializeEnvelope(older), { createdAt: '1000' }),
+        createItem(serializeEnvelope(otherPath), { createdAt: '3000' }),
+      ]);
+
+      expect(
+        await store.fetchEnvelopes(envelopeKeys, 'password'),
+      ).toStrictEqual([newer, older]);
+      expect(toprfClient.fetchAllSecretDataItems).toHaveBeenCalledWith({
+        decKey: envelopeKeys.wrapKey,
+        authKeyPair: envelopeKeys.envAuth,
+      });
+    });
+
+    it('orders items by ISO creation time, then by later position', async () => {
+      const { store, toprfClient } = createStore();
+      const [first, second, third] = await Promise.all(
+        [0, 1, 2].map(async () =>
+          sealEnvelope(envelopeKeys.wrapKey, 'password', vaultKeySet),
+        ),
+      );
+      toprfClient.fetchAllSecretDataItems.mockResolvedValue([
+        createItem(serializeEnvelope(first)),
+        createItem(serializeEnvelope(second)),
+        createItem(serializeEnvelope(third), {
+          createdAt: '2026-01-01T00:00:00Z',
+        }),
+      ]);
+
+      expect(
+        await store.fetchEnvelopes(envelopeKeys, 'password'),
+      ).toStrictEqual([third, second, first]);
+    });
+
+    it('treats an unparseable creation time as unknown', async () => {
+      const { store, toprfClient } = createStore();
+      const [first, second] = await Promise.all(
+        [0, 1].map(async () =>
+          sealEnvelope(envelopeKeys.wrapKey, 'password', vaultKeySet),
+        ),
+      );
+      toprfClient.fetchAllSecretDataItems.mockResolvedValue([
+        createItem(serializeEnvelope(first), { createdAt: 'not-a-date' }),
+        createItem(serializeEnvelope(second)),
+      ]);
+
+      expect(
+        await store.fetchEnvelopes(envelopeKeys, 'password'),
+      ).toStrictEqual([second, first]);
+    });
+
+    it('skips items of other types and malformed envelopes', async () => {
       const { store, toprfClient } = createStore();
       const envelope = await sealEnvelope(
         envelopeKeys.wrapKey,
@@ -102,64 +188,34 @@ describe('EnvelopeStore', () => {
         vaultKeySet,
       );
       toprfClient.fetchAllSecretDataItems.mockResolvedValue([
-        {
-          itemId: WrappedKeysItemId.WrappedPasswordKeys,
-          dataType: EncAccountDataType.WrappedKeys,
-          data: serializeEnvelope(envelope),
-          version: 'v2',
-        },
-      ]);
-
-      expect(await store.fetchEnvelope(envelopeKeys, 'password')).toStrictEqual(
-        envelope,
-      );
-      expect(toprfClient.fetchAllSecretDataItems).toHaveBeenCalledWith({
-        decKey: envelopeKeys.wrapKey,
-        authKeyPair: envelopeKeys.envAuth,
-      });
-    });
-
-    it('returns undefined for a partition without the item', async () => {
-      const { store, toprfClient } = createStore();
-      toprfClient.fetchAllSecretDataItems.mockResolvedValue([
-        {
-          itemId: 'other',
-          data: stringToBytes('x'),
-          version: 'v1',
-        },
+        createItem(stringToBytes('x'), {
+          dataType: EncAccountDataType.PrimarySrp,
+        }),
+        createItem(stringToBytes('garbage')),
+        createItem(serializeEnvelope(envelope)),
       ]);
 
       expect(
-        await store.fetchEnvelope(envelopeKeys, 'password'),
-      ).toBeUndefined();
+        await store.fetchEnvelopes(envelopeKeys, 'password'),
+      ).toStrictEqual([envelope]);
     });
 
-    it('throws for a malformed envelope rather than reporting it absent', async () => {
-      const { store, toprfClient } = createStore();
-      toprfClient.fetchAllSecretDataItems.mockResolvedValue([
-        {
-          itemId: WrappedKeysItemId.WrappedPasswordKeys,
-          dataType: EncAccountDataType.WrappedKeys,
-          data: stringToBytes('garbage'),
-          version: 'v2',
-        },
-      ]);
+    it('returns no envelopes for an empty partition', async () => {
+      const { store } = createStore();
 
-      await expect(
-        store.fetchEnvelope(envelopeKeys, 'password'),
-      ).rejects.toThrow(
-        SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
-      );
+      expect(
+        await store.fetchEnvelopes(envelopeKeys, 'password'),
+      ).toStrictEqual([]);
     });
 
-    it('throws fetch errors rather than reporting the envelope absent', async () => {
+    it('throws fetch errors rather than reporting the envelopes absent', async () => {
       const { store, toprfClient } = createStore();
       toprfClient.fetchAllSecretDataItems.mockRejectedValue(
         new Error('network'),
       );
 
       await expect(
-        store.fetchEnvelope(envelopeKeys, 'password'),
+        store.fetchEnvelopes(envelopeKeys, 'password'),
       ).rejects.toThrow(
         SeedlessOnboardingControllerErrorMessage.FailedToFetchSecretMetadata,
       );
@@ -170,47 +226,51 @@ describe('EnvelopeStore', () => {
       const error = new TOPRFError(TOPRFErrorCode.AuthTokenExpired, 'expired');
       toprfClient.fetchAllSecretDataItems.mockRejectedValue(error);
 
-      await expect(store.fetchEnvelope(envelopeKeys, 'password')).rejects.toBe(
+      await expect(store.fetchEnvelopes(envelopeKeys, 'password')).rejects.toBe(
         error,
       );
     });
   });
 
-  describe('control item', () => {
-    it('writes the control item to the control partition', async () => {
+  describe('control records', () => {
+    it('adds a control record to the control partition', async () => {
       const { store, toprfClient } = createStore();
+      const record = createRecord(1);
 
-      await store.writeControlItem(controlKeys, controlItem);
+      await store.writeControlRecord(controlKeys, record);
 
       expect(toprfClient.addSecretDataItem).toHaveBeenCalledWith({
         encKey: controlKeys.ctrlKey,
         authKeyPair: controlKeys.ctrlAuth,
-        secretData: serializeControlItem(controlItem),
-        itemId: WrappedKeysItemId.WrappedSeedKeys,
-        dataType: EncAccountDataType.WrappedKeys,
+        secretData: serializeControlRecord(record),
+        dataType: EncAccountDataType.EnvelopeControl,
       });
     });
 
-    it('fetches the control item', async () => {
+    it('fetches the well-formed control records, newest first', async () => {
       const { store, toprfClient } = createStore();
       toprfClient.fetchAllSecretDataItems.mockResolvedValue([
-        {
-          itemId: WrappedKeysItemId.WrappedSeedKeys,
-          dataType: EncAccountDataType.WrappedKeys,
-          data: serializeControlItem(controlItem),
-          version: 'v2',
-        },
+        createItem(serializeControlRecord(createRecord(1)), {
+          dataType: EncAccountDataType.EnvelopeControl,
+        }),
+        createItem(stringToBytes('garbage'), {
+          dataType: EncAccountDataType.EnvelopeControl,
+        }),
+        createItem(serializeControlRecord(createRecord(2)), {
+          dataType: EncAccountDataType.EnvelopeControl,
+        }),
       ]);
 
-      expect(await store.fetchControlItem(controlKeys)).toStrictEqual(
-        controlItem,
-      );
+      expect(await store.fetchControlRecords(controlKeys)).toStrictEqual([
+        createRecord(2),
+        createRecord(1),
+      ]);
     });
 
-    it('returns undefined when the vault has no control item', async () => {
+    it('returns no records when the vault has none', async () => {
       const { store } = createStore();
 
-      expect(await store.fetchControlItem(controlKeys)).toBeUndefined();
+      expect(await store.fetchControlRecords(controlKeys)).toStrictEqual([]);
     });
   });
 });

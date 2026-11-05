@@ -2,7 +2,6 @@ import { bigIntToHex } from '@metamask/utils';
 import { describe, expect, it } from 'vitest';
 
 import {
-  appendControlRecord,
   deriveEnvelopeKeys,
   deriveKeyPair,
   sealEnvelope,
@@ -48,7 +47,7 @@ async function createPending(): Promise<PendingEnvelopeMigration> {
         ),
       },
     },
-    control: appendControlRecord(undefined, {
+    control: {
       v: 1,
       seq: 1,
       passwordNamespace: {
@@ -59,7 +58,7 @@ async function createPending(): Promise<PendingEnvelopeMigration> {
         enabled: true,
       },
       migratedAt: 1,
-    }),
+    },
   };
 }
 

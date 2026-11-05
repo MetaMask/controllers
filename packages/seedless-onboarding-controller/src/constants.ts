@@ -70,4 +70,5 @@ export enum SeedlessOnboardingControllerErrorMessage {
   EnvelopeVaultKeyMismatch = `${controllerName} - The password does not derive the vault keys`,
   EnvelopeControlRecordNotFound = `${controllerName} - No control record matches the live password key`,
   EnvelopeMigrationRequiresDataTypes = `${controllerName} - Envelope migration requires the data type migration`,
+  RecoveryEnvelopeNotFound = `${controllerName} - No vault keys are sealed for the Recovery Secret`,
 }

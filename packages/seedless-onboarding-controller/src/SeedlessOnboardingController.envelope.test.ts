@@ -39,14 +39,15 @@ import {
   sealEnvelope,
   serializeEnvelope,
 } from './envelope/envelope-keys.js';
-import type { ControlItem, VaultKeySet } from './envelope/envelope-keys.js';
-import { EnvelopeItemId, EnvelopeStore } from './envelope/EnvelopeStore.js';
+import type { ControlRecord, VaultKeySet } from './envelope/envelope-keys.js';
+import { EnvelopeStore } from './envelope/EnvelopeStore.js';
 import { SecretMetadata } from './SecretMetadata.js';
 
 describe('SeedlessOnboardingController', () => {
   describe('MFA recovery', () => {
     const MOCK_PASSWORD = 'mock-password';
     const NEW_PASSWORD = 'new-password';
+    const RECOVERED_PASSWORD = 'recovered-password';
     const RECOVERY_SECRET = new Uint8Array(32).fill(7);
     const RECOVERY_SECRET_HEX = bytesToHex(RECOVERY_SECRET);
     const AAL2_USER_ID = 'mock-profile-id';
@@ -131,7 +132,7 @@ describe('SeedlessOnboardingController', () => {
      * @param options.store - The metadata store, shared between devices.
      * @param options.globalPassword - The global password.
      * @param options.recoverySecret - The registered Recovery Secret, if any.
-     * @param options.droppedItemIds - Item IDs whose writes the store
+     * @param options.droppedDataTypes - Data types whose writes the store
      * acknowledges but does not keep.
      * @returns The mock network.
      */
@@ -141,12 +142,12 @@ describe('SeedlessOnboardingController', () => {
         store = new Map(),
         globalPassword = MOCK_PASSWORD,
         recoverySecret,
-        droppedItemIds = [],
+        droppedDataTypes = [],
       }: {
         store?: MetadataStore;
         globalPassword?: string;
         recoverySecret?: string;
-        droppedItemIds?: string[];
+        droppedDataTypes?: EncAccountDataType[];
       } = {},
     ): MockNetwork {
       let globalKey = { password: globalPassword, keyIndex: 1 };
@@ -204,7 +205,10 @@ describe('SeedlessOnboardingController', () => {
           .spyOn(toprfClient, 'addSecretDataItem')
           .mockImplementation(
             async ({ encKey, authKeyPair, secretData, itemId, dataType }) => {
-              if (itemId !== undefined && droppedItemIds.includes(itemId)) {
+              if (
+                dataType !== undefined &&
+                droppedDataTypes.includes(dataType)
+              ) {
                 return;
               }
               const partitionId = bytesToHex(authKeyPair.pk);
@@ -366,7 +370,7 @@ describe('SeedlessOnboardingController', () => {
      * @param seedSource - The password or Recovery Secret hex the seed is
      * evaluated for.
      * @param path - The envelope path.
-     * @returns The sealed vault key set, or undefined if there is none.
+     * @returns The newest sealed vault key set, or undefined if there is none.
      */
     async function openStoredEnvelope(
       network: MockNetwork,
@@ -374,22 +378,23 @@ describe('SeedlessOnboardingController', () => {
       path: 'password' | 'recovery-secret',
     ): Promise<VaultKeySet | undefined> {
       const keys = deriveEnvelopeKeys(stringToBytes(seedSource));
-      const envelope = await network.envelopeStore.fetchEnvelope(keys, path);
+      const [envelope] = await network.envelopeStore.fetchEnvelopes(keys, path);
       return envelope && (await openEnvelope(envelope, keys.wrapKey, path));
     }
 
     /**
      * @param network - The mock network.
      * @param vaultKeySet - The vault key set.
-     * @returns The stored control item of the vault.
+     * @returns The stored control records of the vault, by ascending `seq`.
      */
-    async function fetchControlItem(
+    async function fetchControlRecords(
       network: MockNetwork,
       vaultKeySet: VaultKeySet = vaultKeySetFor(),
-    ): Promise<ControlItem | undefined> {
-      return await network.envelopeStore.fetchControlItem(
+    ): Promise<ControlRecord[]> {
+      const records = await network.envelopeStore.fetchControlRecords(
         deriveControlKeys(vaultKeySet),
       );
+      return records.sort((a, b) => a.seq - b.seq);
     }
 
     /**
@@ -398,6 +403,92 @@ describe('SeedlessOnboardingController', () => {
      */
     function authPubKeyOf(password: string): string {
       return bytesToBase64(keysFor(password).authKeyPair.pk);
+    }
+
+    /**
+     * Stores the primary seed phrase in the secret data partition of a
+     * vault key set.
+     *
+     * @param store - The metadata store.
+     * @param vaultKeySet - The vault key set.
+     */
+    function storeSeedPhrase(
+      store: MetadataStore,
+      vaultKeySet: VaultKeySet,
+    ): void {
+      store.set(
+        bytesToHex(vaultKeySet.authKeyPair.pk),
+        new Map([
+          [
+            'server-item-0',
+            {
+              encKey: bytesToHex(vaultKeySet.encKey),
+              dataType: EncAccountDataType.PrimarySrp,
+              data: new SecretMetadata(MOCK_SEED_PHRASE, {
+                dataType: EncAccountDataType.PrimarySrp,
+              }).toBytes(),
+            },
+          ],
+        ]),
+      );
+    }
+
+    /**
+     * Runs the callback with an authenticated controller that has no vault.
+     *
+     * @param fn - The callback.
+     * @returns Whatever the callback returns.
+     */
+    async function withNewDeviceController<ReturnValue>(
+      fn: (args: ControllerArgs) => Promise<ReturnValue>,
+    ): Promise<ReturnValue> {
+      return await withController(
+        {
+          state: getMockInitialControllerState({
+            withMockAuthenticatedUser: true,
+          }),
+        },
+        fn,
+      );
+    }
+
+    /**
+     * Migrates a vault on one device, then changes its password to
+     * `NEW_PASSWORD`, leaving the store as a migrated account whose password
+     * has moved on since migration.
+     *
+     * @returns The shared metadata store.
+     */
+    async function createMigratedAccount(): Promise<MetadataStore> {
+      const store: MetadataStore = new Map();
+      await withUnlockedController(async (args) => {
+        await migrate(args, mockNetwork(args.toprfClient, { store }));
+        await args.baseMessenger.call(
+          'SeedlessOnboardingController:changePassword',
+          NEW_PASSWORD,
+          MOCK_PASSWORD,
+        );
+      });
+      storeSeedPhrase(store, vaultKeySetFor());
+      return store;
+    }
+
+    /**
+     * Recovers the account on a new device with the Recovery Secret.
+     *
+     * @param args - The controller test arguments.
+     * @param password - The password of the new local vault.
+     * @returns The recovered secrets.
+     */
+    async function recover(
+      args: ControllerArgs,
+      password: string = RECOVERED_PASSWORD,
+    ): Promise<SecretMetadata[]> {
+      await authenticateAal2(args, { hasRecoveryShare: true });
+      return await args.baseMessenger.call(
+        'SeedlessOnboardingController:recoverWithRecoverySecret',
+        { recoverySecret: RECOVERY_SECRET, password },
+      );
     }
 
     describe('authenticateForRecovery', () => {
@@ -677,23 +768,20 @@ describe('SeedlessOnboardingController', () => {
               'recovery-secret',
             ),
           ).toStrictEqual(vaultKeySet);
-          expect(await fetchControlItem(network)).toStrictEqual({
-            v: 1,
-            records: [
-              {
-                v: 1,
-                seq: 1,
-                passwordNamespace: {
-                  verifier: controller.state.groupedAuthConnectionId,
-                  verifierId: controller.state.userId,
-                  authSk: expect.any(String),
-                  keyIndex: 1,
-                  enabled: true,
-                },
-                migratedAt: expect.any(Number),
+          expect(await fetchControlRecords(network)).toStrictEqual([
+            {
+              v: 1,
+              seq: 1,
+              passwordNamespace: {
+                verifier: controller.state.groupedAuthConnectionId,
+                verifierId: controller.state.userId,
+                authSk: expect.any(String),
+                keyIndex: 1,
+                enabled: true,
               },
-            ],
-          });
+              migratedAt: expect.any(Number),
+            },
+          ]);
           expect(network.spies.acquireMetadataLock).toHaveBeenCalledWith(
             vaultKeySet.authKeyPair,
           );
@@ -727,12 +815,12 @@ describe('SeedlessOnboardingController', () => {
           ).toBe(false);
           expect(
             network.spies.addSecretDataItem.mock.calls.map(
-              ([{ itemId }]) => itemId,
+              ([{ dataType }]) => dataType,
             ),
           ).toStrictEqual([
-            EnvelopeItemId['recovery-secret'],
-            EnvelopeItemId.password,
-            EnvelopeItemId.control,
+            EncAccountDataType.KeyEnvelope,
+            EncAccountDataType.KeyEnvelope,
+            EncAccountDataType.EnvelopeControl,
           ]);
           expect(controller.state.vault).toBe(vault);
           expect(controller.state.authPubKey).toBe(authPubKey);
@@ -892,7 +980,7 @@ describe('SeedlessOnboardingController', () => {
             );
 
             expect(
-              (await fetchControlItem(network))?.records[0].passwordNamespace
+              (await fetchControlRecords(network))[0].passwordNamespace
                 .verifier,
             ).toBe(controller.state.authConnectionId);
           },
@@ -1140,7 +1228,7 @@ describe('SeedlessOnboardingController', () => {
         await withUnlockedController(async (args) => {
           const { controller, toprfClient, baseMessenger } = args;
           mockNetwork(toprfClient, {
-            droppedItemIds: [EnvelopeItemId.control],
+            droppedDataTypes: [EncAccountDataType.EnvelopeControl],
           });
           await authenticateAal2(args, { hasRecoveryShare: false });
 
@@ -1280,12 +1368,13 @@ describe('SeedlessOnboardingController', () => {
           expect(
             await openStoredEnvelope(network, NEW_PASSWORD, 'password'),
           ).toStrictEqual(vaultKeySet);
-          const controlItem = await fetchControlItem(network);
           expect(
-            controlItem?.records.map(({ seq, passwordNamespace }) => ({
-              seq,
-              keyIndex: passwordNamespace.keyIndex,
-            })),
+            (await fetchControlRecords(network)).map(
+              ({ seq, passwordNamespace }) => ({
+                seq,
+                keyIndex: passwordNamespace.keyIndex,
+              }),
+            ),
           ).toStrictEqual([
             { seq: 1, keyIndex: 1 },
             { seq: 2, keyIndex: 2 },
@@ -1318,7 +1407,7 @@ describe('SeedlessOnboardingController', () => {
           const addSecretDataItem =
             network.spies.addSecretDataItem.getMockImplementation();
           network.spies.addSecretDataItem.mockImplementation(async (params) => {
-            order.push(`write:${params.itemId}`);
+            order.push(`write:${params.dataType}`);
             return addSecretDataItem?.(params);
           });
           const persistLocalKey =
@@ -1339,8 +1428,8 @@ describe('SeedlessOnboardingController', () => {
 
           expect(order).toStrictEqual([
             'lock',
-            `write:${EnvelopeItemId.password}`,
-            `write:${EnvelopeItemId.control}`,
+            `write:${EncAccountDataType.KeyEnvelope}`,
+            `write:${EncAccountDataType.EnvelopeControl}`,
             'persist',
             'release',
           ]);
@@ -1381,7 +1470,7 @@ describe('SeedlessOnboardingController', () => {
             await openStoredEnvelope(network, 'newer-password', 'password'),
           ).toStrictEqual(vaultKeySetFor());
           expect(
-            (await fetchControlItem(network))?.records.map(({ seq }) => seq),
+            (await fetchControlRecords(network)).map(({ seq }) => seq),
           ).toStrictEqual([1, 2, 3]);
           expect(controller.state.envelope?.passwordAuthPubKey).toBe(
             authPubKeyOf('newer-password'),
@@ -1692,53 +1781,6 @@ describe('SeedlessOnboardingController', () => {
     });
 
     describe('fetchAllSecretData with a password on a new device', () => {
-      /**
-       * Stores the primary seed phrase in the secret data partition of a
-       * vault key set.
-       *
-       * @param store - The metadata store.
-       * @param vaultKeySet - The vault key set.
-       */
-      function storeSeedPhrase(
-        store: MetadataStore,
-        vaultKeySet: VaultKeySet,
-      ): void {
-        store.set(
-          bytesToHex(vaultKeySet.authKeyPair.pk),
-          new Map([
-            [
-              'server-item-0',
-              {
-                encKey: bytesToHex(vaultKeySet.encKey),
-                dataType: EncAccountDataType.PrimarySrp,
-                data: new SecretMetadata(MOCK_SEED_PHRASE, {
-                  dataType: EncAccountDataType.PrimarySrp,
-                }).toBytes(),
-              },
-            ],
-          ]),
-        );
-      }
-
-      /**
-       * Runs the callback with an authenticated controller that has no vault.
-       *
-       * @param fn - The callback.
-       * @returns Whatever the callback returns.
-       */
-      async function withNewDeviceController<ReturnValue>(
-        fn: (args: ControllerArgs) => Promise<ReturnValue>,
-      ): Promise<ReturnValue> {
-        return await withController(
-          {
-            state: getMockInitialControllerState({
-              withMockAuthenticatedUser: true,
-            }),
-          },
-          fn,
-        );
-      }
-
       it('restores with the vault keys sealed for the password after an envelope password change', async () => {
         const store: MetadataStore = new Map();
         await withUnlockedController(async (args) => {
@@ -1827,6 +1869,367 @@ describe('SeedlessOnboardingController', () => {
           expect(
             await controller.checkIsPasswordOutdated({ skipCache: true }),
           ).toBe(true);
+        });
+      });
+    });
+
+    describe('recoverWithRecoverySecret', () => {
+      it('restores with the vault keys sealed for the Recovery Secret on a new device', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient } = args;
+          const network = mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+
+          const secrets = await recover(args);
+
+          expect(secrets.map(({ data }) => data)).toStrictEqual([
+            MOCK_SEED_PHRASE,
+          ]);
+          expect(network.spies.recoverEncKey).toHaveBeenCalledTimes(1);
+          expect(network.spies.recoverEncKey).toHaveBeenCalledWith(
+            expect.objectContaining({
+              nodeAuthTokens: AAL2_NODE_AUTH_TOKENS,
+              authConnectionId: AAL2_AUTH_CONNECTION_ID,
+              userId: AAL2_USER_ID,
+              password: RECOVERY_SECRET_HEX,
+            }),
+          );
+          expect(network.spies.createLocalKey).not.toHaveBeenCalled();
+          expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
+          expect(controller.state.authPubKey).toBe(authPubKeyOf(MOCK_PASSWORD));
+          expect(controller.state.envelope).toStrictEqual({
+            v: 1,
+            vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+          });
+          expect(
+            await controller.verifyVaultPassword(RECOVERED_PASSWORD),
+          ).toBeUndefined();
+        });
+      });
+
+      it('reports the password as outdated until it is synced with the global password', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient } = args;
+          mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
+
+          expect(
+            await controller.checkIsPasswordOutdated({ skipCache: true }),
+          ).toBe(true);
+
+          await controller.syncLatestGlobalPassword({
+            globalPassword: NEW_PASSWORD,
+          });
+
+          expect(controller.state.envelope).toStrictEqual({
+            v: 1,
+            vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+            passwordAuthPubKey: authPubKeyOf(NEW_PASSWORD),
+          });
+          expect(
+            await controller.checkIsPasswordOutdated({ skipCache: true }),
+          ).toBe(false);
+        });
+      });
+
+      it('throws RecoveryEnvelopeNotFound when the nodes hold no Recovery Secret share', async () => {
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient, baseMessenger } = args;
+          const network = mockNetwork(toprfClient);
+          await authenticateAal2(args, { hasRecoveryShare: false });
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:recoverWithRecoverySecret',
+              { recoverySecret: RECOVERY_SECRET, password: RECOVERED_PASSWORD },
+            ),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.RecoveryEnvelopeNotFound,
+          );
+          expect(network.spies.recoverEncKey).not.toHaveBeenCalled();
+          expect(controller.state.vault).toBeUndefined();
+        });
+      });
+
+      it('throws RecoveryEnvelopeNotFound when the Recovery Secret has no envelope', async () => {
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient } = args;
+          mockNetwork(toprfClient, { recoverySecret: RECOVERY_SECRET_HEX });
+
+          await expect(recover(args)).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.RecoveryEnvelopeNotFound,
+          );
+          expect(controller.state.vault).toBeUndefined();
+          expect(controller.state.envelope).toBeUndefined();
+        });
+      });
+
+      it('throws InvalidEnvelope when no envelope opens', async () => {
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient } = args;
+          const network = mockNetwork(toprfClient, {
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await network.envelopeStore.writeEnvelope(
+            deriveEnvelopeKeys(stringToBytes(RECOVERY_SECRET_HEX)),
+            await sealEnvelope(
+              deriveEnvelopeKeys(stringToBytes('other-seed')).wrapKey,
+              'recovery-secret',
+              vaultKeySetFor(),
+            ),
+          );
+
+          await expect(recover(args)).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.InvalidEnvelope,
+          );
+          expect(controller.state.vault).toBeUndefined();
+        });
+      });
+
+      it('throws RecoveryKeyShareConflict for another Recovery Secret', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient } = args;
+          mockNetwork(toprfClient, {
+            store,
+            recoverySecret: bytesToHex(new Uint8Array(32).fill(8)),
+          });
+
+          await expect(recover(args)).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.RecoveryKeyShareConflict,
+          );
+          expect(controller.state.vault).toBeUndefined();
+        });
+      });
+
+      it('throws Aal2Required without a recovery session', async () => {
+        await withNewDeviceController(
+          async ({ toprfClient, baseMessenger }) => {
+            const network = mockNetwork(toprfClient, {
+              recoverySecret: RECOVERY_SECRET_HEX,
+            });
+
+            await expect(
+              baseMessenger.call(
+                'SeedlessOnboardingController:recoverWithRecoverySecret',
+                {
+                  recoverySecret: RECOVERY_SECRET,
+                  password: RECOVERED_PASSWORD,
+                },
+              ),
+            ).rejects.toThrow(
+              SeedlessOnboardingControllerErrorMessage.Aal2Required,
+            );
+            expect(network.spies.recoverEncKey).not.toHaveBeenCalled();
+          },
+        );
+      });
+
+      it('does not create a vault when the vault holds no secret data', async () => {
+        const store = await createMigratedAccount();
+        store.delete(bytesToHex(vaultKeySetFor().authKeyPair.pk));
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient } = args;
+          mockNetwork(toprfClient, {
+            store,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+
+          await expect(recover(args)).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.NoSecretDataFound,
+          );
+          expect(controller.state.vault).toBeUndefined();
+          expect(controller.state.envelope).toBeUndefined();
+        });
+      });
+    });
+
+    describe('resetPasswordWithVaultKeys', () => {
+      it('sets a new global password after recovery without the old password', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient, baseMessenger } = args;
+          const network = mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
+          const changeEncKeySpy = vi.spyOn(toprfClient, 'changeEncKey');
+
+          await baseMessenger.call(
+            'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+            { newPassword: RECOVERED_PASSWORD },
+          );
+
+          expect(changeEncKeySpy).not.toHaveBeenCalled();
+          expect(network.spies.persistLocalKey).toHaveBeenCalledWith(
+            expect.objectContaining({
+              authConnectionId: controller.state.authConnectionId,
+              authPubKey: keysFor(RECOVERED_PASSWORD).authKeyPair.pk,
+              keyShareIndex: 1,
+              oldAuthKeyPair: {
+                sk: keysFor(NEW_PASSWORD).authKeyPair.sk,
+                pk: expect.any(Uint8Array),
+              },
+            }),
+          );
+          expect(
+            await openStoredEnvelope(network, RECOVERED_PASSWORD, 'password'),
+          ).toStrictEqual(vaultKeySetFor());
+          expect(
+            (await fetchControlRecords(network)).map(({ seq }) => seq),
+          ).toStrictEqual([1, 2, 3]);
+          expect(controller.state.authPubKey).toBe(authPubKeyOf(MOCK_PASSWORD));
+          expect(controller.state.envelope).toStrictEqual({
+            v: 1,
+            vaultAuthPubKey: authPubKeyOf(MOCK_PASSWORD),
+            passwordAuthPubKey: authPubKeyOf(RECOVERED_PASSWORD),
+          });
+          expect(
+            await controller.checkIsPasswordOutdated({ skipCache: true }),
+          ).toBe(false);
+          expect(
+            await controller.verifyVaultPassword(RECOVERED_PASSWORD),
+          ).toBeUndefined();
+        });
+
+        await withNewDeviceController(async ({ controller, toprfClient }) => {
+          mockNetwork(toprfClient, {
+            store,
+            globalPassword: RECOVERED_PASSWORD,
+          });
+
+          const secrets =
+            await controller.fetchAllSecretData(RECOVERED_PASSWORD);
+
+          expect(secrets.map(({ data }) => data)).toStrictEqual([
+            MOCK_SEED_PHRASE,
+          ]);
+        });
+      });
+
+      it('re-encrypts the vault under the new password and keeps the keyring encryption key', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient, baseMessenger } = args;
+          mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
+          await controller.storeKeyringEncryptionKey('keyring-key');
+
+          await baseMessenger.call(
+            'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+            { newPassword: 'reset-password' },
+          );
+
+          expect(
+            await controller.verifyVaultPassword('reset-password'),
+          ).toBeUndefined();
+          expect(await controller.loadKeyringEncryptionKey()).toBe(
+            'keyring-key',
+          );
+        });
+      });
+
+      it('throws EnvelopeControlRecordNotFound on a vault that is not envelope-managed', async () => {
+        await withUnlockedController(async ({ toprfClient, baseMessenger }) => {
+          const network = mockNetwork(toprfClient);
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+              { newPassword: NEW_PASSWORD },
+            ),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.EnvelopeControlRecordNotFound,
+          );
+          expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
+        });
+      });
+
+      it('throws EnvelopeControlRecordNotFound when no control record matches the password OPRF key', async () => {
+        await withUnlockedController(async (args) => {
+          const { controller, toprfClient, baseMessenger } = args;
+          const network = mockNetwork(toprfClient);
+          await migrate(args, network);
+          // a legacy password change elsewhere left no control record behind
+          network.setGlobalPassword('other-password');
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+              { newPassword: NEW_PASSWORD },
+            ),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.EnvelopeControlRecordNotFound,
+          );
+          expect(network.spies.persistLocalKey).not.toHaveBeenCalled();
+          expect(
+            await controller.verifyVaultPassword(MOCK_PASSWORD),
+          ).toBeUndefined();
+        });
+      });
+
+      it('keeps the vault under the old password when swapping the key fails', async () => {
+        const store = await createMigratedAccount();
+
+        await withNewDeviceController(async (args) => {
+          const { controller, toprfClient, baseMessenger } = args;
+          const network = mockNetwork(toprfClient, {
+            store,
+            globalPassword: NEW_PASSWORD,
+            recoverySecret: RECOVERY_SECRET_HEX,
+          });
+          await recover(args);
+          network.spies.persistLocalKey.mockRejectedValueOnce(
+            new Error('persist'),
+          );
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+              { newPassword: 'reset-password' },
+            ),
+          ).rejects.toThrow('persist');
+
+          expect(
+            await controller.verifyVaultPassword(RECOVERED_PASSWORD),
+          ).toBeUndefined();
+          expect(controller.state.envelope?.passwordAuthPubKey).toBeUndefined();
+        });
+      });
+
+      it('throws ControllerLocked when locked', async () => {
+        await withUnlockedController(async ({ baseMessenger }) => {
+          await baseMessenger.call('SeedlessOnboardingController:setLocked');
+
+          await expect(
+            baseMessenger.call(
+              'SeedlessOnboardingController:resetPasswordWithVaultKeys',
+              { newPassword: NEW_PASSWORD },
+            ),
+          ).rejects.toThrow(
+            SeedlessOnboardingControllerErrorMessage.ControllerLocked,
+          );
         });
       });
     });
