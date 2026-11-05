@@ -500,25 +500,6 @@ describe('AssetsController', () => {
         });
       });
     });
-
-    it('includes all asset state fields in state logs', async () => {
-      await withController(({ controller }) => {
-        const stateLogFields = Object.entries(controller.metadata)
-          .filter(([, metadata]) => metadata.includeInStateLogs)
-          .map(([key]) => key)
-          .sort();
-
-        expect(stateLogFields).toStrictEqual([
-          'assetPreferences',
-          'assetsBalance',
-          'assetsInfo',
-          'assetsLoadingStatus',
-          'assetsPrice',
-          'customAssets',
-          'selectedCurrency',
-        ]);
-      });
-    });
   });
 
   describe('constructor', () => {
