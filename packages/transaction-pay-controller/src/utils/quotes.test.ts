@@ -9,6 +9,7 @@ import { getMessengerMock } from '../../tests/messenger-mock.js';
 import { mockModuleExcept } from '../../tests/mock-module-except.js';
 import { TransactionPayStrategy } from '../constants.js';
 import type {
+  PayStrategyGetQuotesRequest,
   TransactionPaySourceAmount,
   TransactionData,
   TransactionPayQuote,
@@ -1981,29 +1982,37 @@ describe('Quotes Utils', () => {
       );
     });
 
-    it('uses the transaction account as from for post-quote flow with accountOverride', async () => {
-      const accountOverride =
-        '0xrecipient0000000000000000000000000000001' as Hex;
+    it.each([
+      ['no account override', undefined],
+      ['an account override', '0xrecipient0000000000000000000000000000001'],
+    ])(
+      'uses the transaction account as from for post-quote flow with %s',
+      async (_title, accountOverride) => {
+        const refundTo = '0xsafe000000000000000000000000000000000001' as Hex;
 
-      await run({
-        transactionData: {
-          ...POST_QUOTE_TRANSACTION_DATA,
-          accountOverride,
-        },
-      });
+        await run({
+          transactionData: {
+            ...POST_QUOTE_TRANSACTION_DATA,
+            accountOverride: accountOverride as Hex | undefined,
+            refundTo,
+          },
+        });
 
-      expect(getQuotesMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requests: [
-            expect.objectContaining({
-              accountOverride,
-              isPostQuote: true,
-              from: TRANSACTION_META_MOCK.txParams.from,
-            }),
-          ],
-        }),
-      );
-    });
+        const [{ from, requests }] = getQuotesMock.mock.calls[0] as [
+          PayStrategyGetQuotesRequest,
+        ];
+
+        expect(from).toBe(TRANSACTION_META_MOCK.txParams.from);
+        expect(requests).toStrictEqual([
+          expect.objectContaining({
+            from: TRANSACTION_META_MOCK.txParams.from,
+            isPostQuote: true,
+            refundTo,
+          }),
+        ]);
+        expect(requests[0].accountOverride).toBe(accountOverride);
+      },
+    );
 
     it('uses accountOverride as from for non-post-quote flow', async () => {
       const accountOverride =
