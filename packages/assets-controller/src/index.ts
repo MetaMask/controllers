@@ -94,6 +94,9 @@ export type {
   DataResponse,
   AssetsUpdateMode,
   AssetsLoadingStatus,
+  AssetsFetchPhase,
+  AssetsFetchPhaseStatus,
+  AssetsFetchStatus,
   // Middleware types
   Context,
   NextFunction,

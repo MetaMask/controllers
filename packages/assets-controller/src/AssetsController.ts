@@ -493,6 +493,12 @@ const stateMetadata: StateMetadata<AssetsControllerState> = {
     includeInDebugSnapshot: true,
     usedInUi: true,
   },
+  assetsFetchStatus: {
+    persist: false,
+    includeInStateLogs: true,
+    includeInDebugSnapshot: true,
+    usedInUi: true,
+  },
 };
 
 // ============================================================================

@@ -516,6 +516,17 @@ describe('AssetsController', () => {
       });
     });
 
+    it('declares assetsFetchStatus as non persisted, logged and used in the UI', async () => {
+      await withController(({ controller }) => {
+        expect(controller.metadata.assetsFetchStatus).toStrictEqual({
+          persist: false,
+          includeInStateLogs: true,
+          includeInDebugSnapshot: true,
+          usedInUi: true,
+        });
+      });
+    });
+
     it('initializes with provided state', async () => {
       const initialState: Partial<AssetsControllerState> = {
         assetsInfo: {
