@@ -84,25 +84,33 @@ export type MoneyAccountLifecycleControllerUpgradeMoneyAccountAction = {
 
 /**
  * Starts migrating the primary Money Account from its SFA address to a new
- * MFA address.
+ * MFA address, or resumes its migration if one is already in flight.
  *
  * Reads the profile's identities fresh from CHOMP and records them, then
- * only proceeds when the wallet is still ready, no identity is migrating, and
- * the Money Account is a valid SFA in no other identity. Asks
- * `MoneyAccountController` to create the MPC Money Account, or returns the
- * one an earlier attempt created. Creating it may run the MPC setup, so
- * afterwards the identities are read and checked again, and the MFA address
- * must not be part of any identity. CHOMP itself rejects linking an MFA
- * address that already has active intents.
+ * only proceeds when the wallet is still ready and the Money Account is in
+ * no other identity. If the Money Account is migrating, and no other
+ * identity is, the migration is resumed, but only towards the MPC Money
+ * Account of this wallet, which has to sign the successor's steps.
  *
- * Then links the MFA address as the successor of the Money Account through
- * `MoneyAccountUpgradeController`, which starts the migration on CHOMP and
- * freezes the Money Account until it completes, and refetches identities so
- * the recorded lifecycle becomes `migrating`. The remaining migration steps
- * are not driven yet.
+ * Otherwise, the Money Account must be a valid SFA and no identity may be
+ * migrating. Asks `MoneyAccountController` to create the MPC Money Account,
+ * or returns the one an earlier attempt created. Creating it may run the
+ * MPC setup, so afterwards the identities are read and checked again, and
+ * the MFA address must not be part of any identity. CHOMP itself rejects
+ * linking an MFA address that already has active intents.
+ *
+ * Then, through `MoneyAccountUpgradeController`, links the MFA address as
+ * the successor of the Money Account and upgrades it, which starts the
+ * migration on CHOMP and freezes the Money Account until it completes, and
+ * registers the intents the Money Account signs for the migration. Both
+ * only do the work CHOMP reports missing. Identities are then refetched, so
+ * the recorded lifecycle becomes `migrating`, even when registering the
+ * intents fails. CHOMP moves the funds once every step is complete.
+ *
+ * The subscription intent of a premium migration is not registered.
  *
  * @throws If a migration or Money Account upgrade is already in flight, the
- * checks fail, or linking the successor fails.
+ * checks fail, or linking the successor or registering the intents fails.
  */
 export type MoneyAccountLifecycleControllerStartMigrationAction = {
   type: `MoneyAccountLifecycleController:startMigration`;
