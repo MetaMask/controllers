@@ -14,7 +14,7 @@ import {
   toReversed,
   trunc28Mul8,
 } from './cip3';
-import fixtures from '../../test/fixtures';
+import fixtures from '../../tests/fixtures';
 import { BIP_32_HARDENED_OFFSET } from '../constants';
 import { ed25519, ed25519Bip32 } from '../curves';
 import { SLIP10Node } from '../SLIP10Node';

@@ -12,7 +12,7 @@ import type { CryptographicFunctions } from './cryptography';
 import { hmacSha512, pbkdf2Sha512 } from './cryptography';
 import { encodeExtendedKey } from './extended-keys';
 import { mnemonicPhraseToBytes } from './utils';
-import fixtures from '../test/fixtures';
+import fixtures from '../tests/fixtures';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);

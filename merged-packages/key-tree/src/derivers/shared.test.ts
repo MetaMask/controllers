@@ -1,7 +1,7 @@
 import { hexToBytes } from '@metamask/utils';
 
 import { privateAdd } from './shared';
-import fixtures from '../../test/fixtures';
+import fixtures from '../../tests/fixtures';
 import { secp256k1 } from '../curves';
 import { curve } from '../curves/secp256k1';
 import { hexStringToBytes } from '../utils';

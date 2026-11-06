@@ -144,7 +144,7 @@ still access them by importing `@metamask/key-tree/derivation`.
 ## Security
 
 This package is rigorously tested against reference implementations and the [SLIP-10] and [BIP-32] specifications.
-See the [reference implementation tests](./test/reference-implementations.test.ts) for details.
+See the [reference implementation tests](tests/reference-implementations.test.ts) for details.
 
 ## Further Reading
 

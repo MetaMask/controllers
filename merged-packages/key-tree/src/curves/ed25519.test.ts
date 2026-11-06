@@ -8,7 +8,7 @@ import {
   isValidPrivateKey,
   publicAdd,
 } from './ed25519';
-import fixtures from '../../test/fixtures';
+import fixtures from '../../tests/fixtures';
 
 describe('ed25519', () => {
   describe('curve', () => {
