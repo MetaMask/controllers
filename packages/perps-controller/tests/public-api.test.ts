@@ -21,6 +21,7 @@ import {
   HYPERLIQUID_L1_ACTION_DOMAIN_NAME,
   HYPERLIQUID_L1_ACTION_PRIMARY_TYPE,
   PerpsController,
+  TP_SL_PRECISION_CONFIG,
   calculateAccountSummary,
   calculatePercentageForPrice,
   calculatePriceForPercentage,
@@ -297,6 +298,15 @@ describe('@metamask/perps-controller public API', () => {
     expect(isStopLossSafeFromLiquidation('1900', '2000', 'long')).toBe(false);
     expect(validation).toBe('valid');
     expect(formatRoePercent(12.5, { signed: true })).toBe('+12.50');
+    expect(TP_SL_PRECISION_CONFIG).toStrictEqual({
+      TriggerPriceBands: [
+        { BelowPrice: 0.01, Decimals: 8 },
+        { BelowPrice: 1, Decimals: 6 },
+        { BelowPrice: 100, Decimals: 4 },
+      ],
+      TriggerPriceDefaultDecimals: 2,
+      PercentageDecimals: 2,
+    });
     expect(getCrossCollateral(accountParams.crossMarginSummary, 0)).toBeCloseTo(
       10.4,
     );

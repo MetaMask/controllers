@@ -12,12 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export shared TP/SL calculations so Mobile, Extension and Terminal compute the same RoE and trigger prices ([#11343](https://github.com/MetaMask/core/pull/11343))
   - `calculatePriceForRoE` and `calculateSignedRoEForPrice` convert between a trigger price and a signed RoE (positive at a gain, negative at a loss, for take profit and stop loss alike), scaled by leverage, with a stop loss's loss capped at 99% per 1x of leverage
   - `calculateRoEForPrice` returns the RoE on the trigger's own side, a take profit's gain or a stop loss's loss, and zero for a trigger on the wrong side
+  - The RoE calculations need a known `leverage`: they return `''` while it is missing rather than assume 1x, and `''` for a non-finite price, leverage or RoE
   - `calculatePriceForPercentage` and `calculatePercentageForPrice` convert between a trigger price and a price move
-  - `calculatePriceForRoE` and `calculatePriceForPercentage` keep the decimals a trigger price needs at its price, up to 8 below $0.01, without trailing zeros; the provider rounds the price to the asset's precision when the order is sent
+  - `calculatePriceForRoE` and `calculatePriceForPercentage` keep the decimals a trigger price needs at its price, as set by `TP_SL_PRECISION_CONFIG`, without trailing zeros; the provider rounds the price to the asset's precision when the order is sent
   - `getMaxStopLossPercentage` and `isValidStopLossPercentage` bound the stop loss percentage
   - `isPositiveTriggerPrice`, `isValidTakeProfitPrice`, `isValidStopLossPrice` and `isStopLossSafeFromLiquidation` check a trigger price's sign, side and distance from liquidation
   - `validateTPSLPrices` checks a take profit and stop loss pair and returns `valid`, `invalid` or `unresolved`. A set price that does not read as a positive number, or a stop loss beyond liquidation, is `invalid` even without a reference price; a set price that cannot be checked for lack of a reference price, side or readable liquidation price is `unresolved`
   - `formatRoePercent` rounds a RoE for display
+  - `TP_SL_PRECISION_CONFIG` sets the decimals these calculations keep: per price band on a trigger price, and on a RoE or price-move percentage
   - Types `TpslCalculationParams` and `TpslValidationResult`
 - Export `calculateAccountSummary` and `getCrossCollateral` to derive account ratio, account leverage and cross margin usage from `AccountState.crossMarginSummary`, with account leverage as cross notional over total account equity, isolated margin included, as Hyperliquid computes it ([#11343](https://github.com/MetaMask/core/pull/11343))
   - Types `PerpsAccountSummary`, `CalculateAccountSummaryParams` and `CrossMarginSummaryInput`

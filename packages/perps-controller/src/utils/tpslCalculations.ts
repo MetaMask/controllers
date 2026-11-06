@@ -8,7 +8,7 @@
  * For a long, a take profit sits above the reference price and a stop loss
  * below it; for a short, the other way round.
  */
-import { DECIMAL_PRECISION_CONFIG } from '../constants/perpsConfig.js';
+import { TP_SL_PRECISION_CONFIG } from '../constants/perpsConfig.js';
 import type { OrderDirection } from '../types/index.js';
 import { parseFormattedPrice } from './stringParseUtils.js';
 
@@ -20,7 +20,10 @@ export type TpslCalculationParams = {
   currentPrice: number;
   /** Position or order side. */
   direction?: OrderDirection;
-  /** Position leverage. Defaults to 1. */
+  /**
+   * Position leverage. The RoE calculations need it and return '' while it is
+   * unknown: they never assume 1x.
+   */
   leverage?: number;
   /** Entry price of an existing position. RoE is measured from it when set. */
   entryPrice?: number;
@@ -55,22 +58,27 @@ function isAboveReference(
 }
 
 /**
- * Decimal places for a trigger price: more for low-priced assets.
+ * Whether a value is a finite number above zero.
+ *
+ * @param value - The value to check.
+ * @returns True for a finite number above zero.
+ */
+function isPositiveFinite(value: number | undefined): value is number {
+  return value !== undefined && Number.isFinite(value) && value > 0;
+}
+
+/**
+ * Decimal places for a trigger price, from `TP_SL_PRECISION_CONFIG`: more for
+ * low-priced assets.
  *
  * @param price - The trigger price.
  * @returns The number of decimal places to keep.
  */
 function getTriggerPriceDecimals(price: number): number {
-  if (price < 0.01) {
-    return 8;
-  }
-  if (price < 1) {
-    return DECIMAL_PRECISION_CONFIG.MaxPriceDecimals;
-  }
-  if (price < 100) {
-    return 4;
-  }
-  return 2;
+  const band = TP_SL_PRECISION_CONFIG.TriggerPriceBands.find(
+    ({ BelowPrice }) => price < BelowPrice,
+  );
+  return band?.Decimals ?? TP_SL_PRECISION_CONFIG.TriggerPriceDefaultDecimals;
 }
 
 /**
@@ -112,19 +120,24 @@ function getBasePrice(params: TpslCalculationParams): number {
  * @param price - The trigger price; may carry `$` or `,` formatting.
  * @param params - Price context.
  * @returns The RoE in percent, or undefined without a usable price, side or
- * leverage.
+ * leverage: each price and the leverage must be finite and above zero.
  */
 function getSignedRoE(
   price: string,
   params: TpslCalculationParams,
 ): number | undefined {
-  const { direction, leverage = 1 } = params;
+  const { direction, leverage } = params;
   const basePrice = getBasePrice(params);
-  if (!basePrice || basePrice <= 0 || !price || !direction || !(leverage > 0)) {
+  if (
+    !price ||
+    !direction ||
+    !isPositiveFinite(basePrice) ||
+    !isPositiveFinite(leverage)
+  ) {
     return undefined;
   }
   const triggerPrice = parseFormattedPrice(price);
-  if (Number.isNaN(triggerPrice) || triggerPrice <= 0) {
+  if (!isPositiveFinite(triggerPrice)) {
     return undefined;
   }
   const roe = ((triggerPrice - basePrice) / basePrice) * leverage * 100;
@@ -145,7 +158,8 @@ function getSignedRoE(
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
  * @returns The trigger price as a string, or '' without a usable price, side,
- * leverage or RoE.
+ * leverage or RoE: the base price and leverage must be finite and above zero,
+ * and the RoE finite.
  * @example calculatePriceForRoE(-10, false, { currentPrice: 2500, direction: 'long', leverage: 2 }) => '2375'
  */
 export function calculatePriceForRoE(
@@ -153,9 +167,14 @@ export function calculatePriceForRoE(
   isProfit: boolean,
   params: TpslCalculationParams,
 ): string {
-  const { direction, leverage = 1 } = params;
+  const { direction, leverage } = params;
   const basePrice = getBasePrice(params);
-  if (!basePrice || basePrice <= 0 || !direction || !(leverage > 0)) {
+  if (
+    !direction ||
+    !isPositiveFinite(basePrice) ||
+    !isPositiveFinite(leverage) ||
+    !Number.isFinite(roePercentage)
+  ) {
     return '';
   }
 
@@ -176,15 +195,19 @@ export function calculatePriceForRoE(
  *
  * @param price - The trigger price; may carry `$` or `,` formatting.
  * @param params - Price context.
- * @returns The RoE in percent with two decimals, or '' without a usable price,
- * side or leverage.
+ * @returns The RoE in percent with `TP_SL_PRECISION_CONFIG.PercentageDecimals`
+ * decimals, or '' without a usable price, side or leverage.
  * @example calculateSignedRoEForPrice('2375', { currentPrice: 2500, direction: 'long', leverage: 2 }) => '-10.00'
  */
 export function calculateSignedRoEForPrice(
   price: string,
   params: TpslCalculationParams,
 ): string {
-  return getSignedRoE(price, params)?.toFixed(2) ?? '';
+  return (
+    getSignedRoE(price, params)?.toFixed(
+      TP_SL_PRECISION_CONFIG.PercentageDecimals,
+    ) ?? ''
+  );
 }
 
 /**
@@ -195,8 +218,8 @@ export function calculateSignedRoEForPrice(
  * @param price - The trigger price; may carry `$` or `,` formatting.
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
- * @returns The RoE in percent with two decimals, or '' without a usable price,
- * side or leverage.
+ * @returns The RoE in percent with `TP_SL_PRECISION_CONFIG.PercentageDecimals`
+ * decimals, or '' without a usable price, side or leverage.
  * @example calculateRoEForPrice('2375', true, { currentPrice: 2500, direction: 'long', leverage: 2 }) => '0.00'
  */
 export function calculateRoEForPrice(
@@ -209,7 +232,9 @@ export function calculateRoEForPrice(
     return '';
   }
   const isWrongSide = isProfit ? roe < 0 : roe > 0;
-  return (isWrongSide ? 0 : roe).toFixed(2);
+  return (isWrongSide ? 0 : roe).toFixed(
+    TP_SL_PRECISION_CONFIG.PercentageDecimals,
+  );
 }
 
 /**
@@ -219,8 +244,9 @@ export function calculateRoEForPrice(
  * @param percentage - Price move in percent.
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
- * @returns The trigger price, with the decimals its price range needs (up to
- * 8 below $0.01), or '' without a current price, side or finite percentage.
+ * @returns The trigger price, with the decimals its price range needs (see
+ * `TP_SL_PRECISION_CONFIG`), or '' without a current price, side or finite
+ * percentage.
  * @example calculatePriceForPercentage(10, true, { currentPrice: 0.001, direction: 'long' }) => '0.0011'
  */
 export function calculatePriceForPercentage(
@@ -246,8 +272,8 @@ export function calculatePriceForPercentage(
  * @param price - The trigger price; may carry `$` or `,` formatting.
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
- * @returns The move in percent with two decimals, or '' without a usable
- * price or side.
+ * @returns The move in percent with `TP_SL_PRECISION_CONFIG.PercentageDecimals`
+ * decimals, or '' without a usable price or side: both prices must be finite.
  */
 export function calculatePercentageForPrice(
   price: string,
@@ -255,15 +281,17 @@ export function calculatePercentageForPrice(
   params: TpslCalculationParams,
 ): string {
   const { currentPrice, direction } = params;
-  if (!currentPrice || !direction || !price) {
+  if (!currentPrice || !Number.isFinite(currentPrice) || !direction || !price) {
     return '';
   }
   const triggerPrice = parseFormattedPrice(price);
-  if (Number.isNaN(triggerPrice)) {
+  if (!Number.isFinite(triggerPrice)) {
     return '';
   }
   const priceDiff = triggerPrice - currentPrice;
-  const percentage = Math.abs((priceDiff / currentPrice) * 100).toFixed(2);
+  const percentage = Math.abs((priceDiff / currentPrice) * 100).toFixed(
+    TP_SL_PRECISION_CONFIG.PercentageDecimals,
+  );
   const isExpectedSide = isAboveReference(direction, isProfit)
     ? priceDiff > 0
     : priceDiff < 0;
@@ -417,8 +445,7 @@ export type TpslValidationResult = 'valid' | 'invalid' | 'unresolved';
  * @returns True for a usable price.
  */
 function isReadableTriggerPrice(price: string): boolean {
-  const triggerPrice = parseFormattedPrice(price);
-  return Number.isFinite(triggerPrice) && triggerPrice > 0;
+  return isPositiveFinite(parseFormattedPrice(price));
 }
 
 /**
@@ -470,9 +497,10 @@ export function validateTPSLPrices(
 }
 
 /**
- * Format a RoE percentage for display, without the `%` sign: rounded to two
- * decimals, whole numbers without decimals, `-` for a loss and, when
- * `signed`, `+` for a gain. A value that rounds to zero has no sign.
+ * Format a RoE percentage for display, without the `%` sign: rounded to
+ * `TP_SL_PRECISION_CONFIG.PercentageDecimals` decimals, whole numbers without
+ * decimals, `-` for a loss and, when `signed`, `+` for a gain. A value that
+ * rounds to zero has no sign.
  *
  * @param value - RoE in percent, as a number or numeric string.
  * @param options - Formatting options.
@@ -490,10 +518,12 @@ export function formatRoePercent(
   if (!Number.isFinite(roe)) {
     return '';
   }
-  const rounded = Math.round(Math.abs(roe) * 100) / 100;
+  const { PercentageDecimals } = TP_SL_PRECISION_CONFIG;
+  const scale = 10 ** PercentageDecimals;
+  const rounded = Math.round(Math.abs(roe) * scale) / scale;
   const magnitude = Number.isInteger(rounded)
-    ? rounded.toFixed(0)
-    : rounded.toFixed(2);
+    ? rounded.toString()
+    : rounded.toFixed(PercentageDecimals);
   if (rounded === 0) {
     return magnitude;
   }

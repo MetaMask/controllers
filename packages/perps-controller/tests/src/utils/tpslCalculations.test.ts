@@ -28,6 +28,12 @@ const long2x: TpslCalculationParams = {
 const short2x: TpslCalculationParams = { ...long2x, direction: 'short' };
 const long10x: TpslCalculationParams = { ...long2x, leverage: 10 };
 const short10x: TpslCalculationParams = { ...short2x, leverage: 10 };
+// The same long before its leverage is known.
+const longUnknownLeverage: TpslCalculationParams = {
+  currentPrice: 2500,
+  entryPrice: 2500,
+  direction: 'long',
+};
 
 const SIGNED_ROE_ROWS: {
   side: string;
@@ -150,8 +156,21 @@ describe('calculateSignedRoEForPrice', () => {
       calculateSignedRoEForPrice('2750', {
         currentPrice: 2500,
         direction: 'long',
+        leverage: 1,
       }),
     ).toBe('10.00');
+  });
+
+  it('reads 2625 as 5.00 RoE for a long at an explicit 1x leverage', () => {
+    const long1x = { ...longUnknownLeverage, leverage: 1 };
+    expect(calculateSignedRoEForPrice('2625', long1x)).toBe('5.00');
+    expect(calculateRoEForPrice('2625', true, long1x)).toBe('5.00');
+  });
+
+  it('has no RoE while the leverage is unknown', () => {
+    expect(calculateSignedRoEForPrice('2625', longUnknownLeverage)).toBe('');
+    expect(calculateRoEForPrice('2625', true, longUnknownLeverage)).toBe('');
+    expect(calculateRoEForPrice('2375', false, longUnknownLeverage)).toBe('');
   });
 
   it.each([0, Number.NaN])(
@@ -169,13 +188,20 @@ describe('calculateSignedRoEForPrice', () => {
     },
   );
 
-  it.each([0, -2, Number.NaN])(
+  it.each([0, -2, Number.NaN, Number.POSITIVE_INFINITY])(
     'has no RoE with a leverage of %s',
     (leverage) => {
       expect(calculateSignedRoEForPrice('2625', { ...long2x, leverage })).toBe(
         '',
       );
       expect(calculateRoEForPrice('2625', true, { ...long2x, leverage })).toBe(
+        '',
+      );
+      expect(calculateRoEForPrice('2375', false, { ...long2x, leverage })).toBe(
+        '',
+      );
+      // At the base price the move is zero, and zero times Infinity is NaN.
+      expect(calculateSignedRoEForPrice('2500', { ...long2x, leverage })).toBe(
         '',
       );
     },
@@ -209,8 +235,25 @@ describe('calculateSignedRoEForPrice', () => {
         direction: 'long' as const,
       },
     },
+    { reason: 'an infinite price', price: 'Infinity', params: long2x },
+    {
+      reason: 'an infinite current price',
+      price: '2625',
+      params: {
+        currentPrice: Number.POSITIVE_INFINITY,
+        direction: 'long' as const,
+        leverage: 2,
+      },
+    },
+    {
+      reason: 'an infinite entry price',
+      price: '2625',
+      params: { ...long2x, entryPrice: Number.POSITIVE_INFINITY },
+    },
   ])('has no RoE with $reason', ({ price, params }) => {
     expect(calculateSignedRoEForPrice(price, params)).toBe('');
+    expect(calculateRoEForPrice(price, true, params)).toBe('');
+    expect(calculateRoEForPrice(price, false, params)).toBe('');
   });
 });
 
@@ -282,10 +325,15 @@ describe('calculatePriceForRoE', () => {
     expect(calculatePriceForRoE(-150, true, long2x)).toBe('625');
   });
 
-  it('defaults to 1x leverage', () => {
+  it('prices a long TP at 10 RoE at an explicit 1x leverage as 2750', () => {
     expect(
-      calculatePriceForRoE(10, true, { currentPrice: 2500, direction: 'long' }),
+      calculatePriceForRoE(10, true, { ...longUnknownLeverage, leverage: 1 }),
     ).toBe('2750');
+  });
+
+  it('has no price while the leverage is unknown', () => {
+    expect(calculatePriceForRoE(10, true, longUnknownLeverage)).toBe('');
+    expect(calculatePriceForRoE(-10, false, longUnknownLeverage)).toBe('');
   });
 
   it.each([
@@ -322,14 +370,34 @@ describe('calculatePriceForRoE', () => {
     { reason: 'no side', params: { currentPrice: 2500 } },
     { reason: 'zero leverage', params: { ...long2x, leverage: 0 } },
     { reason: 'NaN leverage', params: { ...long2x, leverage: Number.NaN } },
+    {
+      reason: 'infinite leverage',
+      params: { ...long2x, leverage: Number.POSITIVE_INFINITY },
+    },
+    {
+      reason: 'an infinite current price',
+      params: {
+        currentPrice: Number.POSITIVE_INFINITY,
+        direction: 'long' as const,
+        leverage: 2,
+      },
+    },
+    {
+      reason: 'an infinite entry price',
+      params: { ...long2x, entryPrice: Number.POSITIVE_INFINITY },
+    },
   ])('has no price with $reason', ({ params }) => {
     expect(calculatePriceForRoE(10, true, params)).toBe('');
+    expect(calculatePriceForRoE(-10, false, params)).toBe('');
   });
 
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'has no price with a RoE of %s',
     (roe) => {
       expect(calculatePriceForRoE(roe, true, long2x)).toBe('');
+      // The stop loss cap must not turn -Infinity into the capped price.
+      expect(calculatePriceForRoE(roe, false, long2x)).toBe('');
+      expect(calculatePriceForRoE(roe, false, short2x)).toBe('');
     },
   );
 });
@@ -356,6 +424,16 @@ describe('calculatePriceForPercentage', () => {
       ).toBe(price);
     },
   );
+
+  it.each([
+    { boundary: '$0.01', currentPrice: 0.01001234, price: '0.010012' },
+    { boundary: '$1', currentPrice: 1.00001234, price: '1' },
+    { boundary: '$100', currentPrice: 100.001234, price: '100' },
+  ])('starts the next price band at $boundary', ({ currentPrice, price }) => {
+    expect(
+      calculatePriceForPercentage(0, true, { ...long2x, currentPrice }),
+    ).toBe(price);
+  });
 
   it('has no price without a current price', () => {
     expect(
@@ -453,8 +531,15 @@ describe('calculatePercentageForPrice', () => {
     { reason: 'a price', price: '', params: long2x },
     { reason: 'a numeric price', price: 'abc', params: long2x },
     { reason: 'a side', price: '2750', params: { currentPrice: 2500 } },
+    { reason: 'a finite price', price: 'Infinity', params: long2x },
+    {
+      reason: 'a finite current price',
+      price: '2750',
+      params: { ...long2x, currentPrice: Number.POSITIVE_INFINITY },
+    },
   ])('has no percentage without $reason', ({ price, params }) => {
     expect(calculatePercentageForPrice(price, true, params)).toBe('');
+    expect(calculatePercentageForPrice(price, false, params)).toBe('');
   });
 });
 
