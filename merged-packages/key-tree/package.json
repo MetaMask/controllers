@@ -39,6 +39,8 @@
     "build:clean": "yarn build:only-clean && yarn build",
     "build:docs": "typedoc",
     "build:only-clean": "rimraf './dist' './tsconfig.build.tsbuildinfo'",
+    "changelog:update": "../../scripts/update-changelog.sh @metamask/key-tree",
+    "changelog:validate": "../../scripts/validate-changelog.sh",
     "generate-vectors": "node --import ../../scripts/resolver/register.ts scripts/generate-vectors.ts > tests/vectors/derivation.json",
     "lint:tsconfigs": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts",
     "lint:tsconfigs:fix": "node --import ../../scripts/resolver/register.ts ../../scripts/lint-tsconfigs/lint-tsconfigs.ts --fix",
