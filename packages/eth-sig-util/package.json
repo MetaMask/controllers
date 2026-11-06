@@ -10,12 +10,15 @@
   "bugs": {
     "url": "https://github.com/MetaMask/core/issues"
   },
+  "license": "ISC",
+  "author": "Dan Finlay",
   "repository": {
     "type": "git",
     "url": "https://github.com/MetaMask/core.git"
   },
-  "license": "ISC",
-  "author": "Dan Finlay",
+  "files": [
+    "dist/"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -37,9 +40,10 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist/"
-  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "allow-scripts": "yarn workspace @metamask/core-monorepo run allow-scripts",
     "build": "tsc --project tsconfig.build.json",
@@ -79,9 +83,5 @@
   },
   "engines": {
     "node": "^22.14.0 || ^24 || ^26"
-  },
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
   }
 }
