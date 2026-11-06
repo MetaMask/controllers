@@ -1,7 +1,5 @@
 # @metamask/key-tree
 
-<table><tr><td><p align="center"><b>⚠️ PLEASE READ ⚠️</b></p><p align="center">This package is currently being migrated to our <a href="https://github.com/MetaMask/core"><code>MetaMask/core</code></a> monorepo. Please do not make any commits to this repository while this migration is taking place, as they will not be transferred over. Also, please re-open PRs that are under active development in the <a href="https://github.com/MetaMask/core"><code>MetaMask/core</code></a> repo.</p></td></tr></table>
-
 An interface over [SLIP-10], [BIP-32], and [BIP-44] key derivation paths.
 
 This library was audited by Cure53 in February 2023, and April 2024. The audit reports can be found [here](./audits).
@@ -154,6 +152,10 @@ See the [reference implementation tests](tests/reference-implementations.test.ts
 - [SLIP-10]
 - [SLIP-44]
 - Network Working Group: ["Key Derivation Functions and their Uses"](https://trac.tools.ietf.org/html/draft-irtf-cfrg-kdf-uses-00)
+
+## Contributing
+
+This package is part of a monorepo. Instructions for contributing can be found in the [monorepo README](https://github.com/MetaMask/core#readme).
 
 [bip-32]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 [bip-39]: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
