@@ -6365,6 +6365,42 @@ describe('AssetsController', () => {
       },
     );
 
+    it('records a fast phase chain error reported without a throw', async () => {
+      await withController(async ({ controller }) => {
+        const account = createMockInternalAccount({
+          id: 'mock-account-id-fetch',
+        });
+        const middlewareGetter = vi
+          .spyOn(
+            AccountsApiDataSource.prototype,
+            // @ts-expect-error -- Vitest supports `get` for accessor spies; `Spyable` typings omit prototype getters.
+            'assetsMiddleware',
+            'get',
+          )
+          .mockReturnValue((async (ctx: unknown) => ({
+            ...(ctx as object),
+            response: { errors: { 'eip155:1': 'chain unavailable' } },
+          })) as never) as unknown as MockInstance;
+
+        try {
+          await controller.getAssets([account], {
+            chainIds: ['eip155:1'],
+            forceUpdate: true,
+          });
+          await flushPromises();
+        } finally {
+          middlewareGetter.mockRestore();
+        }
+
+        const status = controller.state.assetsFetchStatus?.[account.id];
+        expect(status?.fast.fetchStatus).toBe('idle');
+        expect(status?.fast.errors).toStrictEqual({
+          'eip155:1': 'chain unavailable',
+        });
+        expect(status?.fast.updatedAt).toBeNull();
+      });
+    });
+
     it('writes nothing for empty scopes', async () => {
       await withController(async ({ controller }) => {
         await controller.getAssets([], { forceUpdate: true });

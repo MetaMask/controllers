@@ -9,9 +9,6 @@ import type { AccountId, AssetsFetchPhase, ChainId } from '../types.js';
  * beginning when both phases are idle, so consumers should not treat that gap
  * as "finished".
  *
- * Known limitation: overlapping forced fetches on the same account report the
- * result of the last one to finish (earlier errors are dropped).
- *
  * @param state - AssetsController state slice.
  * @param accountId - The account id (`InternalAccount.id`).
  * @returns True while either fetch phase is running for the account.
@@ -33,6 +30,10 @@ export function isAccountFetching(
  * The phases are not merged on purpose: the fast phase can report a chain as
  * failed, then the background phase retries it and may recover it, while the
  * fast phase errors stay set. A merged union would show false errors.
+ * To get the effective errors, note that the background phase retries chains
+ * that failed in the fast phase, so once the background phase is idle after a
+ * fast completion, `background.errors` supersedes `fast.errors` for the chains
+ * it retried.
  *
  * Known limitation: overlapping forced fetches on the same account report the
  * result of the last one to finish (earlier errors are dropped).
