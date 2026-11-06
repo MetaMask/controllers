@@ -15,7 +15,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Mock, MockInstance, MockedFunction } from 'vitest';
 
 import { registerKeyringUnlockMock } from './__fixtures__/MockAssetControllerMessenger.js';
-import { waitFor } from './__fixtures__/test-utils.js';
+import { waitFor, waitUntilStable } from './__fixtures__/test-utils.js';
 import {
   AssetsController,
   getDefaultAssetsControllerState,
@@ -5559,11 +5559,13 @@ describe('AssetsController', () => {
             [],
           );
 
-          await waitFor(() => {
-            expect(getAssetsSpy).not.toHaveBeenCalled();
-          });
+          await waitUntilStable(() => ({
+            fetchCalls: fetchV2SupportedNetworks.mock.calls.length,
+            getAssetsCalls: getAssetsSpy.mock.calls.length,
+          }));
 
           expect(fetchV2SupportedNetworks).not.toHaveBeenCalled();
+          expect(getAssetsSpy).not.toHaveBeenCalled();
 
           getAssetsSpy.mockRestore();
         },
