@@ -1,6 +1,10 @@
 /* eslint-disable consistent-return */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { formatChainIdToHex, isEvmTxData } from '@metamask/bridge-controller';
+import {
+  formatChainIdToHex,
+  isEvmTxData,
+  getAccountByAddress,
+} from '@metamask/bridge-controller';
 import type { TxData } from '@metamask/bridge-controller';
 import {
   TransactionMeta,
@@ -8,7 +12,7 @@ import {
 } from '@metamask/transaction-controller';
 
 import { BridgeStatusControllerMessenger } from '../types.js';
-import { getAccountByAddress } from '../utils/accounts.js';
+import { getHistoryOverridesFromTxMeta } from '../utils/history.js';
 import { getNetworkClientIdByChainId } from '../utils/network.js';
 import { getApprovalTraceParams } from '../utils/trace.js';
 import {
@@ -151,21 +155,29 @@ export async function* submitEvmHandler(
     quoteResponses: [quoteResponse],
     requireApproval,
     isBridgeTx,
+    next,
+    batchId,
   } = args;
 
   // Generate actionId for pre-submission history
-  const actionId = generateActionId();
+  const actionId = batchId ?? generateActionId();
 
-  // Add pre-submission history keyed by actionId
-  // This ensures we have quote data available if transaction fails during submission
-  yield {
-    type: SubmitStep.AddHistoryItem,
-    payload: {
-      historyKey: actionId,
-      actionId,
-      quoteResponse,
-    },
-  };
+  // Add new history item if no batchId is provided
+  if (!args.historyKey) {
+    // Add pre-submission history keyed by actionId
+    // This ensures we have quote data available if transaction fails during submission
+    yield {
+      type: SubmitStep.AddHistoryItem,
+      payload: {
+        historyKey: actionId,
+        quoteResponse,
+        bridgeTxMeta: {
+          actionId,
+        },
+        next,
+      },
+    };
+  }
 
   // Submit resetApproval and approval transactions if present
   const approvalTxMeta = await handleEvmApprovals(args, actionId);
@@ -234,6 +246,13 @@ export async function* submitEvmHandler(
       oldHistoryKey: tradeActionId,
       newHistoryKey: tradeMeta.id,
       tradeMeta,
+      historyItemOverrides: {
+        ...getHistoryOverridesFromTxMeta(
+          false, // Ignore STX flag when rekeying
+          args.quoteResponses[0].quote.srcChainId,
+          tradeMeta,
+        ),
+      },
     },
   };
 }

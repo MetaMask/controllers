@@ -1,4 +1,7 @@
-import type { AccountsControllerGetAccountByAddressAction } from '@metamask/accounts-controller';
+import type {
+  AccountsControllerGetAccountByAddressAction,
+  AccountsControllerState,
+} from '@metamask/accounts-controller';
 import type {
   ControllerGetStateAction,
   ControllerStateChangeEvent,
@@ -17,9 +20,11 @@ import type {
   BatchSellTradesResponse,
   BridgeControllerGetStateAction,
   InputPrimaryDenomination,
+  Trade,
 } from '@metamask/bridge-controller';
 import type { KeyringControllerSignTypedMessageAction } from '@metamask/keyring-controller';
 import type { Messenger } from '@metamask/messenger';
+import type { MoneyAccountControllerGetMoneyAccountAction } from '@metamask/money-account-controller';
 import type {
   NetworkControllerFindNetworkClientIdByChainIdAction,
   NetworkControllerGetNetworkClientByIdAction,
@@ -113,6 +118,18 @@ export type StatusResponse = Infer<typeof StatusResponseSchema>;
 
 export type RefuelStatusResponse = object & StatusResponse;
 
+export const Operation = {
+  DEPOSIT: 'deposit',
+  WITHDRAW: 'withdraw',
+  SWAP: 'swap',
+} as const;
+export type Operation = (typeof Operation)[keyof typeof Operation];
+
+export type NextAction = {
+  operation: 'swap' | 'deposit';
+  partialQuote: Omit<QuoteResponseV1, 'quote'>;
+};
+
 /**
  * This type ties together the quote, its tx params and the submitted txMeta.
  * Each trade/approval will have its own QuoteAndTxMetadata object.
@@ -123,7 +140,7 @@ export type QuoteAndTxMetadata = {
   /**
    * The approval or trade object from the quote response
    */
-  tx: TxData;
+  tx: Omit<TxData, 'gasLimit'> & { gasLimit: number | null };
   assetsFiatValues?: { sending?: string; receiving?: string };
   /**
    * The simulated gas fee limits for the transaction provided by the bridge-api
@@ -135,6 +152,54 @@ export type QuoteAndTxMetadata = {
   txMeta?: TransactionMeta;
 };
 
+export type SubmitStrategyParamsJson<
+  TradeType extends Trade = TxData,
+  BatchSellTradesResponseType extends BatchSellTradesResponse | null =
+    BatchSellTradesResponse | null,
+> = {
+  /**
+   * The response from obtainGaslessBatch API containing submittable transactions and their fees
+   */
+  batchSellTrades: BatchSellTradesResponseType;
+  isBridgeTx: boolean;
+  isDelegatedAccount: boolean;
+  /**
+   * Whether the STX is enabled in the wallet. Does not necessarily mean that
+   * STX will be used to submit the transaction.
+   */
+  isStxEnabled: boolean;
+  quoteResponses: (QuoteResponseV1<TradeType, TradeType> & QuoteMetadata)[];
+  /**
+   * Set to true so hardware wallets get prompted for approval on mobile
+   */
+  requireApproval: boolean;
+  selectedAccount: AccountsControllerState['internalAccounts']['accounts'][string];
+  clientId: BridgeClientId;
+  bridgeApiBaseUrl: string;
+  /**
+   * The batch ID of the transaction batch passed to the addTransactionBatchFn
+   */
+  batchId?: `0x${string}`;
+  /**
+   * The hash of the initial EVM transaction's final leg (swap, bridge, intent or withdrawal).
+   * Populated by the afterTx helper so the strategy executing the next action can read details about
+   * the previous transaction.
+   */
+  previousTxHash?: string;
+  /**
+   * The current withdraw/deposit/swap operation
+   */
+  operation?: Operation;
+  /**
+   * Sequenced list of next actions to perform
+   */
+  next?: NextAction[];
+  /**
+   * The key of the history item to use for the current action, if a prior action was executed
+   */
+  historyKey?: string;
+};
+
 export type BridgeHistoryItem = {
   txMetaId?: string; // Optional: not available pre-submission or on sync failure
   actionId?: string; // Only for non-batch EVM transactions
@@ -142,7 +207,7 @@ export type BridgeHistoryItem = {
    * @deprecated the txMeta or orderUid should be used instead
    */
   originalTransactionId?: string; // Keep original transaction ID for intent transactions
-  batchId?: string;
+  batchId?: `0x${string}`;
   /**
    * This is defined when the history item is for a batch sell transaction
    */
@@ -231,6 +296,14 @@ export type BridgeHistoryItem = {
    * swap/bridge was submitted.
    */
   inputPrimaryDenomination?: InputPrimaryDenomination;
+  /**
+   * The batchId and id for the money account deposit transactions.
+   */
+  depositTxMeta?: Partial<Pick<TransactionMeta, 'id' | 'batchId' | 'hash'>>;
+  /**
+   * The sequenced list of next actions to perform after the current operation is completed.
+   */
+  next?: NextAction[];
 };
 
 /**
@@ -287,9 +360,9 @@ export type QuoteMetadataSerialized = {
 
 export type StartPollingForBridgeTxStatusArgs = {
   bridgeTxMeta?: Partial<
-    Pick<TransactionMeta, 'id' | 'hash' | 'batchId' | 'status'>
+    Pick<TransactionMeta, 'id' | 'hash' | 'batchId' | 'status' | 'actionId'>
   >;
-  actionId?: string;
+  next?: BridgeHistoryItem['next'];
   batchSellData?: BridgeHistoryItem['batchSellData'];
   /**
    * @deprecated the txMeta or orderUid should be used instead
@@ -314,18 +387,6 @@ export type StartPollingForBridgeTxStatusArgs = {
   tokenSecurityTypeDestination?: BridgeHistoryItem['tokenSecurityTypeDestination'];
   // Primary denomination at submission time, persisted for post-submit analytics.
   inputPrimaryDenomination?: BridgeHistoryItem['inputPrimaryDenomination'];
-};
-
-/**
- * Chrome: The BigNumber values are automatically serialized to strings when sent to the background
- * Firefox: The BigNumber values are not serialized to strings when sent to the background,
- * so we force the ui to do it manually, by using StartPollingForBridgeTxStatusArgsSerialized type on the startPollingForBridgeTxStatus action
- */
-export type StartPollingForBridgeTxStatusArgsSerialized = Omit<
-  StartPollingForBridgeTxStatusArgs,
-  'quoteResponse'
-> & {
-  quoteResponse: QuoteResponseV1 & QuoteMetadata;
 };
 
 export type SourceChainTxMetaId = string;
@@ -391,7 +452,8 @@ type AllowedActions =
   | BridgeControllerGetStateAction
   | AccountsControllerGetAccountByAddressAction
   | AuthenticationControllerGetBearerTokenAction
-  | KeyringControllerSignTypedMessageAction;
+  | KeyringControllerSignTypedMessageAction
+  | MoneyAccountControllerGetMoneyAccountAction;
 
 /**
  * The external events available to the BridgeStatusController.

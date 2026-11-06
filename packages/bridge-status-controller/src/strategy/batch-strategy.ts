@@ -2,6 +2,7 @@ import type { TxData } from '@metamask/bridge-controller';
 import { generateBatchId } from '@metamask/transaction-controller';
 
 import type { QuoteAndTxMetadata } from '../types.js';
+import { getHistoryOverridesFromTxMeta } from '../utils/history.js';
 import {
   findAllTransactionsInBatch,
   getAddTransactionBatchParams,
@@ -29,6 +30,7 @@ export async function* submitBatchHandler(
     isBridgeTx,
     addTransactionBatchFn,
     isDelegatedAccount,
+    next,
   } = args;
 
   const tradeData = toQuoteAndTxMetadata({
@@ -36,18 +38,22 @@ export async function* submitBatchHandler(
     isBridgeTx,
   });
 
-  const batchId = generateBatchId();
+  const batchId = args.batchId ?? generateBatchId();
 
-  yield {
-    type: SubmitStep.AddHistoryItem,
-    payload: {
-      historyKey: batchId,
-      quoteResponse,
-      bridgeTxMeta: {
-        batchId,
+  // Add new history item if historyKey is not provided
+  if (!args.historyKey) {
+    yield {
+      type: SubmitStep.AddHistoryItem,
+      payload: {
+        historyKey: batchId,
+        quoteResponse,
+        bridgeTxMeta: {
+          batchId,
+        },
+        next,
       },
-    },
-  };
+    };
+  }
 
   const transactionParams = await getAddTransactionBatchParams({
     tradeData,
@@ -118,6 +124,11 @@ export async function* submitBatchHandler(
       newHistoryKey: tradeMeta.id,
       historyItemOverrides: {
         approvalTxId: approvalMeta?.id,
+        ...getHistoryOverridesFromTxMeta(
+          false, // Ignore STX flag when rekeying
+          args.quoteResponses[0].quote.srcChainId,
+          tradeMeta,
+        ),
       },
       tradeMeta,
     },
