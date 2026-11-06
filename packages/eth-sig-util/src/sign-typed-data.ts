@@ -139,7 +139,7 @@ export const TYPED_MESSAGE_SCHEMA = {
 function validateVersion(
   version: SignTypedDataVersion,
   allowedVersions?: SignTypedDataVersion[],
-) {
+): void {
   if (!Object.keys(SignTypedDataVersion).includes(version)) {
     throw new Error(`Invalid version: '${version}'`);
   } else if (allowedVersions && !allowedVersions.includes(version)) {
@@ -158,7 +158,7 @@ function validateVersion(
  * @param value - The value to parse.
  * @returns The parsed value.
  */
-function parseNumber(type: string, value: string | number | bigint) {
+function parseNumber(type: string, value: string | number | bigint): bigint {
   assert(
     value !== null,
     `Unable to encode value: Invalid number. Expected a valid number value, but received "${value}".`,
@@ -366,8 +366,8 @@ function encodeField(
       arrToBufArr(
         keccak256(
           encode(
-            typeValuePairs.map(([t]) => t),
-            typeValuePairs.map(([, v]) => v),
+            typeValuePairs.map(([fieldType]) => fieldType),
+            typeValuePairs.map(([, fieldValue]) => fieldValue),
           ),
         ),
       ),
@@ -440,7 +440,7 @@ function encodeType(
     }
 
     result += `${type}(${types[type]
-      .map(({ name, type: t }) => `${t} ${name}`)
+      .map(({ name, type: propertyType }) => `${propertyType} ${name}`)
       .join(',')})`;
   }
 
@@ -498,8 +498,7 @@ function hashStruct(
 
   const encoded = encodeData(primaryType, data, types, version);
   const hashed = keccak256(encoded);
-  const buf = arrToBufArr(hashed);
-  return buf;
+  return arrToBufArr(hashed);
 }
 
 /**
@@ -866,8 +865,12 @@ export function signTypedData<
     version === SignTypedDataVersion.V1
       ? _typedSignatureHash(data as TypedDataV1)
       : TypedDataUtils.eip712Hash(data as TypedMessage<T>, version);
-  const sig = ecsign(messageHash, privateKey);
-  return concatSig(arrToBufArr(bigIntToBytes(sig.v)), sig.r, sig.s);
+  const signature = ecsign(messageHash, privateKey);
+  return concatSig(
+    arrToBufArr(bigIntToBytes(signature.v)),
+    signature.r,
+    signature.s,
+  );
 }
 
 /**

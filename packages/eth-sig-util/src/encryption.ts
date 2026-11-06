@@ -48,7 +48,7 @@ export function encrypt({
       let pubKeyUInt8Array: Uint8Array;
       try {
         pubKeyUInt8Array = base64.decode(publicKey);
-      } catch (err) {
+      } catch {
         throw new Error('Bad public key');
       }
 

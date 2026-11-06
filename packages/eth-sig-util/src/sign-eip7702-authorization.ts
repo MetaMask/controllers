@@ -112,7 +112,9 @@ export function hashEIP7702Authorization(
  * @param authorization - The authorization object to validate.
  * @throws {Error} If the authorization object or any of its required parameters are missing.
  */
-function validateEIP7702Authorization(authorization: EIP7702Authorization) {
+function validateEIP7702Authorization(
+  authorization: EIP7702Authorization,
+): void {
   if (isNullish(authorization)) {
     throw new Error('Missing authorization parameter');
   }
