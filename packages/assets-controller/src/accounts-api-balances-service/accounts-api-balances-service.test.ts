@@ -169,6 +169,94 @@ describe('AccountsApiBalancesService', () => {
       expect(nock.isDone()).toBe(true);
     });
 
+    it('forceUpdate while a fetch is in flight joins it', async () => {
+      let requests = 0;
+      nock(BASE_URL)
+        .get('/v6/multiaccount/balances')
+        .query(true)
+        .times(2)
+        .delay(30)
+        .reply(200, () => {
+          requests += 1;
+          return V6_RESPONSE;
+        });
+      const { service } = createService();
+
+      const results = await Promise.all([
+        service.fetchBalances({ version: 'v6', accountIds: [ACCOUNT_A] }),
+        service.fetchBalances({
+          version: 'v6',
+          accountIds: [ACCOUNT_A],
+          forceUpdate: true,
+        }),
+      ]);
+
+      expect(results).toStrictEqual([V6_RESPONSE, V6_RESPONSE]);
+      expect(requests).toBe(1);
+    });
+
+    it('forceUpdate invalidates only the requested key', async () => {
+      let shortRequests = 0;
+      let longRequests = 0;
+      nock(BASE_URL)
+        .get('/v6/multiaccount/balances')
+        .query((query) => query.accountIds === ACCOUNT_A)
+        .times(3)
+        .reply(200, () => {
+          shortRequests += 1;
+          return V6_RESPONSE;
+        })
+        .get('/v6/multiaccount/balances')
+        .query((query) => query.accountIds === `${ACCOUNT_A},${ACCOUNT_B}`)
+        .times(3)
+        .reply(200, () => {
+          longRequests += 1;
+          return V6_RESPONSE;
+        });
+      const { service } = createService();
+
+      await service.fetchBalances({ version: 'v6', accountIds: [ACCOUNT_A] });
+      await service.fetchBalances({
+        version: 'v6',
+        accountIds: [ACCOUNT_A, ACCOUNT_B],
+      });
+      await service.fetchBalances({
+        version: 'v6',
+        accountIds: [ACCOUNT_A],
+        forceUpdate: true,
+      });
+      await service.fetchBalances({
+        version: 'v6',
+        accountIds: [ACCOUNT_A, ACCOUNT_B],
+      });
+
+      expect(shortRequests).toBe(2);
+      expect(longRequests).toBe(1);
+    });
+
+    it('v5 ignores includeAssetIds and excludeAssetIds in the cache key, as it never sends them', async () => {
+      let requests = 0;
+      nock(BASE_URL)
+        .get('/v5/multiaccount/balances')
+        .query(true)
+        .times(2)
+        .reply(200, () => {
+          requests += 1;
+          return V5_RESPONSE;
+        });
+      const { service } = createService();
+
+      await service.fetchBalances({
+        version: 'v5',
+        accountIds: [ACCOUNT_A],
+        includeAssetIds: ['eip155:1/slip44:60'],
+        excludeAssetIds: ['eip155:1/erc20:0x0'],
+      });
+      await service.fetchBalances({ version: 'v5', accountIds: [ACCOUNT_A] });
+
+      expect(requests).toBe(1);
+    });
+
     it('bypass fetch does not join an in flight non bypass fetch', async () => {
       const bypassed = {
         ...V6_RESPONSE,
@@ -373,7 +461,7 @@ describe('AccountsApiBalancesService', () => {
         policyOptions: {
           ...FAST_POLICY,
           maxConsecutiveFailures: 4,
-          circuitBreakDuration: 50,
+          circuitBreakDuration: 200,
         },
       });
       const options = { version: 'v6' as const, accountIds: [ACCOUNT_A] };
@@ -388,7 +476,8 @@ describe('AccountsApiBalancesService', () => {
       );
       expect(requests).toBe(4);
 
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      // Wait well past the break duration so the breaker is half open.
+      await new Promise((resolve) => setTimeout(resolve, 600));
       expect(await service.fetchBalances(options)).toStrictEqual(V6_RESPONSE);
     });
 

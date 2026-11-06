@@ -48,6 +48,11 @@ const DEFAULT_CIRCUIT_BREAK_DURATION_MS = 60 * 1000;
 /**
  * Reads the HTTP status carried by an error, if any.
  *
+ * `HttpError` carries `httpStatus`. The `status` fallback is load bearing: an
+ * injected `fetch` may reject with its own error type that only carries
+ * `status`, and without it such a 4xx would be retried and counted toward the
+ * circuit breaker.
+ *
  * @param error - The thrown value.
  * @returns The `httpStatus` (or `status`) of the error, if present.
  */
@@ -271,6 +276,12 @@ export class AccountsApiBalancesService extends BaseDataService<
    * milliseconds. Defaults to 5 minutes.
    * @param args.policyOptions - Overrides for the default policy options
    * passed to `createServicePolicy`. See {@link CreateServicePolicyOptions}.
+   * Each override replaces the default for that key as a whole, so passing
+   * `retryFilterPolicy` or `isServiceFailure` drops the default
+   * `BrokenCircuitError` and 4xx handling. One policy, and so one circuit
+   * breaker, is shared by v5, v6 and every query key of a service instance:
+   * once it trips, both versions fail fast for the break duration (balances
+   * then fall back to RPC).
    */
   constructor({
     messenger,
@@ -349,15 +360,22 @@ export class AccountsApiBalancesService extends BaseDataService<
       version,
       [...accountIds].sort(),
       {
-        includeAssetIds: sortedOrNull(includeAssetIds),
-        excludeAssetIds: sortedOrNull(excludeAssetIds),
+        // v5 never sends these lists, so they stay out of its key.
+        includeAssetIds:
+          version === 'v6' ? sortedOrNull(includeAssetIds) : null,
+        excludeAssetIds:
+          version === 'v6' ? sortedOrNull(excludeAssetIds) : null,
         networks: sortedOrNull(networks),
         bypassServerCache,
       },
     ] as const;
 
     if (forceUpdate) {
-      await this.invalidateQueries({ queryKey, refetchType: 'none' });
+      await this.invalidateQueries({
+        queryKey,
+        exact: true,
+        refetchType: 'none',
+      });
     }
 
     const responseStruct = (version === 'v6'
