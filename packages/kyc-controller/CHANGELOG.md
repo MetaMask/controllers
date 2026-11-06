@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `deleteEncryptedStorage`, `createDeletion`, and `completeDeletion` take an `aal2Token` and send it as the Authorization bearer value. The KYC API requires `ext.aal` of at least 2 on both deletion routes ([#11338](https://github.com/MetaMask/core/pull/11338))
+
 ## [0.15.0]
 
 ### Added
