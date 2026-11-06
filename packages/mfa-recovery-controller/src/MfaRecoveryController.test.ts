@@ -1885,16 +1885,55 @@ describe('MfaRecoveryController', () => {
     it.each([
       { ...WALLET, namespace: 'example.com:2' },
       { ...WALLET, verifier: undefined },
+      ...[
+        {},
+        { domain: 1, chainId: 1 },
+        { domain: '', chainId: 1 },
+        { domain: 'example.com' },
+        { domain: 'example.com', chainId: '1' },
+        { domain: 'example.com', chainId: -1 },
+        { domain: 'example.com', chainId: 1.5 },
+        { domain: 'example.com', chainId: NaN },
+        { domain: 'example.com', chainId: Infinity },
+        { domain: 'example.com', chainId: Number.MAX_SAFE_INTEGER + 1 },
+      ].map((verifier) => ({
+        ...WALLET,
+        verifier,
+        namespace: `${String(verifier.domain)}:${String(verifier.chainId)}`,
+      })),
     ])(
-      'rejects a SIWE namespace that does not match its verifier',
+      'rejects a SIWE identifier with an invalid verifier or namespace',
       async (wallet) => {
-        await withController(async ({ controller }) => {
+        await withController(async ({ controller, authProvider }) => {
+          const authorize = vi.spyOn(authProvider, 'authorizeRecoveryRequest');
           await expect(
             controller.register(SECRET, [PASSKEY, wallet]),
           ).rejects.toMatchObject({ code: 'invalid_identifier' });
+          await expect(
+            controller.updateIdentifiers(PASSKEY, [PASSKEY, wallet], 0),
+          ).rejects.toMatchObject({ code: 'invalid_identifier' });
+          expect(authorize).not.toHaveBeenCalled();
+          expect(controller.state.pendingOperation).toBeNull();
         });
       },
     );
+
+    it.each([
+      { domain: 'localhost:3010', chainId: 1 },
+      { domain: 'example.com', chainId: 0 },
+      { domain: 'example.com', chainId: Number.MAX_SAFE_INTEGER },
+    ])('accepts valid SIWE verifier %j', async (verifier) => {
+      await withController(async ({ controller }) => {
+        const wallet = {
+          ...WALLET,
+          verifier,
+          namespace: `${verifier.domain}:${verifier.chainId}`,
+        };
+        expect(
+          await controller.register(SECRET, [PASSKEY, wallet]),
+        ).toBeUndefined();
+      });
+    });
   });
 });
 

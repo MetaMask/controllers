@@ -42,7 +42,17 @@ export function getSiweNamespace(identifier: Identifier): string | undefined {
   if (!isObject(verifier)) {
     return undefined;
   }
-  return `${String(verifier.domain)}:${String(verifier.chainId)}`;
+  const { domain, chainId } = verifier;
+  if (
+    typeof domain !== 'string' ||
+    domain.length === 0 ||
+    typeof chainId !== 'number' ||
+    !Number.isSafeInteger(chainId) ||
+    chainId < 0
+  ) {
+    return undefined;
+  }
+  return `${domain}:${chainId}`;
 }
 
 /**
