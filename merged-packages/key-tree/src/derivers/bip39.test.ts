@@ -15,7 +15,7 @@ import {
   getDerivationPathWithSeed,
   bip39MnemonicToMultipath,
 } from './bip39';
-import fixtures from '../../test/fixtures';
+import fixtures from '../../tests/fixtures';
 import * as cryptography from '../cryptography';
 import { secp256k1, ed25519Bip32, type Curve } from '../curves';
 import { mnemonicPhraseToBytes } from '../utils';

@@ -8,7 +8,7 @@ import {
   isValidPrivateKey,
   multiplyWithBase,
 } from './ed25519Bip32';
-import fixtures from '../../test/fixtures';
+import fixtures from '../../tests/fixtures';
 
 describe('getPublicKey', () => {
   fixtures.cip3.forEach((fixture) => {

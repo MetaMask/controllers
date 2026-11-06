@@ -10,7 +10,7 @@ import { privateKeyToEthAddress } from './derivers/bip32';
 import { getDerivationPathWithSeed } from './derivers/bip39';
 import type { SLIP10Node } from './SLIP10Node';
 import { getUnhardenedBIP32NodeToken, mnemonicPhraseToBytes } from './utils';
-import fixtures from '../test/fixtures';
+import fixtures from '../tests/fixtures';
 
 const {
   bip32: { deriveChildKey: bip32Derive },

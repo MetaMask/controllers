@@ -25,7 +25,7 @@ import {
   isValidBIP32PathSegment,
   validateNetwork,
 } from './utils';
-import fixtures from '../test/fixtures';
+import fixtures from '../tests/fixtures';
 
 // Inputs used for testing non-negative integers
 const inputs = [-1, 1.1, NaN, {}, null, undefined] as number[];
