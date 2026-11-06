@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **BREAKING:** Drop CommonJS support ([#11349](https://github.com/MetaMask/core/pull/11349))
+- **BREAKING:** Drop CommonJS support ([#11349](https://github.com/MetaMask/core/pull/11349), [#11362](https://github.com/MetaMask/core/pull/11362))
   - This package is now ESM-only, but can still be used in CommonJS projects via `require(esm)` in modern Node.js versions (22+), or dynamic imports in older Node.js versions.
 - **BREAKING:** Bump TypeScript target to ES2022 ([#11348](https://github.com/MetaMask/core/pull/11348))
 - Bump `@metamask/utils` from `^11.0.1` to `^12.0.1` ([#11349](https://github.com/MetaMask/core/pull/11349))
