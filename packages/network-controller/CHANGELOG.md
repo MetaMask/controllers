@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ignore `corePlatformRpcFailoverMode` feature flag instead of re-interpreting it as "disabled" if it is absent or malformed ([#11307](https://github.com/MetaMask/core/pull/11307))
 - Bump `@metamask/analytics-controller` from `^4.0.0` to `^4.2.0` ([#11072](https://github.com/MetaMask/core/pull/11072), [#11323](https://github.com/MetaMask/core/pull/11323))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
-- Bump `uuid` from `^11.1.1` to `^14.0.2` ([#10941](https://github.com/MetaMask/core/pull/10941), [#11179](https://github.com/MetaMask/core/pull/11179), [#11305](https://github.com/MetaMask/core/pull/11305))
+- Bump `uuid` from `^11.1.1` to `^14.0.3` ([#10941](https://github.com/MetaMask/core/pull/10941), [#11179](https://github.com/MetaMask/core/pull/11179), [#11305](https://github.com/MetaMask/core/pull/11305), [#11331](https://github.com/MetaMask/core/pull/11331))
 
 ## [37.1.1]
 

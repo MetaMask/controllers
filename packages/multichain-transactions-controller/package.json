@@ -65,7 +65,7 @@
     "@metamask/snaps-utils": "^12.1.2",
     "@metamask/utils": "^12.0.1",
     "immer": "^11.1.18",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@metamask/auto-changelog": "^7.1.0",

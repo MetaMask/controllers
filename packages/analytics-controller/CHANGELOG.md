@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `uuid` from `^14.0.2` to `^14.0.3` ([#11331](https://github.com/MetaMask/core/pull/11331))
+
 ## [4.2.0]
 
 ### Added
