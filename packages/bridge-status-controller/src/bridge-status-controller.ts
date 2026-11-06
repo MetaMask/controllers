@@ -67,9 +67,9 @@ import type {
   StartPollingForBridgeTxStatusArgs,
   FetchFunction,
   BridgeHistoryItem,
+  BridgeStatusControllerMessenger,
 } from './types.js';
-import type { BridgeStatusControllerMessenger } from './types.js';
-import { BridgeClientId } from './types.js';
+import { BridgeClientId, Operation } from './types.js';
 import { getJwt } from './utils/authentication.js';
 import {
   fetchBridgeTxStatus,
@@ -1489,6 +1489,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
     batchSellTrades = null,
     inputPrimaryDenomination,
     migrationPhase,
+    operation = Operation.SWAP,
   }: {
     accountAddress: string;
     quoteResponses:
@@ -1503,6 +1504,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
     batchSellTrades?: BatchSellTradesResponse | null;
     inputPrimaryDenomination?: InputPrimaryDenomination;
     migrationPhase?: QuoteMetadataMigrationPhase;
+    operation?: Operation;
   }): Promise<TransactionMeta> => {
     const quoteResponses = normalizeQuoteResponses(
       quoteResponsesV1orV2,
@@ -1510,7 +1512,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
     );
     const quoteResponse = quoteResponses[0];
 
-    const { quote } = quoteResponse;
+    const { quote, ...partialQuote } = quoteResponse;
     const startTime = Date.now();
 
     stopPollingForQuotes(this.messenger, quotesReceivedContext);
@@ -1602,6 +1604,14 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
         fetchFn: this.#fetchFn,
         traceFn: this.#trace,
         batchId,
+        operation,
+        // Required when a post-swap deposit or pre-swap withdrawal is required
+        next:
+          operation === Operation.DEPOSIT
+            ? [{ operation: Operation.DEPOSIT }]
+            : operation === Operation.WITHDRAW
+              ? [{ operation: Operation.SWAP, partialQuote }]
+              : undefined,
       };
 
       return await this.#trace(
@@ -1672,6 +1682,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
     isStxEnabled?: boolean;
     quotesReceivedContext?: RequiredEventContextFromClient[UnifiedSwapBridgeEventName.QuotesReceived];
     migrationPhase?: QuoteMetadataMigrationPhase;
+    operation?: Operation;
   }): Promise<TransactionMeta> => {
     const {
       quoteResponse,
@@ -1684,6 +1695,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
       inputPrimaryDenomination,
       isStxEnabled = false,
       quotesReceivedContext,
+      operation,
     } = params;
 
     return await this.submitTx({
@@ -1698,6 +1710,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
       batchSellTrades: undefined,
       inputPrimaryDenomination,
       migrationPhase,
+      operation,
     });
   };
 
