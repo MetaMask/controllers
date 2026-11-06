@@ -58,6 +58,8 @@ import { estimateSourceGas } from '../../utils/quote-gas.js';
 import type { QuoteGasTransaction } from '../../utils/quote-gas.js';
 import { resolveQuoteRecipient } from '../../utils/quote-recipient.js';
 import {
+  buildCaipAssetType,
+  getEvmQuoteSource,
   getNativeToken,
   getTokenFiatRate,
   normalizeTokenAddress,
@@ -232,13 +234,13 @@ async function getSingleQuote(
 
   const {
     from,
-    sourceChainId,
-    sourceTokenAddress,
     sourceTokenAmount,
     targetAmountMinimum,
     targetChainId,
     targetTokenAddress,
   } = request;
+  const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+    getEvmQuoteSource(request);
 
   const slippageDecimal = getSlippage(
     messenger,
@@ -484,12 +486,18 @@ function normalizeRequest(
   request: QuoteRequest,
   transaction: TransactionMeta,
 ): QuoteRequest {
+  const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+    getEvmQuoteSource(request);
+
   const newRequest = {
     ...request,
-    sourceTokenAddress: normalizeTokenAddress(
-      request.sourceTokenAddress,
-      request.sourceChainId,
-      TokenAddressTarget.Relay,
+    sourceAssetId: buildCaipAssetType(
+      sourceChainId,
+      normalizeTokenAddress(
+        sourceTokenAddress,
+        sourceChainId,
+        TokenAddressTarget.Relay,
+      ),
     ),
     targetTokenAddress: normalizeTokenAddress(
       request.targetTokenAddress,
@@ -626,7 +634,10 @@ async function normalizeQuote(
  * @param request - Quote request.
  * @returns Dust value in USD and fiat.
  */
-function calculateDustUsd(quote: RelayQuote, request: QuoteRequest): BigNumber {
+export function calculateDustUsd(
+  quote: Pick<RelayQuote, 'details'>,
+  request: Pick<QuoteRequest, 'targetAmountMinimum'>,
+): BigNumber {
   const { currencyOut } = quote.details;
   const { amountUsd, amountFormatted, minimumAmount } = currencyOut;
   const { decimals: targetDecimals } = currencyOut.currency;
@@ -658,12 +669,13 @@ function getFiatRates(
   // For HyperLiquid source, the normalized chain/token (HyperCore + Perps USDC)
   // won't have a fiat rate entry. Use Arbitrum USDC instead since Perps USDC
   // is pegged 1:1.
+  const quoteSource = getEvmQuoteSource(request);
   const sourceChainId = request.isHyperliquidSource
     ? CHAIN_ID_ARBITRUM
-    : request.sourceChainId;
+    : quoteSource.chainId;
   const sourceTokenAddress = request.isHyperliquidSource
     ? ARBITRUM_USDC_ADDRESS
-    : request.sourceTokenAddress;
+    : quoteSource.tokenAddress;
 
   const finalSourceTokenAddress =
     sourceChainId === CHAIN_ID_POLYGON &&
@@ -720,7 +732,9 @@ async function calculateSourceNetworkCost(
     is7702: boolean;
   }
 > {
-  const { from, sourceChainId, sourceTokenAddress } = request;
+  const { from } = request;
+  const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+    getEvmQuoteSource(request);
 
   // None of these flows bill origin gas to the user: the execute flow has a
   // relayer redeem a signed delegation, a HyperLiquid withdrawal's "deposit"
@@ -899,7 +913,9 @@ function toQuoteGasTransaction(
  * @param quote - Relay quote.
  * @returns - Provider fee in USD.
  */
-function calculateProviderFee(quote: RelayQuote): BigNumber {
+export function calculateProviderFee(
+  quote: Pick<RelayQuote, 'details'>,
+): BigNumber {
   return new BigNumber(quote.details.totalImpact.usd).abs();
 }
 
@@ -927,9 +943,9 @@ function getTransferRecipient(data: Hex): Hex {
     .decodeFunctionData('transfer', data)
     .to.toLowerCase();
 }
-function getSubsidizedFeeAmountUsd(
+export function getSubsidizedFeeAmountUsd(
   messenger: TransactionPayControllerMessenger,
-  quote: RelayQuote,
+  quote: Pick<RelayQuote, 'fees'>,
 ): BigNumber {
   const subsidizedFee = quote.fees?.subsidized;
   const amountUsd = new BigNumber(subsidizedFee?.amountUsd ?? '0');
@@ -948,7 +964,7 @@ function getSubsidizedFeeAmountUsd(
   return isSubsidizedStablecoin ? amountFormatted : amountUsd;
 }
 
-function isStablecoin(
+export function isStablecoin(
   messenger: TransactionPayControllerMessenger,
   chainId: string,
   tokenAddress: string,

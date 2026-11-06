@@ -4,12 +4,13 @@ import type {
   BatchTransactionParams,
   TransactionMeta,
 } from '@metamask/transaction-controller';
-import type { Hex } from '@metamask/utils';
+import type { CaipAssetType, Hex } from '@metamask/utils';
 import { cloneDeep } from 'lodash-es';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock, MockInstance } from 'vitest';
 
 import { getMessengerMock } from '../../../tests/messenger-mock.js';
+import { mockModuleExcept } from '../../../tests/mock-module-except.js';
 import { PaymentOverride } from '../../constants.js';
 import type {
   PayStrategyExecuteRequest,
@@ -37,14 +38,23 @@ import {
 import { FALLBACK_HASH, RELAY_STATUS_URL } from './constants.js';
 import * as hyperliquidWithdraw from './hyperliquid-withdraw.js';
 import { submitViaRelayExecute } from './relay-submit-execute.js';
-import { getRelaySubmitCalls, submitRelayQuotes } from './relay-submit.js';
+import {
+  getRelaySubmitCalls,
+  submitRelayQuotes,
+  waitForRelayCompletion,
+} from './relay-submit.js';
 import type { RelayQuote, RelayTransactionStep } from './types.js';
 
 vi.mock(import('../../utils/second-leg.js'), async (importOriginal) => ({
   ...(await importOriginal()),
   submitSecondLeg: vi.fn(),
 }));
-vi.mock(import('../../utils/token.js'));
+vi.mock(import('../../utils/token.js'), async (importOriginal) =>
+  mockModuleExcept(await importOriginal(), [
+    'buildCaipAssetType',
+    'getEvmQuoteSource',
+  ]),
+);
 vi.mock(import('../../utils/transaction.js'));
 vi.mock(import('../../utils/feature-flags.js'));
 vi.mock(import('./hyperliquid-withdraw.js'));
@@ -58,6 +68,7 @@ const ORIGINAL_TRANSACTION_ID_MOCK = '456-789';
 const FROM_MOCK = '0xabcde' as Hex;
 const CHAIN_ID_MOCK = '0x1' as Hex;
 const TOKEN_ADDRESS_MOCK = '0x123' as Hex;
+const SOURCE_ASSET_ID_MOCK: CaipAssetType = `eip155:1/erc20:${TOKEN_ADDRESS_MOCK}`;
 
 const TRANSACTION_META_MOCK = {
   id: '123-456',
@@ -124,8 +135,7 @@ const REQUEST_MOCK: PayStrategyExecuteRequest<RelayQuote> = {
       original: ORIGINAL_QUOTE_MOCK,
       request: {
         from: FROM_MOCK,
-        sourceChainId: CHAIN_ID_MOCK,
-        sourceTokenAddress: TOKEN_ADDRESS_MOCK,
+        sourceAssetId: SOURCE_ASSET_ID_MOCK,
       },
       sourceAmount: {
         raw: SOURCE_AMOUNT_RAW_MOCK,
@@ -2007,6 +2017,62 @@ describe('Relay Submit Utils', () => {
         await submitRelayQuotes(request);
         expect(submitViaRelayExecuteMock).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  describe('waitForRelayCompletion', () => {
+    const pendingResponse = {
+      ok: true,
+      json: async (): Promise<unknown> => ({
+        inTxHashes: [],
+        status: 'waiting',
+      }),
+    };
+
+    it('stops with source-failed once the unindexed source failed', async () => {
+      const isSourceFailed = vi
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+      successfulFetchMock.mockResolvedValue(pendingResponse);
+
+      const completion = await waitForRelayCompletion(
+        ORIGINAL_QUOTE_MOCK,
+        messenger,
+        { isSourceFailed, tolerateFailure: true },
+      );
+
+      expect(completion).toStrictEqual({ status: 'source-failed' });
+      expect(isSourceFailed).toHaveBeenCalledTimes(2);
+      expect(successfulFetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops checking the source once Relay indexes it', async () => {
+      const isSourceFailed = vi.fn().mockResolvedValue(true);
+      successfulFetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            inTxHashes: [SOURCE_HASH_MOCK],
+            status: 'pending',
+          }),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: async () => STATUS_RESPONSE_MOCK,
+        });
+
+      const completion = await waitForRelayCompletion(
+        ORIGINAL_QUOTE_MOCK,
+        messenger,
+        { isSourceFailed, tolerateFailure: true },
+      );
+
+      expect(completion).toStrictEqual({
+        status: 'success',
+        targetHash: TRANSACTION_HASH_MOCK,
+      });
+      expect(isSourceFailed).not.toHaveBeenCalled();
     });
   });
 

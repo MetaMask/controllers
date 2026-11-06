@@ -37,6 +37,7 @@ import {
 import { getNetworkClientId } from '../../utils/provider.js';
 import { submitSecondLeg } from '../../utils/second-leg.js';
 import {
+  getEvmQuoteSource,
   getLiveTokenBalanceOrUndefined,
   normalizeTokenAddress,
   TokenAddressTarget,
@@ -375,7 +376,7 @@ function getSettlementHash({
   }
 
   const isSameChain =
-    quote.request.sourceChainId === quote.request.targetChainId;
+    getEvmQuoteSource(quote.request).chainId === quote.request.targetChainId;
 
   if (isSameChain && submittedSourceHash !== FALLBACK_HASH) {
     return submittedSourceHash;
@@ -402,15 +403,32 @@ function setRelaySourceHash(
   );
 }
 
-async function waitForRelayCompletion(
-  quote: RelayQuote,
+/**
+ * Polls Relay status for a submitted request until it settles.
+ *
+ * @param quote - Relay quote details and steps carrying the request ID.
+ * @param messenger - Controller messenger.
+ * @param options - Polling options.
+ * @param options.isSourceFailed - Callback invoked after each poll until Relay
+ * indexes the source transaction. Polling stops with a `source-failed` outcome
+ * once it resolves to true.
+ * @param options.onSourceHash - Callback invoked once with the indexed source hash.
+ * @param options.tolerateFailure - Whether failure statuses and timeouts are
+ * returned instead of thrown.
+ * @returns The completion outcome.
+ */
+export async function waitForRelayCompletion(
+  quote: Pick<RelayQuote, 'details'> & {
+    steps: Pick<RelayTransactionStep, 'id' | 'requestId'>[];
+  },
   messenger: TransactionPayControllerMessenger,
   options: {
+    isSourceFailed?: () => Promise<boolean>;
     onSourceHash?: (hash: Hex) => void;
     tolerateFailure?: boolean;
   },
 ): Promise<RelayCompletionOutcome> {
-  const { onSourceHash, tolerateFailure } = options;
+  const { isSourceFailed, onSourceHash, tolerateFailure } = options;
 
   const isSameChain =
     quote.details.currencyIn.currency.chainId ===
@@ -470,6 +488,11 @@ async function waitForRelayCompletion(
         }
         throw new Error(`Unrecognized status: ${status.status}`);
       }
+    }
+
+    if (isSourceFailed && !sourceHashEmitted && (await isSourceFailed())) {
+      log('Source transaction failed before Relay indexed it');
+      return { status: 'source-failed' };
     }
 
     if (hasTimeout && Date.now() - startTime >= pollingTimeout) {
@@ -533,7 +556,9 @@ async function validateSourceBalance(
   quote: TransactionPayQuote<RelayQuote>,
   messenger: TransactionPayControllerMessenger,
 ): Promise<void> {
-  const { from, sourceChainId, sourceTokenAddress } = quote.request;
+  const { from } = quote.request;
+  const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+    getEvmQuoteSource(quote.request);
 
   const normalizedSourceTokenAddress = normalizeTokenAddress(
     sourceTokenAddress,
@@ -797,8 +822,9 @@ async function submitViaTransactionController(
   allParams: TransactionParams[],
 ): Promise<Hex> {
   const transactionIds: string[] = [];
-  const { from, sourceChainId, sourceTokenAddress } = quote.request;
-  const { isPostQuote } = quote.request;
+  const { from, isPostQuote } = quote.request;
+  const { chainId: sourceChainId, tokenAddress: sourceTokenAddress } =
+    getEvmQuoteSource(quote.request);
 
   const networkClientId = getNetworkClientId(messenger, sourceChainId);
 
@@ -981,7 +1007,8 @@ function buildRelayTransactionBatchRequest({
   quote: TransactionPayQuote<RelayQuote>;
   transaction: TransactionMeta;
 }): TransactionBatchRequest {
-  const { from, sourceChainId } = quote.request;
+  const { from } = quote.request;
+  const { chainId: sourceChainId } = getEvmQuoteSource(quote.request);
   const { metamask } = quote.original;
   const networkClientId = getNetworkClientId(messenger, sourceChainId);
   const gasLimit7702 = getGasLimit7702(quote);

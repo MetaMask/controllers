@@ -21,6 +21,7 @@ import { projectLogger } from '../logger.js';
 import type {
   EvmPaymentToken,
   FiatRates,
+  QuoteRequest,
   TransactionPayControllerMessenger,
   TransactionPaymentToken,
 } from '../types.js';
@@ -70,6 +71,42 @@ export function isNonEvmPaymentToken(
   paymentToken: TransactionPaymentToken,
 ): boolean {
   return !getEvmAsset(paymentToken.assetId);
+}
+
+/**
+ * Check if the source asset of a quote request is on an EVM chain.
+ *
+ * Strategies use it to support or reject a request and to select their
+ * execution path, which is the only place the source protocol matters.
+ *
+ * @param request - Quote request to check.
+ * @returns True if the source asset is on an EVM chain.
+ */
+export function isEvmQuoteRequest(
+  request: Pick<QuoteRequest, 'sourceAssetId'>,
+): boolean {
+  return Boolean(getEvmAsset(request.sourceAssetId));
+}
+
+/**
+ * Get the Hex chain ID and token address of the EVM source asset of a quote
+ * request, as used by the EVM quote and execution paths.
+ *
+ * @param request - Quote request.
+ * @returns The Hex chain ID and token address derived from `sourceAssetId`.
+ */
+export function getEvmQuoteSource(
+  request: Pick<QuoteRequest, 'sourceAssetId'>,
+): { chainId: Hex; tokenAddress: Hex } {
+  const evmAsset = getEvmAsset(request.sourceAssetId);
+
+  if (!evmAsset) {
+    throw new Error(
+      `Unsupported non-EVM source asset: ${request.sourceAssetId}`,
+    );
+  }
+
+  return { chainId: evmAsset.chainId, tokenAddress: evmAsset.address };
 }
 
 /**
