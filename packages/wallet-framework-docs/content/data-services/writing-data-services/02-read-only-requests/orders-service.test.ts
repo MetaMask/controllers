@@ -360,7 +360,7 @@ describe('OrdersService', () => {
       },
     ])(
       'throws if the API returns a response which $description',
-      async (response) => {
+      async ({ response }) => {
         nock('https://api.example.com')
           .get('/v1/orders/AAAA-BBBB-CCCC-DDDD')
           .reply(200, JSON.stringify(response));
