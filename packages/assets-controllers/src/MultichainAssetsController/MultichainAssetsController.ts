@@ -214,6 +214,10 @@ export class MultichainAssetsController extends StaticIntervalPollingController<
 
   readonly #isDeprecated: () => boolean;
 
+  readonly #blockaidTokenRescanInterval: number;
+
+  #initialized = false;
+
   constructor({
     messenger,
     state = {},
@@ -238,12 +242,10 @@ export class MultichainAssetsController extends StaticIntervalPollingController<
 
     this.#snaps = {};
     this.#isDeprecated = isDeprecated;
+    this.#blockaidTokenRescanInterval = blockaidTokenRescanInterval;
 
     if (this.#isDeprecated()) {
       this.#enforceDisabledState();
-    } else if (blockaidTokenRescanInterval > 0) {
-      this.setIntervalLength(blockaidTokenRescanInterval);
-      this.startPolling(null);
     }
 
     this.messenger.subscribe(
@@ -263,6 +265,32 @@ export class MultichainAssetsController extends StaticIntervalPollingController<
     );
 
     messenger.registerMethodActionHandlers(this, MESSENGER_EXPOSED_METHODS);
+  }
+
+  /**
+   * Complete initialization once the controllers this controller reads from
+   * have been constructed: start the periodic Blockaid re-scan of stored
+   * tokens, unless it is disabled.
+   *
+   * The constructor does not call other controllers or start polling, so it
+   * can run before they are constructed. Calling it more than once has no
+   * effect.
+   */
+  init(): void {
+    if (this.#initialized) {
+      return;
+    }
+    this.#initialized = true;
+
+    if (this.#isDeprecated()) {
+      this.#enforceDisabledState();
+      return;
+    }
+
+    if (this.#blockaidTokenRescanInterval > 0) {
+      this.setIntervalLength(this.#blockaidTokenRescanInterval);
+      this.startPolling(null);
+    }
   }
 
   /**

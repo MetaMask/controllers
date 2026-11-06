@@ -192,15 +192,17 @@ export class TokenDetectionController extends StaticIntervalPollingController<To
 > {
   #intervalId?: ReturnType<typeof setTimeout>;
 
-  #selectedAccountId: string;
+  #selectedAccountId: string | undefined;
 
   readonly #tokenListService: TokenListService;
 
   #disabled: boolean;
 
-  #isUnlocked: boolean;
+  #isUnlocked = false;
 
-  #isDetectionEnabledFromPreferences: boolean;
+  #isDetectionEnabledFromPreferences: boolean | undefined;
+
+  #initialized = false;
 
   readonly #useTokenDetection: () => boolean;
 
@@ -279,21 +281,11 @@ export class TokenDetectionController extends StaticIntervalPollingController<To
     this.#disabled = disabled;
     this.setIntervalLength(interval);
 
-    this.#selectedAccountId = this.#getSelectedAccount().id;
-
     this.#tokenListService = tokenListService;
-
-    const { useTokenDetection: defaultUseTokenDetection } = this.messenger.call(
-      'PreferencesController:getState',
-    );
-    this.#isDetectionEnabledFromPreferences = defaultUseTokenDetection;
 
     this.#getBalancesInSingleCall = getBalancesInSingleCall;
 
     this.#trackMetaMetricsEvent = trackMetaMetricsEvent;
-
-    const { isUnlocked } = this.messenger.call('KeyringController:getState');
-    this.#isUnlocked = isUnlocked;
 
     this.#useTokenDetection = useTokenDetection;
     this.#useExternalServices = useExternalServices;
@@ -304,6 +296,38 @@ export class TokenDetectionController extends StaticIntervalPollingController<To
     }
 
     this.#registerEventListeners();
+  }
+
+  /**
+   * Complete initialization once the controllers this controller reads from
+   * have been constructed: read the selected account, the lock state, and the
+   * token detection preference.
+   *
+   * The constructor does not call other controllers, so it can run before they
+   * are constructed. Until this is called, the controller treats the keyring as
+   * locked. `PreferencesController` may be registered after this is called; if
+   * it is not available yet, the preference is taken from its next
+   * `stateChange` event. Calling it more than once has no effect.
+   */
+  init(): void {
+    if (this.#initialized) {
+      return;
+    }
+    this.#initialized = true;
+
+    this.#selectedAccountId ??= this.#getSelectedAccount().id;
+
+    const { isUnlocked } = this.messenger.call('KeyringController:getState');
+    this.#isUnlocked = isUnlocked;
+
+    try {
+      const { useTokenDetection } = this.messenger.call(
+        'PreferencesController:getState',
+      );
+      this.#isDetectionEnabledFromPreferences = useTokenDetection;
+    } catch (error) {
+      this.messenger.captureException?.(error as Error);
+    }
   }
 
   #enforceDisabledState(): void {
@@ -1144,6 +1168,9 @@ export class TokenDetectionController extends StaticIntervalPollingController<To
   }
 
   #getSelectedAddress(): string {
+    if (this.#selectedAccountId === undefined) {
+      return this.#getSelectedAccount().address;
+    }
     // If the address is not defined (or empty), we fallback to the currently selected account's address
     const account = this.messenger.call(
       'AccountsController:getAccount',
