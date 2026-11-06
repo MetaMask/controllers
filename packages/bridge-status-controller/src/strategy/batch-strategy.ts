@@ -38,19 +38,22 @@ export async function* submitBatchHandler(
     isBridgeTx,
   });
 
-  const batchId = generateBatchId();
+  const batchId = args.batchId ?? generateBatchId();
 
-  yield {
-    type: SubmitStep.AddHistoryItem,
-    payload: {
-      historyKey: batchId,
-      quoteResponse,
-      bridgeTxMeta: {
-        batchId,
+  // Add new history item if historyKey is not provided
+  if (!args.historyKey) {
+    yield {
+      type: SubmitStep.AddHistoryItem,
+      payload: {
+        historyKey: batchId,
+        quoteResponse,
+        bridgeTxMeta: {
+          batchId,
+        },
+        next,
       },
-      next,
-    },
-  };
+    };
+  }
 
   const transactionParams = await getAddTransactionBatchParams({
     tradeData,
