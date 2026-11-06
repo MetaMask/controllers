@@ -304,12 +304,10 @@ export async function entropyToCip3MasterNode(
 
   // Consistent with the Icarus derivation scheme.
   // https://github.com/cardano-foundation/CIPs/blob/09d7d8ee1bd64f7e6b20b5a6cae088039dce00cb/CIP-0003/Icarus.md
-  /* eslint-disable no-bitwise, operator-assignment */
-  /* oxlint-disable typescript/no-non-null-assertion */
+  /* oxlint-disable eslint/no-bitwise, eslint/operator-assignment, typescript/no-non-null-assertion */
   rootNode[0] = rootNode[0]! & 0b1111_1000;
   rootNode[31] = (rootNode[31]! & 0b0001_1111) | 0b0100_0000;
-  /* oxlint-enable typescript/no-non-null-assertion */
-  /* eslint-enable no-bitwise, operator-assignment */
+  /* oxlint-enable eslint/no-bitwise, eslint/operator-assignment, typescript/no-non-null-assertion */
 
   const privateKey = rootNode.slice(0, curve.privateKeyLength);
   const chainCode = rootNode.slice(curve.privateKeyLength);
