@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export `calculateAccountSummary` and `getCrossCollateral` to derive account ratio, account leverage and cross margin usage from `AccountState.crossMarginSummary`, with account leverage as cross notional over total account equity, isolated margin included, as Hyperliquid computes it ([#11343](https://github.com/MetaMask/core/pull/11343))
   - Types `PerpsAccountSummary`, `CalculateAccountSummaryParams` and `CrossMarginSummaryInput`
 
+### Changed
+
+- Bump `@metamask/abi-utils` from `^2.0.4` to `^3.0.0` ([#11356](https://github.com/MetaMask/core/pull/11356))
+
 ## [22.1.2]
 
 ### Changed
