@@ -55,6 +55,7 @@ function setupControllerWithOrderSyncingMocks(args?: {
     errorMessage: string,
     sentryContext?: Record<string, unknown>,
   ) => void;
+  isNetworkAllowed?: () => boolean;
 }): {
   controller: RampsController;
   performBatchSetStorage: Mock;
@@ -104,6 +105,7 @@ function setupControllerWithOrderSyncingMocks(args?: {
 
   const controller = new RampsController({
     messenger,
+    isNetworkAllowed: args?.isNetworkAllowed,
     onOrderSyncErroneousSituation: args?.onOrderSyncErroneousSituation,
   });
 
@@ -389,6 +391,72 @@ describe('RampsController order syncing', () => {
 
     expect(controller.state.orders).toStrictEqual([]);
     expect(controller.getPendingRemoteDeletes()).toStrictEqual([]);
+  });
+
+  it('uploads an order added while network access is denied on the next full sync', async () => {
+    let allowed = false;
+    const { controller, performBatchSetStorage } =
+      setupControllerWithOrderSyncingMocks({
+        isNetworkAllowed: () => allowed,
+      });
+    const order = createMockOrder({
+      id: '/providers/transak/orders/deferred-add',
+      providerOrderId: 'deferred-add',
+    });
+
+    controller.addOrder(order);
+    await new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+
+    expect(performBatchSetStorage).not.toHaveBeenCalled();
+    expect(controller.state.orders).toStrictEqual([
+      expect.objectContaining({ providerOrderId: 'deferred-add' }),
+    ]);
+
+    allowed = true;
+    await controller.syncOrdersWithUserStorage();
+
+    expect(performBatchSetStorage).toHaveBeenCalledTimes(1);
+    const [, entries] = performBatchSetStorage.mock.calls[0];
+    expect(entries).toStrictEqual([
+      ['deferred-add', expect.stringContaining('deferred-add')],
+    ]);
+  });
+
+  it('uploads the tombstone on the next full sync when removeOrder ran while network access is denied', async () => {
+    let allowed = true;
+    const { controller, performBatchSetStorage } =
+      setupControllerWithOrderSyncingMocks({
+        isNetworkAllowed: () => allowed,
+      });
+
+    controller.addOrder(createMockOrder());
+    await new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+    performBatchSetStorage.mockClear();
+
+    allowed = false;
+    controller.removeOrder('abc-123');
+    await new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+
+    expect(performBatchSetStorage).not.toHaveBeenCalled();
+    expect(controller.state.orders).toStrictEqual([]);
+    expect(controller.getPendingRemoteDeletes()).toStrictEqual([
+      expect.objectContaining({ providerOrderId: 'abc-123' }),
+    ]);
+
+    allowed = true;
+    await controller.syncOrdersWithUserStorage();
+
+    expect(performBatchSetStorage).toHaveBeenCalledTimes(1);
+    const [, entries] = performBatchSetStorage.mock.calls[0];
+    expect(entries).toStrictEqual([
+      ['abc-123', expect.stringContaining('"dt"')],
+    ]);
   });
 
   it('does not restore an order when its fetch finishes after removal', async () => {
