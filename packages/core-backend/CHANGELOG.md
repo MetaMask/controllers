@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
 
+### Fixed
+
+- `fetchV5MultiAccountBalances` and `fetchV6MultiAccountBalances` (and their `get*QueryOptions` helpers) now add `bypassServerCache: true` to the query key when `bypassServerCache` is set, so a bypass fetch no longer joins an in flight request for the same params and always hits the network with the cache busting param ([#NNNNN](https://github.com/MetaMask/core/pull/NNNNN))
+
 ## [14.0.0]
 
 ### Added
