@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add support for Node.js 26 ([#10981](https://github.com/MetaMask/core/pull/10981))
 
+### Fixed
+
+- Hide the price scale's auto-fit and logarithmic buttons, which were visible in desktop embedders ([#11368](https://github.com/MetaMask/core/pull/11368))
+
 ## [1.0.0]
 
 ### Added
