@@ -16,6 +16,8 @@ export type StepContext = {
    */
   predecessorAddress?: Hex;
   chainId: Hex;
+  allowedCalldataEnforcer: Hex;
+  allowedTargetsEnforcer: Hex;
   boringVaultAddress: Hex;
   delegateAddress: Hex;
   delegatorImplAddress: Hex;
@@ -24,6 +26,7 @@ export type StepContext = {
   premiumVault?: UpgradeConfig['premiumVault'];
   redeemerEnforcer: Hex;
   valueLteEnforcer: Hex;
+  vaultMigrationHelperAddress?: Hex;
   vedaVaultAdapterAddress: Hex;
 };
 
