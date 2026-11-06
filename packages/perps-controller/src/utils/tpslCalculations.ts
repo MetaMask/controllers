@@ -25,7 +25,11 @@ export type TpslCalculationParams = {
    * unknown: they never assume 1x.
    */
   leverage?: number;
-  /** Entry price of an existing position. RoE is measured from it when set. */
+  /**
+   * Entry price of an existing position. RoE is measured from it when set,
+   * else from `currentPrice`; a set entry price that is not finite and above
+   * zero makes the RoE calculations return ''.
+   */
   entryPrice?: number;
   /** Liquidation price that a stop loss must stay clear of. */
   liquidationPrice?: string;
@@ -100,18 +104,14 @@ function toTriggerPriceString(price: number): string {
 
 /**
  * Price that RoE is measured from: the entry price of an existing position,
- * else the current price. An entry price of 0 or NaN counts as none.
+ * else the current price. Only an omitted entry price falls back; a set one
+ * that is not usable (0, NaN) stays as is, so the callers' checks reject it.
  *
  * @param params - Price context.
  * @returns The base price.
  */
 function getBasePrice(params: TpslCalculationParams): number {
-  const { currentPrice, entryPrice } = params;
-  return entryPrice === undefined ||
-    entryPrice === 0 ||
-    Number.isNaN(entryPrice)
-    ? currentPrice
-    : entryPrice;
+  return params.entryPrice ?? params.currentPrice;
 }
 
 /**

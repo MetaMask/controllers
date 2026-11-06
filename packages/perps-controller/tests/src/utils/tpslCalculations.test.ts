@@ -173,18 +173,26 @@ describe('calculateSignedRoEForPrice', () => {
     expect(calculateRoEForPrice('2375', false, longUnknownLeverage)).toBe('');
   });
 
+  it('measures RoE and prices from the current price for an order form without an entry price', () => {
+    const orderForm: TpslCalculationParams = {
+      currentPrice: 2500,
+      direction: 'long',
+      leverage: 2,
+    };
+    expect(calculateSignedRoEForPrice('2750', orderForm)).toBe('20.00');
+    expect(calculateRoEForPrice('2750', true, orderForm)).toBe('20.00');
+    expect(calculatePriceForRoE(20, true, orderForm)).toBe('2750');
+  });
+
   it.each([0, Number.NaN])(
-    'measures RoE from the current price with an entry price of %s',
+    'has no RoE or price with an entry price of %s, rather than measuring from the current price',
     (entryPrice) => {
-      expect(
-        calculateSignedRoEForPrice('2750', { ...long2x, entryPrice }),
-      ).toBe('20.00');
-      expect(
-        calculateRoEForPrice('2750', true, { ...long2x, entryPrice }),
-      ).toBe('20.00');
-      expect(calculatePriceForRoE(20, true, { ...long2x, entryPrice })).toBe(
-        '2750',
-      );
+      const params = { ...long2x, entryPrice };
+      expect(calculateSignedRoEForPrice('2750', params)).toBe('');
+      expect(calculateRoEForPrice('2750', true, params)).toBe('');
+      expect(calculateRoEForPrice('2250', false, params)).toBe('');
+      expect(calculatePriceForRoE(20, true, params)).toBe('');
+      expect(calculatePriceForRoE(-10, false, params)).toBe('');
     },
   );
 

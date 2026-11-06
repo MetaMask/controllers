@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `calculatePriceForRoE` and `calculateSignedRoEForPrice` convert between a trigger price and a signed RoE (positive at a gain, negative at a loss, for take profit and stop loss alike), scaled by leverage, with a stop loss's loss capped at 99% per 1x of leverage
   - `calculateRoEForPrice` returns the RoE on the trigger's own side, a take profit's gain or a stop loss's loss, and zero for a trigger on the wrong side
   - The RoE calculations need a known `leverage`: they return `''` while it is missing rather than assume 1x, and `''` for a non-finite price, leverage or RoE
+  - RoE is measured from `entryPrice` when set and from `currentPrice` when it is omitted; a set `entryPrice` that is not a finite number above zero, such as `0` or `NaN`, gives `''` rather than falling back to `currentPrice`
   - `calculatePriceForPercentage` and `calculatePercentageForPrice` convert between a trigger price and a price move
   - `calculatePriceForRoE` and `calculatePriceForPercentage` keep the decimals a trigger price needs at its price, as set by `TP_SL_PRECISION_CONFIG`, without trailing zeros; the provider rounds the price to the asset's precision when the order is sent
   - `getMaxStopLossPercentage` and `isValidStopLossPercentage` bound the stop loss percentage
