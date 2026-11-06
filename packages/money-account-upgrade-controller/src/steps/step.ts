@@ -9,7 +9,15 @@ import type { UpgradeConfig } from '../types.js';
 export type StepContext = {
   messenger: MoneyAccountUpgradeControllerMessenger;
   address: Hex;
+  /**
+   * The current address of the Money Account that `address` succeeds. Only
+   * set when upgrading a successor, in which case the address is linked to
+   * it as part of the upgrade.
+   */
+  predecessorAddress?: Hex;
   chainId: Hex;
+  allowedCalldataEnforcer: Hex;
+  allowedTargetsEnforcer: Hex;
   boringVaultAddress: Hex;
   delegateAddress: Hex;
   delegatorImplAddress: Hex;
