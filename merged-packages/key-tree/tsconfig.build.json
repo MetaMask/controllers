@@ -1,24 +1,16 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "../../tsconfig.packages.build.json",
   "compilerOptions": {
-    "declaration": true,
-    "declarationMap": true,
-    "emitDeclarationOnly": true,
-    "inlineSources": true,
-    "noEmit": false,
-    "outDir": "dist",
-    "rootDir": "src",
-    "sourceMap": true
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "outDir": "./dist",
+    "resolveJsonModule": true,
+    "rootDir": "./src"
   },
-  "include": ["./src/**/*.ts"],
-  "exclude": [
-    "./src/**/__fixtures__/**/*",
-    "./src/**/__mocks__/**/*",
-    "./src/**/__test__/**/*",
-    "./src/**/__tests__/**/*",
-    "./src/**/__snapshots__/**/*",
-    "./src/**/*.test.ts",
-    "./src/**/*.test-d.ts",
-    "./src/**/*.test.*.ts"
-  ]
+  "references": [
+    {
+      "path": "../utils/tsconfig.build.json"
+    }
+  ],
+  "include": ["../../types", "./src"]
 }
