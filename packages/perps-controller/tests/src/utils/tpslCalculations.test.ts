@@ -329,13 +329,26 @@ describe('calculatePriceForRoE', () => {
 
 describe('calculatePriceForPercentage', () => {
   it.each([
-    { trigger: 'long TP', isProfit: true, params: long2x, price: '2750.00' },
-    { trigger: 'long SL', isProfit: false, params: long2x, price: '2250.00' },
-    { trigger: 'short TP', isProfit: true, params: short2x, price: '2250.00' },
-    { trigger: 'short SL', isProfit: false, params: short2x, price: '2750.00' },
+    { trigger: 'long TP', isProfit: true, params: long2x, price: '2750' },
+    { trigger: 'long SL', isProfit: false, params: long2x, price: '2250' },
+    { trigger: 'short TP', isProfit: true, params: short2x, price: '2250' },
+    { trigger: 'short SL', isProfit: false, params: short2x, price: '2750' },
   ])('moves the price 10% for a $trigger', ({ isProfit, params, price }) => {
     expect(calculatePriceForPercentage(10, isProfit, params)).toBe(price);
   });
+
+  it.each([
+    { range: 'below $0.01', currentPrice: 0.001, price: '0.0011' },
+    { range: 'below $1', currentPrice: 0.123456, price: '0.135802' },
+    { range: 'below $100', currentPrice: 12.345, price: '13.5795' },
+  ])(
+    'keeps the price decimals for prices $range',
+    ({ currentPrice, price }) => {
+      expect(
+        calculatePriceForPercentage(10, true, { ...long2x, currentPrice }),
+      ).toBe(price);
+    },
+  );
 
   it('has no price without a current price', () => {
     expect(
@@ -530,35 +543,95 @@ describe('validateTPSLPrices', () => {
   const withLiquidation = { ...long2x, liquidationPrice: '2000' };
 
   it('accepts a pair on its sides and clear of liquidation', () => {
-    expect(validateTPSLPrices('2625', '2375', withLiquidation)).toBe(true);
+    expect(validateTPSLPrices('2625', '2375', withLiquidation)).toBe('valid');
   });
 
   it('accepts a single trigger', () => {
-    expect(validateTPSLPrices('2625', undefined, withLiquidation)).toBe(true);
-    expect(validateTPSLPrices(undefined, '2375', withLiquidation)).toBe(true);
+    expect(validateTPSLPrices('2625', undefined, withLiquidation)).toBe(
+      'valid',
+    );
+    expect(validateTPSLPrices(undefined, '2375', withLiquidation)).toBe(
+      'valid',
+    );
+  });
+
+  it('accepts no trigger without needing a reference price', () => {
+    expect(validateTPSLPrices(undefined, '', { currentPrice: 0 })).toBe(
+      'valid',
+    );
+  });
+
+  it('accepts a take profit without a liquidation price', () => {
+    expect(
+      validateTPSLPrices('2625', undefined, {
+        ...long2x,
+        liquidationPrice: 'abc',
+      }),
+    ).toBe('valid');
   });
 
   it('rejects a take profit or stop loss on the wrong side', () => {
-    expect(validateTPSLPrices('2375', '2375', withLiquidation)).toBe(false);
-    expect(validateTPSLPrices('2625', '2625', withLiquidation)).toBe(false);
+    expect(validateTPSLPrices('2375', '2375', withLiquidation)).toBe('invalid');
+    expect(validateTPSLPrices('2625', '2625', withLiquidation)).toBe('invalid');
   });
 
   it('rejects a stop loss beyond liquidation', () => {
-    expect(validateTPSLPrices('2625', '1900', withLiquidation)).toBe(false);
+    expect(validateTPSLPrices('2625', '1900', withLiquidation)).toBe('invalid');
+  });
+
+  it('rejects a stop loss beyond liquidation without a reference price', () => {
+    expect(
+      validateTPSLPrices(undefined, '1900', {
+        currentPrice: 0,
+        direction: 'long',
+        liquidationPrice: '2000',
+      }),
+    ).toBe('invalid');
   });
 
   it('rejects a non-positive price before needing a reference price', () => {
     expect(validateTPSLPrices('-5', undefined, { currentPrice: 0 })).toBe(
-      false,
+      'invalid',
     );
-    expect(validateTPSLPrices(undefined, '0', { currentPrice: 0 })).toBe(false);
+    expect(validateTPSLPrices(undefined, '0', { currentPrice: 0 })).toBe(
+      'invalid',
+    );
   });
 
-  it('skips the side checks without a reference price or side', () => {
-    expect(validateTPSLPrices('2375', '2625', { currentPrice: 0 })).toBe(true);
-    expect(validateTPSLPrices('2375', '2625', { currentPrice: 2500 })).toBe(
-      true,
-    );
+  it.each(['abc', 'Infinity', '$'])(
+    'rejects a trigger price of %s',
+    (price) => {
+      expect(validateTPSLPrices(price, undefined, withLiquidation)).toBe(
+        'invalid',
+      );
+      expect(validateTPSLPrices(undefined, price, withLiquidation)).toBe(
+        'invalid',
+      );
+      expect(validateTPSLPrices(price, undefined, { currentPrice: 0 })).toBe(
+        'invalid',
+      );
+    },
+  );
+
+  it.each([
+    { reason: 'no reference price', params: { ...long2x, currentPrice: 0 } },
+    {
+      reason: 'a NaN reference price',
+      params: { ...long2x, currentPrice: Number.NaN },
+    },
+    { reason: 'no side', params: { currentPrice: 2500 } },
+  ])('cannot check a trigger with $reason', ({ params }) => {
+    expect(validateTPSLPrices('2375', '2625', params)).toBe('unresolved');
+    expect(validateTPSLPrices('2625', undefined, params)).toBe('unresolved');
+  });
+
+  it('cannot check a stop loss with an unreadable liquidation price', () => {
+    expect(
+      validateTPSLPrices('2625', '2375', {
+        ...long2x,
+        liquidationPrice: 'abc',
+      }),
+    ).toBe('unresolved');
   });
 });
 

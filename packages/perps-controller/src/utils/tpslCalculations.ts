@@ -74,6 +74,20 @@ function getTriggerPriceDecimals(price: number): number {
 }
 
 /**
+ * A calculated trigger price as a string, with the decimals its price range
+ * needs and no trailing zeros. Rounding to the asset's submission precision
+ * is left to the provider.
+ *
+ * @param price - The calculated trigger price.
+ * @returns The trigger price as a string.
+ */
+function toTriggerPriceString(price: number): string {
+  return Number.parseFloat(
+    price.toFixed(getTriggerPriceDecimals(price)),
+  ).toString();
+}
+
+/**
  * Price that RoE is measured from: the entry price of an existing position,
  * else the current price. An entry price of 0 or NaN counts as none.
  *
@@ -146,13 +160,10 @@ export function calculatePriceForRoE(
     ? roePercentage
     : Math.max(roePercentage, -leverage * MAX_STOP_LOSS_ROE_PER_LEVERAGE);
   const priceChangeRatio = roe / (leverage * 100);
-  const price =
+  return toTriggerPriceString(
     basePrice *
-    (direction === 'long' ? 1 + priceChangeRatio : 1 - priceChangeRatio);
-
-  return Number.parseFloat(
-    price.toFixed(getTriggerPriceDecimals(price)),
-  ).toString();
+      (direction === 'long' ? 1 + priceChangeRatio : 1 - priceChangeRatio),
+  );
 }
 
 /**
@@ -205,7 +216,9 @@ export function calculateRoEForPrice(
  * @param percentage - Price move in percent.
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
- * @returns The trigger price with two decimals, or '' without a current price.
+ * @returns The trigger price, with the decimals its price range needs (up to
+ * 8 below $0.01), or '' without a current price.
+ * @example calculatePriceForPercentage(10, true, { currentPrice: 0.001, direction: 'long' }) => '0.0011'
  */
 export function calculatePriceForPercentage(
   percentage: number,
@@ -220,7 +233,7 @@ export function calculatePriceForPercentage(
   const multiplier = isAboveReference(direction, isProfit)
     ? 1 + move
     : 1 - move;
-  return (currentPrice * multiplier).toFixed(2);
+  return toTriggerPriceString(currentPrice * multiplier);
 }
 
 /**
@@ -388,39 +401,69 @@ export function isStopLossSafeFromLiquidation(
 }
 
 /**
- * Whether a take profit and stop loss pair is valid: both positive, each on
- * its side of the reference price, and the stop loss clear of liquidation.
+ * Outcome of `validateTPSLPrices`. `unresolved` means a set trigger could not
+ * be checked: the reference price, the side or a readable liquidation price
+ * is missing. It is not a pass.
+ */
+export type TpslValidationResult = 'valid' | 'invalid' | 'unresolved';
+
+/**
+ * Whether a trigger price reads as a finite number above zero.
+ *
+ * @param price - The trigger price; may carry `$` or `,` formatting.
+ * @returns True for a usable price.
+ */
+function isReadableTriggerPrice(price: string): boolean {
+  const triggerPrice = parseFormattedPrice(price);
+  return Number.isFinite(triggerPrice) && triggerPrice > 0;
+}
+
+/**
+ * Check a take profit and stop loss pair: each set price must read as a
+ * positive number, sit on its side of the reference price, and the stop loss
+ * must trigger before liquidation. An unset trigger needs no check. The
+ * liquidation check runs only when `params.liquidationPrice` is set.
+ *
+ * A failure found without the reference price (an unreadable or non-positive
+ * price, a stop loss beyond liquidation) is `invalid` even when the rest of the
+ * context is missing.
  *
  * @param takeProfitPrice - The take profit price, if any.
  * @param stopLossPrice - The stop loss price, if any.
  * @param params - Price context, including the liquidation price.
- * @returns True when every set price passes its checks.
+ * @returns `valid` when every set price passes, `invalid` when one fails, and
+ * `unresolved` when a set price cannot be checked.
  */
 export function validateTPSLPrices(
   takeProfitPrice: string | undefined,
   stopLossPrice: string | undefined,
   params: TpslCalculationParams,
-): boolean {
-  // The positive floor needs no reference price, so it comes before the
-  // early return that skips the side checks.
+): TpslValidationResult {
+  const { currentPrice, direction, liquidationPrice } = params;
+  if (!takeProfitPrice && !stopLossPrice) {
+    return 'valid';
+  }
   if (
-    !isPositiveTriggerPrice(takeProfitPrice) ||
-    !isPositiveTriggerPrice(stopLossPrice)
+    (takeProfitPrice && !isReadableTriggerPrice(takeProfitPrice)) ||
+    (stopLossPrice && !isReadableTriggerPrice(stopLossPrice)) ||
+    !isStopLossSafeFromLiquidation(stopLossPrice, liquidationPrice, direction)
   ) {
-    return false;
+    return 'invalid';
   }
-  if (!params.currentPrice || !params.direction) {
-    return true;
+  if (
+    !direction ||
+    !Number.isFinite(currentPrice) ||
+    currentPrice <= 0 ||
+    (stopLossPrice &&
+      liquidationPrice &&
+      !Number.isFinite(parseFormattedPrice(liquidationPrice)))
+  ) {
+    return 'unresolved';
   }
-  return (
+  const isOnSide =
     (!takeProfitPrice || isValidTakeProfitPrice(takeProfitPrice, params)) &&
-    (!stopLossPrice || isValidStopLossPrice(stopLossPrice, params)) &&
-    isStopLossSafeFromLiquidation(
-      stopLossPrice,
-      params.liquidationPrice,
-      params.direction,
-    )
-  );
+    (!stopLossPrice || isValidStopLossPrice(stopLossPrice, params));
+  return isOnSide ? 'valid' : 'invalid';
 }
 
 /**

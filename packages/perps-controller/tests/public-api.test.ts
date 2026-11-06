@@ -41,6 +41,7 @@ import type {
   CalculateAccountSummaryParams,
   PerpsAccountSummary,
   TpslCalculationParams,
+  TpslValidationResult,
   DirectProviderOrderCapabilities,
   DirectProviderOrderCapabilitiesUnavailableReason,
   GetAccountSupportParams,
@@ -277,11 +278,16 @@ describe('@metamask/perps-controller public API', () => {
       spotCollateral: 0,
     };
     const summary: PerpsAccountSummary = calculateAccountSummary(accountParams);
+    const validation: TpslValidationResult = validateTPSLPrices(
+      '2625',
+      '2375',
+      params,
+    );
 
     expect(calculatePriceForRoE(-10, false, params)).toBe('2375');
     expect(calculateSignedRoEForPrice('2375', params)).toBe('-10.00');
     expect(calculateRoEForPrice('2375', true, params)).toBe('0.00');
-    expect(calculatePriceForPercentage(10, true, params)).toBe('2750.00');
+    expect(calculatePriceForPercentage(10, true, params)).toBe('2750');
     expect(calculatePercentageForPrice('2750', true, params)).toBe('10.00');
     expect(getMaxStopLossPercentage(2)).toBe(198);
     expect(isValidStopLossPercentage(199, 2)).toBe(false);
@@ -289,7 +295,7 @@ describe('@metamask/perps-controller public API', () => {
     expect(isValidTakeProfitPrice('2625', params)).toBe(true);
     expect(isValidStopLossPrice('2625', params)).toBe(false);
     expect(isStopLossSafeFromLiquidation('1900', '2000', 'long')).toBe(false);
-    expect(validateTPSLPrices('2625', '2375', params)).toBe(true);
+    expect(validation).toBe('valid');
     expect(formatRoePercent(12.5, { signed: true })).toBe('+12.50');
     expect(getCrossCollateral(accountParams.crossMarginSummary, 0)).toBeCloseTo(
       10.4,

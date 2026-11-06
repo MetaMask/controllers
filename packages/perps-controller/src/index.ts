@@ -604,7 +604,10 @@ export {
   validateTPSLPrices,
   formatRoePercent,
 } from './utils/index.js';
-export type { TpslCalculationParams } from './utils/index.js';
+export type {
+  TpslCalculationParams,
+  TpslValidationResult,
+} from './utils/index.js';
 export { ensureError, isAbortError } from './utils/index.js';
 export type {
   OrderBookCacheEntry,
