@@ -2665,6 +2665,9 @@ export class SeedlessOnboardingController<
    * global password ({@link resetPasswordWithVaultKeys}), the password counts
    * as outdated.
    *
+   * Any pending envelope migration checkpoint is discarded, since it belongs
+   * to the vault this call replaces.
+   *
    * Authenticate with social login and call {@link authenticateForRecovery}
    * first.
    *
@@ -2715,6 +2718,11 @@ export class SeedlessOnboardingController<
           rawToprfPwEncryptionKey:
             vaultKeySet.localWrapKey as Uint8Array<ArrayBuffer>,
           rawToprfAuthKeyPair: vaultKeySet.authKeyPair,
+        });
+        // the checkpoint belongs to the vault this call just replaced, and
+        // `migrateToEnvelope` would never clear it once `envelope` is set
+        this.update((state) => {
+          delete state.pendingEnvelopeMigration;
         });
         this.#setEnvelopeState(vaultKeySet);
         this.#resetPasswordOutdatedCache();

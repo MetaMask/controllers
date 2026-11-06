@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `recoverWithRecoverySecret` and the `SeedlessOnboardingController:recoverWithRecoverySecret` messenger action, which restore an envelope-managed vault with the Recovery Secret instead of the password ([#11220](https://github.com/MetaMask/core/pull/11220))
   - Takes the 32-byte `recoverySecret` and the `password` of the new local vault, and requires the social login session and an aal2 session from `authenticateForRecovery`.
   - Opens the vault keys sealed for the Recovery Secret, fetches the secret data with them, creates the local vault under `password`, and returns the secret data.
+  - Discards any pending `pendingEnvelopeMigration` checkpoint, since the local vault it belongs to is replaced.
   - The local password counts as outdated until it is synced with `syncLatestGlobalPassword` or set as the global password with `resetPasswordWithVaultKeys`.
 - Add `resetPasswordWithVaultKeys` and the `SeedlessOnboardingController:resetPasswordWithVaultKeys` messenger action, which set a new global password on an unlocked, envelope-managed vault without the old password after `recoverWithRecoverySecret` ([#11220](https://github.com/MetaMask/core/pull/11220))
   - Only allowed while `EnvelopeState.passwordAuthPubKey` is unset and with a valid aal2 session from `authenticateForRecovery`; otherwise it throws `PasswordResetRequiresRecovery` or `Aal2Required`. Once the local password is synced or reset, use `changePassword`.

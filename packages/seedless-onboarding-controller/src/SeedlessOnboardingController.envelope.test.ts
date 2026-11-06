@@ -1950,6 +1950,34 @@ describe('SeedlessOnboardingController', () => {
         });
       });
 
+      it('discards a pending envelope migration checkpoint but keeps the recovery session', async () => {
+        const store = await createMigratedAccount();
+
+        await withController(
+          {
+            state: {
+              ...getMockInitialControllerState({
+                withMockAuthenticatedUser: true,
+              }),
+              pendingEnvelopeMigration: 'encrypted',
+            },
+          },
+          async (args) => {
+            const { controller, toprfClient } = args;
+            mockNetwork(toprfClient, {
+              store,
+              globalPassword: NEW_PASSWORD,
+              recoverySecret: RECOVERY_SECRET_HEX,
+            });
+
+            await recover(args);
+
+            expect(controller.state.pendingEnvelopeMigration).toBeUndefined();
+            expect(controller.state.recoverySession).toBeDefined();
+          },
+        );
+      });
+
       it('reports the password as outdated until it is synced with the global password', async () => {
         const store = await createMigratedAccount();
 
