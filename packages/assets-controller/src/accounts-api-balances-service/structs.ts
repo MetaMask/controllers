@@ -2,7 +2,7 @@ import {
   array,
   boolean,
   enums,
-  literal,
+  nullable,
   number,
   optional,
   string,
@@ -45,30 +45,52 @@ const DefiBalanceMetadataStruct = type({
   groupId: string(),
 });
 
+/**
+ * A string field the data source does not read. It is kept loose (optional
+ * and nullable) so an API change to it never rejects a whole response.
+ */
+const LooseStringStruct = optional(nullable(string()));
+
+/**
+ * A number field the data source does not read, kept loose for the same
+ * reason as {@link LooseStringStruct}.
+ */
+const LooseNumberStruct = optional(nullable(number()));
+
+/**
+ * A v5 balance row. Only `accountId`, `assetId`, `balance` and `metadata` are
+ * read by the data source, every other field is loose.
+ */
 const V5BalanceItemStruct = type({
-  object: literal('token'),
-  symbol: string(),
-  name: string(),
-  type: enums(['native', 'erc20']),
-  decimals: number(),
+  object: LooseStringStruct,
+  symbol: LooseStringStruct,
+  name: LooseStringStruct,
+  type: LooseStringStruct,
+  decimals: LooseNumberStruct,
   assetId: string(),
   balance: string(),
   accountId: string(),
   metadata: optional(TokenBalanceMetadataStruct),
 });
 
+/**
+ * A v6 balance row. Only `accountId`, `assetId`, `balance`, `object` and
+ * `metadata` are read by the data source, every other field is loose.
+ * `object` is a plain string so unknown row kinds are skipped by the data
+ * source instead of rejecting the response.
+ */
 const V6BalanceItemStruct = type({
   accountId: string(),
-  object: enums(['token', 'defi']),
-  type: string(),
+  object: string(),
+  type: LooseStringStruct,
   assetId: string(),
-  name: string(),
-  symbol: string(),
-  decimals: number(),
+  name: LooseStringStruct,
+  symbol: LooseStringStruct,
+  decimals: LooseNumberStruct,
   balance: string(),
-  price: optional(string()),
-  labels: optional(array(string())),
-  canonicalHead: optional(string()),
+  price: LooseStringStruct,
+  labels: optional(nullable(array(string()))),
+  canonicalHead: LooseStringStruct,
   metadata: optional(
     union([DefiBalanceMetadataStruct, TokenBalanceMetadataStruct]),
   ),

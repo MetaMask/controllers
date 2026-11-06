@@ -72,6 +72,91 @@ describe('balances response structs', () => {
     expect(is(response, V6BalancesResponseStruct)).toBe(true);
   });
 
+  it('accepts rows with a null name or an unknown type', () => {
+    const v5Response = {
+      count: 2,
+      unprocessedNetworks: [],
+      balances: [
+        { ...V5_ITEM, name: null },
+        { ...V5_ITEM, type: 'erc721', object: 'nft' },
+      ],
+    };
+    const v6Response = {
+      unprocessedNetworks: [],
+      unprocessedIncludeAssetIds: [],
+      balances: [
+        { ...V6_ITEM, name: null, symbol: null, decimals: null },
+        { ...V6_ITEM, type: 'something-new', object: 'something-new' },
+      ],
+    };
+
+    expect(is(v5Response, V5BalancesResponseStruct)).toBe(true);
+    expect(is(v6Response, V6BalancesResponseStruct)).toBe(true);
+  });
+
+  it('accepts rows carrying only the fields the data source reads', () => {
+    const v5Response = {
+      count: 1,
+      unprocessedNetworks: [],
+      balances: [{ accountId: 'eip155:0:0xabc', assetId: 'a', balance: '1' }],
+    };
+    const v6Response = {
+      unprocessedNetworks: [],
+      unprocessedIncludeAssetIds: [],
+      balances: [
+        {
+          accountId: 'eip155:0:0xabc',
+          assetId: 'a',
+          balance: '1',
+          object: 'token',
+        },
+      ],
+    };
+
+    expect(is(v5Response, V5BalancesResponseStruct)).toBe(true);
+    expect(is(v6Response, V6BalancesResponseStruct)).toBe(true);
+  });
+
+  it('rejects rows missing a field the data source reads', () => {
+    for (const field of ['accountId', 'assetId', 'balance']) {
+      const { [field]: _omitted, ...v5Item } = V5_ITEM as Record<
+        string,
+        unknown
+      >;
+      const { [field]: _omitted6, ...v6Item } = V6_ITEM as Record<
+        string,
+        unknown
+      >;
+      expect(
+        is(
+          { count: 1, unprocessedNetworks: [], balances: [v5Item] },
+          V5BalancesResponseStruct,
+        ),
+      ).toBe(false);
+      expect(
+        is(
+          {
+            unprocessedNetworks: [],
+            unprocessedIncludeAssetIds: [],
+            balances: [v6Item],
+          },
+          V6BalancesResponseStruct,
+        ),
+      ).toBe(false);
+    }
+    const { object: _object, ...v6WithoutObject } = V6_ITEM;
+    expect(
+      is(
+        {
+          unprocessedNetworks: [],
+          unprocessedIncludeAssetIds: [],
+          balances: [v6WithoutObject],
+        },
+        V6BalancesResponseStruct,
+      ),
+    ).toBe(false);
+  });
+
   it('rejects a response missing balances', () => {
     expect(
       is({ count: 0, unprocessedNetworks: [] }, V5BalancesResponseStruct),
