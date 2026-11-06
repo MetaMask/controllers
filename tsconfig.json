@@ -159,6 +159,9 @@
       "path": "./packages/json-rpc-middleware-stream"
     },
     {
+      "path": "./packages/key-tree"
+    },
+    {
       "path": "./packages/keyring-controller"
     },
     {
