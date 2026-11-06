@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Whitelist single-use vault deposit delegations that carry a `Redeemer` caveat ([#11310](https://github.com/MetaMask/core/pull/11310))
+
 ## [0.2.0]
 
 ### Added
