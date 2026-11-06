@@ -1,12 +1,15 @@
-import { assert, bytesToHex, concatBytes, hexToBytes } from '@metamask/utils';
+import { bytesToHex, hexToBytes } from '@metamask/byte-utils';
+import { concatBytes } from '@metamask/byte-utils';
+import { assert } from '@metamask/type-utils';
 
-import type { DeriveChildKeyArgs } from '.';
-import { generateEntropy, getValidatedPath, validateNode } from './shared';
-import { BIP_32_HARDENED_OFFSET } from '../constants';
-import type { CryptographicFunctions } from '../cryptography';
-import { type Curve, mod } from '../curves';
-import { SLIP10Node } from '../SLIP10Node';
-import { numberToUint32 } from '../utils';
+import { BIP_32_HARDENED_OFFSET } from '../constants.js';
+import type { CryptographicFunctions } from '../cryptography.js';
+import type { Curve } from '../curves/index.js';
+import { mod } from '../curves/index.js';
+import { SLIP10Node } from '../SLIP10Node.js';
+import { numberToUint32 } from '../utils.js';
+import type { DeriveChildKeyArgs } from './index.js';
+import { generateEntropy, getValidatedPath, validateNode } from './shared.js';
 
 /**
  * CIP-3 https://github.com/cardano-foundation/CIPs/blob/09d7d8ee1bd64f7e6b20b5a6cae088039dce00cb/CIP-0003/CIP-0003.md.

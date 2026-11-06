@@ -1,21 +1,17 @@
-import { hexToBytes } from '@metamask/utils';
+import { hexToBytes } from '@metamask/byte-utils';
 // eslint-disable-next-line n/no-unsupported-features/node-builtins
-import { webcrypto } from 'crypto';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SLIP10Node, SLIP10PathTuple } from '../src';
-import { secp256k1 } from '../src';
-import derivationVectors from './vectors/derivation.json';
-import type { Curve } from '../src/curves';
-import { ed25519Bip32, ed25519 } from '../src/curves';
+import type { Curve } from '../src/curves/index.js';
+import { ed25519Bip32, ed25519 } from '../src/curves/index.js';
 import {
   createBip39KeyFromSeed,
   entropyToCip3MasterNode,
-} from '../src/derivers/bip39';
-import * as utils from '../src/utils';
-
-// Node.js <20 doesn't have `globalThis.crypto`, so we need to define it.
-// TODO: Remove this once we drop support for Node.js <20.
-Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
+} from '../src/derivers/bip39.js';
+import type { SLIP10Node, SLIP10PathTuple } from '../src/index.js';
+import { secp256k1 } from '../src/index.js';
+import * as utils from '../src/utils.js';
+import derivationVectors from './vectors/derivation.json';
 
 type Vector = (typeof derivationVectors.bip32.hardened)[0];
 
@@ -125,7 +121,7 @@ function generateTests(
 describe('vectors', () => {
   describe('using web crypto API', () => {
     beforeEach(() => {
-      jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(true);
+      vi.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(true);
     });
 
     describe('bip32', () => {
@@ -208,7 +204,7 @@ describe('vectors', () => {
 
   describe('using built-in cryptography functions', () => {
     beforeEach(() => {
-      jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(false);
+      vi.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(false);
     });
 
     describe('bip32', () => {

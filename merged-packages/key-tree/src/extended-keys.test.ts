@@ -1,8 +1,9 @@
-import { hexToBytes } from '@metamask/utils';
+import { hexToBytes } from '@metamask/byte-utils';
+import { describe, expect, it } from 'vitest';
 
-import type { ExtendedKey } from './extended-keys';
-import { decodeExtendedKey, encodeExtendedKey } from './extended-keys';
-import { hexStringToBytes } from './utils';
+import type { ExtendedKey } from './extended-keys.js';
+import { decodeExtendedKey, encodeExtendedKey } from './extended-keys.js';
+import { hexStringToBytes } from './utils.js';
 
 describe('decodeExtendedKey', () => {
   it('decodes an extended public key (mainnet)', () => {

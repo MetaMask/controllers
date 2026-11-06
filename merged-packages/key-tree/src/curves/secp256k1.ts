@@ -1,7 +1,8 @@
-import { assert, stringToBytes } from '@metamask/utils';
+import { stringToBytes } from '@metamask/byte-utils';
+import { assert } from '@metamask/type-utils';
 import { secp256k1 } from '@noble/curves/secp256k1';
 
-import { isValidBytesKey } from '../utils';
+import { isValidBytesKey } from '../utils.js';
 
 export const curve = secp256k1.CURVE;
 export const name = 'secp256k1';

@@ -1,14 +1,15 @@
-import { bytesToHex, hexToBytes } from '@metamask/utils';
+import { bytesToHex, hexToBytes } from '@metamask/byte-utils';
+import { describe, expect, it } from 'vitest';
 
-import { ed25519Bip32 } from '.';
+import fixtures from '../../tests/fixtures.js';
 import {
   bytesToNumberLE,
   compressPublicKey,
   decompressPublicKey,
   isValidPrivateKey,
   multiplyWithBase,
-} from './ed25519Bip32';
-import fixtures from '../../tests/fixtures';
+} from './ed25519Bip32.js';
+import { ed25519Bip32 } from './index.js';
 
 describe('getPublicKey', () => {
   fixtures.cip3.forEach((fixture) => {

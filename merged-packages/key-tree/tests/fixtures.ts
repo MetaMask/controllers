@@ -1,5 +1,5 @@
 import { mnemonicToSeedSync } from '@metamask/scure-bip39';
-import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english';
+import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english.js';
 
 export default {
   // Fixtures defined and used in this package

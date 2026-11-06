@@ -1,12 +1,15 @@
+import { hexToBytes } from '@metamask/byte-utils';
+import { bigIntToBytes, concatBytes } from '@metamask/byte-utils';
 import { mnemonicToEntropy } from '@metamask/scure-bip39';
-import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english';
-import {
-  assert,
-  bigIntToBytes,
-  concatBytes,
-  hexToBytes,
-} from '@metamask/utils';
+import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english.js';
+import { assert } from '@metamask/type-utils';
+import { describe, expect, it, vi } from 'vitest';
 
+import fixtures from '../../tests/fixtures.js';
+import * as cryptography from '../cryptography.js';
+import type { Curve } from '../curves/index.js';
+import { secp256k1, ed25519Bip32 } from '../curves/index.js';
+import { mnemonicPhraseToBytes } from '../utils.js';
 import {
   entropyToCip3MasterNode,
   createBip39KeyFromSeed,
@@ -14,11 +17,7 @@ import {
   mnemonicToSeed,
   getDerivationPathWithSeed,
   bip39MnemonicToMultipath,
-} from './bip39';
-import fixtures from '../../tests/fixtures';
-import * as cryptography from '../cryptography';
-import { secp256k1, ed25519Bip32, type Curve } from '../curves';
-import { mnemonicPhraseToBytes } from '../utils';
+} from './bip39.js';
 
 const TEST_MNEMONIC_PHRASE =
   'pill frown erosion humor invest inquiry rich garment seek such mention punch';
@@ -166,9 +165,9 @@ describe('createBip39KeyFromSeed', () => {
 
   it('throws if the private key is zero', async () => {
     // Mock the hmac function to return a zero private key.
-    jest
-      .spyOn(cryptography, 'hmacSha512')
-      .mockResolvedValueOnce(new Uint8Array(64));
+    vi.spyOn(cryptography, 'hmacSha512').mockResolvedValueOnce(
+      new Uint8Array(64),
+    );
 
     await expect(
       createBip39KeyFromSeed(RANDOM_SEED, secp256k1),
@@ -187,9 +186,9 @@ describe('createBip39KeyFromSeed', () => {
       assert(privateKey.length === 32);
 
       // Mock the hmac function to return a private key larger than the curve order.
-      jest
-        .spyOn(cryptography, 'hmacSha512')
-        .mockResolvedValueOnce(concatBytes([privateKey, new Uint8Array(32)]));
+      vi.spyOn(cryptography, 'hmacSha512').mockResolvedValueOnce(
+        concatBytes([privateKey, new Uint8Array(32)]),
+      );
 
       await expect(
         createBip39KeyFromSeed(RANDOM_SEED, secp256k1),
@@ -219,6 +218,31 @@ describe('Cip3', () => {
         const result = await entropyToCip3MasterNode(
           hexToBytes(fixture.entropyHex),
           ed25519Bip32,
+        );
+        const { bip39Node } = fixture.nodes;
+        expect(result.privateKey).toBe(bip39Node.privateKey);
+        expect(result.chainCode).toBe(bip39Node.chainCode);
+      },
+    );
+
+    it.each(fixtures.cip3)(
+      'clamps the master key if a custom `pbkdf2Sha512` returns a `Buffer`',
+      async (fixture) => {
+        const result = await entropyToCip3MasterNode(
+          hexToBytes(fixture.entropyHex),
+          ed25519Bip32,
+          undefined,
+          {
+            pbkdf2Sha512: async (password, salt, iterations, keyLength) =>
+              Buffer.from(
+                await cryptography.pbkdf2Sha512(
+                  password,
+                  salt,
+                  iterations,
+                  keyLength,
+                ),
+              ),
+          },
         );
         const { bip39Node } = fixture.nodes;
         expect(result.privateKey).toBe(bip39Node.privateKey);

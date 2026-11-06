@@ -1,4 +1,6 @@
-import { createBip39KeyFromSeed, mnemonicToSeed } from '.';
+import { describe, expect, it } from 'vitest';
+
+import { createBip39KeyFromSeed, mnemonicToSeed } from './index.js';
 
 describe('index', () => {
   it('has expected exports', () => {

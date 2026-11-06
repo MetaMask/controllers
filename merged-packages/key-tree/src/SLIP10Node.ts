@@ -1,21 +1,22 @@
-import { assert, bytesToHex } from '@metamask/utils';
+import { bytesToHex } from '@metamask/byte-utils';
+import { assert } from '@metamask/type-utils';
 
-import type { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
-import type { BIP44Node } from './BIP44Node';
-import { BYTES_KEY_LENGTH } from './constants';
+import type { BIP44CoinTypeNode } from './BIP44CoinTypeNode.js';
+import type { BIP44Node } from './BIP44Node.js';
+import { BYTES_KEY_LENGTH } from './constants.js';
 import type {
   Network,
   RootedSLIP10PathTuple,
   SLIP10PathTuple,
-} from './constants';
-import type { CryptographicFunctions } from './cryptography';
-import type { SupportedCurve } from './curves';
-import { getCurveByName } from './curves';
-import { deriveKeyFromPath } from './derivation';
-import { publicKeyToEthAddress } from './derivers/bip32';
-import { getDerivationPathWithSeed } from './derivers/bip39';
-import { decodeExtendedKey, encodeExtendedKey } from './extended-keys';
-import { PUBLIC_KEY_GUARD } from './guard';
+} from './constants.js';
+import type { CryptographicFunctions } from './cryptography.js';
+import type { SupportedCurve } from './curves/index.js';
+import { getCurveByName } from './curves/index.js';
+import { deriveKeyFromPath } from './derivation.js';
+import { publicKeyToEthAddress } from './derivers/bip32.js';
+import { getDerivationPathWithSeed } from './derivers/bip39.js';
+import { decodeExtendedKey, encodeExtendedKey } from './extended-keys.js';
+import { PUBLIC_KEY_GUARD } from './guard.js';
 import {
   getBytes,
   getBytesUnsafe,
@@ -24,7 +25,7 @@ import {
   validateBIP32Index,
   validateCurve,
   validateNetwork,
-} from './utils';
+} from './utils.js';
 
 /**
  * A wrapper for SLIP-10 Hierarchical Deterministic (HD) tree nodes, i.e.

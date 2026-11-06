@@ -1,4 +1,4 @@
-import { assert } from '@metamask/utils';
+import { assert } from '@metamask/type-utils';
 
 import type {
   BIP44Depth,
@@ -7,19 +7,19 @@ import type {
   RootedSLIP10PathTuple,
   RootedSLIP10SeedPathTuple,
   SLIP10Path,
-} from './constants';
+} from './constants.js';
 import {
   BIP44PurposeNodeToken,
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
   MAX_BIP_44_DEPTH,
   MIN_BIP_44_DEPTH,
-} from './constants';
-import type { CryptographicFunctions } from './cryptography';
-import type { SupportedCurve } from './curves';
-import { decodeExtendedKey } from './extended-keys';
-import { SLIP10Node, validateBIP32Depth } from './SLIP10Node';
-import { isHardened } from './utils';
+} from './constants.js';
+import type { CryptographicFunctions } from './cryptography.js';
+import type { SupportedCurve } from './curves/index.js';
+import { decodeExtendedKey } from './extended-keys.js';
+import { SLIP10Node, validateBIP32Depth } from './SLIP10Node.js';
+import { isHardened } from './utils.js';
 
 export type BIP44ExtendedKeyOptions = {
   readonly depth: number;

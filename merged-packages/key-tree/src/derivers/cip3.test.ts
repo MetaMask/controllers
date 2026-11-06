@@ -1,10 +1,15 @@
-import { bytesToHex, hexToBytes } from '@metamask/utils';
+import { bytesToHex, hexToBytes } from '@metamask/byte-utils';
+import { describe, expect, it } from 'vitest';
 
+import fixtures from '../../tests/fixtures.js';
+import { BIP_32_HARDENED_OFFSET } from '../constants.js';
+import { ed25519, ed25519Bip32 } from '../curves/index.js';
+import { SLIP10Node } from '../SLIP10Node.js';
+import type { Cip3SupportedCurve } from './cip3.js';
 import {
   add,
   bigIntToBytes,
   bytesToBigInt,
-  type Cip3SupportedCurve,
   deriveChainCode,
   deriveChildKey,
   derivePrivateKey,
@@ -13,11 +18,7 @@ import {
   padEnd32Bytes,
   toReversed,
   trunc28Mul8,
-} from './cip3';
-import fixtures from '../../tests/fixtures';
-import { BIP_32_HARDENED_OFFSET } from '../constants';
-import { ed25519, ed25519Bip32 } from '../curves';
-import { SLIP10Node } from '../SLIP10Node';
+} from './cip3.js';
 
 const fixtureNodeToParentNode = (
   fixtureNode: (typeof fixtures.cip3)[number]['nodes'][keyof (typeof fixtures.cip3)[number]['nodes']],

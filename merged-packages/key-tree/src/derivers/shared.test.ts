@@ -1,10 +1,11 @@
-import { hexToBytes } from '@metamask/utils';
+import { hexToBytes } from '@metamask/byte-utils';
+import { describe, expect, it } from 'vitest';
 
-import { privateAdd } from './shared';
-import fixtures from '../../tests/fixtures';
-import { secp256k1 } from '../curves';
-import { curve } from '../curves/secp256k1';
-import { hexStringToBytes } from '../utils';
+import fixtures from '../../tests/fixtures.js';
+import { secp256k1 } from '../curves/index.js';
+import { curve } from '../curves/secp256k1.js';
+import { hexStringToBytes } from '../utils.js';
+import { privateAdd } from './shared.js';
 
 describe('privateAdd', () => {
   const PRIVATE_KEY = hexStringToBytes(

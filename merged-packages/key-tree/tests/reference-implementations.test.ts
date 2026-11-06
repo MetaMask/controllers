@@ -1,29 +1,24 @@
-// eslint-disable-next-line n/no-unsupported-features/node-builtins
-import { webcrypto } from 'crypto';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import fixtures from './fixtures';
-import type { SLIP10Node, HDPathTuple } from '../src';
-import { BIP44Node, BIP44PurposeNodeToken } from '../src';
-import { ed25519, secp256k1 } from '../src/curves';
-import { deriveKeyFromPath } from '../src/derivation';
+import { ed25519, secp256k1 } from '../src/curves/index.js';
+import { deriveKeyFromPath } from '../src/derivation.js';
 import {
   createBip39KeyFromSeed,
   getDerivationPathWithSeed,
-} from '../src/derivers/bip39';
+} from '../src/derivers/bip39.js';
+import type { SLIP10Node, HDPathTuple } from '../src/index.js';
+import { BIP44Node, BIP44PurposeNodeToken } from '../src/index.js';
 import {
   getBIP44CoinTypeToAddressPathTuple,
   hexStringToBytes,
-} from '../src/utils';
-import * as utils from '../src/utils';
-
-// Node.js <20 doesn't have `globalThis.crypto`, so we need to define it.
-// TODO: Remove this once we drop support for Node.js <20.
-Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
+} from '../src/utils.js';
+import * as utils from '../src/utils.js';
+import fixtures from './fixtures.js';
 
 describe('reference implementation tests', () => {
   describe('using web crypto API', () => {
     beforeEach(() => {
-      jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(false);
+      vi.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(false);
     });
 
     describe('local', () => {
@@ -343,7 +338,7 @@ describe('reference implementation tests', () => {
 
   describe('using built-in cryptography functions', () => {
     beforeEach(() => {
-      jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(false);
+      vi.spyOn(utils, 'isWebCryptoSupported').mockReturnValue(false);
     });
 
     describe('local', () => {

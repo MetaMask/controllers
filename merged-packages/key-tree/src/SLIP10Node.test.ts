@@ -1,15 +1,16 @@
-import { bytesToHex, hexToBytes } from '@metamask/utils';
+import { bytesToHex, hexToBytes } from '@metamask/byte-utils';
+import { describe, expect, it, vi } from 'vitest';
 
-import { BIP44PurposeNodeToken } from './constants';
-import type { CryptographicFunctions } from './cryptography';
-import { pbkdf2Sha512, hmacSha512 } from './cryptography';
-import { ed25519, secp256k1 } from './curves';
-import { compressPublicKey } from './curves/secp256k1';
-import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39';
-import { encodeExtendedKey } from './extended-keys';
-import { SLIP10Node } from './SLIP10Node';
-import { hexStringToBytes, mnemonicPhraseToBytes } from './utils';
-import fixtures from '../tests/fixtures';
+import fixtures from '../tests/fixtures.js';
+import { BIP44PurposeNodeToken } from './constants.js';
+import type { CryptographicFunctions } from './cryptography.js';
+import { pbkdf2Sha512, hmacSha512 } from './cryptography.js';
+import { ed25519, secp256k1 } from './curves/index.js';
+import { compressPublicKey } from './curves/secp256k1.js';
+import { createBip39KeyFromSeed, deriveChildKey } from './derivers/bip39.js';
+import { encodeExtendedKey } from './extended-keys.js';
+import { SLIP10Node } from './SLIP10Node.js';
+import { hexStringToBytes, mnemonicPhraseToBytes } from './utils.js';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
@@ -22,8 +23,8 @@ const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
  * @returns The mock cryptographic functions.
  */
 function getMockFunctions(): CryptographicFunctions {
-  const mockHmacSha512 = jest.fn().mockImplementation(hmacSha512);
-  const mockPbkdf2Sha512 = jest.fn().mockImplementation(pbkdf2Sha512);
+  const mockHmacSha512 = vi.fn().mockImplementation(hmacSha512);
+  const mockPbkdf2Sha512 = vi.fn().mockImplementation(pbkdf2Sha512);
 
   return {
     hmacSha512: mockHmacSha512,
@@ -360,8 +361,8 @@ describe('SLIP10Node', () => {
 
       it('throws if the private key is not a Uint8Array or hexadecimal string', async () => {
         await expect(
-          // @ts-expect-error Invalid private key type.
           SLIP10Node.fromExtendedKey({
+            // @ts-expect-error Invalid private key type.
             privateKey: 123,
             chainCode: new Uint8Array(32).fill(1),
             depth: 0,
@@ -1121,7 +1122,7 @@ describe('SLIP10Node', () => {
 
       const { publicKey, ...json } = baseNode.toJSON();
 
-      const spy = jest.spyOn(secp256k1, 'getPublicKey');
+      const spy = vi.spyOn(secp256k1, 'getPublicKey');
 
       const node = await SLIP10Node.fromExtendedKey(json);
       expect(spy).not.toHaveBeenCalled();

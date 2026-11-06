@@ -3,12 +3,22 @@
   "compilerOptions": {
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node"]
   },
   "references": [
     {
-      "path": "../utils"
+      "path": "../byte-utils"
+    },
+    {
+      "path": "../type-utils"
     }
   ],
-  "include": ["../../types", "./src", "./tests"]
+  "include": [
+    "../../types",
+    "./scripts",
+    "./src",
+    "./tests",
+    "./tests/vectors/*.json"
+  ]
 }

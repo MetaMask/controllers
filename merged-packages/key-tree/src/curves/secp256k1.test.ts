@@ -1,7 +1,13 @@
-import { bytesToHex, hexToBytes } from '@metamask/utils';
+import { bytesToHex, hexToBytes } from '@metamask/byte-utils';
+import { describe, expect, it } from 'vitest';
 
-import { curve, getPublicKey, isValidPrivateKey, publicAdd } from './secp256k1';
-import fixtures from '../../tests/fixtures';
+import fixtures from '../../tests/fixtures.js';
+import {
+  curve,
+  getPublicKey,
+  isValidPrivateKey,
+  publicAdd,
+} from './secp256k1.js';
 
 describe('secp256k1', () => {
   describe('curve', () => {

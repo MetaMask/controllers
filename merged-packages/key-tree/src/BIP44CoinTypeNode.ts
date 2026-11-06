@@ -1,5 +1,5 @@
-import type { BIP44NodeInterface, JsonBIP44Node } from './BIP44Node';
-import { BIP44Node } from './BIP44Node';
+import type { BIP44NodeInterface, JsonBIP44Node } from './BIP44Node.js';
+import { BIP44Node } from './BIP44Node.js';
 import type {
   BIP39Node,
   BIP44Depth,
@@ -7,12 +7,12 @@ import type {
   CoinTypeHDPathString,
   HardenedBIP32Node,
   Network,
-} from './constants';
-import { BIP_32_HARDENED_OFFSET } from './constants';
-import type { CryptographicFunctions } from './cryptography';
-import type { SupportedCurve } from './curves';
-import { deriveChildNode } from './SLIP10Node';
-import type { CoinTypeToAddressIndices } from './utils';
+} from './constants.js';
+import { BIP_32_HARDENED_OFFSET } from './constants.js';
+import type { CryptographicFunctions } from './cryptography.js';
+import type { SupportedCurve } from './curves/index.js';
+import { deriveChildNode } from './SLIP10Node.js';
+import type { CoinTypeToAddressIndices } from './utils.js';
 import {
   getBIP44CoinType,
   getBIP32NodeToken,
@@ -23,7 +23,7 @@ import {
   getUnhardenedBIP32NodeToken,
   hexStringToBytes,
   nullableHexStringToBytes,
-} from './utils';
+} from './utils.js';
 
 export type CoinTypeHDPathTuple = [
   BIP39Node,

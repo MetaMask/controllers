@@ -1,12 +1,14 @@
-import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english';
-import { assert, createDataView, hexToBytes } from '@metamask/utils';
+import { hexToBytes } from '@metamask/byte-utils';
+import { createDataView } from '@metamask/byte-utils';
+import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english.js';
+import { assert } from '@metamask/type-utils';
 import { base58check as scureBase58check } from '@scure/base';
 
 import type {
   CoinTypeHDPathTuple,
   CoinTypeSeedPathTuple,
-} from './BIP44CoinTypeNode';
-import { BIP_44_COIN_TYPE_DEPTH } from './BIP44CoinTypeNode';
+} from './BIP44CoinTypeNode.js';
+import { BIP_44_COIN_TYPE_DEPTH } from './BIP44CoinTypeNode.js';
 import type {
   BIP32Node,
   ChangeHDPathString,
@@ -16,16 +18,16 @@ import type {
   Network,
   UnhardenedBIP32Node,
   UnprefixedNode,
-} from './constants';
+} from './constants.js';
 import {
   BIP44PurposeNodeToken,
   MAX_BIP_32_INDEX,
   MAX_UNHARDENED_BIP_32_INDEX,
   UNPREFIXED_BIP_32_PATH_REGEX,
-} from './constants';
-import { ripemd160, sha256 } from './cryptography';
-import type { SupportedCurve } from './curves';
-import { curves } from './curves';
+} from './constants.js';
+import { ripemd160, sha256 } from './cryptography.js';
+import type { SupportedCurve } from './curves/index.js';
+import { curves } from './curves/index.js';
 
 /**
  * Gets a string representation of a BIP-44 path of depth 2, i.e.:
@@ -511,9 +513,9 @@ export function validateNetwork(
 export function getBIP44CoinType(
   derivationPath: CoinTypeHDPathTuple | CoinTypeSeedPathTuple,
 ): number {
-  const pathPart = derivationPath[BIP_44_COIN_TYPE_DEPTH].split(
-    ':',
-  )[1]?.replace(`'`, '');
+  const pathPart = derivationPath[BIP_44_COIN_TYPE_DEPTH]
+    .split(':')[1]
+    ?.replace(`'`, '');
 
   assert(pathPart, 'Invalid derivation path: Coin type is not specified.');
 

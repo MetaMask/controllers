@@ -1,16 +1,17 @@
+import { bytesToHex } from '@metamask/byte-utils';
 import { mnemonicToEntropy } from '@metamask/scure-bip39';
-import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english';
-import { bytesToHex } from '@metamask/utils';
+import { wordlist } from '@metamask/scure-bip39/dist/wordlists/english.js';
+import { describe, expect, it } from 'vitest';
 
-import type { RootedHDPathTuple, SLIP10Path } from './constants';
-import { secp256k1 } from './curves';
-import { deriveKeyFromPath, validatePathSegment } from './derivation';
-import { derivers, mnemonicToSeed } from './derivers';
-import { privateKeyToEthAddress } from './derivers/bip32';
-import { getDerivationPathWithSeed } from './derivers/bip39';
-import type { SLIP10Node } from './SLIP10Node';
-import { getUnhardenedBIP32NodeToken, mnemonicPhraseToBytes } from './utils';
-import fixtures from '../tests/fixtures';
+import fixtures from '../tests/fixtures.js';
+import type { RootedHDPathTuple, SLIP10Path } from './constants.js';
+import { secp256k1 } from './curves/index.js';
+import { deriveKeyFromPath, validatePathSegment } from './derivation.js';
+import { privateKeyToEthAddress } from './derivers/bip32.js';
+import { getDerivationPathWithSeed } from './derivers/bip39.js';
+import { derivers, mnemonicToSeed } from './derivers/index.js';
+import type { SLIP10Node } from './SLIP10Node.js';
+import { getUnhardenedBIP32NodeToken, mnemonicPhraseToBytes } from './utils.js';
 
 const {
   bip32: { deriveChildKey: bip32Derive },
