@@ -24,13 +24,12 @@ mutation can then be aborted. Set `CubistEscrowProviderOptions.authAudience` to 
 
 ## Seedless password unlock
 
-`authenticateIdentifier` goes through `requestKeyBoundIdentifierToken` with
-seedless-login enabled: that helper prefers optional
+`authenticateIdentifier` prefers optional
 `RecoveryIdentifierAuthProvider.getKeyBoundIdentifierLogin` when present, and
 otherwise uses `getKeyBoundIdentifierToken`. Mutation writes
-(`updateRecoverySecret` / `updateIdentifiers`) call the same helper **without**
-seedless-login, so they always use `getKeyBoundIdentifierToken` and never mint
-auth-server tokens that would be dropped.
+(`updateRecoverySecret` / `updateIdentifiers`) always use
+`getKeyBoundIdentifierToken`, so they never mint auth-server tokens that would
+be dropped.
 
 `seedlessAuthData` on the result is **optional**: passkey / SIWE logins omit
 it; only seedless social password unlock needs it. For that path, implement

@@ -33,6 +33,7 @@ import {
   countDistinctIdentifiers,
   getIdentifierAuthMode,
   MIN_IDENTIFIERS,
+  requestIdentifierLogin,
   requestKeyBoundIdentifierToken,
 } from './identifier-auth.js';
 import type { AuthorizedEscrow } from './identifier-auth.js';
@@ -361,17 +362,12 @@ export class MfaRecoveryController extends BaseController<
       requestId,
       pkE,
     });
-    const { seedlessAuthData, ...credential } =
-      await requestKeyBoundIdentifierToken({
-        identifier,
-        requestHash,
-        identifierAuthProvider: this.#identifierAuthProvider,
-        requireSeedlessAuthData,
-        // Seedless login + empty-value subject discovery are authenticate-only.
-        // Mutation writes omit these flags (token path + exact value match).
-        allowSeedlessLogin: true,
-        allowEmptyIdentifierValue: true,
-      });
+    const { seedlessAuthData, ...credential } = await requestIdentifierLogin({
+      identifier,
+      requestHash,
+      identifierAuthProvider: this.#identifierAuthProvider,
+      requireSeedlessAuthData,
+    });
     const session: IdentifierSession = {
       ...credential,
       requestId,
