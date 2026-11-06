@@ -363,7 +363,7 @@ export type SolanaPaySupportDiagnostics = {
   phase: MetamaskPaySolanaExecution['phase'];
   provider: 'relay';
   relayStatus: MetamaskPaySolanaRelayStatus;
-  sourceAssetClass?: 'native' | 'token';
+  sourceAssetClass: 'native' | 'token';
   sourceStatus: MetamaskPaySolanaSourceStatus;
   sourceTransactionIdPresent: boolean;
   targetTransactionIdPresent: boolean;

@@ -81,6 +81,7 @@ function getExecution(
     requestId: 'relay-request-123',
     requiresNonAtomicFollowUp: false,
     sourceAmountRaw: '1000000',
+    sourceAssetId: `${SOLANA_CHAIN_ID}/slip44:501`,
     sourceChainId: SOLANA_CHAIN_ID,
     sourceStatus: 'not-observed',
     sourceWalletAccountId: 'wallet-account-uuid',

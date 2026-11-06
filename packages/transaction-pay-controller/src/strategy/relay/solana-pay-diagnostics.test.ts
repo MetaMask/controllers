@@ -1,7 +1,4 @@
-import type {
-  MetamaskPaySolanaExecution,
-  MetamaskPaySource,
-} from '@metamask/transaction-controller';
+import type { MetamaskPaySolanaExecution } from '@metamask/transaction-controller';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,15 +10,7 @@ import { SOLANA_SOURCE_EXPIRED_REASON } from './solana-transaction.js';
 
 const SOLANA_CHAIN_ID = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 
-const TOKEN_SOURCE: MetamaskPaySource = {
-  sourceAccountId: `${SOLANA_CHAIN_ID}:private-account`,
-  sourceAssetId: `${SOLANA_CHAIN_ID}/token:private-mint`,
-};
-
-const NATIVE_SOURCE: MetamaskPaySource = {
-  ...TOKEN_SOURCE,
-  sourceAssetId: `${SOLANA_CHAIN_ID}/slip44:501`,
-};
+const NATIVE_ASSET_ID = `${SOLANA_CHAIN_ID}/slip44:501` as const;
 
 function getExecution(
   overrides: Partial<MetamaskPaySolanaExecution> = {},
@@ -36,6 +25,7 @@ function getExecution(
     requestId: 'private-request-id',
     requiresNonAtomicFollowUp: false,
     sourceAmountRaw: '1000000',
+    sourceAssetId: `${SOLANA_CHAIN_ID}/token:private-mint`,
     sourceChainId: SOLANA_CHAIN_ID,
     sourceStatus: 'not-observed',
     sourceWalletAccountId: 'private-wallet-account-id',
@@ -47,14 +37,12 @@ function getExecution(
 
 function getDiagnostics(
   overrides: Partial<MetamaskPaySolanaExecution> = {},
-  source: MetamaskPaySource = TOKEN_SOURCE,
 ): ReturnType<typeof getSolanaPaySupportDiagnostics> {
   const execution = getExecution(overrides);
 
   return getSolanaPaySupportDiagnostics(
     getSolanaPayStatus(execution),
     execution,
-    source,
   );
 }
 
@@ -156,22 +144,10 @@ describe('getSolanaPaySupportDiagnostics', () => {
   });
 
   it('classifies native SOL without exposing its asset identifier', () => {
-    const diagnostics = getDiagnostics({}, NATIVE_SOURCE);
+    const diagnostics = getDiagnostics({ sourceAssetId: NATIVE_ASSET_ID });
 
     expect(diagnostics.sourceAssetClass).toBe('native');
     expect(JSON.stringify(diagnostics)).not.toContain('slip44');
-  });
-
-  it('omits the asset class when the transaction has no source', () => {
-    const execution = getExecution();
-
-    expect(
-      getSolanaPaySupportDiagnostics(
-        getSolanaPayStatus(execution),
-        execution,
-        undefined,
-      ),
-    ).not.toHaveProperty('sourceAssetClass');
   });
 });
 
@@ -212,7 +188,7 @@ describe('isSolanaPayLifecycleTransition', () => {
     expect(
       isSolanaPayLifecycleTransition(
         getDiagnostics(),
-        getDiagnostics({}, NATIVE_SOURCE),
+        getDiagnostics({ sourceAssetId: NATIVE_ASSET_ID }),
       ),
     ).toBe(true);
   });

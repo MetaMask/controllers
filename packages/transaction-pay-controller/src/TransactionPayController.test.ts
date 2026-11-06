@@ -726,6 +726,7 @@ describe('TransactionPayController', () => {
         requestId: 'relay-request-123',
         requiresNonAtomicFollowUp: false,
         sourceAmountRaw: '1000000',
+        sourceAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
         sourceChainId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
         sourceStatus: 'pending',
         sourceTransactionId: 'signature',
@@ -1078,12 +1079,6 @@ describe('TransactionPayController', () => {
               notificationStatus: 'failure',
               sourceFailureReason: 'raw reason',
             }),
-            source: {
-              sourceAccountId:
-                'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:private-account',
-              sourceAssetId:
-                'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
-            },
           },
         };
         createController();

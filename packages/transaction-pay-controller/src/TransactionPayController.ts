@@ -495,7 +495,6 @@ export class TransactionPayController extends BaseController<
     return getSolanaPaySupportDiagnostics(
       getSolanaPayStatus(execution),
       execution,
-      getTransaction(transactionId, this.messenger)?.metamaskPay?.source,
     );
   }
 
@@ -520,7 +519,6 @@ export class TransactionPayController extends BaseController<
       const diagnostics = getSolanaPaySupportDiagnostics(
         getSolanaPayStatus(execution),
         execution,
-        transaction.metamaskPay?.source,
       );
 
       const previousDiagnostics =
@@ -528,7 +526,6 @@ export class TransactionPayController extends BaseController<
         getSolanaPaySupportDiagnostics(
           getSolanaPayStatus(previousExecution),
           previousExecution,
-          previousTransaction?.metamaskPay?.source,
         );
 
       if (!isSolanaPayLifecycleTransition(previousDiagnostics, diagnostics)) {

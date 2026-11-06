@@ -1,7 +1,4 @@
-import type {
-  MetamaskPaySolanaExecution,
-  MetamaskPaySource,
-} from '@metamask/transaction-controller';
+import type { MetamaskPaySolanaExecution } from '@metamask/transaction-controller';
 import { parseCaipAssetType } from '@metamask/utils';
 import { isEqual } from 'lodash-es';
 
@@ -22,13 +19,11 @@ const NATIVE_ASSET_NAMESPACE = 'slip44';
  *
  * @param status - Observable status derived from the checkpoint.
  * @param execution - Durable Solana execution checkpoint.
- * @param source - Persisted CAIP source of the target transaction, if any.
  * @returns Categorical support and analytics diagnostics.
  */
 export function getSolanaPaySupportDiagnostics(
   status: SolanaPayStatus,
   execution: MetamaskPaySolanaExecution,
-  source: MetamaskPaySource | undefined,
 ): SolanaPaySupportDiagnostics {
   const errorCode = getSolanaPayErrorCode(status, execution);
 
@@ -41,13 +36,11 @@ export function getSolanaPaySupportDiagnostics(
     phase: status.phase,
     provider: 'relay',
     relayStatus: status.relayStatus,
-    ...(source && {
-      sourceAssetClass:
-        parseCaipAssetType(source.sourceAssetId).assetNamespace ===
-        NATIVE_ASSET_NAMESPACE
-          ? 'native'
-          : 'token',
-    }),
+    sourceAssetClass:
+      parseCaipAssetType(execution.sourceAssetId).assetNamespace ===
+      NATIVE_ASSET_NAMESPACE
+        ? 'native'
+        : 'token',
     sourceStatus: status.sourceStatus,
     sourceTransactionIdPresent: status.sourceTransactionId !== undefined,
     targetTransactionIdPresent: status.targetTransactionId !== undefined,
