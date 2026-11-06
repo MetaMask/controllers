@@ -1,31 +1,33 @@
-import * as sigUtil from '.';
-import { concatSig, normalize } from './utils';
+import { describe, expect, it } from 'vitest';
+
+import * as sigUtil from './index.js';
+import { concatSig, normalize } from './utils.js';
 
 describe('exports', () => {
   it('should have all expected exports', () => {
     expect(Object.keys(sigUtil)).toMatchInlineSnapshot(`
-Array [
-  "concatSig",
-  "normalize",
-  "personalSign",
-  "recoverPersonalSignature",
-  "extractPublicKey",
-  "SignTypedDataVersion",
-  "TYPED_MESSAGE_SCHEMA",
-  "TypedDataUtils",
-  "typedSignatureHash",
-  "signTypedData",
-  "recoverTypedSignature",
-  "encrypt",
-  "encryptSafely",
-  "decrypt",
-  "decryptSafely",
-  "getEncryptionPublicKey",
-  "signEIP7702Authorization",
-  "recoverEIP7702Authorization",
-  "hashEIP7702Authorization",
-]
-`);
+      [
+        "concatSig",
+        "normalize",
+        "personalSign",
+        "recoverPersonalSignature",
+        "extractPublicKey",
+        "SignTypedDataVersion",
+        "TYPED_MESSAGE_SCHEMA",
+        "TypedDataUtils",
+        "typedSignatureHash",
+        "signTypedData",
+        "recoverTypedSignature",
+        "encrypt",
+        "encryptSafely",
+        "decrypt",
+        "decryptSafely",
+        "getEncryptionPublicKey",
+        "signEIP7702Authorization",
+        "recoverEIP7702Authorization",
+        "hashEIP7702Authorization",
+      ]
+    `);
   });
 
   // I don't know why this is necessary.

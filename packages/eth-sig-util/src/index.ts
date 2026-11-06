@@ -1,5 +1,5 @@
-export * from './personal-sign';
-export * from './sign-typed-data';
-export * from './encryption';
-export * from './sign-eip7702-authorization';
-export { concatSig, normalize } from './utils';
+export * from './personal-sign.js';
+export * from './sign-typed-data.js';
+export * from './encryption.js';
+export * from './sign-eip7702-authorization.js';
+export { concatSig, normalize } from './utils.js';

@@ -12,7 +12,7 @@ import {
   isNullish,
   legacyToBuffer,
   recoverPublicKey,
-} from './utils';
+} from './utils.js';
 
 /**
  * Create an Ethereum-specific signature for a message.

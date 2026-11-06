@@ -1,7 +1,7 @@
 import { base64, utf8 } from '@scure/base';
 import * as nacl from 'tweetnacl';
 
-import { isNullish } from './utils';
+import { isNullish } from './utils.js';
 
 export type EthEncryptedData = {
   version: string;

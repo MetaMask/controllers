@@ -3,7 +3,7 @@ import { ecsign, publicToAddress, toBuffer } from '@ethereumjs/util';
 import { bytesToHex, Hex, isValidHexAddress } from '@metamask/utils';
 import { keccak256 } from 'ethereum-cryptography/keccak';
 
-import { concatSig, isNullish, recoverPublicKey } from './utils';
+import { concatSig, isNullish, recoverPublicKey } from './utils.js';
 
 const CHAIN_ID_MAX_BITLENGTH = 256;
 const NONCE_MAX_BITLENGTH = 64;

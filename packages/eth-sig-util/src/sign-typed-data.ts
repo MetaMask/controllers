@@ -26,7 +26,7 @@ import {
   isNullish,
   legacyToBuffer,
   recoverPublicKey,
-} from './utils';
+} from './utils.js';
 
 /**
  * This is the message format used for `V1` of `signTypedData`.
