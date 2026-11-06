@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Map `musdConversion` local transactions as `send` instead of `convert` ([#10217](https://github.com/MetaMask/core/pull/10217))
+
 ## [3.1.1]
 
 ### Changed
