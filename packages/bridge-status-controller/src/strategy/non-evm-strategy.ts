@@ -105,10 +105,12 @@ export async function* submitNonEvmHandler(
       type: SubmitStep.UpdateHistoryItem,
       payload: {
         historyKey,
-        txMetaId: tradeMeta.id,
-        approvalTxId,
-        quote: quoteResponse.quote,
-        next,
+        historyItemOverrides: {
+          txMetaId: tradeMeta.id,
+          approvalTxId,
+          quote: quoteResponse.quote,
+          next,
+        },
       },
     };
   } else {
