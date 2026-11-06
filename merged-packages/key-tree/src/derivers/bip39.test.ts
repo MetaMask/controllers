@@ -225,6 +225,31 @@ describe('Cip3', () => {
       },
     );
 
+    it.each(fixtures.cip3)(
+      'clamps the master key if a custom `pbkdf2Sha512` returns a `Buffer`',
+      async (fixture) => {
+        const result = await entropyToCip3MasterNode(
+          hexToBytes(fixture.entropyHex),
+          ed25519Bip32,
+          undefined,
+          {
+            pbkdf2Sha512: async (password, salt, iterations, keyLength) =>
+              Buffer.from(
+                await cryptography.pbkdf2Sha512(
+                  password,
+                  salt,
+                  iterations,
+                  keyLength,
+                ),
+              ),
+          },
+        );
+        const { bip39Node } = fixture.nodes;
+        expect(result.privateKey).toBe(bip39Node.privateKey);
+        expect(result.chainCode).toBe(bip39Node.chainCode);
+      },
+    );
+
     it('throws if the entropy is less than 16 bytes', async () => {
       await expect(
         entropyToCip3MasterNode(new Uint8Array(15), ed25519Bip32),

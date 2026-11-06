@@ -1,4 +1,4 @@
-import { createDataView, stringToBytes } from '@metamask/byte-utils';
+import { stringToBytes } from '@metamask/byte-utils';
 import { mnemonicToEntropy } from '@metamask/scure-bip39';
 import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english.js';
 import { assert, assertExhaustive } from '@metamask/type-utils';
@@ -304,14 +304,12 @@ export async function entropyToCip3MasterNode(
 
   // Consistent with the Icarus derivation scheme.
   // https://github.com/cardano-foundation/CIPs/blob/09d7d8ee1bd64f7e6b20b5a6cae088039dce00cb/CIP-0003/Icarus.md
-  const rootNodeView = createDataView(rootNode);
-  /* eslint-disable no-bitwise */
-  rootNodeView.setUint8(0, rootNodeView.getUint8(0) & 0b1111_1000);
-  rootNodeView.setUint8(
-    31,
-    (rootNodeView.getUint8(31) & 0b0001_1111) | 0b0100_0000,
-  );
-  /* eslint-enable no-bitwise */
+  /* eslint-disable no-bitwise, operator-assignment */
+  /* oxlint-disable typescript/no-non-null-assertion */
+  rootNode[0] = rootNode[0]! & 0b1111_1000;
+  rootNode[31] = (rootNode[31]! & 0b0001_1111) | 0b0100_0000;
+  /* oxlint-enable typescript/no-non-null-assertion */
+  /* eslint-enable no-bitwise, operator-assignment */
 
   const privateKey = rootNode.slice(0, curve.privateKeyLength);
   const chainCode = rootNode.slice(curve.privateKeyLength);
