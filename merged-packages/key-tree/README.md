@@ -1,5 +1,7 @@
 # @metamask/key-tree
 
+<table><tr><td><p align="center"><b>⚠️ PLEASE READ ⚠️</b></p><p align="center">This package is currently being migrated to our <a href="https://github.com/MetaMask/core"><code>MetaMask/core</code></a> monorepo. Please do not make any commits to this repository while this migration is taking place, as they will not be transferred over. Also, please re-open PRs that are under active development in the <a href="https://github.com/MetaMask/core"><code>MetaMask/core</code></a> repo.</p></td></tr></table>
+
 An interface over [SLIP-10], [BIP-32], and [BIP-44] key derivation paths.
 
 This library was audited by Cure53 in February 2023, and April 2024. The audit reports can be found [here](./audits).
