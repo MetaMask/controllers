@@ -1608,7 +1608,7 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
         // Required when a post-swap deposit or pre-swap withdrawal is required
         next:
           operation === Operation.DEPOSIT
-            ? [{ operation: Operation.DEPOSIT }]
+            ? [{ operation: Operation.DEPOSIT, partialQuote }]
             : operation === Operation.WITHDRAW
               ? [{ operation: Operation.SWAP, partialQuote }]
               : undefined,
