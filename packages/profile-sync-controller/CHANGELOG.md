@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `AuthenticationController.refreshSocialLoginCredentials`, `beginSocialLoginVerification` and `completeSocialLoginVerification`, also exposed as `AuthenticationController:*` messenger actions, which verify an enrolled MFA credential while the wallet is locked, for the recovery of a social login wallet ([#XXXXX](https://github.com/MetaMask/core/pull/XXXXX))
+- Add `AuthenticationController.refreshSocialLoginCredentials`, `beginSocialLoginVerification` and `completeSocialLoginVerification`, also exposed as `AuthenticationController:*` messenger actions, which verify an enrolled MFA credential while the wallet is locked, for the recovery of a social login wallet ([#11371](https://github.com/MetaMask/core/pull/11371))
   - They take the access token from the social login (see `exchangeSocialAccessToken`) at each call, so no keyring or signing is involved, and accept no token from the caller
   - They throw when the wallet is unlocked: unlocked features keep using `refreshEnrolledCredentials`, `beginCredentialVerification` and `completeCredentialVerification`
   - `completeSocialLoginVerification` returns the verification token without opening a verification session, so nothing proven while locked is readable once the wallet unlocks
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `JwtBearerAuth.getMfaCredentials`, `beginMfaVerification` and `completeMfaVerification` accept an optional `accessToken` to use instead of signing in with the entropy source ([#XXXXX](https://github.com/MetaMask/core/pull/XXXXX))
+- `JwtBearerAuth.getMfaCredentials`, `beginMfaVerification` and `completeMfaVerification` accept an optional `accessToken` to use instead of signing in with the entropy source ([#11371](https://github.com/MetaMask/core/pull/11371))
 - Bump `@metamask/utils` from `^12.0.0` to `^12.0.1` ([#11107](https://github.com/MetaMask/core/pull/11107))
 
 ## [36.0.0]
