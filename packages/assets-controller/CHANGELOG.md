@@ -7,16 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Refresh the Accounts API and RPC chain lists before fetching balances when a network is added or enabled, so the new network's balance shows without switching networks ([#11303](https://github.com/MetaMask/core/pull/11303))
+
 ## [20.2.3]
 
 ### Changed
 
 - Include `assetsInfo`, `assetsBalance`, `assetsPrice`, `customAssets`, `assetPreferences` and `selectedCurrency` in state logs (`includeInStateLogs: true`) so support can investigate asset issues ([#11319](https://github.com/MetaMask/core/pull/11319))
 - Bump `@metamask/assets-controllers` from `^113.1.1` to `^113.2.0` ([#11326](https://github.com/MetaMask/core/pull/11326))
-
-### Fixed
-
-- Refresh the Accounts API and RPC chain lists before fetching balances when a network is added or enabled, so the new network's balance shows without switching networks ([#11303](https://github.com/MetaMask/core/pull/11303))
 
 ## [20.2.2]
 
