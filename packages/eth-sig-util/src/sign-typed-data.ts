@@ -5,8 +5,8 @@ import {
   getByteLength,
   getLength,
   isArrayType,
-} from '@metamask/abi-utils/dist/parsers';
-import { padStart } from '@metamask/abi-utils/dist/utils';
+} from '@metamask/abi-utils/dist/parsers/index.js';
+import { padStart } from '@metamask/abi-utils/dist/utils/index.js';
 import {
   add0x,
   assert,
@@ -358,8 +358,8 @@ function encodeField(
       );
     }
     const parsedType = type.slice(0, type.lastIndexOf('['));
-    const typeValuePairs = value.map((item: any) =>
-      encodeField(types, name, parsedType, item, version),
+    const typeValuePairs: ReturnType<typeof encodeField>[] = value.map(
+      (item: any) => encodeField(types, name, parsedType, item, version),
     );
     return [
       'bytes32',
@@ -528,8 +528,9 @@ function sanitizeData<T extends MessageTypes>(
 ): TypedMessage<T> {
   const sanitizedData: Partial<TypedMessage<T>> = {};
   for (const key in TYPED_MESSAGE_SCHEMA.properties) {
-    if (data[key]) {
-      sanitizedData[key] = data[key];
+    const typedKey = key as keyof TypedMessage<T>;
+    if (data[typedKey]) {
+      Object.assign(sanitizedData, { [typedKey]: data[typedKey] });
     }
   }
 
@@ -579,7 +580,7 @@ function eip712Hash<T extends MessageTypes>(
   validateVersion(version, [SignTypedDataVersion.V3, SignTypedDataVersion.V4]);
 
   const sanitizedData = sanitizeData(typedData);
-  const parts = [hexToBytes('1901')];
+  const parts: Uint8Array[] = [hexToBytes('1901')];
   parts.push(eip712DomainHash(typedData, version));
 
   if (sanitizedData.primaryType !== 'EIP712Domain') {
