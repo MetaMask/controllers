@@ -358,6 +358,7 @@ const setupController = ({
     blockaidTokenRescanInterval,
     ...(isDeprecated && { isDeprecated }),
   });
+  controller.init();
 
   return {
     controller,
@@ -1820,6 +1821,51 @@ describe('MultichainAssetsController', () => {
 
       // 99 from batch 1 (excluding Token099) + 20 from batch 2 = 119 total
       expect(storedAssets).toHaveLength(119);
+    });
+
+    it('does not start the periodic rescan or call other controllers when constructed', async () => {
+      const messenger: MultichainAssetsControllerMessenger = new Messenger({
+        namespace: 'MultichainAssetsController',
+      });
+      const call = vi.spyOn(messenger, 'call');
+
+      const controller = new MultichainAssetsController({
+        messenger,
+        blockaidTokenRescanInterval: 60_000,
+        state: {
+          accountsAssets: {
+            account1: [
+              'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1/token:SomeAddr',
+            ],
+          },
+          assetsMetadata: {},
+          allIgnoredAssets: {},
+        },
+      });
+      await vi.advanceTimersByTimeAsync(60_001);
+
+      expect(call).not.toHaveBeenCalled();
+      controller.stopAllPolling();
+    });
+
+    it('starts the periodic rescan only once when init is called repeatedly', async () => {
+      const mockAccountId = 'account1';
+      const token = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1/token:SomeAddr';
+      const { controller, mockBulkScanTokens } = setupController({
+        blockaidTokenRescanInterval: 60_000,
+        state: {
+          accountsAssets: { [mockAccountId]: [token] },
+          assetsMetadata: {},
+          allIgnoredAssets: {},
+        },
+      });
+      mockBulkScanTokens.mockResolvedValue({});
+
+      controller.init();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(mockBulkScanTokens).toHaveBeenCalledTimes(1);
+      controller.stopAllPolling();
     });
 
     it('periodic rescan ignores SPL tokens that Blockaid later marks malicious', async () => {

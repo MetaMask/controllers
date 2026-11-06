@@ -84,6 +84,43 @@ function buildTokenRatesControllerMessenger(
 
 describe('TokenRatesController', () => {
   describe('constructor', () => {
+    it('does not call other controllers when constructed', () => {
+      const messenger: TokenRatesControllerMessenger = new Messenger({
+        namespace: 'TokenRatesController',
+      });
+      const call = vi.spyOn(messenger, 'call');
+      const setNativeAssetIdentifiers = vi.fn();
+
+      const controller = new TokenRatesController({
+        messenger,
+        tokenPricesService: buildMockTokenPricesService({
+          setNativeAssetIdentifiers,
+        }),
+      });
+
+      expect(controller.state).toStrictEqual({ marketData: {} });
+      expect(call).not.toHaveBeenCalled();
+      expect(setNativeAssetIdentifiers).not.toHaveBeenCalled();
+    });
+
+    it('reads other controllers only once when init is called repeatedly', async () => {
+      const setNativeAssetIdentifiers = vi.fn();
+      await withController(
+        {
+          options: {
+            tokenPricesService: buildMockTokenPricesService({
+              setNativeAssetIdentifiers,
+            }),
+          },
+        },
+        async ({ controller }) => {
+          controller.init();
+
+          expect(setNativeAssetIdentifiers).toHaveBeenCalledTimes(1);
+        },
+      );
+    });
+
     it('should set default state', async () => {
       await withController(async ({ controller }) => {
         expect(controller.state).toStrictEqual({
@@ -92,7 +129,7 @@ describe('TokenRatesController', () => {
       });
     });
 
-    it('should call setNativeAssetIdentifiers on tokenPricesService if available', async () => {
+    it('should call setNativeAssetIdentifiers on tokenPricesService in init if available', async () => {
       const setNativeAssetIdentifiers = vi.fn();
       const tokenPricesService = buildMockTokenPricesService({
         setNativeAssetIdentifiers,
@@ -1514,6 +1551,7 @@ async function withController<ReturnValue>(
     messenger: buildTokenRatesControllerMessenger(messenger),
     ...options,
   });
+  controller.init();
   try {
     return await fn({
       controller,
