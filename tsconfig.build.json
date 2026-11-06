@@ -152,6 +152,9 @@
       "path": "./packages/json-rpc-middleware-stream/tsconfig.build.json"
     },
     {
+      "path": "./packages/key-tree/tsconfig.build.json"
+    },
+    {
       "path": "./packages/keyring-controller/tsconfig.build.json"
     },
     {

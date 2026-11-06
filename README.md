@@ -88,6 +88,7 @@ yarn skills --reset                 # clear saved local selection
 - [`@metamask/java-tron-up`](packages/java-tron-up)
 - [`@metamask/json-rpc-engine`](packages/json-rpc-engine)
 - [`@metamask/json-rpc-middleware-stream`](packages/json-rpc-middleware-stream)
+- [`@metamask/key-tree`](packages/key-tree)
 - [`@metamask/keyring-controller`](packages/keyring-controller)
 - [`@metamask/kyc-controller`](packages/kyc-controller)
 - [`@metamask/local-node-utils`](packages/local-node-utils)
