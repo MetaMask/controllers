@@ -1,3 +1,4 @@
+import type { QueryStateChangeHandler } from '@metamask/base-data-service';
 import type { V5BalanceItem, V6BalanceItem } from '@metamask/core-backend';
 import { ApiPlatformClient } from '@metamask/core-backend';
 import type {
@@ -12,6 +13,8 @@ import {
   toCaipChainId,
 } from '@metamask/utils';
 
+import type { AccountsApiBalancesServiceFetchBalancesAction } from '../accounts-api-balances-service/accounts-api-balances-service-method-action-types.js';
+import type { FetchBalancesOptions } from '../accounts-api-balances-service/accounts-api-balances-service.js';
 import type { AssetsControllerMessenger } from '../AssetsController.js';
 import { projectLogger, createModuleLogger } from '../logger.js';
 import type {
@@ -52,12 +55,14 @@ const log = createModuleLogger(projectLogger, CONTROLLER_NAME);
 // ============================================================================
 
 // Allowed actions that AccountsApiDataSource can call. Balances are fetched via
-// ApiPlatformClient directly (no BackendApiClient actions needed); the messenger
-// is used to subscribe to `RemoteFeatureFlagController:stateChange` (see
-// constructor) so migration flag changes refresh the active chains, and to
-// read those flags when listing active chains.
+// ApiPlatformClient directly, or through `AccountsApiBalancesService:fetchBalances`
+// when `useAccountsApiBalancesService` is on. The messenger is also used to
+// subscribe to `RemoteFeatureFlagController:stateChange` (see constructor) so
+// migration flag changes refresh the active chains, and to read those flags
+// when listing active chains.
 export type AccountsApiDataSourceAllowedActions =
-  RemoteFeatureFlagControllerGetStateAction;
+  | RemoteFeatureFlagControllerGetStateAction
+  | AccountsApiBalancesServiceFetchBalancesAction;
 
 // Allowed events that AccountsApiDataSource subscribes to. Migration flag
 // changes trigger a refresh of the chains surfaced as active.
@@ -94,6 +99,12 @@ export type AccountsApiDataSourceConfig = {
    * middleware hands them off to the next data source (e.g. RPC fallback).
    */
   fetchTimeoutMs?: number;
+  /**
+   * Called with the state of the balances query as it changes, when balances
+   * are fetched through `AccountsApiBalancesService` (see
+   * `useAccountsApiBalancesService`). Forwarded as `onQueryStateChange`.
+   */
+  onBalancesQueryStateChange?: QueryStateChangeHandler;
 };
 
 export type AccountsApiDataSourceOptions = AccountsApiDataSourceConfig & {
@@ -123,8 +134,20 @@ export type AccountsApiDataSourceOptions = AccountsApiDataSourceConfig & {
   getAssetsState: () => AssetsControllerState;
   /** Returns shared visible/hidden assets for an account/chain scope. */
   getAssetVisibility: GetAssetVisibility;
+  /**
+   * When true, v5 and v6 balances are fetched through the
+   * `AccountsApiBalancesService:fetchBalances` messenger action instead of
+   * `queryApiClient`. Only turn it on once that action is registered and
+   * delegated to the messenger. Defaults to `false`.
+   */
+  useAccountsApiBalancesService?: boolean;
   state?: Partial<AccountsApiDataSourceState>;
 };
+
+/** Cache and fetch options derived from a data request. */
+type BalancesFetchOptions =
+  | { staleTime: number; gcTime: number; bypassServerCache?: boolean }
+  | undefined;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -245,8 +268,10 @@ export function filterResponseToKnownAssets(
 /**
  * Data source for fetching balances from the MetaMask Accounts API.
  *
- * Uses ApiPlatformClient (queryApiClient) for all API calls. Does not use the
- * messenger. Reports active chains via onActiveChainsUpdated callback.
+ * Uses ApiPlatformClient (queryApiClient) for API calls. When
+ * `useAccountsApiBalancesService` is on, balances go through the
+ * `AccountsApiBalancesService:fetchBalances` messenger action instead.
+ * Reports active chains via onActiveChainsUpdated callback.
  */
 export class AccountsApiDataSource extends AbstractDataSource<
   typeof CONTROLLER_NAME,
@@ -278,6 +303,11 @@ export class AccountsApiDataSource extends AbstractDataSource<
   /** ApiPlatformClient for cached API calls */
   readonly #apiClient: ApiPlatformClient;
 
+  /** Whether balances go through `AccountsApiBalancesService`. */
+  readonly #useBalancesService: boolean;
+
+  readonly #onBalancesQueryStateChange: QueryStateChangeHandler | undefined;
+
   /** Chains refresh timer */
   #chainsRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -298,6 +328,8 @@ export class AccountsApiDataSource extends AbstractDataSource<
     this.#getAssetsState = options.getAssetsState;
     this.#getAssetVisibility = options.getAssetVisibility;
     this.#apiClient = options.queryApiClient;
+    this.#useBalancesService = options.useAccountsApiBalancesService ?? false;
+    this.#onBalancesQueryStateChange = options.onBalancesQueryStateChange;
 
     // The Snaps → AssetsController migration flags gate which migration networks
     // (Solana, Stellar, Tron) are surfaced as active chains (see
@@ -605,11 +637,7 @@ export class AccountsApiDataSource extends AbstractDataSource<
     );
   }
 
-  #buildFetchOptions(
-    request: DataRequest,
-  ):
-    | { staleTime: number; gcTime: number; bypassServerCache?: boolean }
-    | undefined {
+  #buildFetchOptions(request: DataRequest): BalancesFetchOptions {
     if (!request.forceUpdate && !request.bypassServerCache) {
       return undefined;
     }
@@ -668,9 +696,7 @@ export class AccountsApiDataSource extends AbstractDataSource<
    */
   async #fetchV5Balances(
     accountIds: string[],
-    fetchOptions:
-      | { staleTime: number; gcTime: number; bypassServerCache?: boolean }
-      | undefined,
+    fetchOptions: BalancesFetchOptions,
     request: DataRequest,
   ): Promise<{
     unprocessedNetworks: string[];
@@ -678,12 +704,20 @@ export class AccountsApiDataSource extends AbstractDataSource<
     assetsBalance: Record<string, Record<Caip19AssetId, AssetBalance>>;
   }> {
     const apiResponse = await fetchWithTimeout(
-      () =>
-        this.#apiClient.accounts.fetchV5MultiAccountBalances(
-          accountIds,
-          undefined,
-          fetchOptions,
-        ),
+      async (): Promise<{
+        balances: V5BalanceItem[];
+        unprocessedNetworks: string[];
+      }> =>
+        this.#useBalancesService
+          ? ((await this.#fetchBalancesFromService(
+              { version: 'v5', accountIds },
+              fetchOptions,
+            )) as { balances: V5BalanceItem[]; unprocessedNetworks: string[] })
+          : this.#apiClient.accounts.fetchV5MultiAccountBalances(
+              accountIds,
+              undefined,
+              fetchOptions,
+            ),
       this.#fetchTimeoutMs,
     );
 
@@ -713,9 +747,7 @@ export class AccountsApiDataSource extends AbstractDataSource<
    */
   async #fetchV6Balances(
     accountIds: string[],
-    fetchOptions:
-      | { staleTime: number; gcTime: number; bypassServerCache?: boolean }
-      | undefined,
+    fetchOptions: BalancesFetchOptions,
     request: DataRequest,
     includeAssetIds: Caip19AssetId[] | undefined,
     excludeAssetIds: Caip19AssetId[] | undefined,
@@ -733,12 +765,25 @@ export class AccountsApiDataSource extends AbstractDataSource<
         : undefined;
 
     const apiResponse = await fetchWithTimeout(
-      () =>
-        this.#apiClient.accounts.fetchV6MultiAccountBalances(
-          accountIds,
-          params,
-          fetchOptions,
-        ),
+      async (): Promise<{
+        balances: V6BalanceItem[];
+        unprocessedNetworks: string[];
+        unprocessedIncludeAssetIds: string[];
+      }> =>
+        this.#useBalancesService
+          ? ((await this.#fetchBalancesFromService(
+              { version: 'v6', accountIds, ...params },
+              fetchOptions,
+            )) as {
+              balances: V6BalanceItem[];
+              unprocessedNetworks: string[];
+              unprocessedIncludeAssetIds: string[];
+            })
+          : this.#apiClient.accounts.fetchV6MultiAccountBalances(
+              accountIds,
+              params,
+              fetchOptions,
+            ),
       this.#fetchTimeoutMs,
     );
 
@@ -752,6 +797,40 @@ export class AccountsApiDataSource extends AbstractDataSource<
       unprocessedIncludeAssetIds: apiResponse.unprocessedIncludeAssetIds,
       assetsBalance,
     };
+  }
+
+  /**
+   * Fetch balances through `AccountsApiBalancesService:fetchBalances`. Any
+   * forced fetch (`forceUpdate` or `bypassServerCache` on the request) skips
+   * the service cache, and `bypassServerCache` also skips the API's own cache,
+   * mirroring the `ApiPlatformClient` fetch options.
+   *
+   * The service validates the fields the balance processors read, so its
+   * response can be handed to them as is.
+   *
+   * @param params - The endpoint version, account IDs and, for v6, the
+   * include and exclude asset IDs.
+   * @param fetchOptions - Cache/fetch options built from the request.
+   * @returns The balances response.
+   */
+  async #fetchBalancesFromService(
+    params: Pick<
+      FetchBalancesOptions,
+      'version' | 'accountIds' | 'includeAssetIds' | 'excludeAssetIds'
+    >,
+    fetchOptions: BalancesFetchOptions,
+  ): Promise<unknown> {
+    return await this.#messenger.call(
+      'AccountsApiBalancesService:fetchBalances',
+      {
+        ...params,
+        forceUpdate: fetchOptions !== undefined,
+        bypassServerCache: fetchOptions?.bypassServerCache === true,
+        ...(this.#onBalancesQueryStateChange
+          ? { onQueryStateChange: this.#onBalancesQueryStateChange }
+          : {}),
+      },
+    );
   }
 
   /**
