@@ -52,21 +52,21 @@ export class AssetsFetchTracker {
     }
 
     const ids = [...accountIds];
-    const started: AccountId[] = [];
-    for (const accountId of ids) {
-      const key = `${accountId}:${phase}`;
-      const count = this.#counts.get(key) ?? 0;
-      this.#counts.set(key, count + 1);
-      if (count === 0) {
-        started.push(accountId);
-      }
-    }
+    const started = ids.filter(
+      (accountId) => !this.#counts.has(`${accountId}:${phase}`),
+    );
 
+    // Write before counting so a failed write leaves no stale count behind.
     if (started.length > 0) {
       this.#write(started, phase, (status) => {
         status.fetchStatus = 'fetching';
         status.errors = {};
       });
+    }
+
+    for (const accountId of ids) {
+      const key = `${accountId}:${phase}`;
+      this.#counts.set(key, (this.#counts.get(key) ?? 0) + 1);
     }
 
     let ended = false;

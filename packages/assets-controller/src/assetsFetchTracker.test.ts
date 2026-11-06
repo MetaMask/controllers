@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { AssetsFetchTracker } from './assetsFetchTracker.js';
 import type { AssetsFetchUpdate } from './assetsFetchTracker.js';
@@ -123,5 +123,20 @@ describe('AssetsFetchTracker', () => {
 
     expect(writes()).toBe(0);
     expect(state.assetsFetchStatus).toBeUndefined();
+  });
+
+  it('does not count a begin whose write throws', () => {
+    const state: FakeState = {};
+    const update = vi
+      .fn<AssetsFetchUpdate>((recipe) => recipe(state))
+      .mockImplementationOnce(() => {
+        throw new Error('update failed');
+      });
+    const tracker = new AssetsFetchTracker(update, () => 1000);
+
+    expect(() => tracker.begin(['a'], 'fast')).toThrow('update failed');
+
+    tracker.begin(['a'], 'fast');
+    expect(state.assetsFetchStatus?.a?.fast.fetchStatus).toBe('fetching');
   });
 });
