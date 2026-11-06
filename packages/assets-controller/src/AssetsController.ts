@@ -686,10 +686,13 @@ function effectiveAccountBalancesV6(
  *    based on which chains they support. When active chains change, the controller
  *    dynamically adjusts subscriptions.
  *
- * 4. **Client + Keyring Lifecycle**: Starts subscriptions only when both the UI is
- *    open (ClientController) and the wallet is unlocked (KeyringController).
- *    Stops when either the UI closes or the keyring locks. See client-controller
- *    README for the combined pattern.
+ * 4. **Client + Keyring Lifecycle**: The constructor never calls other
+ *    controllers. The first time the UI opens (ClientController), the controller
+ *    bootstraps: it reads enabled networks and bootstraps its data sources.
+ *    After that it starts subscriptions only when both the UI is open and the
+ *    wallet is unlocked (KeyringController), and stops when either the UI
+ *    closes or the keyring locks. See client-controller README for the
+ *    combined pattern.
  *
  * ## Architecture
  *
@@ -807,8 +810,27 @@ export class AssetsController extends BaseController<
    */
   #startInFlight = false;
 
-  /** Currently enabled chains from NetworkEnablementController */
+  /**
+   * Currently enabled chains from NetworkEnablementController.
+   *
+   * Empty until `NetworkEnablementController:stateChange` is published or the
+   * controller is bootstrapped, because the constructor must not read other
+   * controllers' state.
+   */
   #enabledChains: Set<ChainId> = new Set();
+
+  /**
+   * Whether `#bootstrap()` has finished. Until then, event handlers only
+   * record state (such as enabled chains) and never fetch.
+   */
+  #isBootstrapped = false;
+
+  /** Set by the first `#bootstrap()` call; later calls reuse it. */
+  #bootstrapPromise: Promise<void> | null = null;
+
+  #isDestroyed = false;
+
+  readonly #subscribeToBasicFunctionalityChange?: AssetsControllerOptions['subscribeToBasicFunctionalityChange'];
 
   /**
    * Get the currently selected accounts from AccountTreeController.
@@ -818,14 +840,19 @@ export class AssetsController extends BaseController<
    * @returns Array of InternalAccount objects from the selected account group.
    */
   #getSelectedAccounts(): InternalAccount[] {
-    const accounts = this.messenger.call(
-      'AccountTreeController:getAccountsFromSelectedAccountGroup',
+    const accounts = this.#callIfRegistered(
+      () =>
+        this.messenger.call(
+          'AccountTreeController:getAccountsFromSelectedAccountGroup',
+        ),
+      [],
     );
     if (accounts.length > 0) {
       return accounts;
     }
-    const selectedAccount = this.messenger.call(
-      'AccountsController:getSelectedAccount',
+    const selectedAccount = this.#callIfRegistered(
+      () => this.messenger.call('AccountsController:getSelectedAccount'),
+      undefined,
     );
     if (selectedAccount) {
       return [selectedAccount];
@@ -834,12 +861,36 @@ export class AssetsController extends BaseController<
   }
 
   /**
+   * Run a messenger call, returning `fallback` if it throws.
+   *
+   * The wallet may construct this controller before (or without) the
+   * controllers it reads from. A missing handler means that controller is not
+   * ready, which is treated the same as "not initialized" rather than crashing
+   * the caller.
+   *
+   * @param call - The messenger call to run.
+   * @param fallback - The value to return if the call throws.
+   * @returns The call's result, or `fallback`.
+   */
+  #callIfRegistered<Result>(call: () => Result, fallback: Result): Result {
+    try {
+      return call();
+    } catch (error) {
+      log('Messenger call failed; treating dependency as not ready', error);
+      return fallback;
+    }
+  }
+
+  /**
    * Whether `AccountTreeController.init()` has completed and the tree is ready.
    *
    * @returns True when the account tree has been initialized.
    */
   #isAccountTreeInitialized(): boolean {
-    return this.messenger.call('AccountTreeController:isInitialized');
+    return this.#callIfRegistered(
+      () => this.messenger.call('AccountTreeController:isInitialized'),
+      false,
+    );
   }
 
   /**
@@ -848,8 +899,12 @@ export class AssetsController extends BaseController<
    * @returns True when the UI is open.
    */
   #isUiOpen(): boolean {
-    return clientControllerSelectors.selectIsUiOpen(
-      this.messenger.call('ClientController:getState'),
+    return this.#callIfRegistered(
+      () =>
+        clientControllerSelectors.selectIsUiOpen(
+          this.messenger.call('ClientController:getState'),
+        ),
+      false,
     );
   }
 
@@ -859,7 +914,10 @@ export class AssetsController extends BaseController<
    * @returns True when the wallet vault is unlocked.
    */
   #isKeyringUnlocked(): boolean {
-    return this.messenger.call('KeyringController:isUnlocked');
+    return this.#callIfRegistered(
+      () => this.messenger.call('KeyringController:isUnlocked'),
+      false,
+    );
   }
 
   readonly #accountActivityDataSource: AccountActivityDataSource;
@@ -958,7 +1016,9 @@ export class AssetsController extends BaseController<
       );
     }
 
-    this.#initializeNativeAssetsMap(queryApiClient);
+    this.#seedNativeAssetsMap(queryApiClient);
+    this.#subscribeToBasicFunctionalityChange =
+      subscribeToBasicFunctionalityChange;
 
     this.#onActiveChainsUpdated = (
       dataSourceName: string,
@@ -1061,29 +1121,25 @@ export class AssetsController extends BaseController<
       defaultUpdateInterval: this.#defaultUpdateInterval,
     });
 
-    this.#initializeState();
+    // The constructor only subscribes to events and registers action
+    // handlers. It never calls other controllers, so it does not depend on
+    // the order in which the wallet constructs them. Everything that reads
+    // other controllers or makes requests happens in `#bootstrap()`, the first
+    // time the UI opens.
     this.#subscribeToEvents();
     this.#registerActionHandlers();
-    // Subscriptions start only when both UI is open and keyring unlocked -> #updateActive().
-
-    // Subscribe to basic-functionality changes after construction so a synchronous
-    // onChange during subscribe cannot run before data sources are initialized.
-    if (subscribeToBasicFunctionalityChange) {
-      const unsubscribe = subscribeToBasicFunctionalityChange((isBasic) =>
-        this.handleBasicFunctionalityChange(isBasic),
-      );
-      if (typeof unsubscribe === 'function') {
-        this.#unsubscribeBasicFunctionality = unsubscribe;
-      }
-    }
   }
 
   // ============================================================================
   // INITIALIZATION
   // ============================================================================
 
-  #initializeNativeAssetsMap(queryApiClient: ApiPlatformClient): void {
-    queryApiClient.queryClient
+  /**
+   * Fetch the native asset map into the query cache, replacing the seed data
+   * written by {@link AssetsController.#seedNativeAssetsMap}.
+   */
+  #fetchNativeAssetsMap(): void {
+    this.#queryApiClient.queryClient
       .fetchQuery({
         queryKey: NATIVE_ASSETS_QUERY_KEY,
         queryFn: buildNativeAssetsFromApi,
@@ -1098,7 +1154,14 @@ export class AssetsController extends BaseController<
           error,
         );
       });
+  }
 
+  /**
+   * Seed the native asset map in the query cache from constants.
+   *
+   * @param queryApiClient - The API client whose cache to seed.
+   */
+  #seedNativeAssetsMap(queryApiClient: ApiPlatformClient): void {
     // Seed the cache synchronously so that synchronous consumers (e.g.
     // #isNativeAsset, #resolveNativeAssetIds) have data available immediately.
     // When fetchQuery resolves (currently instant, future: API), it overwrites
@@ -1110,15 +1173,96 @@ export class AssetsController extends BaseController<
     );
   }
 
-  #initializeState(): void {
-    const { enabledNetworkMap } = this.messenger.call(
-      'NetworkEnablementController:getState',
-    );
-    this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
+  /**
+   * Finish the work the constructor defers: read enabled networks, bootstrap
+   * the data sources and subscribe to basic-functionality changes, then start
+   * tracking assets if the keyring is unlocked and the account tree is ready.
+   *
+   * Runs the first time the UI opens (`ClientController:stateChange`), by
+   * which time the wallet has constructed every controller. Only the first
+   * call does the work; later calls return the same promise.
+   *
+   * @returns A promise that resolves once bootstrapping has finished.
+   */
+  async #bootstrap(): Promise<void> {
+    this.#bootstrapPromise ??= this.#runBootstrap();
+    return this.#bootstrapPromise;
+  }
 
-    log('Initialized state', {
-      enabledNetworkMap,
-      enabledChains: this.#enabledChains,
+  async #runBootstrap(): Promise<void> {
+    log('Bootstrapping AssetsController');
+
+    this.#readEnabledChains();
+    this.#fetchNativeAssetsMap();
+
+    // Data sources report their active chains through `#onActiveChainsUpdated`
+    // while bootstrapping. Those reports are ignored until `#isBootstrapped`
+    // is set; `#updateActive()` below subscribes with the final chains.
+    await Promise.allSettled(
+      [...this.#allBalanceDataSources, this.#stakedBalanceDataSource].map(
+        async (source) => source.bootstrap(),
+      ),
+    );
+
+    if (this.#isDestroyed) {
+      return;
+    }
+
+    this.#isBootstrapped = true;
+
+    if (this.#subscribeToBasicFunctionalityChange) {
+      const unsubscribe = this.#subscribeToBasicFunctionalityChange((isBasic) =>
+        this.handleBasicFunctionalityChange(isBasic),
+      );
+      if (typeof unsubscribe === 'function') {
+        this.#unsubscribeBasicFunctionality = unsubscribe;
+      }
+    }
+
+    // `KeyringController:unlock` handlers skip their work before bootstrap,
+    // so run it now if the wallet was unlocked before the UI opened.
+    if (this.#isKeyringUnlocked()) {
+      await this.#runUnlockCleanups();
+    }
+
+    this.#updateActive();
+  }
+
+  /**
+   * Read enabled chains from NetworkEnablementController.
+   *
+   * `NetworkEnablementController:stateChange` keeps `#enabledChains` current,
+   * but it is only published when the state changes. If the controller
+   * restored persisted state and nothing has changed since, this read is the
+   * only way to learn which chains are enabled. If the controller is not
+   * registered, the chains received from events are kept.
+   */
+  #readEnabledChains(): void {
+    const enabledNetworkMap = this.#callIfRegistered(
+      () =>
+        this.messenger.call('NetworkEnablementController:getState')
+          .enabledNetworkMap,
+      undefined,
+    );
+    if (enabledNetworkMap) {
+      this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
+    }
+
+    log('Read enabled chains', { enabledChains: this.#enabledChains });
+  }
+
+  /**
+   * Remove balances outside the current scope and spam tokens. Runs on
+   * unlock, and at bootstrap when the wallet was already unlocked.
+   */
+  async #runUnlockCleanups(): Promise<void> {
+    try {
+      this.#runOutOfScopeBalanceCleanup();
+    } catch {
+      /* Do nothing */
+    }
+    await this.#runSpamCleanup().catch(() => {
+      /* Do nothing */
     });
   }
 
@@ -1195,6 +1339,11 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkEnablementController:stateChange',
       ({ enabledNetworkMap }) => {
+        if (!this.#isBootstrapped) {
+          // Only record the chains; `#bootstrap()` starts fetching.
+          this.#enabledChains = this.#extractEnabledChains(enabledNetworkMap);
+          return;
+        }
         this.#handleEnabledNetworksChanged(enabledNetworkMap).catch(
           console.error,
         );
@@ -1210,7 +1359,12 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkAdded',
       (networkConfiguration) => {
+        // Seeding default tracked assets only updates state, so it runs even
+        // before bootstrap; the refresh fetches, so it waits for bootstrap.
         this.#handleNetworkAdded(networkConfiguration.chainId);
+        if (!this.#isBootstrapped) {
+          return;
+        }
         this.#refreshAssetsAfterNetworkAdded(
           networkConfiguration.chainId,
         ).catch((error: unknown) => {
@@ -1220,6 +1374,9 @@ export class AssetsController extends BaseController<
     );
 
     this.messenger.subscribe('NetworkController:networkRemoved', () => {
+      if (!this.#isBootstrapped) {
+        return;
+      }
       this.#refreshAssetsAfterNetworkChange();
     });
 
@@ -1228,14 +1385,26 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'NetworkController:networkDidChange',
       (networkState) => {
+        if (!this.#isBootstrapped) {
+          return;
+        }
         this.#handleNetworkDidChange(networkState).catch(console.error);
       },
     );
 
-    // Client + Keyring lifecycle: only run when UI is open AND keyring is unlocked
+    // Client + Keyring lifecycle: the first time the UI opens, bootstrap.
+    // After that, only run when UI is open AND keyring is unlocked.
     this.messenger.subscribe(
       'ClientController:stateChange',
-      () => {
+      (isUiOpen) => {
+        if (!this.#isBootstrapped) {
+          if (isUiOpen) {
+            this.#bootstrap().catch((error) => {
+              log('Failed to bootstrap AssetsController', error);
+            });
+          }
+          return;
+        }
         this.#updateActive();
       },
       clientControllerSelectors.selectIsUiOpen,
@@ -1243,14 +1412,11 @@ export class AssetsController extends BaseController<
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.messenger.subscribe('KeyringController:unlock', async () => {
-      try {
-        this.#runOutOfScopeBalanceCleanup();
-      } catch {
-        /* Do nothing */
+      // Before bootstrap, `#bootstrap()` runs the cleanups itself.
+      if (!this.#isBootstrapped) {
+        return;
       }
-      await this.#runSpamCleanup().catch(() => {
-        /* Do nothing */
-      });
+      await this.#runUnlockCleanups();
       this.#updateActive();
     });
     this.messenger.subscribe('KeyringController:lock', () => {
@@ -1263,6 +1429,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:unapprovedTransactionAdded',
       (transactionMeta: TransactionMeta) => {
+        if (!this.#isBootstrapped) {
+          return;
+        }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
       },
     );
@@ -1274,6 +1443,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'TransactionController:transactionConfirmed',
       (transactionMeta: TransactionMeta) => {
+        if (!this.#isBootstrapped) {
+          return;
+        }
         this.#refreshAssetsForEVMTransaction(transactionMeta);
       },
     );
@@ -1285,6 +1457,9 @@ export class AssetsController extends BaseController<
     this.messenger.subscribe(
       'MultichainTransactionsController:transactionConfirmed',
       (transaction: KeyringTransaction) => {
+        if (!this.#isBootstrapped) {
+          return;
+        }
         this.#refreshAssetsForNonEvmTransaction(transaction);
       },
     );
@@ -1448,6 +1623,9 @@ export class AssetsController extends BaseController<
    * the keyring is unlocked, and the account tree has finished `init()`.
    */
   #updateActive(): void {
+    if (!this.#isBootstrapped) {
+      return;
+    }
     const shouldRun =
       this.#isUiOpen() &&
       this.#isKeyringUnlocked() &&
@@ -1516,7 +1694,12 @@ export class AssetsController extends BaseController<
     activeChains: ChainId[],
     previousChains: ChainId[],
   ): void {
-    if (!this.#isUiOpen() || !this.#isKeyringUnlocked() || !this.#isEnabled()) {
+    if (
+      !this.#isBootstrapped ||
+      !this.#isUiOpen() ||
+      !this.#isKeyringUnlocked() ||
+      !this.#isEnabled()
+    ) {
       return;
     }
     log('Data source active chains changed', {
@@ -3527,6 +3710,9 @@ export class AssetsController extends BaseController<
    * @param _isBasic - The new value (for call-site clarity; the getter is the source of truth).
    */
   handleBasicFunctionalityChange(_isBasic: boolean): void {
+    if (!this.#isBootstrapped) {
+      return;
+    }
     this.#stop();
     this.#subscribeAssets();
   }
@@ -4428,6 +4614,7 @@ export class AssetsController extends BaseController<
   // ============================================================================
 
   destroy(): void {
+    this.#isDestroyed = true;
     log('Destroying AssetsController', {
       dataSourceCount: this.#allBalanceDataSources.length,
       subscriptionCount: this.#activeSubscriptions.size,
