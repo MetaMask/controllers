@@ -143,6 +143,16 @@ const transferCaveats = (
   },
 ];
 
+const rootCaveats = (
+  successor: Hex = SUCCESSOR,
+): DelegationResponse['signedDelegation']['caveats'] => [
+  {
+    enforcer: REDEEMER_ENFORCER,
+    terms: createRedeemerTerms({ redeemers: [successor] }),
+    args: '0x',
+  },
+];
+
 const premiumTransferCaveats =
   (): DelegationResponse['signedDelegation']['caveats'] => [
     {
@@ -213,7 +223,7 @@ const STORED_PREMIUM_HASH: Hex = `0x${'03'.repeat(32)}`;
 const storedRootDelegation = (delegate: Hex = SUCCESSOR): DelegationResponse =>
   storedDelegation({
     delegate,
-    caveats: [],
+    caveats: rootCaveats(delegate.toLowerCase() as Hex),
     tokenAddress: MUSD,
     tokenSymbol: 'mUSD',
     type: 'cash-migration-root',
@@ -431,7 +441,7 @@ describe('registerMigrationIntentsStep', () => {
   });
 
   describe('for a standard migration', () => {
-    it('signs the root delegation from the predecessor to the successor without caveats', async () => {
+    it('signs the root delegation from the predecessor to the successor, redeemable only by the successor', async () => {
       const { messenger, mocks } = setup();
 
       await run(messenger);
@@ -441,7 +451,7 @@ describe('registerMigrationIntentsStep', () => {
           delegate: SUCCESSOR,
           delegator: PREDECESSOR,
           authority: ROOT_AUTHORITY,
-          caveats: [],
+          caveats: rootCaveats(),
           salt: expect.stringMatching(/^0x[0-9a-f]{64}$/u),
         },
         chainId: CHAIN_ID,
@@ -711,6 +721,56 @@ describe('registerMigrationIntentsStep', () => {
       await run(messenger);
 
       expect(signedDelegations(mocks)).toHaveLength(1);
+    });
+
+    it('reuses a stored root delegation signed for the checksummed successor', async () => {
+      const successor = '0xAbCdEf0123456789aBcDeF0123456789AbCdEf01' as Hex;
+      const { messenger, mocks } = setup(
+        migratingIdentity({
+          to: successor.toLowerCase() as Hex,
+          completed: ['TRANSFER_INTENT_MUSD', 'TRANSFER_INTENT_VMUSD'],
+        }),
+      );
+      const root = storedRootDelegation();
+      mocks.listDelegations.mockResolvedValue([
+        storedDelegation({
+          ...root.metadata,
+          ...root.signedDelegation,
+          delegate: successor,
+          caveats: rootCaveats(successor),
+        }),
+      ]);
+
+      await run(messenger);
+
+      expect(mocks.signDelegation).not.toHaveBeenCalled();
+      expect(mocks.createIntentsV2).toHaveBeenCalledWith([
+        expect.objectContaining({ delegationHash: STORED_ROOT_HASH }),
+      ]);
+    });
+
+    it('does not reuse a stored root delegation without caveats', async () => {
+      const { messenger, mocks } = setup(
+        migratingIdentity({
+          completed: ['TRANSFER_INTENT_MUSD', 'TRANSFER_INTENT_VMUSD'],
+        }),
+      );
+      const root = storedRootDelegation();
+      mocks.listDelegations.mockResolvedValue([
+        storedDelegation({
+          ...root.metadata,
+          ...root.signedDelegation,
+          caveats: [],
+        }),
+      ]);
+
+      await run(messenger);
+
+      expect(signedDelegations(mocks)).toStrictEqual([
+        expect.objectContaining({
+          delegation: expect.objectContaining({ caveats: rootCaveats() }),
+        }),
+      ]);
     });
 
     it('reuses a stored delegation whatever the order of its caveats', async () => {
