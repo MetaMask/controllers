@@ -909,6 +909,30 @@ describe('MfaRecoveryController', () => {
   });
 
   describe('SIWE identifiers', () => {
+    it('rejects SIWE address casing duplicates before authorization', async () => {
+      await withController(async ({ controller, authProvider, options }) => {
+        const authorize = vi.spyOn(authProvider, 'authorizeRecoveryRequest');
+        const getIdentifierToken = vi.spyOn(
+          options.identifierAuthProvider,
+          'getKeyBoundIdentifierToken',
+        );
+        const identifiers = [
+          WALLET,
+          { ...WALLET, value: WALLET.value.toLowerCase() },
+        ];
+
+        await expect(
+          controller.register(SECRET, identifiers),
+        ).rejects.toMatchObject({ code: 'too_few_identifiers' });
+        await expect(
+          controller.updateIdentifiers(PASSKEY, identifiers, REGISTERED_EPOCH),
+        ).rejects.toMatchObject({ code: 'too_few_identifiers' });
+        expect(authorize).not.toHaveBeenCalled();
+        expect(getIdentifierToken).not.toHaveBeenCalled();
+        expect(controller.state.pendingOperation).toBeNull();
+      });
+    });
+
     it('proves each SIWE identifier at register', async () => {
       await withController(async ({ controller, escrowA }) => {
         const apply = vi.spyOn(escrowA, 'applyMutation');

@@ -27,7 +27,8 @@ export const MIN_IDENTIFIERS = 2;
 export function countDistinctIdentifiers(identifiers: Identifier[]): number {
   return new Set(
     identifiers.map(
-      ({ type, namespace, value }) => `${type}\0${namespace}\0${value}`,
+      ({ type, namespace, value }) =>
+        `${type}\0${namespace}\0${type === 'siwe' ? value.toLowerCase() : value}`,
     ),
   ).size;
 }
