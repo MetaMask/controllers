@@ -1,0 +1,127 @@
+import { describe, expect, it } from 'vitest';
+
+import { AssetsFetchTracker } from './assetsFetchTracker.js';
+import type { AssetsFetchUpdate } from './assetsFetchTracker.js';
+import type { AccountId, AssetsFetchStatus } from './types.js';
+
+type FakeState = { assetsFetchStatus?: Record<AccountId, AssetsFetchStatus> };
+
+const CHAIN = 'eip155:1';
+
+/**
+ * Build a tracker over a plain state object.
+ *
+ * @param now - Clock function.
+ * @returns The tracker, the state and a write counter.
+ */
+function setup(now: () => number = (): number => 1000): {
+  tracker: AssetsFetchTracker;
+  state: FakeState;
+  writes: () => number;
+} {
+  const state: FakeState = {};
+  let count = 0;
+  const update: AssetsFetchUpdate = (recipe) => {
+    count += 1;
+    recipe(state);
+  };
+  return {
+    tracker: new AssetsFetchTracker(update, now),
+    state,
+    writes: () => count,
+  };
+}
+
+describe('AssetsFetchTracker', () => {
+  it('reports fetching then idle for one account and phase', () => {
+    const { tracker, state } = setup();
+
+    const end = tracker.begin(['a'], 'fast');
+    expect(state.assetsFetchStatus?.a?.fast).toStrictEqual({
+      fetchStatus: 'fetching',
+      errors: {},
+      updatedAt: null,
+    });
+
+    end();
+    expect(state.assetsFetchStatus?.a?.fast).toStrictEqual({
+      fetchStatus: 'idle',
+      errors: {},
+      updatedAt: 1000,
+    });
+  });
+
+  it('keeps accounts and phases independent', () => {
+    const { tracker, state } = setup();
+
+    const endFast = tracker.begin(['a', 'b'], 'fast');
+    tracker.begin(['a'], 'background');
+    endFast();
+
+    expect(state.assetsFetchStatus?.a?.fast.fetchStatus).toBe('idle');
+    expect(state.assetsFetchStatus?.b?.fast.fetchStatus).toBe('idle');
+    expect(state.assetsFetchStatus?.a?.background.fetchStatus).toBe('fetching');
+    expect(state.assetsFetchStatus?.b?.background.fetchStatus).toBe('idle');
+  });
+
+  it('stays fetching until the last overlapping fetch ends', () => {
+    const { tracker, state } = setup();
+
+    const end1 = tracker.begin(['a'], 'fast');
+    const end2 = tracker.begin(['a'], 'fast');
+    end1();
+    expect(state.assetsFetchStatus?.a?.fast.fetchStatus).toBe('fetching');
+    end2();
+    expect(state.assetsFetchStatus?.a?.fast.fetchStatus).toBe('idle');
+  });
+
+  it('clears errors when a new fetch begins', () => {
+    const { tracker, state } = setup();
+
+    tracker.begin(['a'], 'fast')({ errors: { [CHAIN]: 'boom' } });
+    expect(state.assetsFetchStatus?.a?.fast.errors).toStrictEqual({
+      [CHAIN]: 'boom',
+    });
+
+    tracker.begin(['a'], 'fast');
+    expect(state.assetsFetchStatus?.a?.fast.errors).toStrictEqual({});
+  });
+
+  it('moves updatedAt only on error free completion', () => {
+    let time = 1;
+    const { tracker, state } = setup(() => time);
+
+    tracker.begin(['a'], 'fast')();
+    expect(state.assetsFetchStatus?.a?.fast.updatedAt).toBe(1);
+
+    time = 2;
+    tracker.begin(['a'], 'fast')({ errors: { [CHAIN]: 'boom' } });
+    expect(state.assetsFetchStatus?.a?.fast.updatedAt).toBe(1);
+
+    time = 3;
+    tracker.begin(['a'], 'fast')({ errors: {} });
+    expect(state.assetsFetchStatus?.a?.fast.updatedAt).toBe(3);
+  });
+
+  it('ignores a second call to end', () => {
+    const { tracker, state } = setup();
+
+    const end1 = tracker.begin(['a'], 'fast');
+    const end2 = tracker.begin(['a'], 'fast');
+    end1();
+    end1();
+    expect(state.assetsFetchStatus?.a?.fast.fetchStatus).toBe('fetching');
+    end2();
+    expect(state.assetsFetchStatus?.a?.fast.fetchStatus).toBe('idle');
+  });
+
+  it('writes nothing for an empty account list', () => {
+    const { tracker, state, writes } = setup();
+
+    const end = tracker.begin([], 'fast');
+    end();
+
+    expect(writes()).toBe(0);
+    expect(state.assetsFetchStatus).toBeUndefined();
+  });
+});
