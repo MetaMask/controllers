@@ -5376,7 +5376,7 @@ __metadata:
     "@ethersproject/bignumber": "npm:^5.8.0"
     "@ethersproject/contracts": "npm:^5.7.0"
     "@ethersproject/providers": "npm:^5.8.0"
-    "@metamask/abi-utils": "npm:^2.0.4"
+    "@metamask/abi-utils": "npm:^3.0.0"
     "@metamask/account-api": "npm:^2.2.0"
     "@metamask/account-tree-controller": "npm:^11.2.0"
     "@metamask/accounts-controller": "npm:^40.1.0"
@@ -6666,7 +6666,7 @@ __metadata:
     "@lavamoat/allow-scripts": "npm:^5.1.0"
     "@lavamoat/preinstall-always-fail": "npm:^3.0.0"
     "@metamask/7715-permission-types": "npm:^1.0.0"
-    "@metamask/abi-utils": "npm:^2.0.4"
+    "@metamask/abi-utils": "npm:^3.0.0"
     "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/base-controller": "npm:^10.1.0"
     "@metamask/delegation-core": "npm:^2.2.1"
@@ -7318,7 +7318,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/money-account-mfa-whitelist@workspace:packages/money-account-mfa-whitelist"
   dependencies:
-    "@metamask/abi-utils": "npm:^2.0.4"
+    "@metamask/abi-utils": "npm:^3.0.0"
     "@metamask/auto-changelog": "npm:^7.1.0"
     "@metamask/delegation-controller": "npm:^4.0.0"
     "@metamask/delegation-core": "npm:^2.2.1"
@@ -7899,7 +7899,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@metamask/perps-controller@workspace:packages/perps-controller"
   dependencies:
-    "@metamask/abi-utils": "npm:^2.0.4"
+    "@metamask/abi-utils": "npm:^3.0.0"
     "@metamask/account-tree-controller": "npm:^11.2.0"
     "@metamask/authenticated-user-storage": "npm:^4.1.0"
     "@metamask/auto-changelog": "npm:^7.1.0"
