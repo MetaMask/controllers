@@ -308,6 +308,9 @@ export class AccountsApiDataSource extends AbstractDataSource<
 
   readonly #onBalancesQueryStateChange: QueryStateChangeHandler | undefined;
 
+  /** Whether the missing service action warning was already reported. */
+  #hasReportedMissingBalancesService = false;
+
   /** Chains refresh timer */
   #chainsRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -820,17 +823,47 @@ export class AccountsApiDataSource extends AbstractDataSource<
     >,
     fetchOptions: BalancesFetchOptions,
   ): Promise<unknown> {
-    return await this.#messenger.call(
-      'AccountsApiBalancesService:fetchBalances',
-      {
-        ...params,
-        forceUpdate: fetchOptions !== undefined,
-        bypassServerCache: fetchOptions?.bypassServerCache === true,
-        ...(this.#onBalancesQueryStateChange
-          ? { onQueryStateChange: this.#onBalancesQueryStateChange }
-          : {}),
-      },
-    );
+    try {
+      return await this.#messenger.call(
+        'AccountsApiBalancesService:fetchBalances',
+        {
+          ...params,
+          forceUpdate: fetchOptions !== undefined,
+          bypassServerCache: fetchOptions?.bypassServerCache === true,
+          ...(this.#onBalancesQueryStateChange
+            ? { onQueryStateChange: this.#onBalancesQueryStateChange }
+            : {}),
+        },
+      );
+    } catch (error) {
+      this.#reportMissingBalancesService(error);
+      throw error;
+    }
+  }
+
+  /**
+   * Log once per instance when `useAccountsApiBalancesService` is on but the
+   * `AccountsApiBalancesService:fetchBalances` action is not delegated or not
+   * registered. This data source has no injected exception reporter, so it
+   * uses the module debug logger.
+   *
+   * @param error - The error thrown by the messenger call.
+   */
+  #reportMissingBalancesService(error: unknown): void {
+    if (this.#hasReportedMissingBalancesService) {
+      return;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes('has not been delegated') ||
+      message.includes('has not been registered')
+    ) {
+      this.#hasReportedMissingBalancesService = true;
+      log(
+        'useAccountsApiBalancesService is enabled but AccountsApiBalancesService:fetchBalances is not delegated or registered',
+        { error },
+      );
+    }
   }
 
   /**

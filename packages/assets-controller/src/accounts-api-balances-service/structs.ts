@@ -70,7 +70,7 @@ const V5BalanceItemStruct = type({
   assetId: string(),
   balance: string(),
   accountId: string(),
-  metadata: optional(TokenBalanceMetadataStruct),
+  metadata: optional(nullable(TokenBalanceMetadataStruct)),
 });
 
 /**
@@ -92,7 +92,7 @@ const V6BalanceItemStruct = type({
   labels: optional(nullable(array(string()))),
   canonicalHead: LooseStringStruct,
   metadata: optional(
-    union([DefiBalanceMetadataStruct, TokenBalanceMetadataStruct]),
+    nullable(union([DefiBalanceMetadataStruct, TokenBalanceMetadataStruct])),
   ),
 });
 
@@ -108,7 +108,7 @@ export const V6BalancesResponseStruct = type({
   unprocessedNetworks: array(string()),
   unprocessedIncludeAssetIds: array(string()),
   balances: array(V6BalanceItemStruct),
-  processingDefiPositions: optional(array(string())),
+  processingDefiPositions: optional(nullable(array(string()))),
 });
 
 /** A validated v5 or v6 balances response. */

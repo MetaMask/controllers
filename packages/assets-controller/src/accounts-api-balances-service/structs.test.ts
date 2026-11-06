@@ -157,6 +157,37 @@ describe('balances response structs', () => {
     ).toBe(false);
   });
 
+  it('accepts a v5 row with null metadata', () => {
+    const response = {
+      count: 1,
+      unprocessedNetworks: [],
+      balances: [{ ...V5_ITEM, metadata: null }],
+    };
+
+    expect(is(response, V5BalancesResponseStruct)).toBe(true);
+  });
+
+  it('accepts a v6 row with null metadata', () => {
+    const response = {
+      unprocessedNetworks: [],
+      unprocessedIncludeAssetIds: [],
+      balances: [{ ...V6_ITEM, metadata: null }],
+    };
+
+    expect(is(response, V6BalancesResponseStruct)).toBe(true);
+  });
+
+  it('accepts a v6 response with null processingDefiPositions', () => {
+    const response = {
+      unprocessedNetworks: [],
+      unprocessedIncludeAssetIds: [],
+      balances: [],
+      processingDefiPositions: null,
+    };
+
+    expect(is(response, V6BalancesResponseStruct)).toBe(true);
+  });
+
   it('rejects a response missing balances', () => {
     expect(
       is({ count: 0, unprocessedNetworks: [] }, V5BalancesResponseStruct),

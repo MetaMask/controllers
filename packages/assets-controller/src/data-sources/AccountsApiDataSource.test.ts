@@ -33,6 +33,13 @@ import {
   filterResponseToKnownAssets,
 } from './AccountsApiDataSource.js';
 
+const { mockLog } = vi.hoisted(() => ({ mockLog: vi.fn() }));
+
+vi.mock('../logger.js', () => ({
+  projectLogger: {},
+  createModuleLogger: (): typeof mockLog => mockLog,
+}));
+
 type AllActions = AccountsApiDataSourceAllowedActions;
 type AllEvents = AccountsApiDataSourceAllowedEvents;
 type RootMessenger = Messenger<MockAnyNamespace, AllActions, AllEvents>;
@@ -2220,6 +2227,68 @@ describe('AccountsApiDataSource', () => {
       expect(response.assetsBalance).toBeUndefined();
 
       controller.destroy();
+    });
+
+    it('reports once when the action is not delegated', async () => {
+      mockLog.mockClear();
+      const error = new Error(
+        'A handler for AccountsApiBalancesService:fetchBalances has not been registered',
+      );
+      const fetchBalancesHandler = vi.fn().mockRejectedValue(error);
+      const { controller } = await setupController({
+        useAccountsApiBalancesService: true,
+        fetchBalancesHandler,
+      });
+      const request = createDataRequest({
+        chainIds: [CHAIN_MAINNET, CHAIN_POLYGON],
+      });
+
+      const first = await controller.fetch(request);
+      const second = await controller.fetch(request);
+
+      const warnings = mockLog.mock.calls.filter(([message]) =>
+        String(message).includes('AccountsApiBalancesService:fetchBalances'),
+      );
+      expect(warnings).toHaveLength(1);
+      for (const response of [first, second]) {
+        expect(response.errors).toStrictEqual({
+          [CHAIN_MAINNET]: `Fetch failed: ${error.message}`,
+          [CHAIN_POLYGON]: `Fetch failed: ${error.message}`,
+        });
+      }
+
+      controller.destroy();
+    });
+
+    it('treats a null metadata row from the service like an absent one', async () => {
+      const row = createMockBalanceItem(
+        MAINNET_ACCOUNT_ID,
+        MAINNET_NATIVE,
+        '1000000000000000000',
+      );
+      const run = async (metadata: null | undefined): Promise<unknown> => {
+        const { controller } = await setupController({
+          useAccountsApiBalancesService: true,
+          fetchBalancesHandler: createFetchBalancesHandler({
+            count: 1,
+            unprocessedNetworks: [],
+            balances: [{ ...row, metadata }],
+          }),
+        });
+        const response = await controller.fetch(createDataRequest());
+        controller.destroy();
+        return response.assetsBalance;
+      };
+
+      const withNull = await run(null);
+      const withAbsent = await run(undefined);
+
+      expect(withNull).toStrictEqual(withAbsent);
+      expect(withNull).toStrictEqual({
+        'mock-account-id': {
+          [MAINNET_NATIVE]: { amount: '1000000000000000000' },
+        },
+      });
     });
 
     it('a service call slower than fetchTimeoutMs becomes Fetch failed entries', async () => {
