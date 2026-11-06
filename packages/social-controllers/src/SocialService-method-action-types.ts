@@ -19,15 +19,14 @@ export type SocialServiceFetchLeaderboardAction = {
 };
 
 /**
- * Fetches a trader's profile by address or profile ID.
- *
- * Calls `GET ${baseUrl}/traders/${addressOrId}/profile`.
- *
- * `profile.createdAt` is optional. When present it is an ISO-8601 timestamp
- * for when the social-api profile row was inserted.
+ * Fetches a trader's profile by address or profile ID, as the signed-in user
+ * may see it. The signed-in user's own profile comes from their own route,
+ * which includes private trading. Anyone else gets the public view, which
+ * withholds private trading. Pass the profile ID to get your own profile: a
+ * wallet address never matches the signed-in user.
  *
  * @param options - Options bag.
- * @param options.addressOrId - Wallet address or Clicker profile ID.
+ * @param options.addressOrId - Profile ID, or wallet address.
  * @returns The trader profile response.
  */
 export type SocialServiceFetchTraderProfileAction = {
@@ -107,12 +106,15 @@ export type SocialServiceFetchTraderFollowingAction = {
 };
 
 /**
- * Fetches a single position by its unique ID.
- *
- * Calls `GET ${baseUrl}/traders/position/${positionId}`.
+ * Fetches a single position by its unique ID, as the signed-in user may see
+ * it. A position the signed-in trader holds comes from their own route, which
+ * includes private trading. Pass `profileId`, the position's trader, to route
+ * directly. Without it, the signed-in user's own route is tried first, and the
+ * public route is used when that does not find the position.
  *
  * @param options - Options bag.
  * @param options.positionId - Unique position ID (UUID).
+ * @param options.profileId - Profile ID of the position's trader, if known.
  * @returns The position.
  */
 export type SocialServiceFetchPositionByIdAction = {
@@ -150,27 +152,12 @@ export type SocialServiceFetchFeedAction = {
 };
 
 /**
- * Fetches a page of one trader's activity as feed items.
- *
- * Calls `GET ${baseUrl}/traders/${addressOrId}/feed`. Unlike {@link fetchFeed},
- * this is scoped to a single profile (open and closed positions in the feed)
- * and does not accept `scope` or `chains`. Set `commentedOnly` to only return
- * positions that carry an author comment.
- *
- * The route is public, but the Authorization header is still sent so the
- * social-api can hydrate `authorComment.engagement.userReaction` for the
- * signed-in viewer.
- *
- * Cursor pagination supports infinite scroll: pass `pagination.olderCursor`
- * from a prior response back as `olderThan` to load older items, and
- * `pagination.newerCursor` as `newerThan` to fetch newer items.
+ * Fetches a page of one trader's activity as feed items, as the signed-in user
+ * may see it. The signed-in trader's own feed comes from their own route, which
+ * includes private trading. Anyone else gets the public view.
  *
  * @param options - Options bag.
- * @param options.addressOrId - Wallet address or Clicker profile ID.
- * @param options.commentedOnly - When true, only positions with a comment.
- * @param options.limit - Number of results per page.
- * @param options.olderThan - Cursor for older items (scroll down).
- * @param options.newerThan - Cursor for newer items (refresh).
+ * @param options.addressOrId - Profile ID, or wallet address.
  * @returns The feed response with items and pagination cursors.
  */
 export type SocialServiceFetchTraderFeedAction = {

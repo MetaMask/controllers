@@ -230,6 +230,7 @@ export const TraderProfileResponseStruct = structType({
   followingCount: number(),
   copytradedAllTime: CopytradedAllTimeStruct,
   rankingTag: optional(nullable(enums(TRADER_RANKING_TAGS))),
+  tradingPrivacy: optional(enums(['public', 'private'])),
 });
 
 export const PaginationStruct = structType({

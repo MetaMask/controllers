@@ -147,6 +147,7 @@ export type {
   TradeInFlight,
   TraderProfile,
   TraderProfileResponse,
+  TradingPrivacy,
   TraderRankingTag,
   TraderStats,
   UnblockProfileOptions,

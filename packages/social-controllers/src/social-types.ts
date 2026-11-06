@@ -261,6 +261,12 @@ export type PerChainBreakdown = {
 };
 
 /**
+ * Whether a trader has made their trading private. A private trader's
+ * positions and feed are not visible to anyone but themselves.
+ */
+export type TradingPrivacy = 'public' | 'private';
+
+/**
  * Response from `GET /v1/traders/:addressOrId/profile`.
  */
 export type TraderProfileResponse = {
@@ -280,6 +286,13 @@ export type TraderProfileResponse = {
    * social-api builds; `null` when unclaimed or activity is insufficient.
    */
   rankingTag?: TraderRankingTag | null;
+  /**
+   * The trader's trading privacy. Omitted on social-api builds that predate
+   * it. When `private`, `stats`, `perChainBreakdown`, `copytradedAllTime`, and
+   * `socialHandles.ens` come back empty, and `address` and `allAddresses` are
+   * empty.
+   */
+  tradingPrivacy?: TradingPrivacy;
 };
 
 // ---------------------------------------------------------------------------
@@ -743,6 +756,32 @@ export type FetchPositionsOptions = {
   page?: number;
 };
 
+/**
+ * Options for the signed-in trader's own positions. The trader is the token's
+ * subject, so there is no `addressOrId`.
+ */
+export type FetchMyPositionsOptions = {
+  chain?: string;
+  sort?: 'value' | 'latest';
+  limit?: number;
+  page?: number;
+};
+
+/**
+ * Options for the signed-in trader's own feed. The trader is the token's
+ * subject, so there is no `addressOrId`.
+ */
+export type FetchMyTraderFeedOptions = {
+  /** When true, return only positions that carry an author comment. */
+  commentedOnly?: boolean;
+  /** Number of results to return. */
+  limit?: number;
+  /** Cursor for older items (infinite scroll). */
+  olderThan?: string;
+  /** Cursor for newer items (pull to refresh). */
+  newerThan?: string;
+};
+
 export type FetchFollowersOptions = {
   /** Wallet address or Clicker profile ID. */
   addressOrId: string;
@@ -855,6 +894,11 @@ export type FeedScope = 'following' | 'leaderboard' | 'all' | 'trending';
 export type FetchPositionByIdOptions = {
   /** Unique position ID (UUID). */
   positionId: string;
+  /**
+   * Profile ID of the position's trader. Set it to route straight to the right
+   * route. Omit it to try the signed-in user's own route first.
+   */
+  profileId?: string;
 };
 
 export type FollowOptions = {

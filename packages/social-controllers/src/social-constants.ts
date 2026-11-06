@@ -9,6 +9,8 @@ export const SocialServiceErrorMessage = {
   FETCH_TRADER_PROFILE_FAILED: 'SocialService: Trader profile request failed',
   FETCH_TRADER_PROFILE_INVALID_RESPONSE:
     'SocialService: Trader profile returned invalid response',
+  FETCH_TRADER_PROFILE_MISMATCH:
+    'SocialService: Trader profile does not match the requested profile',
   FETCH_OPEN_POSITIONS_FAILED: 'SocialService: Open positions request failed',
   FETCH_OPEN_POSITIONS_INVALID_RESPONSE:
     'SocialService: Open positions returned invalid response',
