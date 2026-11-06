@@ -4,9 +4,9 @@
 
 /**
  * Social login providers accepted by seedless authenticate. Values match
- * `SeedlessOnboardingController`'s `AuthConnection` enum. Kept as a local
- * constant so this package does not depend on seedless-onboarding-controller
- * at runtime; a unit test asserts the two stay in sync.
+ * `SeedlessOnboardingController`'s `AuthConnection` enum (`google`, `apple`,
+ * `telegram`). Kept as a local constant so this package does not depend on
+ * seedless-onboarding-controller.
  */
 export const SEEDLESS_AUTH_CONNECTIONS = [
   'google',
@@ -21,8 +21,9 @@ export type SeedlessAuthConnection = (typeof SEEDLESS_AUTH_CONNECTIONS)[number];
 
 /**
  * OIDC issuer namespaces for {@link Identifier} `type: 'social'`, mapped to
- * {@link SeedlessAuthConnection}. Used to ensure seedless auth data belongs to
- * the same IdP that was authenticated.
+ * {@link SeedlessAuthConnection}. Used to check that `seedlessAuthData.authConnection`
+ * matches the authenticated identifier's IdP namespace (provider check only;
+ * subject / `userId` are not compared).
  */
 export const SEEDLESS_AUTH_CONNECTION_BY_NAMESPACE: Record<
   string,
@@ -154,8 +155,9 @@ export type SeedlessAuthData = {
   revokeToken?: string;
   /**
    * Social login provider. Values match `SeedlessOnboardingController`'s
-   * `AuthConnection` enum (`google`, `apple`, `telegram`). Must match the
-   * authenticated social identifier's issuer namespace.
+   * `AuthConnection` enum (`google`, `apple`, `telegram`). Validated against
+   * the authenticated social identifier's issuer namespace (provider match
+   * only; not subject / `userId`).
    */
   authConnection: SeedlessAuthConnection;
   authConnectionId: string;
@@ -396,8 +398,10 @@ export type RecoveryAuthProvider = {
  *
  * Implement `getKeyBoundIdentifierToken` for every provider. Optionally also
  * implement `getKeyBoundIdentifierLogin` when one social login should return
- * seedless auth-server tokens beside the recovery token; `seedlessAuthData`
- * on that result stays optional (passkey providers omit it).
+ * seedless auth-server tokens beside the recovery token for
+ * `authenticateIdentifier`; `seedlessAuthData` on that result stays optional
+ * (passkey providers omit it). Mutation writes always use
+ * {@link getKeyBoundIdentifierToken} and never call this method.
  */
 export type RecoveryIdentifierAuthProvider = {
   getKeyBoundIdentifierToken: (
@@ -405,11 +409,11 @@ export type RecoveryIdentifierAuthProvider = {
   ) => Promise<KeyBoundIdentifierToken>;
   /**
    * Optional. One identifier login that returns the key-bound token and, when
-   * available, seedless auth-server tokens from the same exchange. When
-   * present, the controller prefers this over {@link getKeyBoundIdentifierToken}.
-   * The returned token must be bound to the requested `proofPublicKey` and
-   * `requestHash`. Omit `seedlessAuthData` when the IdP does not issue it
-   * (e.g. passkey).
+   * available, seedless auth-server tokens from the same exchange. Used only by
+   * `authenticateIdentifier` when present; mutation writes always use
+   * {@link getKeyBoundIdentifierToken} instead. The returned token must be
+   * bound to the requested `proofPublicKey` and `requestHash`. Omit
+   * `seedlessAuthData` when the IdP does not issue it (e.g. passkey).
    */
   getKeyBoundIdentifierLogin?: (
     params: KeyBoundIdentifierTokenRequest,

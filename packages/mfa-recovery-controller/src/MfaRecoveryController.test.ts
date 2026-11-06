@@ -1046,6 +1046,68 @@ describe('MfaRecoveryController', () => {
           },
         );
       });
+
+      it('uses getKeyBoundIdentifierToken for writes even when login is available', async () => {
+        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
+        await withController(
+          { identifierAuthProvider },
+          async ({ controller }) => {
+            await controller.register(SECRET, IDENTIFIERS);
+            const login = vi.spyOn(
+              identifierAuthProvider,
+              'getKeyBoundIdentifierLogin',
+            );
+            const getToken = vi.spyOn(
+              identifierAuthProvider,
+              'getKeyBoundIdentifierToken',
+            );
+
+            await controller.updateRecoverySecret(
+              SOCIAL,
+              SECRET_2,
+              REGISTERED_EPOCH,
+            );
+
+            expect(login).not.toHaveBeenCalled();
+            expect(getToken).toHaveBeenCalled();
+          },
+        );
+      });
+
+      it('rejects empty identifier values on writes even when the token discovers a subject', async () => {
+        const socialWithoutSubject: Identifier = { ...SOCIAL, value: '' };
+        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
+        const getToken = identifierAuthProvider.getKeyBoundIdentifierToken.bind(
+          identifierAuthProvider,
+        );
+        vi.spyOn(
+          identifierAuthProvider,
+          'getKeyBoundIdentifierToken',
+        ).mockImplementation(async (params) => {
+          const token = await getToken(params);
+          return {
+            ...token,
+            identifier: {
+              ...params.identifier,
+              value: 'provider-oidc-sub',
+            },
+          };
+        });
+        await withController(
+          { identifierAuthProvider },
+          async ({ controller }) => {
+            await controller.register(SECRET, IDENTIFIERS);
+
+            await expect(
+              controller.updateRecoverySecret(
+                socialWithoutSubject,
+                SECRET_2,
+                REGISTERED_EPOCH,
+              ),
+            ).rejects.toMatchObject({ code: 'invalid_identifier_token' });
+          },
+        );
+      });
     });
   });
 

@@ -24,10 +24,13 @@ mutation can then be aborted. Set `CubistEscrowProviderOptions.authAudience` to 
 
 ## Seedless password unlock
 
-`authenticateIdentifier` always goes through one helper
-(`requestKeyBoundIdentifierToken`). That helper prefers optional
+`authenticateIdentifier` goes through `requestKeyBoundIdentifierToken` with
+seedless-login enabled: that helper prefers optional
 `RecoveryIdentifierAuthProvider.getKeyBoundIdentifierLogin` when present, and
-otherwise uses `getKeyBoundIdentifierToken`.
+otherwise uses `getKeyBoundIdentifierToken`. Mutation writes
+(`updateRecoverySecret` / `updateIdentifiers`) call the same helper **without**
+seedless-login, so they always use `getKeyBoundIdentifierToken` and never mint
+auth-server tokens that would be dropped.
 
 `seedlessAuthData` on the result is **optional**: passkey / SIWE logins omit
 it; only seedless social password unlock needs it. For that path, implement
@@ -50,14 +53,15 @@ await seedlessOnboardingController.authenticate({
 // Keep `session` only if a later getRecoverySecret is needed; drop seedlessAuthData.
 ```
 
-With `requireSeedlessAuthData: true`, the result always includes
-`seedlessAuthData` (including `revokeToken`) beside a key-bound `session`.
-Without that flag (default), missing seedless data is fine — e.g. passkey.
-`authConnection` must match the social identifier's issuer namespace and uses
-the same string values as seedless `AuthConnection`. Cast to `AuthConnection`
-if TypeScript treats that enum nominally. Pass only `session` to
-`getRecoverySecret(session)` later — do not keep auth-server tokens on the
-session object.
+With `requireSeedlessAuthData: true`, the result is a
+`SeedlessAuthenticateIdentifierResult`: `seedlessAuthData` (including
+`revokeToken`) beside a key-bound `session`. Without that flag (default), the
+result is an `AuthenticateIdentifierResult` and missing seedless data is fine
+— e.g. passkey. `authConnection` is checked against the social identifier's
+issuer namespace (provider match only) and uses the same string values as
+seedless `AuthConnection`. Cast to `AuthConnection` if TypeScript treats that
+enum nominally. Pass only `session` to `getRecoverySecret(session)` later —
+do not keep auth-server tokens on the session object.
 
 The seedless auth data comes only from the AAL1 social login and is never sent
 to recovery escrows. `getRecoverySecret` separately requests its AAL2

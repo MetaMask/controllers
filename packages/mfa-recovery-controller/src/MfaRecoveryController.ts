@@ -367,6 +367,10 @@ export class MfaRecoveryController extends BaseController<
         requestHash,
         identifierAuthProvider: this.#identifierAuthProvider,
         requireSeedlessAuthData,
+        // Seedless login + empty-value subject discovery are authenticate-only.
+        // Mutation writes omit these flags (token path + exact value match).
+        allowSeedlessLogin: true,
+        allowEmptyIdentifierValue: true,
       });
     const session: IdentifierSession = {
       ...credential,

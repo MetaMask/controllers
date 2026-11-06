@@ -85,10 +85,12 @@ const SeedlessAuthDataStruct = structType({
  * Requests a key-bound identifier credential (and optional seedless auth data)
  * from one provider call.
  *
- * Prefers `getKeyBoundIdentifierLogin` when the provider implements it so a
+ * Mutation write paths leave `allowSeedlessLogin` false and only call
+ * `getKeyBoundIdentifierToken`, so providers never mint seedless tokens that
+ * would be discarded. `authenticateIdentifier` sets `allowSeedlessLogin` so a
  * social login can return seedless auth-server tokens beside the recovery
- * token. Otherwise falls back to `getKeyBoundIdentifierToken` (passkey / SIWE /
- * providers that do not return seedless data).
+ * token via `getKeyBoundIdentifierLogin` when implemented; otherwise it falls
+ * back to `getKeyBoundIdentifierToken`.
  *
  * `seedlessAuthData` is always optional on the success path — passkey logins
  * typically omit it. Set `requireSeedlessAuthData` only for the seedless
@@ -100,6 +102,12 @@ const SeedlessAuthDataStruct = structType({
  * @param params.identifierAuthProvider - Provider for key-bound assertions.
  * @param params.requireSeedlessAuthData - When true, fail unless complete
  * seedless auth data (including `revokeToken`) is returned.
+ * @param params.allowSeedlessLogin - When true, prefer
+ * `getKeyBoundIdentifierLogin` if the provider implements it. Only
+ * `authenticateIdentifier` sets this; mutation writes leave it false.
+ * @param params.allowEmptyIdentifierValue - When true, an empty request
+ * `identifier.value` may bind to a non-empty provider-discovered subject.
+ * Only `authenticateIdentifier` sets this; mutation writes leave it false.
  * @returns Key-bound credential and optional seedless auth data.
  * @throws If the returned token is not bound to this identifier and request,
  * or seedless auth data is required but missing / incomplete.
@@ -109,15 +117,22 @@ export async function requestKeyBoundIdentifierToken({
   requestHash,
   identifierAuthProvider,
   requireSeedlessAuthData = false,
+  allowSeedlessLogin = false,
+  allowEmptyIdentifierValue = false,
 }: {
   identifier: Identifier;
   requestHash: string;
   identifierAuthProvider: RecoveryIdentifierAuthProvider;
   requireSeedlessAuthData?: boolean;
+  allowSeedlessLogin?: boolean;
+  allowEmptyIdentifierValue?: boolean;
 }): Promise<KeyBoundCredential & { seedlessAuthData?: SeedlessAuthData }> {
   const proofKey = await generateSigningKey();
 
-  if (identifierAuthProvider.getKeyBoundIdentifierLogin !== undefined) {
+  if (
+    allowSeedlessLogin &&
+    identifierAuthProvider.getKeyBoundIdentifierLogin !== undefined
+  ) {
     const login: Partial<KeyBoundIdentifierLogin> | null | undefined =
       await identifierAuthProvider.getKeyBoundIdentifierLogin({
         identifier,
@@ -127,7 +142,13 @@ export async function requestKeyBoundIdentifierToken({
     const token: unknown = login?.token;
     if (
       !login ||
-      !isTokenBoundToRequest(token, identifier, proofKey.publicKey, requestHash)
+      !isTokenBoundToRequest(
+        token,
+        identifier,
+        proofKey.publicKey,
+        requestHash,
+        allowEmptyIdentifierValue,
+      )
     ) {
       throwInvalidIdentifierToken();
     }
@@ -158,7 +179,13 @@ export async function requestKeyBoundIdentifierToken({
     requestHash,
   });
   if (
-    !isTokenBoundToRequest(token, identifier, proofKey.publicKey, requestHash)
+    !isTokenBoundToRequest(
+      token,
+      identifier,
+      proofKey.publicKey,
+      requestHash,
+      allowEmptyIdentifierValue,
+    )
   ) {
     throwInvalidIdentifierToken();
   }
@@ -170,6 +197,8 @@ export async function requestKeyBoundIdentifierToken({
  * @param identifier - Identifier the provider was asked to authenticate.
  * @param proofPublicKey - Proof public key sent to the provider.
  * @param requestHash - Request hash sent to the provider.
+ * @param allowEmptyIdentifierValue - Whether an empty request value may bind
+ * to a non-empty provider-discovered subject.
  * @returns Whether the token is bound to the identifier, proof key, and request.
  */
 function isTokenBoundToRequest(
@@ -177,6 +206,7 @@ function isTokenBoundToRequest(
   identifier: Identifier,
   proofPublicKey: Uint8Array,
   requestHash: string,
+  allowEmptyIdentifierValue: boolean,
 ): token is KeyBoundIdentifierToken {
   if (typeof token !== 'object' || token === null) {
     return false;
@@ -186,7 +216,11 @@ function isTokenBoundToRequest(
     candidate.requestHash === requestHash &&
     candidate.proofPublicKey instanceof Uint8Array &&
     areUint8ArraysEqual(candidate.proofPublicKey, proofPublicKey) &&
-    isTokenIdentifierBoundToRequest(candidate.identifier, identifier)
+    isTokenIdentifierBoundToRequest(
+      candidate.identifier,
+      identifier,
+      allowEmptyIdentifierValue,
+    )
   );
 }
 
@@ -194,17 +228,22 @@ function isTokenBoundToRequest(
  * Whether the token's identifier is bound to the requested identifier.
  *
  * Type and namespace must always match. Value must match when the request
- * already knows the subject. An empty request `value` is allowed for password
- * unlock: mobile discovers the IdP `sub` from the provider ID token and writes
- * it onto the returned token (see metamask-mobile OIDC identifier provider).
+ * already knows the subject. When `allowEmptyIdentifierValue` is true (only
+ * `authenticateIdentifier` sets this), an empty request `value` may bind to a
+ * non-empty provider-discovered IdP `sub` written onto the returned token
+ * (see metamask-mobile OIDC identifier provider). Mutation writes leave the
+ * option false and require an exact value match.
  *
  * @param tokenIdentifier - Identifier from the token, if any.
  * @param requested - Identifier requested by the controller.
+ * @param allowEmptyIdentifierValue - Whether empty request values may discover
+ * a non-empty subject.
  * @returns Whether the token identifier is acceptable for this request.
  */
 function isTokenIdentifierBoundToRequest(
   tokenIdentifier: Identifier | undefined,
   requested: Identifier,
+  allowEmptyIdentifierValue: boolean,
 ): boolean {
   if (
     tokenIdentifier === undefined ||
@@ -213,7 +252,7 @@ function isTokenIdentifierBoundToRequest(
   ) {
     return false;
   }
-  if (requested.value === '') {
+  if (allowEmptyIdentifierValue && requested.value === '') {
     return tokenIdentifier.value.length > 0;
   }
   return tokenIdentifier.value === requested.value;
@@ -236,8 +275,10 @@ export function expectedSeedlessAuthConnection(
 }
 
 /**
- * Validates seedless auth data shape, strips unknown fields, and ensures it
- * belongs to the authenticated social identifier.
+ * Validates seedless auth data shape, strips unknown fields, and checks that
+ * `authConnection` matches the expected provider for the authenticated social
+ * identifier's issuer namespace. It does not verify that tokens belong to the
+ * same subject / `userId` as the identifier value.
  *
  * @param data - Provider-returned seedless auth data.
  * @param options - Validation options.
