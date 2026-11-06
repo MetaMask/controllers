@@ -22,8 +22,6 @@ import { sha256 } from '@noble/hashes/sha2';
 import { SeedlessOnboardingControllerErrorMessage } from '../constants.js';
 import { SeedlessOnboardingError } from '../errors.js';
 
-const ENV_AUTH = 'mm-envelope-v1/auth';
-const ENV_WRAP = 'mm-envelope-v1/wrap';
 const CTRL_AUTH = 'mm-envelope-v1/control-auth';
 const CTRL_ENC = 'mm-envelope-v1/control-enc';
 
@@ -39,14 +37,6 @@ export type VaultKeySet = {
 };
 
 export type EnvelopePath = 'password' | 'recovery-secret';
-
-/** The keys of an envelope partition, derived from a TOPRF seed. */
-export type EnvelopeKeys = {
-  /** Signs the requests to the envelope partition. */
-  envAuth: KeyPair;
-  /** Encrypts the envelope. */
-  wrapKey: Uint8Array;
-};
 
 /** The keys of the control record partition, derived from `K_v`. */
 export type ControlKeys = {
@@ -157,19 +147,6 @@ export function pubKeysEqual(
 export function deriveKeyPair(bytes: Uint8Array): KeyPair {
   const sk = bytesToNumberBE(bytes) % secp256k1.CURVE.n;
   return { sk, pk: derivePubKey(sk) };
-}
-
-/**
- * Derive the envelope keys `E(S)` of a TOPRF seed.
- *
- * @param seed - The TOPRF seed.
- * @returns The envelope keys.
- */
-export function deriveEnvelopeKeys(seed: Uint8Array): EnvelopeKeys {
-  return {
-    envAuth: deriveKeyPair(hkdf(sha256, seed, undefined, ENV_AUTH, 32)),
-    wrapKey: hkdf(sha256, seed, undefined, ENV_WRAP, 32),
-  };
 }
 
 /**

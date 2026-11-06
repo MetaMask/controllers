@@ -1,4 +1,5 @@
 import { decrypt, encrypt, IV_LENGTH } from '@metamask/cryptography/aes-gcm';
+import type { EnvelopeKeys } from '@metamask/toprf-secure-backup';
 import {
   base64ToBytes,
   bigIntToHex,
@@ -10,7 +11,7 @@ import {
 } from '@metamask/utils';
 
 import { derivePubKey } from './envelope-keys.js';
-import type { ControlRecord, Envelope, EnvelopeKeys } from './envelope-keys.js';
+import type { ControlRecord, Envelope } from './envelope-keys.js';
 
 /** An envelope and the keys of the partition it is written to. */
 export type SealedEnvelope = {
@@ -55,7 +56,7 @@ function serializeSealedEnvelope(
   sealed: SealedEnvelope,
 ): SerializedSealedEnvelope {
   return {
-    envAuthSk: bigIntToHex(sealed.keys.envAuth.sk),
+    envAuthSk: bigIntToHex(sealed.keys.authKeyPair.sk),
     wrapKey: bytesToBase64(sealed.keys.wrapKey),
     envelope: sealed.envelope,
   };
@@ -69,7 +70,7 @@ function parseSealedEnvelope(value: SerializedSealedEnvelope): SealedEnvelope {
   const sk = hexToBigInt(value.envAuthSk);
   return {
     keys: {
-      envAuth: { sk, pk: derivePubKey(sk) },
+      authKeyPair: { sk, pk: derivePubKey(sk) },
       wrapKey: base64ToBytes(value.wrapKey),
     },
     envelope: value.envelope,

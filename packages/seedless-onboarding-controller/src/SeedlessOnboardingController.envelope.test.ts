@@ -1,5 +1,6 @@
 import { deriveStateFromMetadata } from '@metamask/base-controller';
 import type {
+  EnvelopeKeys,
   FetchedSecretDataItem,
   KeyPair,
   ToprfSecureBackup,
@@ -27,6 +28,7 @@ import {
   mockCreateToprfKeyAndBackupSeedPhrase,
   withController,
 } from '../tests/controller-helpers.js';
+import { deriveTestEnvelopeKeys } from '../tests/mocks/envelopeKeys.js';
 import { createMockJWTToken } from '../tests/mocks/utils.js';
 import {
   SeedlessOnboardingControllerErrorMessage,
@@ -34,7 +36,6 @@ import {
 } from './constants.js';
 import {
   deriveControlKeys,
-  deriveEnvelopeKeys,
   openEnvelope,
   sealEnvelope,
   serializeEnvelope,
@@ -65,20 +66,20 @@ describe('SeedlessOnboardingController', () => {
      * Derives the keys the mock TOPRF network gives a password.
      *
      * @param password - The password.
-     * @returns The keys and the password seed.
+     * @returns The keys and the envelope keys.
      */
     function keysFor(password: string): {
       encKey: Uint8Array;
       pwEncKey: Uint8Array;
       authKeyPair: KeyPair;
-      seed: Uint8Array;
+      envelopeKeys: EnvelopeKeys;
     } {
       const encryptor = createMockToprfEncryptor();
       return {
         encKey: encryptor.deriveEncKey(password),
         pwEncKey: encryptor.derivePwEncKey(password),
         authKeyPair: encryptor.deriveAuthKeyPair(password),
-        seed: stringToBytes(password),
+        envelopeKeys: deriveTestEnvelopeKeys(stringToBytes(password)),
       };
     }
 
@@ -186,7 +187,11 @@ describe('SeedlessOnboardingController', () => {
           .mockImplementation(async ({ password }) => {
             const keys = keysFor(password);
             localKeys.set(bytesToHex(keys.authKeyPair.pk), password);
-            return { ...keys, oprfKey: 5n };
+            return {
+              ...keys,
+              seed: stringToBytes(password),
+              oprfKey: 5n,
+            };
           }),
         persistLocalKey: vi
           .spyOn(toprfClient, 'persistLocalKey')
@@ -377,7 +382,7 @@ describe('SeedlessOnboardingController', () => {
       seedSource: string,
       path: 'password' | 'recovery-secret',
     ): Promise<VaultKeySet | undefined> {
-      const keys = deriveEnvelopeKeys(stringToBytes(seedSource));
+      const keys = deriveTestEnvelopeKeys(stringToBytes(seedSource));
       const [envelope] = await network.envelopeStore.fetchEnvelopes(keys, path);
       return envelope && (await openEnvelope(envelope, keys.wrapKey, path));
     }
@@ -1001,7 +1006,7 @@ describe('SeedlessOnboardingController', () => {
                 ...params,
                 secretData: serializeEnvelope(
                   await sealEnvelope(
-                    deriveEnvelopeKeys(stringToBytes(RECOVERY_SECRET_HEX))
+                    deriveTestEnvelopeKeys(stringToBytes(RECOVERY_SECRET_HEX))
                       .wrapKey,
                     'recovery-secret',
                     vaultKeySetFor('other-password'),
@@ -2046,9 +2051,9 @@ describe('SeedlessOnboardingController', () => {
             recoverySecret: RECOVERY_SECRET_HEX,
           });
           await network.envelopeStore.writeEnvelope(
-            deriveEnvelopeKeys(stringToBytes(RECOVERY_SECRET_HEX)),
+            deriveTestEnvelopeKeys(stringToBytes(RECOVERY_SECRET_HEX)),
             await sealEnvelope(
-              deriveEnvelopeKeys(stringToBytes('other-seed')).wrapKey,
+              deriveTestEnvelopeKeys(stringToBytes('other-seed')).wrapKey,
               'recovery-secret',
               vaultKeySetFor(),
             ),

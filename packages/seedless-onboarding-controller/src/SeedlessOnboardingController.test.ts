@@ -75,6 +75,7 @@ import {
   userId,
   withController,
 } from '../tests/controller-helpers.js';
+import { deriveTestEnvelopeKeys } from '../tests/mocks/envelopeKeys.js';
 import {
   createMockSecretDataGetResponse,
   MULTIPLE_MOCK_SECRET_METADATA,
@@ -199,7 +200,7 @@ function mockRecoverEncKey(
   const pwEncKey = mockToprfEncryptor.derivePwEncKey(password);
   const authKeyPair = mockToprfEncryptor.deriveAuthKeyPair(password);
   const rateLimitResetResult = Promise.resolve();
-  const seed = stringToBytes(password);
+  const envelopeKeys = deriveTestEnvelopeKeys(stringToBytes(password));
 
   let recoverEncKeySpy: MockInstance;
 
@@ -213,7 +214,7 @@ function mockRecoverEncKey(
         encKey,
         pwEncKey,
         authKeyPair,
-        seed,
+        envelopeKeys,
         rateLimitResetResult,
         keyShareIndex: 1,
       });
@@ -224,7 +225,7 @@ function mockRecoverEncKey(
         encKey,
         pwEncKey,
         authKeyPair,
-        seed,
+        envelopeKeys,
         rateLimitResetResult,
         keyShareIndex: 1,
       });
@@ -234,7 +235,7 @@ function mockRecoverEncKey(
     encKey,
     pwEncKey,
     authKeyPair,
-    seed,
+    envelopeKeys,
     rateLimitResetResult,
     keyShareIndex: 1,
     recoverEncKeySpy,
@@ -1100,6 +1101,9 @@ describe('SeedlessOnboardingController', () => {
               retryToprfEncryptor.deriveAuthKeyPair('retry-password'),
             oprfKey: BigInt(1),
             seed: stringToBytes('retry-password'),
+            envelopeKeys: deriveTestEnvelopeKeys(
+              stringToBytes('retry-password'),
+            ),
           });
 
           const persistLocalKeySpy = vi
@@ -4858,7 +4862,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             authKeyPair,
             pwEncKey,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -4924,7 +4928,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             authKeyPair,
             pwEncKey,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5152,7 +5156,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             pwEncKey,
             authKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5203,7 +5207,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             pwEncKey,
             authKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5299,7 +5303,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             pwEncKey,
             authKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5345,7 +5349,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             pwEncKey,
             authKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5390,7 +5394,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             pwEncKey,
             authKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5499,7 +5503,7 @@ describe('SeedlessOnboardingController', () => {
             encKey: newEncKey,
             pwEncKey: newPwEncKey,
             authKeyPair: newAuthKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5518,7 +5522,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             pwEncKey,
             authKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5615,7 +5619,7 @@ describe('SeedlessOnboardingController', () => {
             encKey: newEncKey,
             pwEncKey: newPwEncKey,
             authKeyPair: newAuthKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5648,7 +5652,7 @@ describe('SeedlessOnboardingController', () => {
             encKey,
             pwEncKey,
             authKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5770,7 +5774,7 @@ describe('SeedlessOnboardingController', () => {
             encKey: newEncKey,
             pwEncKey: newPwEncKey,
             authKeyPair: newAuthKeyPair,
-            seed: new Uint8Array(32),
+            envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
             rateLimitResetResult: Promise.resolve(),
             keyShareIndex: 1,
           });
@@ -5827,7 +5831,7 @@ describe('SeedlessOnboardingController', () => {
               encKey: newEncKey,
               pwEncKey: newPwEncKey,
               authKeyPair: newAuthKeyPair,
-              seed: new Uint8Array(32),
+              envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
               rateLimitResetResult: Promise.resolve(),
               keyShareIndex: 1,
             });
@@ -6391,7 +6395,7 @@ describe('SeedlessOnboardingController', () => {
                 encKey: newEncKey,
                 pwEncKey: newPwEncKey,
                 authKeyPair: newAuthKeyPair,
-                seed: new Uint8Array(32),
+                envelopeKeys: deriveTestEnvelopeKeys(new Uint8Array(32)),
                 rateLimitResetResult: Promise.resolve(),
                 keyShareIndex: 1,
               });

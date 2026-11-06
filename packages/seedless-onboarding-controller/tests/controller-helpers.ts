@@ -6,7 +6,11 @@ import type {
   DefaultEncryptionResult,
   Encryptor,
 } from '@metamask/keyring-controller';
-import type { KeyPair, ToprfSecureBackup } from '@metamask/toprf-secure-backup';
+import type {
+  EnvelopeKeys,
+  KeyPair,
+  ToprfSecureBackup,
+} from '@metamask/toprf-secure-backup';
 import { stringToBytes } from '@metamask/utils';
 import type { webcrypto } from 'node:crypto';
 import type { Mock, MockInstance } from 'vitest';
@@ -28,6 +32,7 @@ import type {
 } from './__fixtures__/mockMessenger.js';
 import { mockSeedlessOnboardingMessenger } from './__fixtures__/mockMessenger.js';
 import { handleMockSecretDataAdd } from './__fixtures__/topfClient.js';
+import { deriveTestEnvelopeKeys } from './mocks/envelopeKeys.js';
 import { MockToprfEncryptorDecryptor } from './mocks/toprfEncryptor.js';
 import MockVaultEncryptor from './mocks/vaultEncryptor.js';
 
@@ -214,6 +219,7 @@ export function mockcreateLocalKey(
   authKeyPair: KeyPair;
   oprfKey: bigint;
   seed: Uint8Array;
+  envelopeKeys: EnvelopeKeys;
   createLocalKeySpy: MockInstance;
 } {
   const mockToprfEncryptor = createMockToprfEncryptor();
@@ -223,6 +229,7 @@ export function mockcreateLocalKey(
   const authKeyPair = mockToprfEncryptor.deriveAuthKeyPair(password);
   const oprfKey = BigInt(0);
   const seed = stringToBytes(password);
+  const envelopeKeys = deriveTestEnvelopeKeys(seed);
 
   const createLocalKeySpy = vi
     .spyOn(toprfClient, 'createLocalKey')
@@ -232,6 +239,7 @@ export function mockcreateLocalKey(
       authKeyPair,
       oprfKey,
       seed,
+      envelopeKeys,
     });
 
   return {
@@ -240,6 +248,7 @@ export function mockcreateLocalKey(
     authKeyPair,
     oprfKey,
     seed,
+    envelopeKeys,
     createLocalKeySpy,
   };
 }

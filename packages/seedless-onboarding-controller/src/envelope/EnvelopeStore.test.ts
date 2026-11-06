@@ -11,10 +11,10 @@ import { bigIntToHex, stringToBytes } from '@metamask/utils';
 import type { Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 
+import { deriveTestEnvelopeKeys } from '../../tests/mocks/envelopeKeys.js';
 import { SeedlessOnboardingControllerErrorMessage } from '../constants.js';
 import {
   deriveControlKeys,
-  deriveEnvelopeKeys,
   deriveKeyPair,
   sealEnvelope,
   serializeControlRecord,
@@ -28,7 +28,7 @@ const vaultKeySet: VaultKeySet = {
   encKey: new Uint8Array(32).fill(2),
   localWrapKey: new Uint8Array(32).fill(3),
 };
-const envelopeKeys = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
+const envelopeKeys = deriveTestEnvelopeKeys(new Uint8Array(32).fill(4));
 const controlKeys = deriveControlKeys(vaultKeySet);
 
 /**
@@ -105,7 +105,7 @@ describe('EnvelopeStore', () => {
 
       expect(toprfClient.addSecretDataItem).toHaveBeenCalledWith({
         encKey: envelopeKeys.wrapKey,
-        authKeyPair: envelopeKeys.envAuth,
+        authKeyPair: envelopeKeys.authKeyPair,
         secretData: serializeEnvelope(envelope),
         dataType: EncAccountDataType.KeyEnvelope,
       });
@@ -139,7 +139,7 @@ describe('EnvelopeStore', () => {
       ).toStrictEqual([newer, older]);
       expect(toprfClient.fetchAllSecretDataItems).toHaveBeenCalledWith({
         decKey: envelopeKeys.wrapKey,
-        authKeyPair: envelopeKeys.envAuth,
+        authKeyPair: envelopeKeys.authKeyPair,
       });
     });
 

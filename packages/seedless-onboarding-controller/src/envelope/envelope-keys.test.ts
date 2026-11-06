@@ -7,10 +7,10 @@ import {
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { describe, expect, it } from 'vitest';
 
+import { deriveTestEnvelopeKeys } from '../../tests/mocks/envelopeKeys.js';
 import { SeedlessOnboardingControllerErrorMessage } from '../constants.js';
 import {
   deriveControlKeys,
-  deriveEnvelopeKeys,
   deriveKeyPair,
   derivePubKey,
   getPasswordNamespaceAuthKeyPair,
@@ -63,20 +63,6 @@ const INVALID_ENVELOPE =
 
 describe('envelope keys', () => {
   describe('key derivation', () => {
-    it('derives distinct, deterministic envelope keys per seed', () => {
-      const seed = new Uint8Array(32).fill(9);
-      const keys = deriveEnvelopeKeys(seed);
-
-      expect(deriveEnvelopeKeys(seed)).toStrictEqual(keys);
-      expect(keys.wrapKey).toHaveLength(32);
-      expect(pubKeysEqual(keys.envAuth.pk, derivePubKey(keys.envAuth.sk))).toBe(
-        true,
-      );
-      expect(
-        bytesToHex(deriveEnvelopeKeys(new Uint8Array(32).fill(8)).wrapKey),
-      ).not.toBe(bytesToHex(keys.wrapKey));
-    });
-
     it('derives control keys from the vault encryption key only', () => {
       const vaultKeySet = createVaultKeySet();
       const keys = deriveControlKeys(vaultKeySet);
@@ -91,19 +77,12 @@ describe('envelope keys', () => {
         false,
       );
     });
-
-    it('keeps envelope keys apart from the vault keys of the same seed', () => {
-      const seed = new Uint8Array(32).fill(3);
-      const { envAuth } = deriveEnvelopeKeys(seed);
-
-      expect(pubKeysEqual(envAuth.pk, deriveKeyPair(seed).pk)).toBe(false);
-    });
   });
 
   describe('sealEnvelope / openEnvelope', () => {
     it('round-trips the vault key set', async () => {
       const vaultKeySet = createVaultKeySet();
-      const { wrapKey } = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
+      const { wrapKey } = deriveTestEnvelopeKeys(new Uint8Array(32).fill(4));
 
       const envelope = await sealEnvelope(wrapKey, 'password', vaultKeySet);
 
@@ -119,7 +98,7 @@ describe('envelope keys', () => {
     });
 
     it('rejects an envelope opened on the other path', async () => {
-      const { wrapKey } = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
+      const { wrapKey } = deriveTestEnvelopeKeys(new Uint8Array(32).fill(4));
       const envelope = await sealEnvelope(
         wrapKey,
         'recovery-secret',
@@ -132,7 +111,7 @@ describe('envelope keys', () => {
     });
 
     it('rejects an envelope whose header was changed', async () => {
-      const { wrapKey } = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
+      const { wrapKey } = deriveTestEnvelopeKeys(new Uint8Array(32).fill(4));
       const envelope = await sealEnvelope(
         wrapKey,
         'password',
@@ -153,7 +132,7 @@ describe('envelope keys', () => {
 
     it('rejects an envelope under another wrap key', async () => {
       const envelope = await sealEnvelope(
-        deriveEnvelopeKeys(new Uint8Array(32).fill(4)).wrapKey,
+        deriveTestEnvelopeKeys(new Uint8Array(32).fill(4)).wrapKey,
         'password',
         createVaultKeySet(),
       );
@@ -161,14 +140,14 @@ describe('envelope keys', () => {
       await expect(
         openEnvelope(
           envelope,
-          deriveEnvelopeKeys(new Uint8Array(32).fill(5)).wrapKey,
+          deriveTestEnvelopeKeys(new Uint8Array(32).fill(5)).wrapKey,
           'password',
         ),
       ).rejects.toThrow(INVALID_ENVELOPE);
     });
 
     it('rejects a sealed key set that does not match the header', async () => {
-      const { wrapKey } = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
+      const { wrapKey } = deriveTestEnvelopeKeys(new Uint8Array(32).fill(4));
       const other = createVaultKeySet(7);
       // seal another key set under a header naming the first one
       const forged = await sealEnvelope(wrapKey, 'password', {
@@ -185,7 +164,7 @@ describe('envelope keys', () => {
     });
 
     it('rejects a sealed body that is not a key set', async () => {
-      const { wrapKey } = deriveEnvelopeKeys(new Uint8Array(32).fill(4));
+      const { wrapKey } = deriveTestEnvelopeKeys(new Uint8Array(32).fill(4));
       const envelope = await sealEnvelope(
         wrapKey,
         'password',

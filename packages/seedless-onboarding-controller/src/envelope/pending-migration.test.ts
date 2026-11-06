@@ -1,11 +1,8 @@
 import { bigIntToHex } from '@metamask/utils';
 import { describe, expect, it } from 'vitest';
 
-import {
-  deriveEnvelopeKeys,
-  deriveKeyPair,
-  sealEnvelope,
-} from './envelope-keys.js';
+import { deriveTestEnvelopeKeys } from '../../tests/mocks/envelopeKeys.js';
+import { deriveKeyPair, sealEnvelope } from './envelope-keys.js';
 import type { VaultKeySet } from './envelope-keys.js';
 import {
   decryptPendingMigration,
@@ -23,7 +20,7 @@ const vaultKeySet: VaultKeySet = {
  * @returns A pending migration checkpoint.
  */
 async function createPending(): Promise<PendingEnvelopeMigration> {
-  const recoveryKeys = deriveEnvelopeKeys(new Uint8Array(32).fill(5));
+  const recoveryKeys = deriveTestEnvelopeKeys(new Uint8Array(32).fill(5));
   return {
     v: 2,
     recoverySecret: '0x07',

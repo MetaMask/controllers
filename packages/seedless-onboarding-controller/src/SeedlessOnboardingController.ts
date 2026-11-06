@@ -10,6 +10,7 @@ import type {
 import type {
   AuthenticateResult,
   ChangeEncryptionKeyResult,
+  EnvelopeKeys,
   KeyPair,
   RecoverEncryptionKeyResult,
   SEC1EncodedPublicKey,
@@ -42,7 +43,6 @@ import {
 } from './constants.js';
 import {
   deriveControlKeys,
-  deriveEnvelopeKeys,
   getPasswordNamespaceAuthKeyPair,
   nextControlSeq,
   openEnvelope,
@@ -53,7 +53,6 @@ import {
 import type {
   ControlRecord,
   Envelope,
-  EnvelopeKeys,
   VaultKeySet,
 } from './envelope/envelope-keys.js';
 import { EnvelopeStore } from './envelope/EnvelopeStore.js';
@@ -709,16 +708,11 @@ export class SeedlessOnboardingController<
 
         if (password) {
           const recoverEncKeyResult = await this.#recoverEncKey(password);
-          let vaultKeySet: VaultKeySet | undefined;
-          try {
-            // an envelope-managed vault keeps its keys across password
-            // changes, so the password only opens them (I6)
-            vaultKeySet = await this.#openPasswordEnvelope(
-              recoverEncKeyResult.seed,
-            );
-          } finally {
-            recoverEncKeyResult.seed.fill(0);
-          }
+          // an envelope-managed vault keeps its keys across password
+          // changes, so the password only opens them (I6)
+          const vaultKeySet = await this.#openPasswordEnvelope(
+            recoverEncKeyResult.envelopeKeys,
+          );
           if (vaultKeySet) {
             encKey = vaultKeySet.encKey;
             pwEncKey = vaultKeySet.localWrapKey;
@@ -920,11 +914,11 @@ export class SeedlessOnboardingController<
       );
     }
 
-    const { oprfKey, seed, authKeyPair } =
+    const { oprfKey, seed, envelopeKeys, authKeyPair } =
       await this.toprfClient.createLocalKey({ password: newPassword });
-    const keys = deriveEnvelopeKeys(seed);
+    // the controller only needs the envelope keys, so the seed is not kept
     seed.fill(0);
-    const sealed = await sealFor(keys, 'password', vaultKeySet);
+    const sealed = await sealFor(envelopeKeys, 'password', vaultKeySet);
     const nextControlRecord: ControlRecord = {
       ...currentRecord,
       seq: nextControlSeq(controlRecords),
@@ -1136,14 +1130,9 @@ export class SeedlessOnboardingController<
       this.#assertIsUnlocked();
       const doSyncPassword = async (): Promise<void> => {
         // update vault with latest globalPassword
-        const { seed, encKey, pwEncKey, authKeyPair } =
+        const { envelopeKeys, encKey, pwEncKey, authKeyPair } =
           await this.#recoverEncKey(globalPassword);
-        let vaultKeySet: VaultKeySet | undefined;
-        try {
-          vaultKeySet = await this.#openPasswordEnvelope(seed);
-        } finally {
-          seed.fill(0);
-        }
+        const vaultKeySet = await this.#openPasswordEnvelope(envelopeKeys);
 
         if (vaultKeySet) {
           // envelope-managed: keep K_v and re-encrypt under the new password
@@ -1238,7 +1227,7 @@ export class SeedlessOnboardingController<
     maxKeyChainLength: number;
   }): Promise<void> {
     const {
-      seed,
+      envelopeKeys,
       pwEncKey: globalPwEncKey,
       authKeyPair: globalAuthKeyPair,
     } = await this.#recoverEncKey(globalPassword);
@@ -1246,7 +1235,7 @@ export class SeedlessOnboardingController<
     try {
       // Envelope first (I6): the global password opens K_v, whose PW_BACKUP
       // chain leads back to this device's key set if it lagged behind.
-      const vaultKeySet = await this.#openPasswordEnvelope(seed);
+      const vaultKeySet = await this.#openPasswordEnvelope(envelopeKeys);
       const chainStart = vaultKeySet
         ? {
             pwEncKey: vaultKeySet.localWrapKey,
@@ -1295,8 +1284,6 @@ export class SeedlessOnboardingController<
         );
       }
       throw PasswordSyncError.getInstance(error);
-    } finally {
-      seed.fill(0);
     }
   }
 
@@ -2705,15 +2692,13 @@ export class SeedlessOnboardingController<
           );
         }
 
-        const seed = await this.#recoverRecoverySecretSeed(
+        const envelopeKeys = await this.#recoverRecoverySecretEnvelopeKeys(
           bytesToHex(recoverySecret),
         );
-        let vaultKeySet: VaultKeySet | undefined;
-        try {
-          vaultKeySet = await this.#openNewestEnvelope(seed, 'recovery-secret');
-        } finally {
-          seed.fill(0);
-        }
+        const vaultKeySet = await this.#openNewestEnvelope(
+          envelopeKeys,
+          'recovery-secret',
+        );
         if (!vaultKeySet) {
           throw new SeedlessOnboardingError(
             SeedlessOnboardingControllerErrorMessage.RecoveryEnvelopeNotFound,
@@ -2832,59 +2817,58 @@ export class SeedlessOnboardingController<
       skipLock: true,
     });
 
-    const recoverySeed = await this.#evalRecoverySecretSeed(recoverySecretHex);
-    try {
-      this.#assertIsAuthenticatedUser(this.state);
-      const { authConnectionId, groupedAuthConnectionId, userId } = this.state;
-      const record: ControlRecord = {
-        v: 1,
-        seq: 1,
-        passwordNamespace: {
-          verifier: groupedAuthConnectionId ?? authConnectionId,
-          verifierId: userId,
-          authSk: bigIntToHex(vaultKeySet.authKeyPair.sk),
-          keyIndex: latestKeyIndex,
-          enabled: true,
-        },
-        migratedAt: Date.now(),
-      };
+    const recoveryKeys =
+      await this.#evalRecoverySecretEnvelopeKeys(recoverySecretHex);
+    this.#assertIsAuthenticatedUser(this.state);
+    const { authConnectionId, groupedAuthConnectionId, userId } = this.state;
+    const record: ControlRecord = {
+      v: 1,
+      seq: 1,
+      passwordNamespace: {
+        verifier: groupedAuthConnectionId ?? authConnectionId,
+        verifierId: userId,
+        authSk: bigIntToHex(vaultKeySet.authKeyPair.sk),
+        keyIndex: latestKeyIndex,
+        enabled: true,
+      },
+      migratedAt: Date.now(),
+    };
 
-      return {
-        v: 2,
-        recoverySecret: recoverySecretHex,
-        passwordAuthPubKey: bytesToBase64(vaultKeySet.authKeyPair.pk),
-        recoveryEnvelope: await sealFor(
-          deriveEnvelopeKeys(recoverySeed),
-          'recovery-secret',
-          vaultKeySet,
-        ),
-        control: record,
-      };
-    } finally {
-      recoverySeed.fill(0);
-    }
+    return {
+      v: 2,
+      recoverySecret: recoverySecretHex,
+      passwordAuthPubKey: bytesToBase64(vaultKeySet.authKeyPair.pk),
+      recoveryEnvelope: await sealFor(
+        recoveryKeys,
+        'recovery-secret',
+        vaultKeySet,
+      ),
+      control: record,
+    };
   }
 
   /**
-   * Evaluate the Recovery Secret seed `S_rs` on the recovery verifier,
+   * Derive the envelope keys of the Recovery Secret on the recovery verifier,
    * registering the Recovery Secret OPRF key first if the nodes hold none
    * (step 3).
    *
    * @param recoverySecretHex - The hex encoded Recovery Secret.
-   * @returns The seed. The caller zeroes it.
+   * @returns The envelope keys of the Recovery Secret.
    * @throws `RecoveryKeyShareConflict` if the registered key belongs to a
    * different Recovery Secret.
    */
-  async #evalRecoverySecretSeed(
+  async #evalRecoverySecretEnvelopeKeys(
     recoverySecretHex: string,
-  ): Promise<Uint8Array> {
+  ): Promise<EnvelopeKeys> {
     const recoverySession = this.#requireRecoverySession();
     if (recoverySession.hasRecoveryShare) {
-      return await this.#recoverRecoverySecretSeed(recoverySecretHex);
+      return await this.#recoverRecoverySecretEnvelopeKeys(recoverySecretHex);
     }
 
-    const { oprfKey, seed, authKeyPair } =
+    const { oprfKey, seed, envelopeKeys, authKeyPair } =
       await this.toprfClient.createLocalKey({ password: recoverySecretHex });
+    // the controller only needs the envelope keys, so the seed is not kept
+    seed.fill(0);
     await this.#withRecoverySession(async (session) =>
       this.toprfClient.persistLocalKey({
         ...session,
@@ -2895,23 +2879,23 @@ export class SeedlessOnboardingController<
     this.update((state) => {
       state.recoverySession = { ...recoverySession, hasRecoveryShare: true };
     });
-    return seed;
+    return envelopeKeys;
   }
 
   /**
-   * Evaluate the Recovery Secret seed `S_rs` with the Recovery Secret OPRF
-   * key the nodes already hold.
+   * Derive the envelope keys of the Recovery Secret with the Recovery Secret
+   * OPRF key the nodes already hold.
    *
    * @param recoverySecretHex - The hex encoded Recovery Secret.
-   * @returns The seed. The caller zeroes it.
+   * @returns The envelope keys of the Recovery Secret.
    * @throws `RecoveryKeyShareConflict` if the registered key belongs to a
    * different Recovery Secret.
    */
-  async #recoverRecoverySecretSeed(
+  async #recoverRecoverySecretEnvelopeKeys(
     recoverySecretHex: string,
-  ): Promise<Uint8Array> {
-    const { seed, rateLimitResetResult } = await this.#withRecoverySession(
-      async (session) =>
+  ): Promise<EnvelopeKeys> {
+    const { envelopeKeys, rateLimitResetResult } =
+      await this.#withRecoverySession(async (session) =>
         this.toprfClient
           .recoverEncKey({ ...session, password: recoverySecretHex })
           .catch((error) => {
@@ -2923,11 +2907,11 @@ export class SeedlessOnboardingController<
             }
             throw error;
           }),
-    );
+      );
     rateLimitResetResult.catch((error) => {
       log('Error resetting recovery secret rate limit', error);
     });
-    return seed;
+    return envelopeKeys;
   }
 
   /**
@@ -2990,35 +2974,34 @@ export class SeedlessOnboardingController<
   }
 
   /**
-   * Open the password envelope `pbek` of a password seed.
+   * Open the password envelope `pbek` of a password's envelope keys.
    *
-   * @param seed - The password seed `S_pw`.
+   * @param keys - The envelope keys derived from the password's TOPRF seed.
    * @returns The vault key set, or undefined when the password has no
    * envelope (legacy layout).
    * @throws If the envelopes cannot be fetched, or `InvalidEnvelope` if none
    * opens. A fetch error is never treated as "absent" (I6).
    */
   async #openPasswordEnvelope(
-    seed: Uint8Array,
+    keys: EnvelopeKeys,
   ): Promise<VaultKeySet | undefined> {
-    return await this.#openNewestEnvelope(seed, 'password');
+    return await this.#openNewestEnvelope(keys, 'password');
   }
 
   /**
-   * Open the newest envelope of a seed's partition that opens.
+   * Open the newest envelope of a partition's envelope keys that opens.
    *
-   * @param seed - The seed the partition's envelope keys derive from.
-   * @param path - The path the seed came from.
+   * @param keys - The envelope keys of the partition.
+   * @param path - The path of the envelopes to open.
    * @returns The vault key set, or undefined when the partition holds no
    * envelope of the path.
    * @throws If the envelopes cannot be fetched, or `InvalidEnvelope` if none
    * opens.
    */
   async #openNewestEnvelope(
-    seed: Uint8Array,
+    keys: EnvelopeKeys,
     path: Envelope['path'],
   ): Promise<VaultKeySet | undefined> {
-    const keys = deriveEnvelopeKeys(seed);
     const envelopes = await this.#envelopeStore.fetchEnvelopes(keys, path);
     if (envelopes.length === 0) {
       return undefined;

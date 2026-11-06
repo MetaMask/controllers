@@ -1,4 +1,5 @@
 import type {
+  EnvelopeKeys,
   FetchedSecretDataItem,
   KeyPair,
   ToprfSecureBackup,
@@ -22,7 +23,6 @@ import type {
   ControlKeys,
   ControlRecord,
   Envelope,
-  EnvelopeKeys,
   EnvelopePath,
 } from './envelope-keys.js';
 
@@ -100,7 +100,7 @@ export class EnvelopeStore {
     keys: EnvelopeKeys,
     path: EnvelopePath,
   ): Promise<Envelope[]> {
-    const items = await this.#fetchItems(keys.wrapKey, keys.envAuth);
+    const items = await this.#fetchItems(keys.wrapKey, keys.authKeyPair);
     return parseItems(
       items,
       EncAccountDataType.KeyEnvelope,
@@ -117,7 +117,7 @@ export class EnvelopeStore {
   async writeEnvelope(keys: EnvelopeKeys, envelope: Envelope): Promise<void> {
     await this.#getToprfClient().addSecretDataItem({
       encKey: keys.wrapKey,
-      authKeyPair: keys.envAuth,
+      authKeyPair: keys.authKeyPair,
       secretData: serializeEnvelope(envelope),
       dataType: EncAccountDataType.KeyEnvelope,
     });
