@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **BREAKING:** Add profile verification status ([#TODO](https://github.com/MetaMask/core/pull/TODO))
-  - `Profile.verified` is required; consumers constructing profile objects must supply a boolean.
-  - API responses keep `verified` optional; the controller defaults missing values to `false`, including in persisted profiles.
+- **BREAKING:** Add profile verification status ([#11374](https://github.com/MetaMask/core/pull/11374))
+  - `Profile.verified` is now required; consumers constructing `Profile` objects must supply it.
+  - Defaults to false if the service does not provide it (retro-compatible).
 
 ## [1.2.1]
 
