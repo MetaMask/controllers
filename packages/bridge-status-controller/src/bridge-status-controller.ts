@@ -1240,12 +1240,16 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
     txHash,
     attempts,
     completionTime,
+    depositTxMeta,
+    next,
   }: {
     historyKey?: string;
     status?: StatusTypes;
     txHash?: string;
     attempts?: BridgeHistoryItem['attempts'];
     completionTime?: BridgeHistoryItem['completionTime'];
+    depositTxMeta?: BridgeHistoryItem['depositTxMeta'];
+    next?: null;
   }): void => {
     if (!historyKey) {
       return;
@@ -1262,6 +1266,15 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
       }
       if (completionTime) {
         currentState.txHistory[historyKey].completionTime = completionTime;
+      }
+      if (depositTxMeta) {
+        currentState.txHistory[historyKey].depositTxMeta = {
+          ...currentState.txHistory[historyKey].depositTxMeta,
+          ...depositTxMeta,
+        };
+      }
+      if (next === null) {
+        currentState.txHistory[historyKey].next = undefined;
       }
     });
   };
@@ -1398,6 +1411,10 @@ export class BridgeStatusController extends StaticIntervalPollingController<Brid
 
           case SubmitStep.StartPolling:
             this.#startPollingForTxId(payload.historyKey);
+            break;
+
+          case SubmitStep.UpdateHistoryItem:
+            this.#updateHistoryItem(payload);
             break;
 
           case SubmitStep.PublishCompletedEvent: {

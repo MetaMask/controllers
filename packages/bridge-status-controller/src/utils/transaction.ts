@@ -181,6 +181,17 @@ export const checkIsDelegatedAccount = async (
   }
 };
 
+const getTransactionMetaByBatchId = ({
+  messenger,
+  batchId,
+}: {
+  messenger: BridgeStatusControllerMessenger;
+  batchId: string;
+}): TransactionMeta[] =>
+  getTransactions(messenger).filter(
+    (tx: TransactionMeta) => tx.batchId === batchId,
+  );
+
 const waitForHashAndReturnFinalTxMeta = async (
   messenger: BridgeStatusControllerMessenger,
   hashPromise?: Awaited<
@@ -547,9 +558,7 @@ export const findAllTransactionsInBatch = ({
   tradeData: QuoteAndTxMetadata[];
 }): QuoteAndTxMetadata[] => {
   // Filter for transactions with batchId
-  const txs = getTransactions(messenger).filter(
-    (tx: TransactionMeta) => tx.batchId === batchId,
-  );
+  const txs = getTransactionMetaByBatchId({ messenger, batchId });
 
   return tradeData.map((tradeWithMetadata) => {
     const { tx, type } = tradeWithMetadata;

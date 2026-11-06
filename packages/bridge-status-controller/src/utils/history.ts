@@ -32,8 +32,19 @@ const mergeHistoryItems = (
   historyItemOverrides?: Partial<
     Pick<
       BridgeHistoryItem,
-      'approvalTxId' | 'quoteIds' | 'quote' | 'txMetaId' | 'actionId'
-    > & { status?: DeepPartial<BridgeHistoryItem['status']> }
+      | 'approvalTxId'
+      | 'quoteIds'
+      | 'quote'
+      | 'txMetaId'
+      | 'actionId'
+      | 'depositTxMeta'
+    > & {
+      status?: DeepPartial<BridgeHistoryItem['status']>;
+      /**
+       * After can only be reset, no updates or additions outside of AddHistoryItem
+       */
+      next?: null;
+    }
   >,
 ): Partial<BridgeHistoryItem> => {
   return {
@@ -58,6 +69,15 @@ const mergeHistoryItems = (
     ...(historyItemOverrides?.quote && { quote: historyItemOverrides.quote }),
     ...(historyItemOverrides?.quoteIds && {
       quoteIds: historyItemOverrides.quoteIds,
+    }),
+    ...(historyItemOverrides?.next === null && { next: undefined }),
+    ...(historyItemOverrides?.depositTxMeta && {
+      depositTxMeta: {
+        ...(oldHistoryItem.depositTxMeta && {
+          ...oldHistoryItem.depositTxMeta,
+        }),
+        ...historyItemOverrides.depositTxMeta,
+      },
     }),
   };
 };
@@ -308,6 +328,7 @@ export const getInitialHistoryItem = (
     location,
     abTests,
     activeAbTests,
+    next,
     accountAddress: selectedAddress,
     originalTransactionId,
     tokenSecurityTypeDestination,
@@ -354,6 +375,7 @@ export const getInitialHistoryItem = (
     ...(inputPrimaryDenomination !== undefined && {
       inputPrimaryDenomination,
     }),
+    ...(next && { next }),
   };
 
   if (batchSellData) {
