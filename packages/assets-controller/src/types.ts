@@ -424,7 +424,12 @@ export type AssetsLoadingStatus = 'loading' | 'loaded';
 /** Fetch phase: the fast first pass, or the slower background pass. */
 export type AssetsFetchPhase = 'fast' | 'background';
 
-/** Fetch status of a single phase for one account. */
+/**
+ * Fetch status of a single phase for one account.
+ *
+ * Known limitation: overlapping forced fetches on the same account report the
+ * result of the last one to finish (earlier errors are dropped).
+ */
 export type AssetsFetchPhaseStatus = {
   fetchStatus: 'idle' | 'fetching';
   errors: Record<ChainId, string>;

@@ -202,6 +202,11 @@ export {
 } from './selectors/balance.js';
 
 export {
+  getAccountFetchErrors,
+  isAccountFetching,
+} from './selectors/fetchStatus.js';
+
+export {
   getAccountGroupLoadingStatus,
   getAccountLoadingStatus,
   getIsAssetsLoadingForSelectedAccountGroup,
