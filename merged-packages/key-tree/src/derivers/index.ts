@@ -1,11 +1,11 @@
-import * as bip32 from './bip32';
-import * as bip39 from './bip39';
-import * as cip3 from './cip3';
-import * as slip10 from './slip10';
-import type { Network } from '../constants';
-import type { CryptographicFunctions } from '../cryptography';
-import type { Curve } from '../curves';
-import type { SLIP10Node } from '../SLIP10Node';
+import type { Network } from '../constants.js';
+import type { CryptographicFunctions } from '../cryptography.js';
+import type { Curve } from '../curves/index.js';
+import type { SLIP10Node } from '../SLIP10Node.js';
+import * as bip32 from './bip32.js';
+import * as bip39 from './bip39.js';
+import * as cip3 from './cip3.js';
+import * as slip10 from './slip10.js';
 
 export type DerivedKeys = {
   /**
@@ -37,4 +37,4 @@ export const derivers = {
   cip3,
 };
 
-export { createBip39KeyFromSeed, mnemonicToSeed } from './bip39';
+export { createBip39KeyFromSeed, mnemonicToSeed } from './bip39.js';

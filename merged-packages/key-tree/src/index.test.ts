@@ -1,3 +1,6 @@
+import { describe, expect, it } from 'vitest';
+
+import * as guard from './guard.js';
 import {
   MAX_BIP_44_DEPTH,
   MIN_BIP_44_DEPTH,
@@ -10,9 +13,8 @@ import {
   ed25519Bip32,
   getBIP44CoinTypeToAddressPathTuple,
   mnemonicToSeed,
-} from '.';
-import * as index from '.';
-import * as guard from './guard';
+} from './index.js';
+import * as index from './index.js';
 
 // This is purely for coverage shenanigans
 describe('index', () => {

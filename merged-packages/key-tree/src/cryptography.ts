@@ -1,11 +1,11 @@
 import { hmac as nobleHmac } from '@noble/hashes/hmac';
 import { pbkdf2Async as noblePbkdf2 } from '@noble/hashes/pbkdf2';
 import { ripemd160 as nobleRipemd160 } from '@noble/hashes/ripemd160';
-import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 import { keccak_256 as nobleKeccak256 } from '@noble/hashes/sha3';
+import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 import { sha512 as nobleSha512 } from '@noble/hashes/sha512';
 
-import { isWebCryptoSupported } from './utils';
+import { isWebCryptoSupported } from './utils.js';
 
 export type CryptographicFunctions = {
   /**
@@ -58,15 +58,21 @@ export async function hmacSha512(
 
   if (isWebCryptoSupported()) {
     /* eslint-disable no-restricted-globals */
+    // The Web Crypto API only accepts `ArrayBuffer`-backed views, so we copy
+    // the inputs into new `Uint8Array`s.
     const subtleKey = await crypto.subtle.importKey(
       'raw',
-      key,
+      new Uint8Array(key),
       { name: 'HMAC', hash: 'SHA-512' },
       false,
       ['sign'],
     );
 
-    const result = await crypto.subtle.sign('HMAC', subtleKey, data);
+    const result = await crypto.subtle.sign(
+      'HMAC',
+      subtleKey,
+      new Uint8Array(data),
+    );
     return new Uint8Array(result);
     /* eslint-enable no-restricted-globals */
   }
@@ -118,9 +124,11 @@ export async function pbkdf2Sha512(
 
   if (isWebCryptoSupported()) {
     /* eslint-disable no-restricted-globals */
+    // The Web Crypto API only accepts `ArrayBuffer`-backed views, so we copy
+    // the inputs into new `Uint8Array`s.
     const key = await crypto.subtle.importKey(
       'raw',
-      password,
+      new Uint8Array(password),
       { name: 'PBKDF2' },
       false,
       ['deriveBits'],
@@ -129,7 +137,7 @@ export async function pbkdf2Sha512(
     const derivedBits = await crypto.subtle.deriveBits(
       {
         name: 'PBKDF2',
-        salt,
+        salt: new Uint8Array(salt),
         iterations,
         hash: { name: 'SHA-512' },
       },

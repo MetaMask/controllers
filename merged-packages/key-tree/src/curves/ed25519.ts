@@ -1,4 +1,4 @@
-import { concatBytes, stringToBytes } from '@metamask/utils';
+import { concatBytes, stringToBytes } from '@metamask/byte-utils';
 import { ed25519 } from '@noble/curves/ed25519';
 
 export const curve = ed25519.CURVE;

@@ -1,6 +1,7 @@
-import { bytesToHex } from '@metamask/utils';
+import { bytesToHex } from '@metamask/byte-utils';
 // eslint-disable-next-line n/no-unsupported-features/node-builtins
 import { webcrypto } from 'crypto';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   hmacSha512,
@@ -8,8 +9,8 @@ import {
   pbkdf2Sha512,
   ripemd160,
   sha256,
-} from './cryptography';
-import * as utils from './utils';
+} from './cryptography.js';
+import * as utils from './utils.js';
 
 // Node.js <20 doesn't have `globalThis.crypto`, so we need to define it.
 // TODO: Remove this once we drop support for Node.js <20.
@@ -21,7 +22,7 @@ describe('hmacSha512', () => {
     const data = new Uint8Array(32);
 
     const hash = new Uint8Array(64).fill(1);
-    const customHmacSha512 = jest.fn().mockResolvedValue(hash);
+    const customHmacSha512 = vi.fn().mockResolvedValue(hash);
 
     const result = await hmacSha512(key, data, {
       hmacSha512: customHmacSha512,
@@ -42,7 +43,7 @@ describe('hmacSha512', () => {
   });
 
   it('returns the HMAC-SHA-512 when using the fallback', async () => {
-    jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValueOnce(false);
+    vi.spyOn(utils, 'isWebCryptoSupported').mockReturnValueOnce(false);
 
     const key = new Uint8Array(32);
     const data = new Uint8Array(32);
@@ -73,7 +74,7 @@ describe('pbkdf2Sha512', () => {
     const keyLength = 64;
 
     const hash = new Uint8Array(64).fill(1);
-    const customPbkdf2Sha512 = jest.fn().mockResolvedValue(hash);
+    const customPbkdf2Sha512 = vi.fn().mockResolvedValue(hash);
 
     const result = await pbkdf2Sha512(password, salt, iterations, keyLength, {
       pbkdf2Sha512: customPbkdf2Sha512,
@@ -101,7 +102,7 @@ describe('pbkdf2Sha512', () => {
   });
 
   it('returns the PBKDF2-SHA-512 when using the fallback', async () => {
-    jest.spyOn(utils, 'isWebCryptoSupported').mockReturnValueOnce(false);
+    vi.spyOn(utils, 'isWebCryptoSupported').mockReturnValueOnce(false);
 
     const password = new Uint8Array(32);
     const salt = new Uint8Array(32);

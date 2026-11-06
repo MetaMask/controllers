@@ -1,23 +1,24 @@
+import { createDataView, stringToBytes } from '@metamask/byte-utils';
 import { mnemonicToEntropy } from '@metamask/scure-bip39';
-import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english';
-import { assert, assertExhaustive, stringToBytes } from '@metamask/utils';
+import { wordlist as englishWordlist } from '@metamask/scure-bip39/dist/wordlists/english.js';
+import { assert, assertExhaustive } from '@metamask/type-utils';
 
-import type { DeriveChildKeyArgs } from '.';
 import type {
   BIP39Node,
   BIP39StringNode,
   Network,
   RootedSLIP10PathTuple,
   RootedSLIP10SeedPathTuple,
-} from '../constants';
-import { BYTES_KEY_LENGTH } from '../constants';
-import type { CryptographicFunctions } from '../cryptography';
-import { hmacSha512, pbkdf2Sha512 } from '../cryptography';
-import type { Curve, SupportedCurve } from '../curves';
-import { getCurveByName } from '../curves';
-import { PUBLIC_KEY_GUARD } from '../guard';
-import { SLIP10Node } from '../SLIP10Node';
-import { getFingerprint } from '../utils';
+} from '../constants.js';
+import { BYTES_KEY_LENGTH } from '../constants.js';
+import type { CryptographicFunctions } from '../cryptography.js';
+import { hmacSha512, pbkdf2Sha512 } from '../cryptography.js';
+import type { Curve, SupportedCurve } from '../curves/index.js';
+import { getCurveByName } from '../curves/index.js';
+import { PUBLIC_KEY_GUARD } from '../guard.js';
+import { SLIP10Node } from '../SLIP10Node.js';
+import { getFingerprint } from '../utils.js';
+import type { DeriveChildKeyArgs } from './index.js';
 
 const MNEMONIC_PHRASE_LENGTHS = [12, 15, 18, 21, 24];
 
@@ -303,10 +304,13 @@ export async function entropyToCip3MasterNode(
 
   // Consistent with the Icarus derivation scheme.
   // https://github.com/cardano-foundation/CIPs/blob/09d7d8ee1bd64f7e6b20b5a6cae088039dce00cb/CIP-0003/Icarus.md
+  const rootNodeView = createDataView(rootNode);
   /* eslint-disable no-bitwise */
-  rootNode[0] &= 0b1111_1000;
-  rootNode[31] &= 0b0001_1111;
-  rootNode[31] |= 0b0100_0000;
+  rootNodeView.setUint8(0, rootNodeView.getUint8(0) & 0b1111_1000);
+  rootNodeView.setUint8(
+    31,
+    (rootNodeView.getUint8(31) & 0b0001_1111) | 0b0100_0000,
+  );
   /* eslint-enable no-bitwise */
 
   const privateKey = rootNode.slice(0, curve.privateKeyLength);

@@ -1,6 +1,6 @@
-import * as ed25519 from './ed25519';
-import * as ed25519Bip32 from './ed25519Bip32';
-import * as secp256k1 from './secp256k1';
+import * as ed25519 from './ed25519.js';
+import * as ed25519Bip32 from './ed25519Bip32.js';
+import * as secp256k1 from './secp256k1.js';
 
 export type SupportedCurve = keyof typeof curves;
 

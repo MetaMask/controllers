@@ -1,11 +1,12 @@
-import { hexToBytes } from '@metamask/utils';
+import { hexToBytes } from '@metamask/byte-utils';
+import { describe, expect, it, vi } from 'vitest';
 
-import { bip39MnemonicToMultipath, createBip39KeyFromSeed } from './bip39';
-import { deriveChildKey } from './slip10';
-import fixtures from '../../tests/fixtures';
-import { BIP_32_HARDENED_OFFSET } from '../constants';
-import { ed25519, secp256k1 } from '../curves';
-import { SLIP10Node } from '../SLIP10Node';
+import fixtures from '../../tests/fixtures.js';
+import { BIP_32_HARDENED_OFFSET } from '../constants.js';
+import { ed25519, secp256k1 } from '../curves/index.js';
+import { SLIP10Node } from '../SLIP10Node.js';
+import { bip39MnemonicToMultipath, createBip39KeyFromSeed } from './bip39.js';
+import { deriveChildKey } from './slip10.js';
 
 describe('deriveChildKey', () => {
   it('handles deriving invalid private keys', async () => {
@@ -15,7 +16,7 @@ describe('deriveChildKey', () => {
     });
 
     // Simulate an invalid key once.
-    jest.spyOn(secp256k1, 'isValidPrivateKey').mockReturnValueOnce(false);
+    vi.spyOn(secp256k1, 'isValidPrivateKey').mockReturnValueOnce(false);
 
     const childNode = await deriveChildKey({
       node,
@@ -25,7 +26,7 @@ describe('deriveChildKey', () => {
 
     expect(childNode.index).toBe(BIP_32_HARDENED_OFFSET);
     expect(childNode).toMatchInlineSnapshot(`
-      Object {
+      {
         "chainCode": "0x69c58a9e53bb674d1bbeb871975f01adce5e058cdcba89f8930225341a75b439",
         "curve": "secp256k1",
         "depth": 1,
@@ -48,7 +49,7 @@ describe('deriveChildKey', () => {
       );
 
       // Simulate an invalid key once.
-      jest.spyOn(secp256k1, 'isValidPrivateKey').mockReturnValueOnce(false);
+      vi.spyOn(secp256k1, 'isValidPrivateKey').mockReturnValueOnce(false);
 
       const childNode = await node.derive(path.ours.tuple);
       expect(childNode.privateKey).toBe(privateKey);
@@ -64,7 +65,7 @@ describe('deriveChildKey', () => {
 
     // This should never be the case.
     const error = new Error('Unable to derive child key.');
-    jest.spyOn(SLIP10Node, 'fromExtendedKey').mockImplementationOnce(() => {
+    vi.spyOn(SLIP10Node, 'fromExtendedKey').mockImplementationOnce(() => {
       throw error;
     });
 
@@ -84,7 +85,7 @@ describe('deriveChildKey', () => {
     }).then((privateNode) => privateNode.neuter());
 
     // Simulate an invalid key once.
-    jest.spyOn(secp256k1, 'publicAdd').mockImplementationOnce(() => {
+    vi.spyOn(secp256k1, 'publicAdd').mockImplementationOnce(() => {
       throw new Error('Invalid key.');
     });
 
@@ -96,7 +97,7 @@ describe('deriveChildKey', () => {
 
     expect(childNode.index).toBe(0);
     expect(childNode).toMatchInlineSnapshot(`
-      Object {
+      {
         "chainCode": "0x03eebbe4707329e7da4aef868adb65f21bdc8712a86567b17a15ee4c3f01a57a",
         "curve": "secp256k1",
         "depth": 1,

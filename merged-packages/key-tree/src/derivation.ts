@@ -1,21 +1,21 @@
-import { assert } from '@metamask/utils';
+import { assert } from '@metamask/type-utils';
 
-import { BIP44CoinTypeNode } from './BIP44CoinTypeNode';
-import { BIP44Node } from './BIP44Node';
-import type { Network, SLIP10Path } from './constants';
+import { BIP44CoinTypeNode } from './BIP44CoinTypeNode.js';
+import { BIP44Node } from './BIP44Node.js';
+import type { Network, SLIP10Path } from './constants.js';
 import {
   BIP_32_PATH_REGEX,
   BIP_39_PATH_REGEX,
   MIN_BIP_44_DEPTH,
   SLIP_10_PATH_REGEX,
   CIP_3_PATH_REGEX,
-} from './constants';
-import type { CryptographicFunctions } from './cryptography';
-import type { SupportedCurve } from './curves';
-import { getCurveByName } from './curves';
-import type { Deriver } from './derivers';
-import { derivers } from './derivers';
-import { SLIP10Node } from './SLIP10Node';
+} from './constants.js';
+import type { CryptographicFunctions } from './cryptography.js';
+import type { SupportedCurve } from './curves/index.js';
+import { getCurveByName } from './curves/index.js';
+import type { Deriver } from './derivers/index.js';
+import { derivers } from './derivers/index.js';
+import { SLIP10Node } from './SLIP10Node.js';
 
 /**
  * Ethereum default seed path: "m/44'/60'/0'/0/{account_index}"
@@ -172,7 +172,7 @@ export function validatePathSegment(
   hasKey: boolean,
   depth?: number,
 ): void {
-  if ((path as any).length === 0) {
+  if ((path as readonly unknown[]).length === 0) {
     throw new Error(`Invalid HD path segment: The segment must not be empty.`);
   }
 

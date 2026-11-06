@@ -1,5 +1,10 @@
-import { bytesToHex } from '@metamask/utils';
+import { bytesToHex } from '@metamask/byte-utils';
+import { describe, expect, it, vi } from 'vitest';
 
+import fixtures from '../tests/fixtures.js';
+import type { CryptographicFunctions } from './cryptography.js';
+import { hmacSha512, pbkdf2Sha512 } from './cryptography.js';
+import { encodeExtendedKey } from './extended-keys.js';
 import {
   BIP_44_COIN_TYPE_DEPTH,
   BIP44Node,
@@ -7,12 +12,8 @@ import {
   BIP44PurposeNodeToken,
   deriveBIP44AddressKey,
   getBIP44AddressKeyDeriver,
-} from '.';
-import type { CryptographicFunctions } from './cryptography';
-import { hmacSha512, pbkdf2Sha512 } from './cryptography';
-import { encodeExtendedKey } from './extended-keys';
-import { mnemonicPhraseToBytes } from './utils';
-import fixtures from '../tests/fixtures';
+} from './index.js';
+import { mnemonicPhraseToBytes } from './utils.js';
 
 const defaultBip39NodeToken = `bip39:${fixtures.local.mnemonic}` as const;
 const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
@@ -25,8 +26,8 @@ const defaultBip39BytesToken = mnemonicPhraseToBytes(fixtures.local.mnemonic);
  * @returns The mock cryptographic functions.
  */
 function getMockFunctions(): CryptographicFunctions {
-  const mockHmacSha512 = jest.fn().mockImplementation(hmacSha512);
-  const mockPbkdf2Sha512 = jest.fn().mockImplementation(pbkdf2Sha512);
+  const mockHmacSha512 = vi.fn().mockImplementation(hmacSha512);
+  const mockPbkdf2Sha512 = vi.fn().mockImplementation(pbkdf2Sha512);
 
   return {
     hmacSha512: mockHmacSha512,

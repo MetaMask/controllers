@@ -1,10 +1,6 @@
-import {
-  stringToBytes,
-  bytesToHex,
-  hexToBigInt,
-  remove0x,
-  assert,
-} from '@metamask/utils';
+import { bytesToHex } from '@metamask/byte-utils';
+import { hexToBigInt, remove0x, stringToBytes } from '@metamask/byte-utils';
+import { assert } from '@metamask/type-utils';
 import { mod } from '@noble/curves/abstract/modular';
 import { ed25519 } from '@noble/curves/ed25519';
 

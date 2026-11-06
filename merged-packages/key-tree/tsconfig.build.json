@@ -9,7 +9,10 @@
   },
   "references": [
     {
-      "path": "../utils/tsconfig.build.json"
+      "path": "../byte-utils/tsconfig.build.json"
+    },
+    {
+      "path": "../type-utils/tsconfig.build.json"
     }
   ],
   "include": ["../../types", "./src"]

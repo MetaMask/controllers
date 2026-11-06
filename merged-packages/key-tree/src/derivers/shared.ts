@@ -1,20 +1,17 @@
-import {
-  assert,
-  bytesToBigInt,
-  concatBytes,
-  hexToBytes,
-} from '@metamask/utils';
+import { hexToBytes } from '@metamask/byte-utils';
+import { bytesToBigInt, concatBytes } from '@metamask/byte-utils';
+import { assert } from '@metamask/type-utils';
 
-import type { DeriveChildKeyArgs, DerivedKeys } from '.';
-import type { Network } from '../constants';
-import { BIP_32_HARDENED_OFFSET, UNPREFIXED_PATH_REGEX } from '../constants';
-import type { CryptographicFunctions } from '../cryptography';
-import { hmacSha512 } from '../cryptography';
-import type { Curve } from '../curves';
-import { mod } from '../curves';
-import { PUBLIC_KEY_GUARD } from '../guard';
-import { SLIP10Node } from '../SLIP10Node';
-import { isValidBytesKey, numberToUint32, validateBytes } from '../utils';
+import type { Network } from '../constants.js';
+import { BIP_32_HARDENED_OFFSET, UNPREFIXED_PATH_REGEX } from '../constants.js';
+import type { CryptographicFunctions } from '../cryptography.js';
+import { hmacSha512 } from '../cryptography.js';
+import type { Curve } from '../curves/index.js';
+import { mod } from '../curves/index.js';
+import { PUBLIC_KEY_GUARD } from '../guard.js';
+import { SLIP10Node } from '../SLIP10Node.js';
+import { isValidBytesKey, numberToUint32, validateBytes } from '../utils.js';
+import type { DeriveChildKeyArgs, DerivedKeys } from './index.js';
 
 type ErrorHandler = (
   error: unknown,

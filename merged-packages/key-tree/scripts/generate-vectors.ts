@@ -1,17 +1,17 @@
-import { bytesToHex } from '@metamask/utils';
+import { bytesToHex } from '@metamask/byte-utils';
 // eslint-disable-next-line import-x/no-nodejs-modules
 import { randomInt, randomBytes } from 'crypto';
 
-import type { BIP32Node, SLIP10Node } from '../src';
+import type { Curve } from '../src/curves/index.js';
+import { deriveChildKey } from '../src/derivers/bip39.js';
+import type { BIP32Node, SLIP10Node } from '../src/index.js';
 import {
   BIP_32_HARDENED_OFFSET,
   ed25519,
   MAX_BIP_32_INDEX,
   secp256k1,
   ed25519Bip32,
-} from '../src';
-import { type Curve } from '../src/curves';
-import { deriveChildKey } from '../src/derivers/bip39';
+} from '../src/index.js';
 
 /**
  * Get a random boolean value.
