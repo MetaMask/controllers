@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Refresh the Accounts API and RPC chain lists before fetching balances when a network is added or enabled, so the new network's balance shows without switching networks ([#11303](https://github.com/MetaMask/core/pull/11303))
+
 ## [20.2.3]
 
 ### Changed

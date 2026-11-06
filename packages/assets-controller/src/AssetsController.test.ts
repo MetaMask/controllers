@@ -15,7 +15,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Mock, MockInstance, MockedFunction } from 'vitest';
 
 import { registerKeyringUnlockMock } from './__fixtures__/MockAssetControllerMessenger.js';
-import { waitFor } from './__fixtures__/test-utils.js';
+import { waitFor, waitUntilStable } from './__fixtures__/test-utils.js';
 import {
   AssetsController,
   getDefaultAssetsControllerState,
@@ -217,7 +217,12 @@ const [MOCK_DEFAULT_TRACKED_ASSET_ID] =
  *
  * @param messenger - The root messenger used to publish lifecycle events.
  */
-type LifecyclePublish = (topic: string, payload?: unknown) => void;
+type LifecyclePublish = (
+  topic: string,
+  payload?: unknown,
+  // Previous value, or the patches array on a `stateChange` event.
+  extra?: unknown,
+) => void;
 
 async function activateTracking(messenger: RootMessenger): Promise<void> {
   (messenger as unknown as { publish: LifecyclePublish }).publish(
@@ -5262,9 +5267,11 @@ describe('AssetsController', () => {
             [],
           );
 
-          // The price poll snapshots state synchronously on an existing
-          // subscription, before this handler yields.
-          expect(fetchSpy).toHaveBeenCalled();
+          // Chain lists refresh before the price subscription snapshots state.
+          await waitFor(() => {
+            expect(fetchSpy).toHaveBeenCalled();
+          });
+
           expect(musdPresentAtPriceFetch).toBe(true);
           expect(
             controller.state.assetsBalance[MOCK_ACCOUNT_ID]?.[lineaMusd],
@@ -5422,6 +5429,147 @@ describe('AssetsController', () => {
 
         expect(true).toBe(true);
       });
+    });
+
+    it('refreshes active chains before fetching when a network is added', async () => {
+      const fetchV2SupportedNetworks = vi.fn().mockResolvedValue({
+        fullSupport: [1, 4663],
+        partialSupport: [],
+      });
+      const queryApiClient = {
+        ...createMockQueryApiClient(),
+        accounts: {
+          fetchV2SupportedNetworks,
+          fetchV5MultiAccountBalances: vi.fn().mockResolvedValue({
+            balances: [],
+            unprocessedNetworks: [],
+          }),
+        },
+      } as unknown as ApiPlatformClient;
+
+      await withController(
+        { queryApiClient },
+        async ({ controller, messenger }) => {
+          await activateTracking(messenger);
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+          });
+
+          const getAssetsSpy = vi.spyOn(controller, 'getAssets');
+          fetchV2SupportedNetworks.mockClear();
+          getAssetsSpy.mockClear();
+
+          (messenger as unknown as { publish: LifecyclePublish }).publish(
+            'NetworkController:networkAdded',
+            { chainId: '0x1237' },
+          );
+
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+            expect(getAssetsSpy).toHaveBeenCalled();
+          });
+
+          expect(getAssetsSpy).toHaveBeenCalledWith(
+            [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
+            expect.objectContaining({
+              chainIds: ['eip155:4663'],
+              forceUpdate: true,
+            }),
+          );
+          expect(
+            fetchV2SupportedNetworks.mock.invocationCallOrder[0],
+          ).toBeLessThan(getAssetsSpy.mock.invocationCallOrder[0]);
+
+          getAssetsSpy.mockRestore();
+        },
+      );
+    });
+
+    it('refreshes active chains before fetching when a network is enabled', async () => {
+      const fetchV2SupportedNetworks = vi.fn().mockResolvedValue({
+        fullSupport: [1, 4663],
+        partialSupport: [],
+      });
+      const queryApiClient = {
+        ...createMockQueryApiClient(),
+        accounts: {
+          fetchV2SupportedNetworks,
+          fetchV5MultiAccountBalances: vi.fn().mockResolvedValue({
+            balances: [],
+            unprocessedNetworks: [],
+          }),
+        },
+      } as unknown as ApiPlatformClient;
+
+      await withController(
+        { queryApiClient },
+        async ({ controller, messenger }) => {
+          await activateTracking(messenger);
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+          });
+
+          const getAssetsSpy = vi.spyOn(controller, 'getAssets');
+          fetchV2SupportedNetworks.mockClear();
+          getAssetsSpy.mockClear();
+
+          (messenger as unknown as { publish: LifecyclePublish }).publish(
+            'NetworkEnablementController:stateChange',
+            {
+              enabledNetworkMap: {
+                eip155: {
+                  '1': true,
+                  '0x1237': true,
+                },
+              },
+              nativeAssetIdentifiers: {},
+            },
+            [],
+          );
+
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+            expect(getAssetsSpy).toHaveBeenCalled();
+          });
+
+          expect(getAssetsSpy).toHaveBeenCalledWith(
+            [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
+            expect.objectContaining({
+              chainIds: ['eip155:4663'],
+              forceUpdate: true,
+            }),
+          );
+          expect(
+            fetchV2SupportedNetworks.mock.invocationCallOrder[0],
+          ).toBeLessThan(getAssetsSpy.mock.invocationCallOrder[0]);
+
+          fetchV2SupportedNetworks.mockClear();
+          getAssetsSpy.mockClear();
+
+          (messenger as unknown as { publish: LifecyclePublish }).publish(
+            'NetworkEnablementController:stateChange',
+            {
+              enabledNetworkMap: {
+                eip155: {
+                  '1': true,
+                },
+              },
+              nativeAssetIdentifiers: {},
+            },
+            [],
+          );
+
+          await waitUntilStable(() => ({
+            fetchCalls: fetchV2SupportedNetworks.mock.calls.length,
+            getAssetsCalls: getAssetsSpy.mock.calls.length,
+          }));
+
+          expect(fetchV2SupportedNetworks).not.toHaveBeenCalled();
+          expect(getAssetsSpy).not.toHaveBeenCalled();
+
+          getAssetsSpy.mockRestore();
+        },
+      );
     });
 
     it('subscribes and fetches assets when the selected EVM network switches', async () => {
