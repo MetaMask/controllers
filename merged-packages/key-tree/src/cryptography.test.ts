@@ -1,6 +1,4 @@
 import { bytesToHex } from '@metamask/byte-utils';
-// eslint-disable-next-line n/no-unsupported-features/node-builtins
-import { webcrypto } from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,10 +9,6 @@ import {
   sha256,
 } from './cryptography.js';
 import * as utils from './utils.js';
-
-// Node.js <20 doesn't have `globalThis.crypto`, so we need to define it.
-// TODO: Remove this once we drop support for Node.js <20.
-Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
 
 describe('hmacSha512', () => {
   it('returns the HMAC-SHA-512 when using a custom implementation', async () => {
