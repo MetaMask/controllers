@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `fetchV5MultiAccountBalances` and `fetchV6MultiAccountBalances` (and their `get*QueryOptions` helpers) now add `bypassServerCache: true` to the query key when `bypassServerCache` is set, so a bypass fetch no longer joins an in flight request for the same params and always hits the network with the cache busting param ([#NNNNN](https://github.com/MetaMask/core/pull/NNNNN))
+- `fetchV5MultiAccountBalances` and `fetchV6MultiAccountBalances` (and their `get*QueryOptions` helpers) now add `bypassServerCache: true` to the query key when `bypassServerCache` is set, so a bypass fetch no longer joins an in flight request for the same params and always hits the network with the cache busting param ([#11376](https://github.com/MetaMask/core/pull/11376))
 
 ## [14.0.0]
 
