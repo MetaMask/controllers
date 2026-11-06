@@ -109,6 +109,7 @@ import type {
   PerpsReadOptions,
   PerpsFeeResolution,
 } from '../types/index.js';
+import { carryProviderErrorCause } from '../utils/errorContext.js';
 import { ensureError } from '../utils/errorUtils.js';
 
 /** Error returned when only some providers suspend their Chase orders. */
@@ -664,7 +665,7 @@ export class AggregatedPerpsProvider implements PerpsProvider {
     });
 
     const result = await provider.placeOrder(params);
-    return { ...result, providerId };
+    return carryProviderErrorCause(result, { ...result, providerId });
   }
 
   /**
@@ -833,7 +834,7 @@ export class AggregatedPerpsProvider implements PerpsProvider {
       params.newOrder.providerId,
     );
     const result = await provider.editOrder(params);
-    return { ...result, providerId };
+    return carryProviderErrorCause(result, { ...result, providerId });
   }
 
   async cancelOrder(params: CancelOrderParams): Promise<CancelOrderResult> {
@@ -841,7 +842,7 @@ export class AggregatedPerpsProvider implements PerpsProvider {
       params.providerId,
     );
     const result = await provider.cancelOrder(params);
-    return { ...result, providerId };
+    return carryProviderErrorCause(result, { ...result, providerId });
   }
 
   async cancelOrders(
@@ -870,7 +871,7 @@ export class AggregatedPerpsProvider implements PerpsProvider {
       params.providerId,
     );
     const result = await provider.closePosition(params);
-    return { ...result, providerId };
+    return carryProviderErrorCause(result, { ...result, providerId });
   }
 
   async closePositions(
@@ -896,7 +897,7 @@ export class AggregatedPerpsProvider implements PerpsProvider {
       params.providerId,
     );
     const result = await provider.updatePositionTPSL(params);
-    return { ...result, providerId };
+    return carryProviderErrorCause(result, { ...result, providerId });
   }
 
   async updateMargin(params: UpdateMarginParams): Promise<MarginResult> {
