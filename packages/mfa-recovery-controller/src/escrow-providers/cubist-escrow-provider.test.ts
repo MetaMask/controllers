@@ -104,7 +104,7 @@ describe('CubistEscrowProvider', () => {
         stdout: { ok: true },
       });
       expect(await provider.isAvailable()).toBe(true);
-      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'latest', {
+      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'v10', {
         request: { cmd: 'ping' },
       });
     });
@@ -115,7 +115,7 @@ describe('CubistEscrowProvider', () => {
         stdout: { ok: true },
       });
       expect(await provider.isAvailable()).toBe(true);
-      expect(invoke).toHaveBeenCalledWith('NamedPolicy#escrow', 'latest', {
+      expect(invoke).toHaveBeenCalledWith('NamedPolicy#escrow', 'v10', {
         request: { cmd: 'ping' },
       });
     });
@@ -141,7 +141,7 @@ describe('CubistEscrowProvider', () => {
         stdout: CHALLENGE,
       });
       expect(await provider.generateChallenge()).toStrictEqual(CHALLENGE);
-      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'latest', {
+      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'v10', {
         request: { cmd: 'generateChallenge' },
       });
     });
@@ -179,7 +179,7 @@ describe('CubistEscrowProvider', () => {
       expect(
         await provider.applyMutation(MUTATION, TOKEN, null, PAYLOAD, APPROVED),
       ).toStrictEqual(receipt);
-      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'latest', {
+      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'v10', {
         request: {
           cmd: 'applyMutation',
           mutation: MUTATION,
@@ -274,7 +274,7 @@ describe('CubistEscrowProvider', () => {
         ...secretResponse,
         recoverySecret: { ciphertext: new Uint8Array([0xcc]) },
       });
-      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'latest', {
+      expect(invoke).toHaveBeenCalledWith('cubist_secret_escrow', 'v10', {
         request: {
           cmd: 'getSecret',
           authControllerToken: TOKEN,

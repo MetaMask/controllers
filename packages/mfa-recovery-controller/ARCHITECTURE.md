@@ -221,7 +221,7 @@ authenticated `CubeSignerClient` and the pinned wrap and receipt public keys
 before `register`.
 
 `CubistEscrowProvider` sends every command with `policyInvoke` on the C2F
-(default `cubist_secret_escrow`, version `latest`) as `{ cmd, ...fields }`:
+(default `cubist_secret_escrow`, version `v10`, escrow release 0.1.0) as `{ cmd, ...fields }`:
 `ping` (`isAvailable`), `generateChallenge`, `getSecret`, and
 `applyMutation`. Escrow JSON is parsed from C2F stdout. A policy `Deny` on
 `applyMutation` becomes `MutationRejectedError`; any other failure is

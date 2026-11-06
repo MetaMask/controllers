@@ -32,7 +32,8 @@ import type {
 
 const ESCROW_ID = 'cubist';
 const DEFAULT_FUNCTION_ID = 'cubist_secret_escrow';
-const DEFAULT_VERSION: Version = 'latest';
+// cubist-secret-escrow 0.1.0
+const DEFAULT_VERSION: Version = 'v10';
 
 /**
  * CubeSigner C2F client for the Cubist recovery escrow.
@@ -56,7 +57,7 @@ export type CubistEscrowProviderOptions = {
    */
   functionId?: string;
   /**
-   * C2F version to invoke. Defaults to `latest`.
+   * C2F version to invoke. Defaults to `v10`.
    */
   version?: Version;
   /**
