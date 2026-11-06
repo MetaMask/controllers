@@ -98,3 +98,31 @@ export const approvalUpdateHandler = ({
       break;
   }
 };
+
+export const depositUpdateHandler = ({
+  txMeta,
+  historyKey,
+  onTransactionConfirmed,
+  onTransactionFailed,
+}: SubscriptionHandlerParams) => {
+  if (!historyKey) {
+    return;
+  }
+
+  switch (txMeta.status) {
+    case TransactionStatus.confirmed:
+      historyKey &&
+        onTransactionConfirmed({
+          txMeta,
+          historyKey,
+        });
+      break;
+    case TransactionStatus.failed:
+    case TransactionStatus.dropped:
+    case TransactionStatus.rejected:
+      onTransactionFailed({ txMeta, historyKey });
+      break;
+    default:
+      break;
+  }
+};
