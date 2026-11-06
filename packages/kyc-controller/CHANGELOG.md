@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0]
+
 ### Uncategorized
 
 - chore: add `allow-scripts` script to child workspaces so Yarn doesn't fail ([#11324](https://github.com/MetaMask/core/pull/11324))
@@ -253,7 +255,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial Release ([#10145](https://github.com/MetaMask/core/pull/10145))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/kyc-controller@0.15.0...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/kyc-controller@0.16.0...HEAD
+[0.16.0]: https://github.com/MetaMask/core/compare/@metamask/kyc-controller@0.15.0...@metamask/kyc-controller@0.16.0
 [0.15.0]: https://github.com/MetaMask/core/compare/@metamask/kyc-controller@0.14.0...@metamask/kyc-controller@0.15.0
 [0.14.0]: https://github.com/MetaMask/core/compare/@metamask/kyc-controller@0.13.0...@metamask/kyc-controller@0.14.0
 [0.13.0]: https://github.com/MetaMask/core/compare/@metamask/kyc-controller@0.12.1...@metamask/kyc-controller@0.13.0
