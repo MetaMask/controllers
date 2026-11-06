@@ -178,6 +178,9 @@ const config = {
     'json-rpc-middleware-stream': {
       teams: ['@MetaMask/core-platform'],
     },
+    'key-tree': {
+      teams: ['@MetaMask/core-platform'],
+    },
     'keyring-controller': {
       teams: ['@MetaMask/accounts-engineers', '@MetaMask/core-platform'],
       initializationPath: 'keyring-controller',

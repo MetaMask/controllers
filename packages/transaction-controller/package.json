@@ -1,6 +1,6 @@
 {
   "name": "@metamask/transaction-controller",
-  "version": "73.0.0",
+  "version": "73.1.1",
   "description": "Stores transactions alongside their periodically updated statuses and manages interactions such as approval and cancellation",
   "keywords": [
     "Ethereum",
@@ -32,6 +32,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
+    "allow-scripts": "yarn workspace @metamask/core-monorepo run allow-scripts",
     "build": "tsc --project tsconfig.build.json",
     "build:all": "tsc --build tsconfig.build.json --verbose",
     "build:clean": "yarn build:only-clean && yarn build",
@@ -46,6 +47,7 @@
     "since-latest-release": "../../scripts/since-latest-release.sh",
     "test": "vitest",
     "test:clean": "vitest --clearCache",
+    "test:coverage": "vitest --coverage",
     "test:verbose": "vitest --reporter=verbose",
     "test:watch": "vitest --watch"
   },
@@ -61,8 +63,8 @@
     "@metamask/approval-controller": "^10.0.0",
     "@metamask/base-controller": "^10.1.0",
     "@metamask/controller-utils": "^13.0.0",
-    "@metamask/core-backend": "^13.0.0",
-    "@metamask/gas-fee-controller": "^27.0.0",
+    "@metamask/core-backend": "^14.0.0",
+    "@metamask/gas-fee-controller": "^27.1.0",
     "@metamask/messenger": "^3.0.0",
     "@metamask/metamask-eth-abis": "^3.1.1",
     "@metamask/network-controller": "^37.1.1",
@@ -78,7 +80,7 @@
     "ethereum-cryptography": "^3.2.0",
     "fast-json-patch": "^3.1.1",
     "lodash-es": "^4.18.1",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@babel/runtime": "^7.29.7",
@@ -97,7 +99,7 @@
     "typedoc": "^0.28.20",
     "typedoc-plugin-missing-exports": "^4.1.4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "5.0.3"
   },
   "peerDependencies": {
     "@babel/runtime": "^7.0.0",

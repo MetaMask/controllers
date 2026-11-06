@@ -39,6 +39,7 @@ export * from './sortMarkets.js';
 export * from './standaloneInfoClient.js';
 export * from './stringParseUtils.js';
 export * from './subscriptionFeeWaiver.js';
+export * from './tpslCalculations.js';
 export * from './transferData.js';
 export * from './wait.js';
 
