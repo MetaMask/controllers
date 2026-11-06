@@ -5268,9 +5268,10 @@ describe('AssetsController', () => {
           );
 
           // Chain lists refresh before the price subscription snapshots state.
-          await flushPromises();
+          await waitFor(() => {
+            expect(fetchSpy).toHaveBeenCalled();
+          });
 
-          expect(fetchSpy).toHaveBeenCalled();
           expect(musdPresentAtPriceFetch).toBe(true);
           expect(
             controller.state.assetsBalance[MOCK_ACCOUNT_ID]?.[lineaMusd],
@@ -5450,7 +5451,9 @@ describe('AssetsController', () => {
         { queryApiClient },
         async ({ controller, messenger }) => {
           await activateTracking(messenger);
-          await flushPromises();
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+          });
 
           const getAssetsSpy = vi.spyOn(controller, 'getAssets');
           fetchV2SupportedNetworks.mockClear();
@@ -5461,9 +5464,11 @@ describe('AssetsController', () => {
             { chainId: '0x1237' },
           );
 
-          await flushPromises();
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+            expect(getAssetsSpy).toHaveBeenCalled();
+          });
 
-          expect(fetchV2SupportedNetworks).toHaveBeenCalled();
           expect(getAssetsSpy).toHaveBeenCalledWith(
             [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
             expect.objectContaining({
@@ -5500,7 +5505,9 @@ describe('AssetsController', () => {
         { queryApiClient },
         async ({ controller, messenger }) => {
           await activateTracking(messenger);
-          await flushPromises();
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+          });
 
           const getAssetsSpy = vi.spyOn(controller, 'getAssets');
           fetchV2SupportedNetworks.mockClear();
@@ -5520,9 +5527,11 @@ describe('AssetsController', () => {
             [],
           );
 
-          await flushPromises();
+          await waitFor(() => {
+            expect(fetchV2SupportedNetworks).toHaveBeenCalled();
+            expect(getAssetsSpy).toHaveBeenCalled();
+          });
 
-          expect(fetchV2SupportedNetworks).toHaveBeenCalled();
           expect(getAssetsSpy).toHaveBeenCalledWith(
             [expect.objectContaining({ id: MOCK_ACCOUNT_ID })],
             expect.objectContaining({
@@ -5550,7 +5559,9 @@ describe('AssetsController', () => {
             [],
           );
 
-          await flushPromises();
+          await waitFor(() => {
+            expect(getAssetsSpy).not.toHaveBeenCalled();
+          });
 
           expect(fetchV2SupportedNetworks).not.toHaveBeenCalled();
 
