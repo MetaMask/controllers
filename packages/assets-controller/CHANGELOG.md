@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Stream spot prices on `market-stats.v1` from `PriceDataSource` when `MarketStatsService` is registered. The socket set is the same assets the price poll tracks. Assets with `wssSupport` publish `AssetsController:priceChanged` from the socket (at most 200 channels, highest 24h volume first) and do not write `assetsPrice`. Assets without streaming support, assets past that cap, and assets on a chain reported down keep polling `/v3/spot-prices` into state. A down chain waits a short random delay before the first fallback poll. When `MarketStatsService` is not registered, every asset stays on the poll. A price for an asset `AssetsController` does not track is a direct `MarketStatsService:subscribe`, not an `AssetsController` action ([#11193](https://github.com/MetaMask/core/pull/11193))
+
+### Changed
+
+- Tracked market-stats channels are opened in one `MarketStatsService.subscribe` call instead of one frame per asset ([#11193](https://github.com/MetaMask/core/pull/11193))
+- **BREAKING:** `AssetsControllerMessenger` now includes `MarketStatsService:subscribe`, `MarketStatsService:unsubscribe`, `MarketStatsService:pricesUpdated`, and `MarketStatsService:chainStatusChanged`. Delegate them from the root messenger. Without a registered `MarketStatsService`, price updates stay on the Price API poll ([#11193](https://github.com/MetaMask/core/pull/11193))
+- `PriceDataSource` requests `includeWssSupportField=true` on `/v3/spot-prices`. The Price API omits `wssSupport` without that flag, so no market-stats channel is opened ([#11193](https://github.com/MetaMask/core/pull/11193))
+- A market-stats subscribe the socket rejects stays on the `/v3/spot-prices` poll. That failure does not reconnect the shared WebSocket ([#11193](https://github.com/MetaMask/core/pull/11193))
+
 ## [20.2.3]
 
 ### Changed

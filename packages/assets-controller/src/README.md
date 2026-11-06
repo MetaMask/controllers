@@ -200,6 +200,10 @@ DataSource calls: messenger.call('AssetsController:assetsUpdate', response, sour
             └── AssetsController:priceChanged (when a price changes)
 ```
 
+Live socket ticks take a different path. They publish
+`AssetsController:priceChanged` and leave `assetsPrice` unchanged. See
+[Market stats](../docs/decisions/2026-11-05-market-stats.md).
+
 #### 3.3 Chain Assignment Algorithm
 
 ```typescript

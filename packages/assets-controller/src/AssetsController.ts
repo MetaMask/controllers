@@ -23,6 +23,10 @@ import type {
   ApiPlatformClient,
   AccountActivityServiceBalanceUpdatedEvent,
   AccountActivityServiceStatusChangedEvent,
+  MarketStatsServiceActions,
+  MarketStatsServiceChainStatusChangedEvent,
+  MarketStatsServicePricesUpdatedEvent,
+  MarketStatsServiceSubscriptionErrorEvent,
   SupportedCurrency,
 } from '@metamask/core-backend';
 import type { Transaction as KeyringTransaction } from '@metamask/keyring-api';
@@ -333,7 +337,9 @@ type AllowedActions =
   // PhishingController
   | PhishingControllerBulkScanTokensAction
   // AccountsApiDataSource (Accounts API v6 balances feature flag)
-  | RemoteFeatureFlagControllerGetStateAction;
+  | RemoteFeatureFlagControllerGetStateAction
+  // PriceDataSource market-stats stream. Absent at runtime, prices stay on the poll.
+  | MarketStatsServiceActions;
 
 type AllowedEvents =
   // AssetsController — account tree lifecycle and group switches
@@ -367,7 +373,11 @@ type AllowedEvents =
   | AccountActivityServiceStatusChangedEvent
   // AccountsApiDataSource subscribes to react to Snaps → AssetsController
   // migration flag changes (which gate the chains it surfaces as active)
-  | RemoteFeatureFlagControllerStateChangeEvent;
+  | RemoteFeatureFlagControllerStateChangeEvent
+  // PriceDataSource market-stats stream
+  | MarketStatsServicePricesUpdatedEvent
+  | MarketStatsServiceChainStatusChangedEvent
+  | MarketStatsServiceSubscriptionErrorEvent;
 
 export type AssetsControllerMessenger = Messenger<
   typeof CONTROLLER_NAME,
@@ -1033,9 +1043,15 @@ export class AssetsController extends BaseController<
     });
     this.#priceDataSource = new PriceDataSource({
       queryApiClient,
+      messenger: this.messenger,
       getSelectedCurrency: (): SupportedCurrency => this.state.selectedCurrency,
       getAssetsState: (): AssetsControllerState => this.state,
       ...priceDataSourceConfig,
+      onStreamPrices: (prices): void => {
+        // Socket ticks stay off controller state. Writing them would copy
+        // every tick into Redux. The UI listens to this event instead.
+        this.messenger.publish('AssetsController:priceChanged', { prices });
+      },
     });
     this.#customAssetGraduationMiddleware = new CustomAssetGraduationMiddleware(
       {
@@ -2071,8 +2087,8 @@ export class AssetsController extends BaseController<
    * `fiatValue`) for an account directly from controller state.
    *
    * Reuses the same state-composition and filtering logic as `getAssets`
-   * (balance and metadata are required, a missing price falls back to
-   * `{ price: 0, lastUpdated: 0 }` with `fiatValue: 0`, and hidden or
+   * (balance and metadata are required, a missing price falls back to a
+   * fungible price of `0` with `fiatValue: 0`, and hidden or
    * otherwise filtered assets are excluded) so the returned shape never
    * drifts from `getAssets`. Reads from current state only and does not
    * trigger a data-source refresh.
@@ -2558,6 +2574,9 @@ export class AssetsController extends BaseController<
 
     // Currency changed — old cached prices are in the wrong currency.
     this.#priceDataSource.invalidatePriceCache();
+    this.#priceDataSource.resubscribeForCurrencyChange().catch((error) => {
+      log('Failed to resubscribe market stats after currency change', error);
+    });
 
     this.syncAssetsPrices(
       Object.values(this.state.assetsBalance).flatMap(
@@ -3384,7 +3403,9 @@ export class AssetsController extends BaseController<
 
     const priceRaw = this.state.assetsPrice[assetId];
     const price: AssetPrice = priceRaw ?? {
+      assetPriceType: 'fungible',
       price: 0,
+      usdPrice: 0,
       lastUpdated: 0,
     };
 
