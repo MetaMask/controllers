@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Allow an optional `properties` argument on `trackErrorAsAnalytics` so callers can attach extra payload fields such as `anonymous: true` while keeping sanitized `source` and `error_message`
+- Allow an optional `properties` argument on `trackErrorAsAnalytics` so callers can attach extra payload fields such as `anonymous: true` while keeping sanitized `source` and `error_message` ([#11355](https://github.com/MetaMask/core/pull/11355))
 
 ## [4.2.0]
 
