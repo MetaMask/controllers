@@ -40,6 +40,7 @@ import {
   PERPS_ERROR_ACTION,
   PERPS_ERROR_OPERATION,
   createPerpsErrorContext,
+  getProviderErrorCause,
   wasProviderErrorReported,
 } from '../utils/errorContext.js';
 import type {
@@ -1910,7 +1911,8 @@ export class TradingService {
 
         if (!isSignerUnavailable(result.error)) {
           this.#deps.logger.error(
-            ensureError(result.error, 'TradingService.cancelOrder'),
+            getProviderErrorCause(result) ??
+              ensureError(result.error, 'TradingService.cancelOrder'),
             this.#getErrorContext(
               context,
               'cancelOrder',
@@ -2317,7 +2319,8 @@ export class TradingService {
 
         if (!isSignerUnavailable(result.error)) {
           this.#deps.logger.error(
-            ensureError(result.error, 'TradingService.closePosition'),
+            getProviderErrorCause(result) ??
+              ensureError(result.error, 'TradingService.closePosition'),
             this.#getErrorContext(
               context,
               'closePosition',
@@ -3160,7 +3163,8 @@ export class TradingService {
           !wasProviderErrorReported(result)
         ) {
           this.#deps.logger.error(
-            ensureError(result.error, 'TradingService.flipPosition'),
+            getProviderErrorCause(result) ??
+              ensureError(result.error, 'TradingService.flipPosition'),
             this.#getErrorContext(
               context,
               'flipPosition',
