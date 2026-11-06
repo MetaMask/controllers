@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Add an `allow-scripts` package script that delegates to the monorepo allow-scripts command ([#11324](https://github.com/MetaMask/core/pull/11324))
+- **BREAKING:** `KycController.deleteEncryptedStorage` now requires `{ aal2Token }` instead of taking no arguments ([#11338](https://github.com/MetaMask/core/pull/11338))
+  - Pass an AAL2 token (one whose `ext.aal` is at least 2): `deleteEncryptedStorage({ aal2Token })`
+  - The token is sent as the `Authorization` bearer value for both deletion requests. An empty token throws before any request is made
+- **BREAKING:** `KycService.createDeletion` and `KycService.completeDeletion` require an `aal2Token` parameter, which is sent as the `Authorization` bearer value ([#11338](https://github.com/MetaMask/core/pull/11338))
+  - Callers of the `KycService:createDeletion` and `KycService:completeDeletion` messenger actions must pass `aal2Token` alongside the existing parameters
+  - Both methods throw if the token is empty
 
 ## [0.15.0]
 
