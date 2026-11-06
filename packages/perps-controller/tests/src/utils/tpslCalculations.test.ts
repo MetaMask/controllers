@@ -325,6 +325,13 @@ describe('calculatePriceForRoE', () => {
   ])('has no price with $reason', ({ params }) => {
     expect(calculatePriceForRoE(10, true, params)).toBe('');
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'has no price with a RoE of %s',
+    (roe) => {
+      expect(calculatePriceForRoE(roe, true, long2x)).toBe('');
+    },
+  );
 });
 
 describe('calculatePriceForPercentage', () => {
@@ -355,6 +362,19 @@ describe('calculatePriceForPercentage', () => {
       calculatePriceForPercentage(10, true, { ...long2x, currentPrice: 0 }),
     ).toBe('');
   });
+
+  it('has no price without a side', () => {
+    expect(calculatePriceForPercentage(10, true, { currentPrice: 2500 })).toBe(
+      '',
+    );
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'has no price with a percentage of %s',
+    (percentage) => {
+      expect(calculatePriceForPercentage(percentage, true, long2x)).toBe('');
+    },
+  );
 });
 
 describe('calculatePercentageForPrice', () => {
@@ -432,6 +452,7 @@ describe('calculatePercentageForPrice', () => {
     },
     { reason: 'a price', price: '', params: long2x },
     { reason: 'a numeric price', price: 'abc', params: long2x },
+    { reason: 'a side', price: '2750', params: { currentPrice: 2500 } },
   ])('has no percentage without $reason', ({ price, params }) => {
     expect(calculatePercentageForPrice(price, true, params)).toBe('');
   });

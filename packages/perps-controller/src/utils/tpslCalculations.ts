@@ -79,9 +79,12 @@ function getTriggerPriceDecimals(price: number): number {
  * is left to the provider.
  *
  * @param price - The calculated trigger price.
- * @returns The trigger price as a string.
+ * @returns The trigger price as a string, or '' when it is not finite.
  */
 function toTriggerPriceString(price: number): string {
+  if (!Number.isFinite(price)) {
+    return '';
+  }
   return Number.parseFloat(
     price.toFixed(getTriggerPriceDecimals(price)),
   ).toString();
@@ -141,8 +144,8 @@ function getSignedRoE(
  * @param roePercentage - Signed RoE in percent (10 for +10%, -5 for -5%).
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
- * @returns The trigger price as a string, or '' without a usable price, side
- * or leverage.
+ * @returns The trigger price as a string, or '' without a usable price, side,
+ * leverage or RoE.
  * @example calculatePriceForRoE(-10, false, { currentPrice: 2500, direction: 'long', leverage: 2 }) => '2375'
  */
 export function calculatePriceForRoE(
@@ -217,7 +220,7 @@ export function calculateRoEForPrice(
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
  * @returns The trigger price, with the decimals its price range needs (up to
- * 8 below $0.01), or '' without a current price.
+ * 8 below $0.01), or '' without a current price, side or finite percentage.
  * @example calculatePriceForPercentage(10, true, { currentPrice: 0.001, direction: 'long' }) => '0.0011'
  */
 export function calculatePriceForPercentage(
@@ -226,7 +229,7 @@ export function calculatePriceForPercentage(
   params: TpslCalculationParams,
 ): string {
   const { currentPrice, direction } = params;
-  if (!currentPrice) {
+  if (!currentPrice || !direction) {
     return '';
   }
   const move = percentage / 100;
@@ -244,7 +247,7 @@ export function calculatePriceForPercentage(
  * @param isProfit - True for a take profit, false for a stop loss.
  * @param params - Price context.
  * @returns The move in percent with two decimals, or '' without a usable
- * price.
+ * price or side.
  */
 export function calculatePercentageForPrice(
   price: string,
@@ -252,7 +255,7 @@ export function calculatePercentageForPrice(
   params: TpslCalculationParams,
 ): string {
   const { currentPrice, direction } = params;
-  if (!currentPrice || !price) {
+  if (!currentPrice || !direction || !price) {
     return '';
   }
   const triggerPrice = parseFormattedPrice(price);
