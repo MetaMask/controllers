@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump `@metamask/abi-utils` from `^2.0.4` to `^3.0.0` ([#11356](https://github.com/MetaMask/core/pull/11356))
+- Bump `@metamask/snaps-controllers` from `^19.0.1` to `^22.0.1` ([#10748](https://github.com/MetaMask/core/pull/10748))
 
 ## [113.2.0]
 
