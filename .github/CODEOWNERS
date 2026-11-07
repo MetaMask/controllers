@@ -396,6 +396,14 @@
 /packages/json-rpc-middleware-stream/typedoc.json       @MetaMask/core-platform
 /packages/json-rpc-middleware-stream/vitest.config.*    @MetaMask/core-platform
 
+### key-tree
+/packages/key-tree                    @MetaMask/core-platform
+/packages/key-tree/CHANGELOG.md       @MetaMask/core-platform
+/packages/key-tree/package.json       @MetaMask/core-platform
+/packages/key-tree/tsconfig.*         @MetaMask/core-platform
+/packages/key-tree/typedoc.json       @MetaMask/core-platform
+/packages/key-tree/vitest.config.*    @MetaMask/core-platform
+
 ### keyring-controller
 /packages/keyring-controller                    @MetaMask/accounts-engineers @MetaMask/core-platform
 /packages/keyring-controller/CHANGELOG.md       @MetaMask/accounts-engineers @MetaMask/core-platform

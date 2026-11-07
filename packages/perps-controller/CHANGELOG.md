@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [22.2.0]
+
+### Added
+
+- Export shared TP/SL calculations so Mobile, Extension and Terminal compute the same RoE and trigger prices ([#11343](https://github.com/MetaMask/core/pull/11343))
+  - `calculatePriceForRoE` and `calculateSignedRoEForPrice` convert between a trigger price and a signed RoE (positive at a gain, negative at a loss, for take profit and stop loss alike), scaled by leverage, with a stop loss's loss capped at 99% per 1x of leverage
+  - `calculateRoEForPrice` returns the RoE on the trigger's own side, a take profit's gain or a stop loss's loss, and zero for a trigger on the wrong side
+  - The RoE calculations need a known `leverage`: they return `''` while it is missing rather than assume 1x, and `''` for a non-finite price, leverage or RoE
+  - RoE is measured from `entryPrice` when set and from `currentPrice` when it is omitted; a set `entryPrice` that is not a finite number above zero, such as `0` or `NaN`, gives `''` rather than falling back to `currentPrice`
+  - `calculatePriceForPercentage` and `calculatePercentageForPrice` convert between a trigger price and a price move
+  - `calculatePriceForRoE` and `calculatePriceForPercentage` keep the decimals a trigger price needs at its price, as set by `TP_SL_PRECISION_CONFIG`, without trailing zeros; the provider rounds the price to the asset's precision when the order is sent
+  - `getMaxStopLossPercentage` and `isValidStopLossPercentage` bound the stop loss percentage
+  - `isPositiveTriggerPrice`, `isValidTakeProfitPrice`, `isValidStopLossPrice` and `isStopLossSafeFromLiquidation` check a trigger price's sign, side and distance from liquidation
+  - `validateTPSLPrices` checks a take profit and stop loss pair and returns `valid`, `invalid` or `unresolved`. A set price that does not read as a positive number, or a stop loss beyond liquidation, is `invalid` even without a reference price; a set price that cannot be checked for lack of a reference price, side or readable liquidation price is `unresolved`
+  - `formatRoePercent` rounds a RoE for display
+  - `TP_SL_PRECISION_CONFIG` sets the decimals these calculations keep: per price band on a trigger price, and on a RoE or price-move percentage
+  - Types `TpslCalculationParams` and `TpslValidationResult`
+- Export `calculateAccountSummary` and `getCrossCollateral` to derive account ratio, account leverage and cross margin usage from `AccountState.crossMarginSummary`, with account leverage as cross notional over total account equity, isolated margin included, as Hyperliquid computes it ([#11343](https://github.com/MetaMask/core/pull/11343))
+  - Types `PerpsAccountSummary`, `CalculateAccountSummaryParams` and `CrossMarginSummaryInput`
+
+### Changed
+
+- Bump `@metamask/abi-utils` from `^2.0.4` to `^3.0.0` ([#11356](https://github.com/MetaMask/core/pull/11356))
+
+## [22.1.2]
+
+### Changed
+
+- Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
+
 ### Fixed
 
 - Hyperliquid account balance aggregation now uses decimal-safe arithmetic and emits canonical six-decimal USDC balances, preventing equivalent unified-account balances from differing by one atomic unit ([#11253](https://github.com/MetaMask/core/pull/11253))
@@ -1332,7 +1362,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `@metamask/controller-utils` from `^11.18.0` to `^11.19.0` ([#7995](https://github.com/MetaMask/core/pull/7995))
 
-[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.1...HEAD
+[Unreleased]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.2.0...HEAD
+[22.2.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.2...@metamask/perps-controller@22.2.0
+[22.1.2]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.1...@metamask/perps-controller@22.1.2
 [22.1.1]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.1.0...@metamask/perps-controller@22.1.1
 [22.1.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@22.0.0...@metamask/perps-controller@22.1.0
 [22.0.0]: https://github.com/MetaMask/core/compare/@metamask/perps-controller@21.0.0...@metamask/perps-controller@22.0.0
