@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump `@metamask/abi-utils` from `^2.0.4` to `^3.0.0` ([#11356](https://github.com/MetaMask/core/pull/11356))
+- Bump `@tanstack/query-core` from `^5.103.2` to `^5.105.3` ([#10740](https://github.com/MetaMask/core/pull/10740))
 
 ## [113.2.0]
 
