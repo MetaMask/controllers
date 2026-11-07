@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump `@metamask/transaction-controller` from `^73.1.0` to `^73.1.1` ([#11300](https://github.com/MetaMask/core/pull/11300))
+- Bump `@tanstack/query-core` from `^5.103.2` to `^5.105.3` ([#10740](https://github.com/MetaMask/core/pull/10740))
 
 ## [15.2.0]
 

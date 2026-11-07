@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump `uuid` from `^14.0.1` to `^14.0.2` ([#11305](https://github.com/MetaMask/core/pull/11305))
+- Bump `@tanstack/query-core` from `^5.103.2` to `^5.105.3` ([#10740](https://github.com/MetaMask/core/pull/10740))
 
 ## [14.0.0]
 
