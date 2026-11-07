@@ -2,6 +2,10 @@
  * MFA recovery protocol types from the recovery ADR.
  */
 
+import type { SeedlessAuthData } from '@metamask/seedless-onboarding-controller';
+
+export type { SeedlessAuthData };
+
 export type Identifier = {
   type: string;
   namespace: string;
@@ -98,12 +102,37 @@ export type KeyBoundCredential = {
 };
 
 /**
+ * Parameters for requesting a key-bound identifier token from an IdP.
+ */
+export type KeyBoundIdentifierTokenRequest = {
+  identifier: Identifier;
+  /**
+   * Raw 32-byte Ed25519 public key to bind into the token.
+   */
+  proofPublicKey: Uint8Array;
+  requestHash: string;
+};
+
+/**
+ * Result of one identifier login. `token` is the key-bound recovery material
+ * presented to escrows (its `providerAssertion` carries the provider ID token
+ * or assertion). `seedlessAuthData` is present when the IdP issued seedless
+ * auth-server tokens in the same exchange (social logins); passkey / SIWE
+ * omit it.
+ */
+export type KeyBoundIdentifierLogin = {
+  token: KeyBoundIdentifierToken;
+  seedlessAuthData?: SeedlessAuthData;
+};
+
+/**
  * Result of first-factor identifier authentication, consumed by
  * `getRecoverySecret`.
  *
  * `proofPrivateKey` signs escrow challenges. `ephemeralPrivateKey` is the
  * private half of `pkE` and decrypts the recovery secret. Keep both in
- * memory only.
+ * memory only. Does not carry seedless auth-server tokens — those are
+ * returned beside the session from {@link AuthenticateIdentifierResult}.
  */
 export type IdentifierSession = KeyBoundCredential & {
   requestId: string;
@@ -115,6 +144,17 @@ export type IdentifierSession = KeyBoundCredential & {
    * Raw 32-byte X25519 public key, the client's one-time read key.
    */
   pkE: Uint8Array;
+};
+
+/**
+ * Result of `authenticateIdentifier`. `seedlessAuthData` is present when the
+ * login also completed a seedless auth-server exchange. Callers that need it
+ * use it for `SeedlessOnboardingController.authenticate` and then drop it;
+ * keep only `session` for a later `getRecoverySecret`.
+ */
+export type AuthenticateIdentifierResult = {
+  session: IdentifierSession;
+  seedlessAuthData?: SeedlessAuthData;
 };
 
 /**
@@ -271,14 +311,16 @@ export type RecoveryAuthProvider = {
  * Obtains a key-bound identifier assertion from an IdP (OIDC, Passkey, SIWE).
  */
 export type RecoveryIdentifierAuthProvider = {
-  getKeyBoundIdentifierToken: (params: {
-    identifier: Identifier;
-    /**
-     * Raw 32-byte Ed25519 public key to bind into the token.
-     */
-    proofPublicKey: Uint8Array;
-    requestHash: string;
-  }) => Promise<KeyBoundIdentifierToken>;
+  /**
+   * One identifier login. Returns the key-bound token, bound to the requested
+   * `proofPublicKey` and `requestHash`, and any seedless auth-server tokens
+   * from the same exchange. Omit `seedlessAuthData` when the IdP does not
+   * issue it (e.g. passkey). Every controller path calls this method and uses
+   * only the parts it needs.
+   */
+  getKeyBoundIdentifierLogin: (
+    params: KeyBoundIdentifierTokenRequest,
+  ) => Promise<KeyBoundIdentifierLogin>;
 };
 
 /**

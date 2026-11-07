@@ -107,7 +107,7 @@ Updates and reads prove control of a registered identifier:
 
 The proof private key never leaves the controller/caller; read sessions keep it
 in memory. `register` sends `null` instead of an identifier proof. Implementation:
-`requestKeyBoundIdentifierToken` and `authorizeEscrowsWithToken` in `src/identifier-auth.ts`.
+`requestIdentifierLogin` and `authorizeEscrowsWithToken` in `src/identifier-auth.ts`.
 
 ## Read: `authenticateIdentifier`, `getRecoverySecret`
 
