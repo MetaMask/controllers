@@ -19,5 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `@noble/curves` from `^1.8.1` to `^1.9.7`, `@noble/hashes` from `^1.3.2` to `^1.8.0`, and `@scure/base` from `^1.0.0` to `^1.2.6` ([#11361](https://github.com/MetaMask/core/pull/11361))
 - This package was migrated from `MetaMask/key-tree` to the `MetaMask/core` monorepo ([#11354](https://github.com/MetaMask/core/pull/11354))
   - See [`MetaMask/key-tree`](https://github.com/MetaMask/key-tree/blob/742c995fa27144d038941df5bddbc7351ee0e8ff/CHANGELOG.md) for the original changelog.
+- Bump `@scure/base` from `^1.2.6` to `^2.4.0` ([#10596](https://github.com/MetaMask/core/pull/10596))
 
 [Unreleased]: https://github.com/MetaMask/core/
