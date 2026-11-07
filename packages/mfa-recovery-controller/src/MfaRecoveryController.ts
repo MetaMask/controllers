@@ -34,7 +34,7 @@ import {
   getIdentifierAuthMode,
   MIN_IDENTIFIERS,
   requestIdentifierLogin,
-  requestKeyBoundIdentifierToken,
+  validateSeedlessAuthData,
 } from './identifier-auth.js';
 import type { AuthorizedEscrow } from './identifier-auth.js';
 import type { MfaRecoveryControllerMethodActions } from './MfaRecoveryController-method-action-types.js';
@@ -45,7 +45,6 @@ import {
 } from './pending-operation-validation.js';
 import { assertAbortAllowed, getRecoveryPhase } from './state-machine.js';
 import type {
-  AuthenticateIdentifierOptions,
   AuthenticateIdentifierResult,
   Identifier,
   IdentifierSession,
@@ -62,7 +61,6 @@ import type {
   RecoveryIdentifierAuthProvider,
   RecoveryPhase,
   RecoveredSecret,
-  SeedlessAuthenticateIdentifierResult,
   WrappedSecret,
   WritingPendingOperation,
 } from './types.js';
@@ -327,31 +325,16 @@ export class MfaRecoveryController extends BaseController<
    * Authenticates an identifier with a single login. Returns an ephemeral
    * `session` for {@link getRecoverySecret} and, for seedless social logins,
    * `seedlessAuthData` for `SeedlessOnboardingController.authenticate`.
-   * Callers should drop `seedlessAuthData` after seedless authenticate and
-   * keep only `session` for recovery reads.
+   * Callers decide whether they need `seedlessAuthData` (and its
+   * `revokeToken`), drop it after seedless authenticate, and keep only
+   * `session` for recovery reads.
    *
    * @param identifier - Identifier to authenticate.
-   * @param options - Authentication options.
-   * @param options.requireSeedlessAuthData - Fail unless the login returns
-   * complete seedless auth data (including `revokeToken`). Set for the
-   * seedless password unlock path.
-   * @returns Session for recovery reads, plus seedless auth data when present.
+   * @returns Session for recovery reads, plus seedless auth data when the
+   * login returned it.
    */
   async authenticateIdentifier(
     identifier: Identifier,
-    options: AuthenticateIdentifierOptions & {
-      requireSeedlessAuthData: true;
-    },
-  ): Promise<SeedlessAuthenticateIdentifierResult>;
-
-  async authenticateIdentifier(
-    identifier: Identifier,
-    options?: AuthenticateIdentifierOptions,
-  ): Promise<AuthenticateIdentifierResult>;
-
-  async authenticateIdentifier(
-    identifier: Identifier,
-    { requireSeedlessAuthData = false }: AuthenticateIdentifierOptions = {},
   ): Promise<AuthenticateIdentifierResult> {
     this.#assertKnownIdentifierTypes([identifier]);
     const requestId = randomId();
@@ -366,7 +349,6 @@ export class MfaRecoveryController extends BaseController<
       identifier,
       requestHash,
       identifierAuthProvider: this.#identifierAuthProvider,
-      requireSeedlessAuthData,
     });
     const session: IdentifierSession = {
       ...credential,
@@ -376,7 +358,13 @@ export class MfaRecoveryController extends BaseController<
     };
     return seedlessAuthData === undefined
       ? { session }
-      : { session, seedlessAuthData };
+      : {
+          session,
+          seedlessAuthData: validateSeedlessAuthData(
+            seedlessAuthData,
+            identifier,
+          ),
+        };
   }
 
   /**
@@ -727,12 +715,23 @@ export class MfaRecoveryController extends BaseController<
     requestHash: string;
   }): Promise<AuthorizedEscrow[]> {
     getIdentifierAuthMode(identifier.type);
-    const credential = await requestKeyBoundIdentifierToken({
+    const { token, proofPrivateKey } = await requestIdentifierLogin({
       identifier,
       requestHash,
       identifierAuthProvider: this.#identifierAuthProvider,
     });
-    return await authorizeEscrowsWithToken({ escrows, credential });
+    // Writes authorize a registered identifier, so the subject must match
+    // exactly; only reads may discover it from an empty value.
+    if (token.identifier.value !== identifier.value) {
+      throw new MfaRecoveryError(
+        'Identifier token is not bound to this request',
+        'invalid_identifier_token',
+      );
+    }
+    return await authorizeEscrowsWithToken({
+      escrows,
+      credential: { token, proofPrivateKey },
+    });
   }
 
   async #payloadForEscrow(

@@ -24,43 +24,38 @@ mutation can then be aborted. Set `CubistEscrowProviderOptions.authAudience` to 
 
 ## Seedless password unlock
 
-`authenticateIdentifier` prefers optional
-`RecoveryIdentifierAuthProvider.getKeyBoundIdentifierLogin` when present, and
-otherwise uses `getKeyBoundIdentifierToken`. Mutation writes
-(`updateRecoverySecret` / `updateIdentifiers`) always use
-`getKeyBoundIdentifierToken`, so they never mint auth-server tokens that would
-be dropped.
+`RecoveryIdentifierAuthProvider` has one method, `getKeyBoundIdentifierLogin`.
+It performs one identifier login and returns the key-bound recovery `token`
+plus, for social logins, the seedless auth-server token set
+(`seedlessAuthData`). Every controller path calls it and uses only what it
+needs: `authenticateIdentifier` returns both, and mutation writes
+(`updateRecoverySecret` / `updateIdentifiers`) use only the token and never
+send `seedlessAuthData` to escrows.
 
 `seedlessAuthData` on the result is **optional**: passkey / SIWE logins omit
-it; only seedless social password unlock needs it. For that path, implement
-`getKeyBoundIdentifierLogin` to perform one AAL1 social login and return the
-key-bound recovery token plus the auth-server token set, then call:
+it. The caller decides whether it needs it. For seedless social password
+unlock, check that it is present (including `revokeToken`):
 
 ```typescript
 const { session, seedlessAuthData } =
-  await mfaRecoveryController.authenticateIdentifier(identifier, {
-    requireSeedlessAuthData: true,
-  });
+  await mfaRecoveryController.authenticateIdentifier(identifier);
+if (!seedlessAuthData?.revokeToken) {
+  throw new Error('Social login did not return seedless auth data');
+}
 
-const { authConnection, ...seedlessAuthFields } = seedlessAuthData;
-await seedlessOnboardingController.authenticate({
-  ...seedlessAuthFields,
-  // Values match `AuthConnection`; cast if your TS treats string enums nominally.
-  authConnection: authConnection as AuthConnection,
-});
+await seedlessOnboardingController.authenticate(seedlessAuthData);
 // Prompt for the password, evaluate TOPRF, and decrypt the vault.
 // Keep `session` only if a later getRecoverySecret is needed; drop seedlessAuthData.
 ```
 
-With `requireSeedlessAuthData: true`, the result is a
-`SeedlessAuthenticateIdentifierResult`: `seedlessAuthData` (including
-`revokeToken`) beside a key-bound `session`. Without that flag (default), the
-result is an `AuthenticateIdentifierResult` and missing seedless data is fine
-— e.g. passkey. `authConnection` is checked against the social identifier's
-issuer namespace (provider match only) and uses the same string values as
-seedless `AuthConnection`. Cast to `AuthConnection` if TypeScript treats that
-enum nominally. Pass only `session` to `getRecoverySecret(session)` later —
-do not keep auth-server tokens on the session object.
+`seedlessAuthData` is the `SeedlessAuthData` type from
+`@metamask/seedless-onboarding-controller`, the parameters of
+`SeedlessOnboardingController.authenticate` without `skipLock`. When present,
+it is checked with `parseSeedlessAuthData` from that package (required fields
+present, unknown fields stripped) and its `authConnection` is checked against
+the social identifier's issuer namespace using `AUTH_CONNECTION_BY_NAMESPACE`
+(provider match only). Pass only `session` to `getRecoverySecret(session)`
+later — do not keep auth-server tokens on the session object.
 
 The seedless auth data comes only from the AAL1 social login and is never sent
 to recovery escrows. `getRecoverySecret` separately requests its AAL2

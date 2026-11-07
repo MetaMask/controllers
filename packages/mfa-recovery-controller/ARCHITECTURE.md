@@ -144,7 +144,7 @@ sequenceDiagram
   M->>E: isAvailable (remaining escrows)
   M->>M: reuse token, or re-issue it if exp <= now()
   alt not register
-    M->>I: getKeyBoundIdentifierToken
+    M->>I: getKeyBoundIdentifierLogin (uses token, ignores seedlessAuthData)
     M->>E: generateChallenge + PoP per remaining escrow (all required)
   end
   M->>M: wrap secret per escrow, persist writing
@@ -250,8 +250,8 @@ sequenceDiagram
   C->>M: authenticateIdentifier(identifier)
   M->>M: generate requestId, proof key, and ephemeral pkE
   M->>M: requestHash = hash(getRecoverySecret, requestId, pkE)
-  M->>I: getKeyBoundIdentifierToken
-  M-->>C: IdentifierSession
+  M->>I: getKeyBoundIdentifierLogin
+  M-->>C: session and seedlessAuthData if returned
   C->>M: getRecoverySecret(session)
   M->>M: recompute and validate requestHash
   M->>E: isAvailable (failures skipped)

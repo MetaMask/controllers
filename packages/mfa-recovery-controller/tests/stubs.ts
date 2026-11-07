@@ -1,4 +1,5 @@
 import type { KeyPair } from '@metamask/cryptography';
+import { AuthConnection } from '@metamask/seedless-onboarding-controller';
 import {
   bytesToBase64,
   bytesToHex,
@@ -29,7 +30,6 @@ import type {
   Identifier,
   IdentifierAuthorization,
   KeyBoundIdentifierLogin,
-  KeyBoundIdentifierToken,
   KeyBoundIdentifierTokenRequest,
   Mutation,
   MutationPayload,
@@ -139,20 +139,20 @@ export class StubAuthProvider implements RecoveryAuthProvider {
  * In-memory identifier IdP used in tests.
  */
 export class StubIdentifierAuthProvider implements RecoveryIdentifierAuthProvider {
-  async getKeyBoundIdentifierToken(params: {
-    identifier: Identifier;
-    proofPublicKey: Uint8Array;
-    requestHash: string;
-  }): Promise<KeyBoundIdentifierToken> {
+  async getKeyBoundIdentifierLogin(
+    params: KeyBoundIdentifierTokenRequest,
+  ): Promise<KeyBoundIdentifierLogin> {
     return {
-      identifier: params.identifier,
-      proofPublicKey: params.proofPublicKey,
-      requestHash: params.requestHash,
-      providerAssertion: {
-        bound: await hash({
-          proofPublicKey: params.proofPublicKey,
-          requestHash: params.requestHash,
-        }),
+      token: {
+        identifier: params.identifier,
+        proofPublicKey: params.proofPublicKey,
+        requestHash: params.requestHash,
+        providerAssertion: {
+          bound: await hash({
+            proofPublicKey: params.proofPublicKey,
+            requestHash: params.requestHash,
+          }),
+        },
       },
     };
   }
@@ -164,7 +164,7 @@ export const STUB_SEEDLESS_AUTH_DATA: SeedlessAuthData = {
   metadataAccessToken: 'seedless-metadata-access-token',
   refreshToken: 'seedless-refresh-token',
   revokeToken: 'seedless-revoke-token',
-  authConnection: 'google',
+  authConnection: AuthConnection.Google,
   authConnectionId: 'auth-connection-id',
   groupedAuthConnectionId: 'grouped-auth-connection-id',
   userId: 'user@example.com',
@@ -182,7 +182,7 @@ export class StubSeedlessIdentifierAuthProvider extends StubIdentifierAuthProvid
   async getKeyBoundIdentifierLogin(
     params: KeyBoundIdentifierTokenRequest,
   ): Promise<KeyBoundIdentifierLogin> {
-    const token = await super.getKeyBoundIdentifierToken(params);
+    const { token } = await super.getKeyBoundIdentifierLogin(params);
     return {
       token: {
         ...token,

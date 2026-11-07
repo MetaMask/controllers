@@ -39,13 +39,8 @@ export {
   expectedSeedlessAuthConnection,
   getIdentifierAuthMode,
 } from './identifier-auth.js';
-export {
-  SEEDLESS_AUTH_CONNECTIONS,
-  SEEDLESS_AUTH_CONNECTION_BY_NAMESPACE,
-} from './types.js';
 export type {
   AuthControllerToken,
-  AuthenticateIdentifierOptions,
   AuthenticateIdentifierResult,
   EncryptedPendingOperation,
   Identifier,
@@ -70,9 +65,7 @@ export type {
   RecoveryIdentifierAuthProvider,
   RecoveryPhase,
   RecoveredSecret,
-  SeedlessAuthConnection,
   SeedlessAuthData,
-  SeedlessAuthenticateIdentifierResult,
   WrappedSecret,
   WrappedSecretOutput,
 } from './types.js';

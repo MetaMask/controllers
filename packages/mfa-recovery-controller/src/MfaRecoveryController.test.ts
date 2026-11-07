@@ -5,6 +5,7 @@ import type {
   MessengerActions,
   MessengerEvents,
 } from '@metamask/messenger';
+import { AuthConnection } from '@metamask/seedless-onboarding-controller';
 import { bytesToHex } from '@metamask/utils';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -359,19 +360,19 @@ describe('MfaRecoveryController', () => {
       });
     });
 
-    it('does not request another token when reading with a session', async () => {
+    it('does not log in again when reading with a session', async () => {
       await withController(async ({ controller, options }) => {
         await controller.register(SECRET, IDENTIFIERS);
-        const getToken = vi.spyOn(
+        const login = vi.spyOn(
           options.identifierAuthProvider,
-          'getKeyBoundIdentifierToken',
+          'getKeyBoundIdentifierLogin',
         );
 
         const { session } = await controller.authenticateIdentifier(PASSKEY);
-        expect(getToken).toHaveBeenCalledTimes(1);
+        expect(login).toHaveBeenCalledTimes(1);
 
         await controller.getRecoverySecret(session);
-        expect(getToken).toHaveBeenCalledTimes(1);
+        expect(login).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -391,31 +392,33 @@ describe('MfaRecoveryController', () => {
       });
     });
 
-    it('uses getKeyBoundIdentifierToken when the provider has no login method', async () => {
+    it('omits seedlessAuthData when the login returns none', async () => {
       await withController(async ({ controller, options }) => {
-        const getToken = vi.spyOn(
+        const login = vi.spyOn(
           options.identifierAuthProvider,
-          'getKeyBoundIdentifierToken',
+          'getKeyBoundIdentifierLogin',
         );
 
         const result = await controller.authenticateIdentifier(SOCIAL);
 
-        expect(getToken).toHaveBeenCalledTimes(1);
+        expect(login).toHaveBeenCalledTimes(1);
         expect(result).not.toHaveProperty('seedlessAuthData');
         expect(result.session.token.identifier).toStrictEqual(SOCIAL);
       });
     });
 
-    it('rejects getKeyBoundIdentifierToken results not bound to the request', async () => {
+    it('rejects login tokens not bound to the request', async () => {
       const identifierAuthProvider = new StubIdentifierAuthProvider();
       vi.spyOn(
         identifierAuthProvider,
-        'getKeyBoundIdentifierToken',
+        'getKeyBoundIdentifierLogin',
       ).mockImplementation(async (params) => ({
-        identifier: params.identifier,
-        proofPublicKey: params.proofPublicKey,
-        requestHash: '0xother-request',
-        providerAssertion: {},
+        token: {
+          identifier: params.identifier,
+          proofPublicKey: params.proofPublicKey,
+          requestHash: '0xother-request',
+          providerAssertion: {},
+        },
       }));
       await withController(
         { identifierAuthProvider },
@@ -427,16 +430,18 @@ describe('MfaRecoveryController', () => {
       );
     });
 
-    it('rejects getKeyBoundIdentifierToken results for another identifier', async () => {
+    it('rejects login tokens for another identifier', async () => {
       const identifierAuthProvider = new StubIdentifierAuthProvider();
       vi.spyOn(
         identifierAuthProvider,
-        'getKeyBoundIdentifierToken',
+        'getKeyBoundIdentifierLogin',
       ).mockImplementation(async (params) => ({
-        identifier: OTHER_PASSKEY,
-        proofPublicKey: params.proofPublicKey,
-        requestHash: params.requestHash,
-        providerAssertion: {},
+        token: {
+          identifier: OTHER_PASSKEY,
+          proofPublicKey: params.proofPublicKey,
+          requestHash: params.requestHash,
+          providerAssertion: {},
+        },
       }));
       await withController(
         { identifierAuthProvider },
@@ -453,33 +458,19 @@ describe('MfaRecoveryController', () => {
         await controller.register(SECRET, IDENTIFIERS);
         vi.spyOn(
           options.identifierAuthProvider,
-          'getKeyBoundIdentifierToken',
+          'getKeyBoundIdentifierLogin',
         ).mockImplementation(async (params) => ({
-          identifier: OTHER_PASSKEY,
-          proofPublicKey: params.proofPublicKey,
-          requestHash: params.requestHash,
-          providerAssertion: {},
+          token: {
+            identifier: OTHER_PASSKEY,
+            proofPublicKey: params.proofPublicKey,
+            requestHash: params.requestHash,
+            providerAssertion: {},
+          },
         }));
 
         await expect(
           controller.updateRecoverySecret(PASSKEY, SECRET_2, REGISTERED_EPOCH),
         ).rejects.toMatchObject({ code: 'invalid_identifier_token' });
-      });
-    });
-
-    it('rejects before prompting when seedless auth data is required but the provider has no login method', async () => {
-      await withController(async ({ controller, options }) => {
-        const getToken = vi.spyOn(
-          options.identifierAuthProvider,
-          'getKeyBoundIdentifierToken',
-        );
-
-        await expect(
-          controller.authenticateIdentifier(SOCIAL, {
-            requireSeedlessAuthData: true,
-          }),
-        ).rejects.toMatchObject({ code: 'missing_seedless_auth_data' });
-        expect(getToken).not.toHaveBeenCalled();
       });
     });
 
@@ -493,18 +484,11 @@ describe('MfaRecoveryController', () => {
               identifierAuthProvider,
               'getKeyBoundIdentifierLogin',
             );
-            const getToken = vi.spyOn(
-              identifierAuthProvider,
-              'getKeyBoundIdentifierToken',
-            );
 
             const { session, seedlessAuthData } =
-              await controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              });
+              await controller.authenticateIdentifier(SOCIAL);
 
             expect(login).toHaveBeenCalledTimes(1);
-            expect(getToken).not.toHaveBeenCalled();
             expect(seedlessAuthData).toStrictEqual(STUB_SEEDLESS_AUTH_DATA);
             expect(session).not.toHaveProperty('seedlessAuthData');
             expect(session.token.identifier).toStrictEqual(SOCIAL);
@@ -527,14 +511,13 @@ describe('MfaRecoveryController', () => {
         );
       });
 
-      it('is callable through the messenger with options', async () => {
+      it('is callable through the messenger', async () => {
         await withController(
           { identifierAuthProvider: new StubSeedlessIdentifierAuthProvider() },
           async ({ rootMessenger }) => {
             const result = await rootMessenger.call(
               'MfaRecoveryController:authenticateIdentifier',
               SOCIAL,
-              { requireSeedlessAuthData: true },
             );
 
             expect(result.seedlessAuthData).toStrictEqual(
@@ -555,17 +538,8 @@ describe('MfaRecoveryController', () => {
               identifierAuthProvider,
               'getKeyBoundIdentifierLogin',
             );
-            const getToken = vi.spyOn(
-              identifierAuthProvider,
-              'getKeyBoundIdentifierToken',
-            );
 
-            const { session } = await controller.authenticateIdentifier(
-              SOCIAL,
-              {
-                requireSeedlessAuthData: true,
-              },
-            );
+            const { session } = await controller.authenticateIdentifier(SOCIAL);
             const recovered = await controller.getRecoverySecret(session);
 
             expect(bytesToHex(recovered.recoverySecret)).toBe(
@@ -573,7 +547,6 @@ describe('MfaRecoveryController', () => {
             );
             expect(recovered.epoch).toBe(REGISTERED_EPOCH);
             expect(login).toHaveBeenCalledTimes(1);
-            expect(getToken).not.toHaveBeenCalled();
           },
         );
       });
@@ -586,9 +559,7 @@ describe('MfaRecoveryController', () => {
             const getSecret = vi.spyOn(escrowA, 'getSecret');
 
             const { session, seedlessAuthData } =
-              await controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              });
+              await controller.authenticateIdentifier(SOCIAL);
             await controller.getRecoverySecret(session);
 
             const sent = JSON.stringify(getSecret.mock.calls[0]);
@@ -619,9 +590,7 @@ describe('MfaRecoveryController', () => {
               'authorizeRecoveryRequest',
             );
 
-            await controller.authenticateIdentifier(SOCIAL, {
-              requireSeedlessAuthData: true,
-            });
+            await controller.authenticateIdentifier(SOCIAL);
 
             expect(authorize).not.toHaveBeenCalled();
           },
@@ -639,16 +608,14 @@ describe('MfaRecoveryController', () => {
           { identifierAuthProvider },
           async ({ controller }) => {
             const { seedlessAuthData } =
-              await controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              });
+              await controller.authenticateIdentifier(SOCIAL);
 
             expect(seedlessAuthData).toStrictEqual(STUB_SEEDLESS_AUTH_DATA);
           },
         );
       });
 
-      it('accepts seedless auth data without optional non-revoke fields when required', async () => {
+      it('accepts seedless auth data without optional fields', async () => {
         const {
           groupedAuthConnectionId: _groupedAuthConnectionId,
           socialLoginEmail: _socialLoginEmail,
@@ -660,16 +627,14 @@ describe('MfaRecoveryController', () => {
           { identifierAuthProvider },
           async ({ controller }) => {
             const { seedlessAuthData } =
-              await controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              });
+              await controller.authenticateIdentifier(SOCIAL);
 
             expect(seedlessAuthData).toStrictEqual(required);
           },
         );
       });
 
-      it('accepts seedless auth data without revokeToken when not required', async () => {
+      it('returns seedless auth data without revokeToken for the client to check', async () => {
         const { revokeToken: _revokeToken, ...withoutRevoke } =
           STUB_SEEDLESS_AUTH_DATA;
         const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
@@ -685,36 +650,17 @@ describe('MfaRecoveryController', () => {
         );
       });
 
-      it('rejects missing revokeToken when seedless auth data is required', async () => {
-        const { revokeToken: _revokeToken, ...withoutRevoke } =
-          STUB_SEEDLESS_AUTH_DATA;
-        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
-        identifierAuthProvider.seedlessAuthData = withoutRevoke;
-        await withController(
-          { identifierAuthProvider },
-          async ({ controller }) => {
-            await expect(
-              controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              }),
-            ).rejects.toMatchObject({ code: 'invalid_seedless_auth_data' });
-          },
-        );
-      });
-
       it('rejects seedless auth data whose authConnection does not match the identifier', async () => {
         const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
         identifierAuthProvider.seedlessAuthData = {
           ...STUB_SEEDLESS_AUTH_DATA,
-          authConnection: 'apple',
+          authConnection: AuthConnection.Apple,
         };
         await withController(
           { identifierAuthProvider },
           async ({ controller }) => {
             await expect(
-              controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              }),
+              controller.authenticateIdentifier(SOCIAL),
             ).rejects.toMatchObject({ code: 'invalid_seedless_auth_data' });
           },
         );
@@ -747,9 +693,7 @@ describe('MfaRecoveryController', () => {
           { identifierAuthProvider },
           async ({ controller }) => {
             const { session, seedlessAuthData } =
-              await controller.authenticateIdentifier(socialWithoutSubject, {
-                requireSeedlessAuthData: true,
-              });
+              await controller.authenticateIdentifier(socialWithoutSubject);
 
             expect(seedlessAuthData).toStrictEqual(STUB_SEEDLESS_AUTH_DATA);
             expect(session.token.identifier).toStrictEqual({
@@ -767,9 +711,7 @@ describe('MfaRecoveryController', () => {
           { identifierAuthProvider },
           async ({ controller }) => {
             await expect(
-              controller.authenticateIdentifier(socialWithoutSubject, {
-                requireSeedlessAuthData: true,
-              }),
+              controller.authenticateIdentifier(socialWithoutSubject),
             ).rejects.toMatchObject({ code: 'invalid_identifier_token' });
           },
         );
@@ -781,15 +723,13 @@ describe('MfaRecoveryController', () => {
           { identifierAuthProvider },
           async ({ controller }) => {
             await expect(
-              controller.authenticateIdentifier(PASSKEY, {
-                requireSeedlessAuthData: true,
-              }),
+              controller.authenticateIdentifier(PASSKEY),
             ).rejects.toMatchObject({ code: 'invalid_seedless_auth_data' });
           },
         );
       });
 
-      it('returns a recovery session without seedless auth data when not required', async () => {
+      it('returns a recovery session without seedless auth data when the login returns none', async () => {
         const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
         identifierAuthProvider.seedlessAuthData = undefined;
         await withController(
@@ -806,21 +746,6 @@ describe('MfaRecoveryController', () => {
             expect(bytesToHex(recovered.recoverySecret)).toBe(
               bytesToHex(SECRET),
             );
-          },
-        );
-      });
-
-      it('rejects when seedless auth data is required but the login returned none', async () => {
-        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
-        identifierAuthProvider.seedlessAuthData = undefined;
-        await withController(
-          { identifierAuthProvider },
-          async ({ controller }) => {
-            await expect(
-              controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              }),
-            ).rejects.toMatchObject({ code: 'missing_seedless_auth_data' });
           },
         );
       });
@@ -896,24 +821,6 @@ describe('MfaRecoveryController', () => {
         identifierAuthProvider.seedlessAuthData = update(
           STUB_SEEDLESS_AUTH_DATA,
         ) as SeedlessAuthData;
-        await withController(
-          { identifierAuthProvider },
-          async ({ controller }) => {
-            await expect(
-              controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              }),
-            ).rejects.toMatchObject({ code: 'invalid_seedless_auth_data' });
-          },
-        );
-      });
-
-      it('rejects incomplete seedless auth data even when not required', async () => {
-        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
-        identifierAuthProvider.seedlessAuthData = {
-          ...STUB_SEEDLESS_AUTH_DATA,
-          accessToken: '',
-        };
         await withController(
           { identifierAuthProvider },
           async ({ controller }) => {
@@ -1021,9 +928,7 @@ describe('MfaRecoveryController', () => {
           { identifierAuthProvider },
           async ({ controller }) => {
             await expect(
-              controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              }),
+              controller.authenticateIdentifier(SOCIAL),
             ).rejects.toMatchObject({ code: 'invalid_identifier_token' });
           },
         );
@@ -1039,28 +944,23 @@ describe('MfaRecoveryController', () => {
           { identifierAuthProvider },
           async ({ controller }) => {
             await expect(
-              controller.authenticateIdentifier(SOCIAL, {
-                requireSeedlessAuthData: true,
-              }),
+              controller.authenticateIdentifier(SOCIAL),
             ).rejects.toThrow('token exchange failed');
           },
         );
       });
 
-      it('uses getKeyBoundIdentifierToken for writes even when login is available', async () => {
+      it('does not send seedless auth data to escrows on writes', async () => {
         const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
         await withController(
           { identifierAuthProvider },
-          async ({ controller }) => {
+          async ({ controller, escrowA }) => {
             await controller.register(SECRET, IDENTIFIERS);
             const login = vi.spyOn(
               identifierAuthProvider,
               'getKeyBoundIdentifierLogin',
             );
-            const getToken = vi.spyOn(
-              identifierAuthProvider,
-              'getKeyBoundIdentifierToken',
-            );
+            const applyMutation = vi.spyOn(escrowA, 'applyMutation');
 
             await controller.updateRecoverySecret(
               SOCIAL,
@@ -1068,8 +968,39 @@ describe('MfaRecoveryController', () => {
               REGISTERED_EPOCH,
             );
 
-            expect(login).not.toHaveBeenCalled();
-            expect(getToken).toHaveBeenCalled();
+            expect(login).toHaveBeenCalledTimes(1);
+            const sent = JSON.stringify(applyMutation.mock.calls[0]);
+            for (const token of [
+              ...STUB_SEEDLESS_AUTH_DATA.idTokens,
+              STUB_SEEDLESS_AUTH_DATA.accessToken,
+              STUB_SEEDLESS_AUTH_DATA.metadataAccessToken,
+              STUB_SEEDLESS_AUTH_DATA.refreshToken,
+              STUB_SEEDLESS_AUTH_DATA.revokeToken,
+            ]) {
+              expect(sent).not.toContain(token);
+            }
+          },
+        );
+      });
+
+      it('ignores invalid seedless auth data on writes', async () => {
+        const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
+        identifierAuthProvider.seedlessAuthData = {
+          ...STUB_SEEDLESS_AUTH_DATA,
+          authConnection: AuthConnection.Apple,
+        };
+        await withController(
+          { identifierAuthProvider },
+          async ({ controller }) => {
+            await controller.register(SECRET, IDENTIFIERS);
+
+            expect(
+              await controller.updateRecoverySecret(
+                SOCIAL,
+                SECRET_2,
+                REGISTERED_EPOCH,
+              ),
+            ).toBeUndefined();
           },
         );
       });
@@ -1077,19 +1008,22 @@ describe('MfaRecoveryController', () => {
       it('rejects empty identifier values on writes even when the token discovers a subject', async () => {
         const socialWithoutSubject: Identifier = { ...SOCIAL, value: '' };
         const identifierAuthProvider = new StubSeedlessIdentifierAuthProvider();
-        const getToken = identifierAuthProvider.getKeyBoundIdentifierToken.bind(
+        const login = identifierAuthProvider.getKeyBoundIdentifierLogin.bind(
           identifierAuthProvider,
         );
         vi.spyOn(
           identifierAuthProvider,
-          'getKeyBoundIdentifierToken',
+          'getKeyBoundIdentifierLogin',
         ).mockImplementation(async (params) => {
-          const token = await getToken(params);
+          const result = await login(params);
           return {
-            ...token,
-            identifier: {
-              ...params.identifier,
-              value: 'provider-oidc-sub',
+            ...result,
+            token: {
+              ...result.token,
+              identifier: {
+                ...params.identifier,
+                value: 'provider-oidc-sub',
+              },
             },
           };
         });

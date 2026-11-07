@@ -2,37 +2,9 @@
  * MFA recovery protocol types from the recovery ADR.
  */
 
-/**
- * Social login providers accepted by seedless authenticate. Values match
- * `SeedlessOnboardingController`'s `AuthConnection` enum (`google`, `apple`,
- * `telegram`). Kept as a local constant so this package does not depend on
- * seedless-onboarding-controller.
- */
-export const SEEDLESS_AUTH_CONNECTIONS = [
-  'google',
-  'apple',
-  'telegram',
-] as const;
+import type { SeedlessAuthData } from '@metamask/seedless-onboarding-controller';
 
-/**
- * Social login provider for {@link SeedlessAuthData}.
- */
-export type SeedlessAuthConnection = (typeof SEEDLESS_AUTH_CONNECTIONS)[number];
-
-/**
- * OIDC issuer namespaces for {@link Identifier} `type: 'social'`, mapped to
- * {@link SeedlessAuthConnection}. Used to check that `seedlessAuthData.authConnection`
- * matches the authenticated identifier's IdP namespace (provider check only;
- * subject / `userId` are not compared).
- */
-export const SEEDLESS_AUTH_CONNECTION_BY_NAMESPACE: Record<
-  string,
-  SeedlessAuthConnection
-> = {
-  'https://accounts.google.com': 'google',
-  'https://appleid.apple.com': 'apple',
-  'https://oauth.telegram.org': 'telegram',
-};
+export type { SeedlessAuthData };
 
 export type Identifier = {
   type: string;
@@ -130,46 +102,6 @@ export type KeyBoundCredential = {
 };
 
 /**
- * Seedless auth-server tokens and social login details issued by the same
- * login that produced a key-bound identifier token. The fields match the
- * parameters of `SeedlessOnboardingController.authenticate` (without
- * `skipLock`), so the password unlock path can authenticate without a second
- * social prompt.
- *
- * These tokens come from the AAL1 social login exchange, never from an AAL2
- * recovery approval. They are never sent to escrows. Keep in memory only.
- */
-export type SeedlessAuthData = {
-  /**
-   * ID token(s) verified by the TOPRF nodes.
-   */
-  idTokens: string[];
-  accessToken: string;
-  metadataAccessToken: string;
-  refreshToken: string;
-  /**
-   * Required when `authenticateIdentifier` is called with
-   * `requireSeedlessAuthData: true` (password unlock / vault path). Optional
-   * when seedless auth data is returned without that requirement.
-   */
-  revokeToken?: string;
-  /**
-   * Social login provider. Values match `SeedlessOnboardingController`'s
-   * `AuthConnection` enum (`google`, `apple`, `telegram`). Validated against
-   * the authenticated social identifier's issuer namespace (provider match
-   * only; not subject / `userId`).
-   */
-  authConnection: SeedlessAuthConnection;
-  authConnectionId: string;
-  groupedAuthConnectionId?: string;
-  /**
-   * User email or id from the social login.
-   */
-  userId: string;
-  socialLoginEmail?: string;
-};
-
-/**
  * Parameters for requesting a key-bound identifier token from an IdP.
  */
 export type KeyBoundIdentifierTokenRequest = {
@@ -184,23 +116,13 @@ export type KeyBoundIdentifierTokenRequest = {
 /**
  * Result of one identifier login. `token` is the key-bound recovery material
  * presented to escrows (its `providerAssertion` carries the provider ID token
- * or assertion). `seedlessAuthData` is optional — social password-unlock may
- * include it from the same exchange; passkey / SIWE typically omit it.
+ * or assertion). `seedlessAuthData` is present when the IdP issued seedless
+ * auth-server tokens in the same exchange (social logins); passkey / SIWE
+ * omit it.
  */
 export type KeyBoundIdentifierLogin = {
   token: KeyBoundIdentifierToken;
   seedlessAuthData?: SeedlessAuthData;
-};
-
-/**
- * Options for `MfaRecoveryController.authenticateIdentifier`.
- */
-export type AuthenticateIdentifierOptions = {
-  /**
-   * Fail unless the login returns complete {@link SeedlessAuthData}. Set for
-   * the seedless password unlock path.
-   */
-  requireSeedlessAuthData?: boolean;
 };
 
 /**
@@ -226,21 +148,13 @@ export type IdentifierSession = KeyBoundCredential & {
 
 /**
  * Result of `authenticateIdentifier`. `seedlessAuthData` is present when the
- * login also completed a seedless auth-server exchange. Callers should use it
- * for `SeedlessOnboardingController.authenticate` and then drop it; keep only
- * `session` for a later `getRecoverySecret`.
+ * login also completed a seedless auth-server exchange. Callers that need it
+ * use it for `SeedlessOnboardingController.authenticate` and then drop it;
+ * keep only `session` for a later `getRecoverySecret`.
  */
 export type AuthenticateIdentifierResult = {
   session: IdentifierSession;
   seedlessAuthData?: SeedlessAuthData;
-};
-
-/**
- * `AuthenticateIdentifierResult` when seedless auth data was required.
- */
-export type SeedlessAuthenticateIdentifierResult = {
-  session: IdentifierSession;
-  seedlessAuthData: SeedlessAuthData;
 };
 
 /**
@@ -395,27 +309,16 @@ export type RecoveryAuthProvider = {
 
 /**
  * Obtains a key-bound identifier assertion from an IdP (OIDC, Passkey, SIWE).
- *
- * Implement `getKeyBoundIdentifierToken` for every provider. Optionally also
- * implement `getKeyBoundIdentifierLogin` when one social login should return
- * seedless auth-server tokens beside the recovery token for
- * `authenticateIdentifier`; `seedlessAuthData` on that result stays optional
- * (passkey providers omit it). Mutation writes always use
- * {@link getKeyBoundIdentifierToken} and never call this method.
  */
 export type RecoveryIdentifierAuthProvider = {
-  getKeyBoundIdentifierToken: (
-    params: KeyBoundIdentifierTokenRequest,
-  ) => Promise<KeyBoundIdentifierToken>;
   /**
-   * Optional. One identifier login that returns the key-bound token and, when
-   * available, seedless auth-server tokens from the same exchange. Used only by
-   * `authenticateIdentifier` when present; mutation writes always use
-   * {@link getKeyBoundIdentifierToken} instead. The returned token must be
-   * bound to the requested `proofPublicKey` and `requestHash`. Omit
-   * `seedlessAuthData` when the IdP does not issue it (e.g. passkey).
+   * One identifier login. Returns the key-bound token, bound to the requested
+   * `proofPublicKey` and `requestHash`, and any seedless auth-server tokens
+   * from the same exchange. Omit `seedlessAuthData` when the IdP does not
+   * issue it (e.g. passkey). Every controller path calls this method and uses
+   * only the parts it needs.
    */
-  getKeyBoundIdentifierLogin?: (
+  getKeyBoundIdentifierLogin: (
     params: KeyBoundIdentifierTokenRequest,
   ) => Promise<KeyBoundIdentifierLogin>;
 };
